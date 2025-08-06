@@ -1528,8 +1528,8 @@
                                     <div class="mb-3">
                                         <label for="langflowUrl" class="form-label">Langflow URL</label>
                                         <input type="url" class="form-control" id="langflowUrl" 
-                                               placeholder="http://localhost:7860/api/v1/run" 
-                                               value="http://10.88.4.25:7860/api/v1/run">
+                                               placeholder="http://localhost:7860" 
+                                               value="http://10.88.4.25:7860">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -2625,6 +2625,18 @@
                 return;
             }
             
+            // Extract base URL from the langflowUrl (remove /api/v1/run or similar paths)
+            let baseUrl;
+            try {
+                const url = new URL(langflowUrl);
+                baseUrl = `${url.protocol}//${url.host}`;
+                console.log('Base Langflow URL:', baseUrl);
+            } catch (urlError) {
+                console.error('Invalid Langflow URL:', urlError);
+                addMessageToChat('bot', '❌ Invalid Langflow URL format. Please check your configuration.');
+                return;
+            }
+            
             isWaitingForResponse = true;
             document.getElementById('sendButton').disabled = true;
             showTypingIndicator();
@@ -2665,45 +2677,60 @@
                             }
                             
                             let uploadResponse;
-                            let uploadEndpoint;
+                            let successfulEndpoint;
                             
                             // Try different file upload endpoints for different Langflow versions
                             const endpoints = [
-                                '/api/v2/files/',      // Latest Langflow
-                                '/api/v1/files/',      // Older Langflow
-                                '/files/',             // Even older versions
-                                '/upload'              // Alternative endpoint
+                                `${baseUrl}/api/v2/files/`,      // Latest Langflow
+                                `${baseUrl}/api/v1/files/`,      // Older Langflow  
+                                `${baseUrl}/files/`,             // Even older versions
+                                `${baseUrl}/upload`,             // Alternative endpoint
+                                `${baseUrl}/api/files`           // Another possible endpoint
                             ];
                             
-                            for (const endpoint of endpoints) {
+                            console.log('Trying file upload endpoints:', endpoints);
+                            
+                            for (let i = 0; i < endpoints.length; i++) {
+                                const endpoint = endpoints[i];
                                 try {
-                                    uploadEndpoint = `${langflowUrl}${endpoint}`;
-                                    console.log(`Trying upload endpoint: ${uploadEndpoint}`);
+                                    console.log(`[${i+1}/${endpoints.length}] Trying: ${endpoint}`);
                                     
-                                    uploadResponse = await fetch(uploadEndpoint, {
+                                    uploadResponse = await fetch(endpoint, {
                                         method: 'POST',
                                         headers: uploadHeaders,
                                         body: formData
                                     });
                                     
+                                    console.log(`Response status: ${uploadResponse.status} ${uploadResponse.statusText}`);
+                                    
                                     if (uploadResponse.ok) {
-                                        console.log(`Upload successful with endpoint: ${endpoint}`);
+                                        successfulEndpoint = endpoint;
+                                        console.log(`✅ Upload successful with: ${endpoint}`);
                                         break;
                                     } else {
-                                        console.log(`Upload failed with ${endpoint}: ${uploadResponse.status}`);
+                                        console.log(`❌ Failed with status ${uploadResponse.status}: ${uploadResponse.statusText}`);
+                                        // Log response body for debugging
+                                        try {
+                                            const errorText = await uploadResponse.text();
+                                            console.log(`Error response: ${errorText}`);
+                                        } catch (e) {
+                                            console.log('Could not read error response');
+                                        }
                                     }
                                 } catch (endpointError) {
-                                    console.log(`Endpoint ${endpoint} error:`, endpointError.message);
+                                    console.log(`❌ Network error with ${endpoint}:`, endpointError.message);
                                     continue;
                                 }
                             }
                             
                             if (!uploadResponse || !uploadResponse.ok) {
-                                throw new Error(`All file upload endpoints failed. Last status: ${uploadResponse?.status || 'Network Error'}`);
+                                const errorMsg = `All file upload endpoints failed. Your Langflow server may not support file uploads.`;
+                                console.error(errorMsg);
+                                throw new Error(errorMsg);
                             }
                             
                             const uploadData = await uploadResponse.json();
-                            console.log('File upload response:', uploadData);
+                            console.log('✅ File upload response:', uploadData);
                             
                             // Get the uploaded file path (handle different response formats)
                             const uploadedPath = uploadData.path || uploadData.file_path || uploadData.url || uploadData.id;
@@ -2713,18 +2740,19 @@
                                 requestBody.tweaks["File-QW4Au"] = {
                                     "path": uploadedPath
                                 };
-                                console.log('File path set in tweaks:', uploadedPath);
+                                console.log('✅ File path set in tweaks:', uploadedPath);
+                                addMessageToChat('bot', `📎 File uploaded successfully: ${firstFile.name}`);
                             } else {
-                                console.warn('No file path returned from upload, falling back to content method');
+                                console.warn('⚠️ No file path returned from upload, falling back to content method');
                                 throw new Error('No file path returned from upload');
                             }
                             
                         } catch (uploadError) {
-                            console.error('File upload error:', uploadError);
+                            console.error('❌ File upload error:', uploadError);
                             
                             // Fallback: Read file content and include in message if it's a text file
                             if (isTextFile(firstFile.file)) {
-                                console.log('Falling back to text content method for:', firstFile.name);
+                                console.log('🔄 Falling back to text content method for:', firstFile.name);
                                 try {
                                     const fileReader = new FileReader();
                                     const fileContent = await new Promise((resolve, reject) => {
@@ -2734,19 +2762,21 @@
                                     });
                                     
                                     firstFile.content = fileContent;
-                                    console.log('File content read successfully, length:', fileContent.length);
+                                    console.log('✅ File content read successfully, length:', fileContent.length);
                                     
                                     // Include content in the message as fallback
                                     const fileContents = `--- File: ${firstFile.name} ---\n${fileContent}\n--- End of ${firstFile.name} ---`;
                                     requestBody.input_value = `${message}\n\n--- ATTACHED FILE CONTENT ---\n${fileContents}\n--- END ATTACHED FILE ---`;
                                     
+                                    addMessageToChat('bot', `⚠️ File upload failed, but included text content from: ${firstFile.name}`);
+                                    
                                 } catch (readError) {
-                                    console.error('Failed to read file content:', readError);
-                                    addMessageToChat('bot', `❌ Failed to upload file and couldn't read content: ${uploadError.message}`);
+                                    console.error('❌ Failed to read file content:', readError);
+                                    addMessageToChat('bot', `❌ Failed to upload file and couldn't read content: ${uploadError.message}. Please check your Langflow configuration.`);
                                     return;
                                 }
                             } else {
-                                addMessageToChat('bot', `❌ Failed to upload file: ${uploadError.message}. File upload may not be supported by your Langflow server. Please check your Langflow version and configuration.`);
+                                addMessageToChat('bot', `❌ Failed to upload binary file: ${uploadError.message}. Your Langflow server may not support file uploads. Only text files can be included as fallback.`);
                                 return;
                             }
                         }
@@ -2857,7 +2887,13 @@
                     runHeaders['x-api-key'] = apiKey;
                 }
                 
-                const response = await fetch(`${langflowUrl}/api/v1/run/${flowId}`, {
+                // Use the same base URL extraction for consistency
+                const flowUrl = new URL(langflowUrl);
+                const baseUrl = `${flowUrl.protocol}//${flowUrl.host}`;
+                const runEndpoint = `${baseUrl}/api/v1/run/${flowId}`;
+                console.log('Flow execution endpoint:', runEndpoint);
+                
+                const response = await fetch(runEndpoint, {
                     method: 'POST',
                     headers: runHeaders,
                     body: JSON.stringify(requestBody)

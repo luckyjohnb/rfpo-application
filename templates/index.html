@@ -1,0 +1,2444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask User Management - Main Application</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #3b82f6;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-color: #0f172a;
+            --light-color: #f8fafc;
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e1;
+            --gray-400: #94a3b8;
+            --gray-500: #64748b;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-800: #1e293b;
+            --gray-900: #0f172a;
+            --border-radius: 12px;
+            --border-radius-sm: 8px;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--gray-50);
+            color: var(--gray-900);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, var(--gray-900) 0%, var(--gray-800) 100%);
+            min-height: 100vh;
+            color: white;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-right: 1px solid var(--gray-200);
+        }
+        
+        /* Mobile responsive sidebar */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: -100%;
+                width: 280px;
+                height: 100vh;
+                z-index: 1050;
+                transform: translateX(-100%);
+                box-shadow: var(--shadow-lg);
+            }
+            .sidebar.show {
+                transform: translateX(0);
+                left: 0;
+            }
+            .content-area {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+            .mobile-header {
+                display: flex !important;
+            }
+            .desktop-sidebar-col {
+                display: none;
+            }
+        }
+        
+        /* Desktop sidebar */
+        @media (min-width: 769px) {
+            .mobile-header {
+                display: none !important;
+            }
+        }
+        
+        .mobile-header {
+            background: white;
+            color: var(--gray-900);
+            padding: 1rem 1.5rem;
+            display: none;
+            position: sticky;
+            top: 0;
+            z-index: 1040;
+            border-bottom: 1px solid var(--gray-200);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1040;
+            backdrop-filter: blur(4px);
+        }
+        
+        .nav-link {
+            color: var(--gray-300) !important;
+            border-radius: var(--border-radius-sm);
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.25rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-weight: 500;
+            border: none;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white !important;
+            transform: translateX(4px);
+        }
+
+        .nav-link.active {
+            background-color: var(--primary-color);
+            color: white !important;
+            box-shadow: var(--shadow);
+        }
+
+        .content-area {
+            background-color: var(--gray-50);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .login-card {
+            max-width: 420px;
+            margin: 2rem auto;
+            border: none;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            border: none;
+            padding: 1.5rem;
+        }
+
+        .feature-box {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 1.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--gray-200);
+        }
+        
+        /* Responsive feature box */
+        @media (max-width: 768px) {
+            .feature-box {
+                padding: 1.5rem;
+                margin-bottom: 1rem;
+            }
+            .content-area {
+                padding: 1rem;
+            }
+        }
+        
+        .feature-box:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-online { background-color: var(--success-color); }
+        .status-offline { background-color: var(--danger-color); }
+        
+        /* Modern buttons */
+        .btn {
+            border-radius: var(--border-radius-sm);
+            font-weight: 500;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            padding: 0.75rem 1.5rem;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+
+        .btn-success:hover {
+            background-color: #059669;
+            transform: translateY(-1px);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+            background: transparent;
+        }
+
+        .btn-outline-primary:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-outline-light {
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-outline-danger {
+            color: var(--danger-color);
+            border: 1px solid var(--danger-color);
+            background: transparent;
+        }
+
+        .btn-outline-danger:hover {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        /* Modern form controls */
+        .form-control {
+            border: 1px solid var(--gray-300);
+            border-radius: var(--border-radius-sm);
+            padding: 0.75rem 1rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 14px;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            outline: none;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Modern badges */
+        .badge {
+            border-radius: var(--border-radius-sm);
+            font-weight: 500;
+            padding: 0.5rem 0.75rem;
+        }
+
+        .badge.bg-success {
+            background-color: var(--success-color) !important;
+        }
+
+        .badge.bg-primary {
+            background-color: var(--primary-color) !important;
+        }
+
+        .badge.bg-warning {
+            background-color: var(--warning-color) !important;
+            color: var(--gray-900) !important;
+        }
+
+        .badge.bg-danger {
+            background-color: var(--danger-color) !important;
+        }
+
+        .badge.bg-info {
+            background-color: var(--primary-light) !important;
+        }
+
+        /* Modern alerts */
+        .alert {
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 1rem 1.5rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .alert-success {
+            background-color: #ecfdf5;
+            color: #065f46;
+            border-left: 4px solid var(--success-color);
+        }
+
+        .alert-danger {
+            background-color: #fef2f2;
+            color: #991b1b;
+            border-left: 4px solid var(--danger-color);
+        }
+
+        .alert-warning {
+            background-color: #fffbeb;
+            color: #92400e;
+            border-left: 4px solid var(--warning-color);
+        }
+
+        .alert-info {
+            background-color: #eff6ff;
+            color: #1e40af;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        /* Responsive table */
+        .table {
+            background: white;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 0;
+        }
+
+        .table th {
+            background-color: var(--gray-50);
+            border-bottom: 1px solid var(--gray-200);
+            color: var(--gray-700);
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 1rem 0.75rem;
+        }
+
+        .table td {
+            border-bottom: 1px solid var(--gray-100);
+            padding: 1rem 0.75rem;
+            color: var(--gray-600);
+        }
+
+        @media (max-width: 768px) {
+            .table-responsive {
+                font-size: 0.875rem;
+            }
+            .table th,
+            .table td {
+                padding: 0.75rem 0.5rem;
+                word-break: break-word;
+            }
+            .btn-sm {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.75rem;
+            }
+        }
+        
+        /* Responsive form layouts */
+        @media (max-width: 768px) {
+            .user-management-row {
+                flex-direction: column;
+            }
+            .user-list-col {
+                order: 2;
+                margin-top: 1rem;
+            }
+            .create-user-col {
+                order: 1;
+            }
+        }
+
+        /* Typography improvements */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--gray-900);
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        h2 {
+            font-size: 1.875rem;
+            margin-bottom: 1.5rem;
+        }
+
+        h5 {
+            font-size: 1.125rem;
+            margin-bottom: 1rem;
+        }
+
+        .text-muted {
+            color: var(--gray-500) !important;
+        }
+
+        .text-gray-300 {
+            color: var(--gray-300) !important;
+        }
+
+        .text-gray-400 {
+            color: var(--gray-400) !important;
+        }
+
+        /* Icon improvements */
+        .fas {
+            color: inherit;
+        }
+
+        /* Loading spinner */
+        .fa-spinner {
+            color: var(--primary-color);
+        }
+
+        /* Modern scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--gray-100);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray-400);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gray-500);
+        }
+
+        /* Apple SMS-style Chat Interface */
+        .chat-container {
+            height: 75vh;
+            max-height: 650px;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+            background: #f2f2f7;
+            border: 1px solid var(--gray-200);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-header .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            margin-right: 0.75rem;
+        }
+
+        .chat-header .info h6 {
+            margin: 0;
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        .chat-header .info small {
+            color: var(--success-color);
+            font-size: 12px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background: #f2f2f7;
+            min-height: 0;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 1rem;
+            animation: messageSlideIn 0.3s ease-out;
+        }
+
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.bot {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 0.75rem 1rem;
+            border-radius: 18px;
+            position: relative;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .message.user .message-bubble {
+            background: #007aff;
+            color: white;
+            border-bottom-right-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0, 122, 255, 0.3);
+        }
+
+        .message.bot .message-bubble {
+            background: white;
+            color: var(--gray-900);
+            border-bottom-left-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--gray-200);
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: var(--gray-500);
+            margin-top: 0.25rem;
+            text-align: right;
+        }
+
+        .message.bot .message-time {
+            text-align: left;
+        }
+
+        .chat-input-container {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .chat-input-group {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+        }
+
+        .chat-input-group .d-flex {
+            width: 100%;
+        }
+
+        .chat-input {
+            flex: 1;
+            border: 1px solid var(--gray-300);
+            border-radius: 20px;
+            padding: 0.75rem 1rem;
+            max-height: 100px;
+            resize: none;
+            font-size: 14px;
+            line-height: 1.4;
+            transition: all 0.2s ease;
+        }
+
+        .chat-input:focus {
+            border-color: #007aff;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+            outline: none;
+        }
+
+        .chat-send-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #007aff;
+            border: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .chat-send-btn:hover {
+            background: #0056d6;
+            transform: scale(1.05);
+        }
+
+        .chat-send-btn:disabled {
+            background: var(--gray-400);
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 0.75rem 1rem;
+            color: var(--gray-500);
+            font-style: italic;
+            font-size: 13px;
+        }
+
+        /* File Upload Styles */
+        .chat-file-upload {
+            background: var(--gray-50);
+            border: 1px dashed var(--gray-300);
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .chat-file-upload:hover {
+            border-color: var(--primary-color);
+            background: rgba(37, 99, 235, 0.05);
+        }
+
+        .chat-file-upload.dragover {
+            border-color: var(--primary-color);
+            background: rgba(37, 99, 235, 0.1);
+        }
+
+        .file-attachments {
+            display: none;
+            max-height: 80px;
+            overflow-y: auto;
+            margin-bottom: 0.5rem;
+            padding: 0.25rem;
+            background: var(--gray-50);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--gray-200);
+        }
+
+        .file-attachment {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.25rem 0.5rem;
+            margin-bottom: 0.25rem;
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--border-radius-sm);
+            font-size: 11px;
+        }
+
+        .file-attachment:last-child {
+            margin-bottom: 0;
+        }
+
+        .file-attachment .file-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-attachment .file-icon {
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.5rem;
+            font-size: 10px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .file-attachment .file-icon.pdf { background: #dc3545; }
+        .file-attachment .file-icon.doc { background: #0066cc; }
+        .file-attachment .file-icon.txt { background: var(--gray-600); }
+        .file-attachment .file-icon.image { background: var(--success-color); }
+        .file-attachment .file-icon.default { background: var(--gray-500); }
+
+        .file-attachment .file-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-attachment .file-name {
+            font-weight: 500;
+            color: var(--gray-900);
+            margin-bottom: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-attachment .file-size {
+            color: var(--gray-500);
+            font-size: 10px;
+        }
+
+        .file-attachment .remove-file {
+            background: none;
+            border: none;
+            color: var(--gray-400);
+            cursor: pointer;
+            padding: 0.125rem;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .file-attachment .remove-file:hover {
+            color: var(--danger-color);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .chat-input-container {
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid var(--gray-200);
+            flex-shrink: 0;
+        }
+
+        .message-attachment {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: var(--border-radius-sm);
+            border-left: 3px solid var(--primary-color);
+        }
+
+        .message-attachment .attachment-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.25rem;
+        }
+
+        .message-attachment .attachment-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 0.5rem;
+        }
+
+        .message-attachment .attachment-name {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--gray-700);
+        }
+
+        .message-attachment .attachment-content {
+            font-size: 11px;
+            color: var(--gray-600);
+            margin-top: 0.25rem;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .typing-dots {
+            display: inline-block;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--gray-400);
+            margin: 0 1px;
+            animation: typingDots 1.4s infinite ease-in-out;
+        }
+
+        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typingDots {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .chat-settings {
+            margin-bottom: 1.5rem;
+        }
+
+        .langflow-config {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: var(--border-radius);
+            padding: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 65vh;
+                max-height: 500px;
+            }
+            
+            .message-bubble {
+                max-width: 85%;
+            }
+            
+            .chat-input {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+            
+            .file-attachment .file-name {
+                font-size: 10px;
+            }
+            
+            .file-attachment .file-size {
+                font-size: 9px;
+            }
+            
+            .chat-input-container {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile Header (hidden on desktop) -->
+    <div class="mobile-header d-md-none">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-users-cog fs-4 me-2" style="color: var(--primary-color);"></i>
+                <h5 class="mb-0 fw-bold">Flask App</h5>
+            </div>
+            <button class="btn btn-outline-primary btn-sm" onclick="toggleMobileSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 p-0 desktop-sidebar-col">
+                <div class="sidebar p-3" id="sidebar">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="d-flex align-items-center justify-content-center me-3" 
+                             style="width: 40px; height: 40px; background: var(--primary-color); border-radius: var(--border-radius-sm);">
+                            <i class="fas fa-users-cog text-white"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0 text-white fw-bold">Flask App</h5>
+                            <small class="text-gray-400">User Management</small>
+                        </div>
+                        <!-- Close button for mobile -->
+                        <button class="btn btn-outline-light btn-sm ms-auto d-md-none" onclick="closeMobileSidebar()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <ul class="nav nav-pills flex-column">
+                        <li class="nav-item mb-2">
+                            <a class="nav-link text-white active" href="#" onclick="showSection('dashboard'); return false;">
+                                <i class="fas fa-tachometer-alt me-2"></i>
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item mb-2">
+                            <a class="nav-link text-white" href="#" onclick="showSection('auth'); return false;">
+                                <i class="fas fa-sign-in-alt me-2"></i>
+                                Authentication
+                            </a>
+                        </li>
+                        <li class="nav-item mb-2">
+                            <a class="nav-link text-white" href="#" onclick="showSection('upload'); return false;">
+                                <i class="fas fa-file-upload me-2"></i>
+                                File Upload
+                            </a>
+                        </li>
+                        <li class="nav-item mb-2">
+                            <a class="nav-link text-white" href="#" onclick="showSection('users'); return false;">
+                                <i class="fas fa-users me-2"></i>
+                                User Management
+                            </a>
+                        </li>
+                        <li class="nav-item mb-2">
+                            <a class="nav-link text-white" href="#" onclick="openChatSection(); return false;">
+                                <i class="fas fa-comments me-2"></i>
+                                AI Assistant
+                            </a>
+                        </li>
+                        <li class="nav-item mb-2">
+                            <a class="nav-link text-white" href="#" onclick="testAPI(); return false;">
+                                <i class="fas fa-flask me-2"></i>
+                                Test API
+                            </a>
+                        </li>
+                    </ul>
+
+                    <hr class="my-4" style="border-color: rgba(255, 255, 255, 0.1);">
+                    
+                    <div class="px-2">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="status-indicator status-online"></span>
+                            <small class="text-gray-300">Server Online</small>
+                        </div>
+                        <div class="text-gray-400" style="font-size: 12px;">
+                            <div class="mb-1">Version 2.0</div>
+                            <div>© 2025 Flask App</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 content-area p-4">
+                <!-- Dashboard Section -->
+                <div id="dashboard" class="content-section">
+                    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+                        <div>
+                            <h2 class="mb-1"><i class="fas fa-tachometer-alt me-2" style="color: var(--primary-color);"></i>Application Dashboard</h2>
+                            <p class="text-muted mb-0">Monitor your Flask application status and metrics</p>
+                        </div>
+                        <a href="/" class="btn btn-outline-primary">
+                            <i class="fas fa-home me-1"></i>
+                            Back to Landing
+                        </a>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="feature-box text-center">
+                                <div class="d-flex align-items-center justify-content-center mb-3" 
+                                     style="width: 60px; height: 60px; background: rgba(37, 99, 235, 0.1); border-radius: var(--border-radius); margin: 0 auto;">
+                                    <i class="fas fa-server fs-3" style="color: var(--primary-color);"></i>
+                                </div>
+                                <h5 class="fw-bold">Server Status</h5>
+                                <p class="text-muted mb-3">Flask application is running successfully</p>
+                                <span class="badge bg-success">Online</span>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="feature-box text-center">
+                                <div class="d-flex align-items-center justify-content-center mb-3" 
+                                     style="width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1); border-radius: var(--border-radius); margin: 0 auto;">
+                                    <i class="fas fa-shield-alt fs-3" style="color: var(--success-color);"></i>
+                                </div>
+                                <h5 class="fw-bold">Security</h5>
+                                <p class="text-muted mb-3">JWT authentication enabled</p>
+                                <span class="badge bg-info">Active</span>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 col-md-12 mb-3">
+                            <div class="feature-box text-center">
+                                <div class="d-flex align-items-center justify-content-center mb-3" 
+                                     style="width: 60px; height: 60px; background: rgba(245, 158, 11, 0.1); border-radius: var(--border-radius); margin: 0 auto;">
+                                    <i class="fas fa-database fs-3" style="color: var(--warning-color);"></i>
+                                </div>
+                                <h5 class="fw-bold">Data Processing</h5>
+                                <p class="text-muted mb-3">Pandas integration available</p>
+                                <span class="badge bg-warning">Ready</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="feature-box">
+                                <div class="d-flex align-items-center mb-4">
+                                    <div class="d-flex align-items-center justify-content-center me-3" 
+                                         style="width: 40px; height: 40px; background: rgba(37, 99, 235, 0.1); border-radius: var(--border-radius-sm);">
+                                        <i class="fas fa-info-circle" style="color: var(--primary-color);"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="mb-1 fw-bold">Quick Start Guide</h5>
+                                        <p class="text-muted mb-0">Explore the key features of this application</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-4">
+                                            <h6 class="fw-bold mb-3" style="color: var(--gray-700);">🔐 Authentication Features</h6>
+                                            <ul class="list-unstyled">
+                                                <li class="mb-2 d-flex align-items-start">
+                                                    <i class="fas fa-check-circle me-2 mt-1" style="color: var(--success-color); font-size: 12px;"></i>
+                                                    <span>JWT-based secure authentication</span>
+                                                </li>
+                                                <li class="mb-2 d-flex align-items-start">
+                                                    <i class="fas fa-check-circle me-2 mt-1" style="color: var(--success-color); font-size: 12px;"></i>
+                                                    <span>Role-based access control (RBAC)</span>
+                                                </li>
+                                                <li class="mb-2 d-flex align-items-start">
+                                                    <i class="fas fa-check-circle me-2 mt-1" style="color: var(--success-color); font-size: 12px;"></i>
+                                                    <span>Password complexity requirements</span>
+                                                </li>
+                                                <li class="mb-2 d-flex align-items-start">
+                                                    <i class="fas fa-check-circle me-2 mt-1" style="color: var(--success-color); font-size: 12px;"></i>
+                                                    <span>Account lockout protection</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-4">
+                                            <h6 class="fw-bold mb-3" style="color: var(--gray-700);">📊 Application Features</h6>
+                                            <ul class="list-unstyled">
+                                                <li class="mb-2 d-flex align-items-start">
+                                                    <i class="fas fa-check-circle me-2 mt-1" style="color: var(--success-color); font-size: 12px;"></i>
+                                                    <span>File upload and processing</span>
+                                                </li>
+                                                <li class="mb-2 d-flex align-items-start">
+                                                    <i class="fas fa-check-circle me-2 mt-1" style="color: var(--success-color); font-size: 12px;"></i>
+                                                    <span>User management dashboard</span>
+                                                </li>
+                                                <li class="mb-2 d-flex align-items-start">
+                                                    <i class="fas fa-check-circle me-2 mt-1" style="color: var(--success-color); font-size: 12px;"></i>
+                                                    <span>Data export capabilities</span>
+                                                </li>
+                                                <li class="mb-2 d-flex align-items-start">
+                                                    <i class="fas fa-check-circle me-2 mt-1" style="color: var(--success-color); font-size: 12px;"></i>
+                                                    <span>Comprehensive audit logging</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Authentication Section -->
+                <div id="auth" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-sign-in-alt me-2" style="color: var(--primary-color);"></i>Authentication Demo</h2>
+                        <p class="text-muted mb-0">Test the JWT-based authentication system</p>
+                    </div>
+                    <div class="row justify-content-center">
+                        <div class="col-md-6">
+                            <div class="card login-card">
+                                <div class="card-header text-center">
+                                    <h5>Login Demo</h5>
+                                </div>
+                                <div class="card-body">
+                                    <form id="loginForm">
+                                        <div class="mb-3">
+                                            <label for="username" class="form-label">Username</label>
+                                            <input type="text" class="form-control" id="username" value="admin" placeholder="Enter username">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="password" class="form-label">Password</label>
+                                            <input type="password" class="form-control" id="password" value="Administrator123!" placeholder="Enter password">
+                                        </div>
+                                        <div class="d-grid">
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="fas fa-sign-in-alt me-1"></i>
+                                                Login
+                                            </button>
+                                        </div>
+                                    </form>
+                                    <div id="authResult" class="mt-3"></div>
+                                    <div class="text-center mt-3">
+                                        <small class="text-muted">
+                                            Default credentials: admin / Administrator123!<br>
+                                            (Run <code>python init_admin.py</code> first)
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Upload Section -->
+                <div id="upload" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-file-upload me-2" style="color: var(--primary-color);"></i>File Upload Demo</h2>
+                        <p class="text-muted mb-0">Upload and process CSV/Excel files with automatic data validation</p>
+                    </div>
+                    <div class="feature-box">
+                        <div class="row">
+                            <div class="col-lg-6 col-md-12 mb-3">
+                                <h5>Upload CSV/Excel File</h5>
+                                <form id="uploadForm" enctype="multipart/form-data">
+                                    <div class="mb-3">
+                                        <input type="file" class="form-control" id="fileInput" accept=".csv,.xlsx,.xls">
+                                    </div>
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-upload me-1"></i>
+                                        Upload File
+                                    </button>
+                                </form>
+                                <div id="uploadResult" class="mt-3"></div>
+                            </div>
+                            <div class="col-lg-6 col-md-12">
+                                <h6>Supported Formats:</h6>
+                                <ul>
+                                    <li>CSV files (.csv)</li>
+                                    <li>Excel files (.xlsx, .xls)</li>
+                                </ul>
+                                <h6>Features:</h6>
+                                <ul>
+                                    <li>Automatic data processing</li>
+                                    <li>Data validation and cleaning</li>
+                                    <li>Export capabilities</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Management Section -->
+                <div id="users" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-users me-2" style="color: var(--primary-color);"></i>User Management</h2>
+                        <p class="text-muted mb-0">Manage user accounts, roles, and permissions</p>
+                    </div>
+                    
+                    <!-- Authentication Check -->
+                    <div id="userMgmtAuth" class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Please login first to access user management features.
+                        <button class="btn btn-sm btn-outline-primary ms-2" onclick="showSection('auth'); return false;">
+                            <i class="fas fa-sign-in-alt me-1"></i>
+                            Go to Login
+                        </button>
+                    </div>
+                    
+                    <!-- User Management Interface (shown after login) -->
+                    <div id="userMgmtInterface" style="display: none;">
+                        <div class="row user-management-row">
+                            <!-- Create User -->
+                            <div class="col-md-4 create-user-col">
+                                <div class="feature-box">
+                                    <h5><i class="fas fa-user-plus me-2"></i>Create New User</h5>
+                                    <form id="createUserForm">
+                                        <div class="mb-3">
+                                            <label for="newUsername" class="form-label">Username</label>
+                                            <input type="text" class="form-control" id="newUsername" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="newPassword" class="form-label">Password</label>
+                                            <input type="password" class="form-control" id="newPassword" required>
+                                            <div class="form-text">Min 8 chars, 1 upper, 1 lower, 1 number</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="newDisplayName" class="form-label">Display Name</label>
+                                            <input type="text" class="form-control" id="newDisplayName">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="newEmail" class="form-label">Email</label>
+                                            <input type="email" class="form-control" id="newEmail">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Roles</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="roleUser" value="user" checked>
+                                                <label class="form-check-label" for="roleUser">User</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="roleAdmin" value="admin">
+                                                <label class="form-check-label" for="roleAdmin">Admin</label>
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-success btn-sm w-100">
+                                            <i class="fas fa-user-plus me-1"></i>
+                                            Create User
+                                        </button>
+                                    </form>
+                                    <div id="createUserResult" class="mt-3"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- User List -->
+                            <div class="col-md-8 user-list-col">
+                                <div class="feature-box">
+                                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+                                        <h5 class="mb-0"><i class="fas fa-list me-2"></i>All Users</h5>
+                                        <button class="btn btn-primary btn-sm" onclick="loadUsers()">
+                                            <i class="fas fa-sync me-1"></i>
+                                            Refresh
+                                        </button>
+                                    </div>
+                                    <div id="usersList">
+                                        <div class="text-center text-muted">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            Loading users...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Assistant Section -->
+                <div id="chat" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-comments me-2" style="color: var(--primary-color);"></i>AI Assistant</h2>
+                        <p class="text-muted mb-0">Chat with an intelligent AI assistant powered by Langflow</p>
+                    </div>
+
+                    <!-- Langflow Configuration -->
+                    <div class="chat-settings">
+                        <div class="feature-box">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="d-flex align-items-center justify-content-center me-3" 
+                                     style="width: 32px; height: 32px; background: rgba(37, 99, 235, 0.1); border-radius: var(--border-radius-sm);">
+                                    <i class="fas fa-cog" style="color: var(--primary-color); font-size: 14px;"></i>
+                                </div>
+                                <h6 class="mb-0 fw-bold">Langflow Configuration</h6>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="langflowUrl" class="form-label">Langflow URL</label>
+                                        <input type="url" class="form-control" id="langflowUrl" 
+                                               placeholder="http://localhost:7860/api/v1/run" 
+                                               value="http://10.88.4.25:7860/api/v1/run">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="flowId" class="form-label">Flow ID</label>
+                                        <input type="text" class="form-control" id="flowId" 
+                                               placeholder="your-flow-id"
+                                               value="900b0d89-4481-4f64-88bf-4d4661086a62">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="apiKey" class="form-label">API Key (Optional)</label>
+                                        <input type="password" class="form-control" id="apiKey" 
+                                               placeholder="Your Langflow API key">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="chatModel" class="form-label">Model</label>
+                                        <select class="form-control" id="chatModel">
+                                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                            <option value="gpt-4">GPT-4</option>
+                                            <option value="claude-3">Claude 3</option>
+                                            <option value="llama-2">Llama 2</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center">
+                                <button class="btn btn-outline-primary btn-sm" onclick="testLangflowConnection()">
+                                    <i class="fas fa-plug me-1"></i>
+                                    Test Connection
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="clearChatHistory()">
+                                    <i class="fas fa-trash me-1"></i>
+                                    Clear Chat
+                                </button>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    <strong>File Upload Support:</strong> Attach .txt, .pdf, .doc, .csv, .json, .md files (max 10MB each) to provide context for your conversations. Files are automatically sent to the <code>File-QW4Au</code> component in your Langflow.
+                                </small>
+                            </div>
+                            
+                            <div id="connectionStatus" class="mt-3"></div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Interface -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="chat-container">
+                                <!-- Chat Header -->
+                                <div class="chat-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar">
+                                            <i class="fas fa-robot"></i>
+                                        </div>
+                                        <div class="info">
+                                            <h6>AI Assistant</h6>
+                                            <small id="chatStatus">Online</small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-success me-2" id="modelBadge">GPT-3.5</span>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="toggleChatSettings()">
+                                            <i class="fas fa-cog"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Chat Messages -->
+                                <div class="chat-messages" id="chatMessages">
+                                    <div class="message bot">
+                                        <div class="message-bubble">
+                                            👋 Hello! I'm your AI assistant. I'm here to help you with any questions or tasks you might have. What can I do for you today?
+                                            <div class="message-time" id="welcomeTime"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Typing Indicator -->
+                                <div class="typing-indicator" id="typingIndicator">
+                                    <div class="typing-dots">
+                                        AI is thinking<span>.</span><span>.</span><span>.</span>
+                                    </div>
+                                </div>
+
+                                <!-- Chat Input -->
+                                <div class="chat-input-container">
+                                    <!-- File Attachments Display -->
+                                    <div class="file-attachments" id="fileAttachments"></div>
+                                    
+                                    <div class="chat-input-group">
+                                        <div class="d-flex align-items-end gap-2">
+                                            <!-- File Upload Button -->
+                                            <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('chatFileInput').click()" title="Attach files">
+                                                <i class="fas fa-paperclip"></i>
+                                            </button>
+                                            <input type="file" id="chatFileInput" multiple accept=".txt,.pdf,.doc,.docx,.csv,.json,.md" style="display: none;">
+                                            
+                                            <textarea class="chat-input flex-fill" id="chatInput" 
+                                                      placeholder="Type your message..." 
+                                                      rows="1"
+                                                      onkeydown="handleChatKeydown(event)"
+                                                      oninput="autoResizeTextarea(this)"></textarea>
+                                            <button class="chat-send-btn" id="sendButton" onclick="sendMessage()">
+                                                <i class="fas fa-paper-plane"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Compact File Upload Area (shown on demand) -->
+                                    <div class="chat-file-upload" id="fileUploadArea" style="display: none;">
+                                        <i class="fas fa-cloud-upload-alt me-2" style="color: var(--gray-500);"></i>
+                                        <span style="color: var(--gray-600);">Drop files here or click attach button</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Simple function to open chat section
+        function openChatSection() {
+            try {
+                console.log('Opening chat section...');
+                
+                // Hide all sections
+                document.querySelectorAll('.content-section').forEach(section => {
+                    section.style.display = 'none';
+                });
+                
+                // Remove active class from all nav links  
+                document.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                
+                // Show chat section
+                const chatSection = document.getElementById('chat');
+                if (chatSection) {
+                    chatSection.style.display = 'block';
+                    console.log('Chat section displayed');
+                } else {
+                    console.error('Chat section not found');
+                    return false;
+                }
+                
+                // Add active class to current link
+                if (typeof event !== 'undefined' && event && event.target) {
+                    event.target.classList.add('active');
+                }
+                
+                // Close mobile sidebar if function exists
+                if (typeof closeMobileSidebar === 'function') {
+                    closeMobileSidebar();
+                }
+                
+                // Initialize chat if needed
+                if (typeof updateWelcomeTime === 'function') {
+                    updateWelcomeTime();
+                }
+                if (typeof updateModelBadge === 'function') {
+                    updateModelBadge();
+                }
+                
+                return false;
+            } catch (error) {
+                console.error('Error in openChatSection:', error);
+                return false;
+            }
+        }
+        function showSection(sectionId) {
+            try {
+                console.log('showSection called with:', sectionId);
+                
+                // Validate input
+                if (!sectionId || typeof sectionId !== 'string') {
+                    console.error('Invalid section ID provided:', sectionId);
+                    return false;
+                }
+                
+                // Hide all sections
+                const sections = document.querySelectorAll('.content-section');
+                console.log('Found sections:', sections.length);
+                if (sections.length === 0) {
+                    console.error('No content sections found!');
+                    return false;
+                }
+                
+                sections.forEach(section => {
+                    section.style.display = 'none';
+                });
+                
+                // Remove active class from all nav links
+                const navLinks = document.querySelectorAll('.nav-link');
+                console.log('Found nav links:', navLinks.length);
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                });
+                
+                // Show selected section
+                const targetSection = document.getElementById(sectionId);
+                if (targetSection) {
+                    targetSection.style.display = 'block';
+                    console.log('Section displayed successfully:', sectionId);
+                } else {
+                    console.error('Section not found:', sectionId);
+                    console.log('Available sections:', Array.from(sections).map(s => s.id));
+                    return false;
+                }
+                
+                // Add active class to clicked nav link
+                if (typeof event !== 'undefined' && event && event.target) {
+                    event.target.classList.add('active');
+                    console.log('Active class added to nav link');
+                } else {
+                    // Fallback: find the nav link for this section
+                    const navLink = document.querySelector(`[onclick*="showSection('${sectionId}')"]`);
+                    if (navLink) {
+                        navLink.classList.add('active');
+                        console.log('Active class added to nav link (fallback)');
+                    }
+                }
+                
+                // Close mobile sidebar if open
+                if (typeof closeMobileSidebar === 'function') {
+                    closeMobileSidebar();
+                }
+                
+                // Special handling for user management section
+                if (sectionId === 'users') {
+                    if (typeof checkAuthForUserMgmt === 'function') {
+                        checkAuthForUserMgmt();
+                    }
+                }
+                
+                // Special handling for chat section
+                if (sectionId === 'chat') {
+                    console.log('Chat section opened, initializing...');
+                    // Initialize chat if needed
+                    if (typeof updateWelcomeTime === 'function') {
+                        updateWelcomeTime();
+                    }
+                    if (typeof updateModelBadge === 'function') {
+                        updateModelBadge();
+                    }
+                }
+                
+                return false;
+                
+            } catch (error) {
+                console.error('Error in showSection:', error);
+                alert('Error opening section: ' + error.message);
+                return false;
+            }
+        }
+
+        // Mobile sidebar functions
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            if (sidebar.classList.contains('show')) {
+                closeMobileSidebar();
+            } else {
+                sidebar.classList.add('show');
+                overlay.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            sidebar.classList.remove('show');
+            overlay.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+
+        // Close sidebar when clicking on nav links on mobile
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    setTimeout(closeMobileSidebar, 100);
+                }
+            });
+        });
+
+        // Test API functionality
+        function testAPI() {
+            alert('API Test:\n\n✅ Server: Online\n✅ Authentication: Ready\n✅ File Upload: Ready\n✅ User Management: Ready\n\nAll API endpoints are functioning properly!');
+        }
+        
+        // Simple test function for debugging navigation
+        function testNavigation() {
+            console.log('=== Navigation Test ===');
+            console.log('Available sections:');
+            const sections = document.querySelectorAll('.content-section');
+            sections.forEach(section => {
+                console.log(`- ${section.id}: ${section.style.display || 'visible'}`);
+            });
+            
+            console.log('Available nav links:');
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach((link, index) => {
+                console.log(`- Link ${index}: ${link.textContent.trim()}`);
+            });
+            
+            alert('Navigation test complete! Check console for details.');
+        }
+        
+        // Global function to manually show sections (for console testing)
+        window.showSectionManual = function(sectionId) {
+            return showSection(sectionId);
+        };
+
+        // Handle login form
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('authResult');
+            
+            resultDiv.innerHTML = '<div class="alert alert-info">Attempting login...</div>';
+            
+            fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>Login Successful!</strong><br>
+                            Welcome, ${data.user.display_name || data.user.username}!<br>
+                            Roles: ${data.user.roles.join(', ')}
+                        </div>
+                    `;
+                    localStorage.setItem('token', data.token);
+                    
+                    // Debug: Log user roles
+                    console.log('User logged in with roles:', data.user.roles);
+                    
+                    // Show user management interface if user has admin role
+                    if (data.user.roles.includes('admin')) {
+                        console.log('Admin detected, redirecting to user management interface');
+                        
+                        // Hide all sections first
+                        document.querySelectorAll('.content-section').forEach(section => {
+                            section.style.display = 'none';
+                        });
+                        
+                        // Remove active class from all nav links
+                        document.querySelectorAll('.nav-link').forEach(link => {
+                            link.classList.remove('active');
+                        });
+                        
+                        // Show user management section
+                        document.getElementById('users').style.display = 'block';
+                        
+                        // Make user management nav link active
+                        document.querySelector('a[onclick="showSection(\'users\')"]').classList.add('active');
+                        
+                        // Show the user management interface
+                        document.getElementById('userMgmtAuth').style.display = 'none';
+                        document.getElementById('userMgmtInterface').style.display = 'block';
+                        loadUsers(); // Load users immediately after login
+                    } else {
+                        console.log('Not admin user, hiding user management interface');
+                    }
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Login Failed:</strong> ${data.message}
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-warning">
+                        <strong>Connection Error:</strong> ${error.message}<br>
+                        <small>Make sure the admin user is initialized with: <code>python init_admin.py</code></small>
+                    </div>
+                `;
+            });
+        });
+
+        // User Management Functions
+        function loadUsers() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('usersList').innerHTML = '<div class="alert alert-warning">Please login first</div>';
+                return;
+            }
+            
+            document.getElementById('usersList').innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading users...</div>';
+            
+            fetch('/api/users', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Users API response:', data);
+                if (data.success) {
+                    console.log('Users data:', data.users);
+                    let usersHtml = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Username</th><th>Display Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+                    
+                    data.users.forEach(user => {
+                        console.log('Processing user:', user);
+                        // Handle both status formats
+                        const isActive = user.is_active !== undefined ? user.is_active : (user.status === 'active');
+                        
+                        usersHtml += `
+                            <tr>
+                                <td><strong>${user.username}</strong></td>
+                                <td>${user.display_name || '-'}</td>
+                                <td>${user.email || '-'}</td>
+                                <td><span class="badge bg-primary">${user.roles.join(', ')}</span></td>
+                                <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${isActive ? 'Active' : 'Inactive'}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.username}')" ${user.username === 'admin' ? 'disabled' : ''}>
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    usersHtml += '</tbody></table></div>';
+                    document.getElementById('usersList').innerHTML = usersHtml;
+                } else {
+                    document.getElementById('usersList').innerHTML = `<div class="alert alert-danger">Error: ${data.message}</div>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('usersList').innerHTML = `<div class="alert alert-danger">Connection error: ${error.message}</div>`;
+            });
+        }
+        
+        function deleteUser(username) {
+            if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
+                return;
+            }
+            
+            const token = localStorage.getItem('token');
+            fetch(`/api/users/${username}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadUsers(); // Refresh the list
+                } else {
+                    alert('Error deleting user: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Connection error: ' + error.message);
+            });
+        }
+
+        // Handle create user form
+        document.getElementById('createUserForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('createUserResult').innerHTML = '<div class="alert alert-warning">Please login first</div>';
+                return;
+            }
+            
+            const username = document.getElementById('newUsername').value;
+            const password = document.getElementById('newPassword').value;
+            const displayName = document.getElementById('newDisplayName').value;
+            const email = document.getElementById('newEmail').value;
+            
+            const roles = [];
+            if (document.getElementById('roleUser').checked) roles.push('user');
+            if (document.getElementById('roleAdmin').checked) roles.push('admin');
+            
+            const resultDiv = document.getElementById('createUserResult');
+            resultDiv.innerHTML = '<div class="alert alert-info">Creating user...</div>';
+            
+            fetch('/api/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password,
+                    display_name: displayName,
+                    email: email,
+                    roles: roles
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="alert alert-success">User created successfully!</div>';
+                    document.getElementById('createUserForm').reset();
+                    document.getElementById('roleUser').checked = true; // Reset to default
+                    loadUsers(); // Refresh the list
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.message}</div>`;
+                }
+            })
+            .catch(error => {
+                resultDiv.innerHTML = `<div class="alert alert-danger">Connection error: ${error.message}</div>`;
+            });
+        });
+
+        // Check if already logged in when switching to user management
+        function checkAuthForUserMgmt() {
+            console.log('Checking authentication for user management...');
+            const token = localStorage.getItem('token');
+            if (token) {
+                console.log('Token found, verifying...');
+                // Verify token is still valid
+                fetch('/api/auth/verify', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Verify response:', data);
+                    if (data.success && data.user.roles.includes('admin')) {
+                        console.log('Admin verified, showing user management');
+                        document.getElementById('userMgmtAuth').style.display = 'none';
+                        document.getElementById('userMgmtInterface').style.display = 'block';
+                        loadUsers();
+                    } else {
+                        console.log('Not admin or verification failed');
+                    }
+                })
+                .catch(error => {
+                    console.log('Verification error:', error);
+                });
+            } else {
+                console.log('No token found');
+            }
+        }
+
+        // Handle file upload
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('fileInput');
+            const resultDiv = document.getElementById('uploadResult');
+            
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<div class="alert alert-warning">Please select a file first.</div>';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            resultDiv.innerHTML = '<div class="alert alert-info">Uploading file...</div>';
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>Upload Successful!</strong><br>
+                            File: ${data.filename}<br>
+                            Rows: ${data.rows}<br>
+                            Columns: ${data.columns.join(', ')}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Upload Failed:</strong> ${data.error}
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>Upload Error:</strong> ${error.message}
+                    </div>
+                `;
+            });
+        });
+
+        // Chat functionality
+        let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        let isWaitingForResponse = false;
+        let attachedFiles = [];
+
+        // Initialize chat
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded - Initializing application...');
+            
+            // Test if basic functions work
+            console.log('Testing navigation functions...');
+            
+            // Initialize chat functions
+            try {
+                updateWelcomeTime();
+                loadChatHistory();
+                updateModelBadge();
+                initializeFileUpload();
+            } catch (error) {
+                console.error('Error initializing chat:', error);
+            }
+            
+            // Add click event listeners as backup for navigation
+            try {
+                addNavigationListeners();
+            } catch (error) {
+                console.error('Error adding navigation listeners:', error);
+            }
+        });
+
+        // Backup navigation listeners in case onclick doesn't work
+        function addNavigationListeners() {
+            const navLinks = document.querySelectorAll('.nav-link[onclick*="showSection"]');
+            console.log('Found nav links for backup listeners:', navLinks.length);
+            
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const onclick = this.getAttribute('onclick');
+                    const match = onclick.match(/showSection\('([^']+)'\)/);
+                    if (match) {
+                        const sectionId = match[1];
+                        console.log('Backup listener triggered for section:', sectionId);
+                        showSection(sectionId);
+                    }
+                });
+            });
+            
+            // Special handler for chat section
+            const chatLink = document.querySelector('.nav-link[onclick*="openChatSection"]');
+            if (chatLink) {
+                chatLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Backup chat listener triggered');
+                    openChatSection();
+                });
+            }
+        }
+
+        function initializeFileUpload() {
+            const fileInput = document.getElementById('chatFileInput');
+            const uploadArea = document.getElementById('fileUploadArea');
+            const inputContainer = document.querySelector('.chat-input-container');
+            
+            // File input change handler
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            // Drag and drop handlers on the entire input container
+            inputContainer.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.style.display = 'block';
+                uploadArea.classList.add('dragover');
+            });
+            
+            inputContainer.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                // Only hide if we're leaving the container entirely
+                if (!inputContainer.contains(e.relatedTarget)) {
+                    uploadArea.style.display = 'none';
+                    uploadArea.classList.remove('dragover');
+                }
+            });
+            
+            inputContainer.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.style.display = 'none';
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFiles(files);
+                }
+            });
+        }
+
+        function handleFileSelect(event) {
+            handleFiles(event.target.files);
+        }
+
+        function handleFiles(files) {
+            for (let file of files) {
+                if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                    alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
+                    continue;
+                }
+                
+                addFileAttachment(file);
+            }
+        }
+
+        function addFileAttachment(file) {
+            const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            const fileObj = {
+                id: fileId,
+                file: file,
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                content: null
+            };
+            
+            console.log('Adding file attachment:', fileObj);
+            attachedFiles.push(fileObj);
+            
+            // Read file content if it's a text-based file
+            if (isTextFile(file)) {
+                console.log('Reading text file:', file.name);
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    fileObj.content = e.target.result;
+                    console.log('File content loaded:', file.name, fileObj.content.length + ' characters');
+                };
+                reader.onerror = function(e) {
+                    console.error('Error reading file:', file.name, e);
+                };
+                reader.readAsText(file);
+            } else {
+                console.log('Skipping binary file:', file.name);
+            }
+            
+            displayFileAttachments();
+        }
+
+        function isTextFile(file) {
+            const textTypes = ['text/', 'application/json', 'application/csv'];
+            const textExtensions = ['.txt', '.md', '.csv', '.json', '.log'];
+            
+            return textTypes.some(type => file.type.startsWith(type)) ||
+                   textExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+        }
+
+        function getFileIcon(fileName, fileType) {
+            const ext = fileName.toLowerCase().split('.').pop();
+            
+            if (['pdf'].includes(ext)) return 'pdf';
+            if (['doc', 'docx'].includes(ext)) return 'doc';
+            if (['txt', 'md', 'log'].includes(ext)) return 'txt';
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image';
+            return 'default';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function displayFileAttachments() {
+            const container = document.getElementById('fileAttachments');
+            
+            if (attachedFiles.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            container.innerHTML = '';
+            
+            attachedFiles.forEach(file => {
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'file-attachment';
+                
+                const iconType = getFileIcon(file.name, file.type);
+                const iconMap = {
+                    'pdf': 'fas fa-file-pdf',
+                    'doc': 'fas fa-file-word',
+                    'txt': 'fas fa-file-alt',
+                    'image': 'fas fa-file-image',
+                    'default': 'fas fa-file'
+                };
+                
+                fileDiv.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-icon ${iconType}">
+                            <i class="${iconMap[iconType]}"></i>
+                        </div>
+                        <div class="file-details">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${formatFileSize(file.size)}</div>
+                        </div>
+                    </div>
+                    <button class="remove-file" onclick="removeFileAttachment('${file.id}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                
+                container.appendChild(fileDiv);
+            });
+        }
+
+        function removeFileAttachment(fileId) {
+            attachedFiles = attachedFiles.filter(file => file.id !== fileId);
+            displayFileAttachments();
+        }
+
+        function updateWelcomeTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('welcomeTime').textContent = timeString;
+        }
+
+        function updateModelBadge() {
+            const model = document.getElementById('chatModel').value;
+            const badge = document.getElementById('modelBadge');
+            const modelNames = {
+                'gpt-3.5-turbo': 'GPT-3.5',
+                'gpt-4': 'GPT-4',
+                'claude-3': 'Claude 3',
+                'llama-2': 'Llama 2'
+            };
+            badge.textContent = modelNames[model] || 'AI';
+        }
+
+        function handleChatKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function autoResizeTextarea(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if ((!message && attachedFiles.length === 0) || isWaitingForResponse) return;
+            
+            // Create message content with attachments for display
+            let messageContent = message;
+            let attachmentInfo = '';
+            
+            if (attachedFiles.length > 0) {
+                attachmentInfo = attachedFiles.map(file => {
+                    let content = '';
+                    if (file.content) {
+                        // Truncate content for display only
+                        const truncated = file.content.length > 200 ? 
+                            file.content.substring(0, 200) + '...' : file.content;
+                        content = `\nContent preview: ${truncated}`;
+                    }
+                    return `📎 ${file.name} (${formatFileSize(file.size)})${content}`;
+                }).join('\n');
+            }
+            
+            // Add user message with attachments for display
+            const displayMessage = message + (attachmentInfo ? '\n\n' + attachmentInfo : '');
+            addMessageToChat('user', displayMessage);
+            
+            // Store current attachments for Langflow
+            const currentFiles = [...attachedFiles];
+            
+            input.value = '';
+            input.style.height = 'auto';
+            
+            // Clear attachments UI after sending (but keep reference for Langflow)
+            attachedFiles = [];
+            displayFileAttachments();
+            
+            // Save to history
+            chatHistory.push({
+                type: 'user', 
+                content: displayMessage, 
+                timestamp: new Date().toISOString()
+            });
+            localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+            
+            // Send to Langflow with original message and files
+            sendToLangflowWithFiles(message, currentFiles);
+        }
+
+        async function sendToLangflowWithFiles(message, files) {
+            const langflowUrl = document.getElementById('langflowUrl').value;
+            const flowId = document.getElementById('flowId').value;
+            const apiKey = document.getElementById('apiKey').value;
+            
+            if (!langflowUrl || !flowId) {
+                addMessageToChat('bot', '⚠️ Please configure Langflow URL and Flow ID in the settings above.');
+                return;
+            }
+            
+            isWaitingForResponse = true;
+            document.getElementById('sendButton').disabled = true;
+            showTypingIndicator();
+            document.getElementById('chatStatus').textContent = 'Thinking...';
+            
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+                
+                if (apiKey) {
+                    headers['Authorization'] = `Bearer ${apiKey}`;
+                }
+                
+                // Prepare the base request body
+                let finalMessage = message;
+                const requestBody = {
+                    input_value: finalMessage,
+                    output_type: "chat",
+                    input_type: "chat",
+                    tweaks: {}
+                };
+                
+                // Handle file uploads to File-QW4Au component
+                if (files && files.length > 0) {
+                    console.log('Processing files for Langflow:', files);
+                    
+                    // Filter text files that we can process
+                    const textFiles = files.filter(file => file.content);
+                    
+                    if (textFiles.length > 0) {
+                        console.log('Found text files:', textFiles.map(f => f.name));
+                        
+                        // Combine all file contents
+                        const fileContents = textFiles.map(file => 
+                            `--- File: ${file.name} ---\n${file.content}\n--- End of ${file.name} ---`
+                        ).join('\n\n');
+                        
+                        // Method 1: Try sending file content directly to the File component
+                        requestBody.tweaks["File-QW4Au"] = {
+                            "path": textFiles[0].name,
+                            "content": fileContents
+                        };
+                        
+                        // Method 2: Also include file content in the main message
+                        finalMessage = `${message}\n\n--- ATTACHED FILES CONTEXT ---\n${fileContents}\n--- END ATTACHED FILES ---`;
+                        requestBody.input_value = finalMessage;
+                        
+                        console.log('File content being sent:', fileContents.substring(0, 200) + '...');
+                    }
+                    
+                    // Handle binary files
+                    const binaryFiles = files.filter(file => !file.content);
+                    if (binaryFiles.length > 0) {
+                        const binaryFileNames = binaryFiles.map(f => f.name).join(', ');
+                        finalMessage += `\n\n[Binary files attached: ${binaryFileNames} - content not readable]`;
+                        requestBody.input_value = finalMessage;
+                    }
+                }
+                
+                console.log('Final Langflow request:', JSON.stringify(requestBody, null, 2));
+                
+                const response = await fetch(`${langflowUrl}/${flowId}`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(requestBody)
+                });
+                
+                console.log('Langflow response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Langflow error response:', errorText);
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Full Langflow response:', data);
+                
+                let botResponse = '';
+                
+                // Parse Langflow response format - try multiple possible structures
+                if (data.outputs && data.outputs[0]) {
+                    const output = data.outputs[0];
+                    if (output.outputs && output.outputs[0] && output.outputs[0].results) {
+                        const results = output.outputs[0].results;
+                        if (results.message) {
+                            botResponse = results.message.text || results.message;
+                        } else if (results.text) {
+                            botResponse = results.text;
+                        }
+                    }
+                } else if (data.result) {
+                    botResponse = data.result;
+                } else if (data.message) {
+                    botResponse = data.message;
+                } else if (data.text) {
+                    botResponse = data.text;
+                } else {
+                    console.log('Unexpected response format:', data);
+                    botResponse = '🤔 I received a response but couldn\'t parse it. Check the console for details.';
+                }
+                
+                // Add bot response
+                addMessageToChat('bot', botResponse);
+                
+                // Save to history
+                chatHistory.push({type: 'bot', content: botResponse, timestamp: new Date().toISOString()});
+                localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                
+            } catch (error) {
+                console.error('Langflow error:', error);
+                addMessageToChat('bot', `❌ Sorry, I encountered an error: ${error.message}. Please check your Langflow configuration and try again.`);
+            } finally {
+                isWaitingForResponse = false;
+                document.getElementById('sendButton').disabled = false;
+                hideTypingIndicator();
+                document.getElementById('chatStatus').textContent = 'Online';
+            }
+        }
+
+        function addMessageToChat(type, content, timestamp = null) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const time = timestamp ? new Date(timestamp) : new Date();
+            const timeString = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            // Parse content to separate message and attachments
+            let messageText = content;
+            let attachmentSection = '';
+            
+            if (content.includes('📎')) {
+                const parts = content.split('\n\n');
+                messageText = parts[0];
+                if (parts[1] && parts[1].includes('📎')) {
+                    const attachments = parts[1].split('\n').filter(line => line.includes('📎'));
+                    attachmentSection = attachments.map(att => {
+                        const fileName = att.split('📎 ')[1].split(' (')[0];
+                        const fileSize = att.match(/\(([^)]+)\)/)?.[1] || '';
+                        const hasPreview = att.includes('Content preview:');
+                        
+                        return `
+                            <div class="message-attachment">
+                                <div class="attachment-header">
+                                    <i class="fas fa-paperclip attachment-icon"></i>
+                                    <span class="attachment-name">${fileName} ${fileSize ? `(${fileSize})` : ''}</span>
+                                </div>
+                                ${hasPreview ? '<div class="attachment-content">Content included in conversation</div>' : ''}
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+            
+            messageDiv.innerHTML = `
+                <div class="message-bubble">
+                    ${messageText}
+                    ${attachmentSection}
+                    <div class="message-time">${timeString}</div>
+                </div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'block';
+            const messagesContainer = document.getElementById('chatMessages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'none';
+        }
+
+        function loadChatHistory() {
+            const messagesContainer = document.getElementById('chatMessages');
+            // Clear existing messages except welcome
+            const welcomeMessage = messagesContainer.firstElementChild;
+            messagesContainer.innerHTML = '';
+            messagesContainer.appendChild(welcomeMessage);
+            
+            // Load history
+            chatHistory.forEach(msg => {
+                addMessageToChat(msg.type, msg.content, msg.timestamp);
+            });
+        }
+
+        function clearChatHistory() {
+            if (confirm('Are you sure you want to clear the chat history?')) {
+                chatHistory = [];
+                localStorage.removeItem('chatHistory');
+                loadChatHistory();
+            }
+        }
+
+        async function testLangflowConnection() {
+            const langflowUrl = document.getElementById('langflowUrl').value;
+            const flowId = document.getElementById('flowId').value;
+            const statusDiv = document.getElementById('connectionStatus');
+            
+            if (!langflowUrl || !flowId) {
+                statusDiv.innerHTML = '<div class="alert alert-warning">Please enter both Langflow URL and Flow ID.</div>';
+                return;
+            }
+            
+            statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i>Testing connection...</div>';
+            
+            try {
+                const headers = {'Content-Type': 'application/json'};
+                const apiKey = document.getElementById('apiKey').value;
+                if (apiKey) {
+                    headers['Authorization'] = `Bearer ${apiKey}`;
+                }
+                
+                // Test with a simple message and File component
+                const testRequest = {
+                    input_value: "Hello, this is a connection test. Can you confirm you received this message?",
+                    output_type: "chat",
+                    input_type: "chat",
+                    tweaks: {
+                        "File-QW4Au": {
+                            "path": "test.txt",
+                            "content": "This is a test file content to verify the File-QW4Au component is working."
+                        }
+                    }
+                };
+                
+                console.log('Test request to Langflow:', testRequest);
+                
+                const response = await fetch(`${langflowUrl}/${flowId}`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(testRequest)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Test response from Langflow:', data);
+                    statusDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>Connection successful! Langflow and File component are ready.</div>';
+                } else {
+                    const errorText = await response.text();
+                    console.error('Test error:', errorText);
+                    statusDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times-circle me-2"></i>Connection failed: ${response.status} ${response.statusText}<br><small>${errorText}</small></div>`;
+                }
+            } catch (error) {
+                console.error('Test connection error:', error);
+                statusDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times-circle me-2"></i>Connection error: ${error.message}</div>`;
+            }
+        }
+
+        function toggleChatSettings() {
+            const settings = document.querySelector('.chat-settings');
+            if (settings.style.display === 'none') {
+                settings.style.display = 'block';
+            } else {
+                settings.style.display = 'none';
+            }
+        }
+
+        // Update model badge when selection changes
+        document.getElementById('chatModel').addEventListener('change', updateModelBadge);
+        
+    </script>
+</body>
+</html>

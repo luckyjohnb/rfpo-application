@@ -847,6 +847,194 @@
                 padding: 0.5rem;
             }
         }
+
+        /* User Dropdown Styles */
+        .user-dropdown {
+            position: relative;
+        }
+
+        .user-dropdown-toggle {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: var(--border-radius);
+            padding: 0.5rem 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--gray-700);
+            font-size: 14px;
+            font-weight: 500;
+            min-width: 150px;
+        }
+
+        .user-dropdown-toggle:hover {
+            background: var(--gray-100);
+            border-color: var(--gray-300);
+            color: var(--gray-900);
+        }
+
+        .user-dropdown-toggle.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .user-avatar.guest {
+            background: var(--gray-400);
+        }
+
+        .user-info {
+            flex: 1;
+            text-align: left;
+        }
+
+        .user-name {
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .user-role {
+            font-size: 11px;
+            opacity: 0.8;
+            line-height: 1;
+        }
+
+        .dropdown-chevron {
+            transition: transform 0.2s ease;
+            font-size: 12px;
+        }
+
+        .user-dropdown.show .dropdown-chevron {
+            transform: rotate(180deg);
+        }
+
+        .user-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            right: 0;
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            min-width: 220px;
+            z-index: 1050;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s ease;
+        }
+
+        .user-dropdown.show .user-dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--gray-100);
+            background: var(--gray-50);
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        }
+
+        .dropdown-header .user-details {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .dropdown-header .user-avatar {
+            width: 36px;
+            height: 36px;
+            font-size: 14px;
+        }
+
+        .dropdown-header .user-info .user-name {
+            font-size: 14px;
+            color: var(--gray-900);
+            margin: 0;
+        }
+
+        .dropdown-header .user-info .user-role {
+            font-size: 12px;
+            color: var(--gray-500);
+            margin: 0;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: var(--gray-700);
+            text-decoration: none;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .dropdown-item:hover {
+            background: var(--gray-50);
+            color: var(--gray-900);
+        }
+
+        .dropdown-item i {
+            width: 16px;
+            text-align: center;
+            color: var(--gray-500);
+        }
+
+        .dropdown-item.danger {
+            color: var(--danger-color);
+        }
+
+        .dropdown-item.danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+        }
+
+        .dropdown-divider {
+            height: 1px;
+            background: var(--gray-100);
+            margin: 0.25rem 0;
+        }
+
+        @media (max-width: 768px) {
+            .user-dropdown-toggle {
+                min-width: auto;
+                padding: 0.5rem;
+            }
+            
+            .user-info {
+                display: none;
+            }
+            
+            .user-dropdown-menu {
+                right: 0;
+                left: auto;
+                min-width: 200px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -857,9 +1045,19 @@
                 <i class="fas fa-users-cog fs-4 me-2" style="color: var(--primary-color);"></i>
                 <h5 class="mb-0 fw-bold">Flask App</h5>
             </div>
-            <button class="btn btn-outline-primary btn-sm" onclick="toggleMobileSidebar()">
-                <i class="fas fa-bars"></i>
-            </button>
+            <div class="d-flex align-items-center gap-2">
+                <!-- Mobile User Dropdown -->
+                <div class="user-dropdown" id="mobileUserDropdown">
+                    <div class="user-dropdown-toggle" onclick="toggleUserDropdown()" style="min-width: auto; padding: 0.5rem;">
+                        <div class="user-avatar guest" id="mobileUserAvatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-outline-primary btn-sm" onclick="toggleMobileSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -942,6 +1140,92 @@
 
             <!-- Main Content -->
             <div class="col-md-9 col-lg-10 content-area p-4">
+                <!-- Top Navigation Bar -->
+                <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                    <div class="d-flex align-items-center">
+                        <button class="btn btn-outline-primary btn-sm d-md-none me-3" onclick="toggleMobileSidebar()">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <div>
+                            <h1 class="h4 mb-0 text-dark fw-bold">Flask User Management</h1>
+                            <small class="text-muted">Main Application Interface</small>
+                        </div>
+                    </div>
+                    
+                    <!-- User Dropdown -->
+                    <div class="user-dropdown" id="userDropdown">
+                        <div class="user-dropdown-toggle" onclick="toggleUserDropdown()">
+                            <div class="user-avatar guest" id="userAvatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="user-info d-none d-sm-block">
+                                <div class="user-name" id="userName">Guest User</div>
+                                <div class="user-role" id="userRole">Not Authenticated</div>
+                            </div>
+                            <i class="fas fa-chevron-down dropdown-chevron"></i>
+                        </div>
+                        
+                        <div class="user-dropdown-menu" id="userDropdownMenu">
+                            <!-- Guest State Menu -->
+                            <div id="guestMenu">
+                                <div class="dropdown-header">
+                                    <div class="user-details">
+                                        <div class="user-avatar guest">
+                                            <i class="fas fa-user"></i>
+                                        </div>
+                                        <div class="user-info">
+                                            <div class="user-name">Guest User</div>
+                                            <div class="user-role">Not Authenticated</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="dropdown-item" onclick="showSection('auth'); closeUserDropdown();">
+                                    <i class="fas fa-sign-in-alt"></i>
+                                    Login / Authenticate
+                                </button>
+                                <div class="dropdown-divider"></div>
+                                <button class="dropdown-item" onclick="testAPI(); closeUserDropdown();">
+                                    <i class="fas fa-cog"></i>
+                                    API Status
+                                </button>
+                            </div>
+                            
+                            <!-- Authenticated User Menu -->
+                            <div id="authenticatedMenu" style="display: none;">
+                                <div class="dropdown-header">
+                                    <div class="user-details">
+                                        <div class="user-avatar" id="authUserAvatar">
+                                            <span id="authUserInitials">U</span>
+                                        </div>
+                                        <div class="user-info">
+                                            <div class="user-name" id="authUserName">User Name</div>
+                                            <div class="user-role" id="authUserRole">user</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="dropdown-item" onclick="showSection('users'); closeUserDropdown();" id="userMgmtMenuItem" style="display: none;">
+                                    <i class="fas fa-users-cog"></i>
+                                    User Management
+                                </button>
+                                <button class="dropdown-item" onclick="showSection('auth'); closeUserDropdown();">
+                                    <i class="fas fa-user-edit"></i>
+                                    Switch User
+                                </button>
+                                <div class="dropdown-divider"></div>
+                                <button class="dropdown-item" onclick="testAPI(); closeUserDropdown();">
+                                    <i class="fas fa-cog"></i>
+                                    API Status
+                                </button>
+                                <div class="dropdown-divider"></div>
+                                <button class="dropdown-item danger" onclick="logoutUser(); closeUserDropdown();">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Dashboard Section -->
                 <div id="dashboard" class="content-section">
                     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
@@ -1576,6 +1860,152 @@
             return showSection(sectionId);
         };
 
+        // User Dropdown Functions
+        function toggleUserDropdown() {
+            const dropdown = document.getElementById('userDropdown');
+            const isShow = dropdown.classList.contains('show');
+            
+            // Close all other dropdowns first
+            closeAllDropdowns();
+            
+            if (!isShow) {
+                dropdown.classList.add('show');
+                // Close dropdown when clicking outside
+                setTimeout(() => {
+                    document.addEventListener('click', closeUserDropdownOnClickOutside);
+                }, 0);
+            }
+        }
+
+        function closeUserDropdown() {
+            const dropdown = document.getElementById('userDropdown');
+            dropdown.classList.remove('show');
+            document.removeEventListener('click', closeUserDropdownOnClickOutside);
+        }
+
+        function closeUserDropdownOnClickOutside(event) {
+            const dropdown = document.getElementById('userDropdown');
+            if (!dropdown.contains(event.target)) {
+                closeUserDropdown();
+            }
+        }
+
+        function closeAllDropdowns() {
+            closeUserDropdown();
+        }
+
+        function updateUserDropdown(user = null) {
+            const userAvatar = document.getElementById('userAvatar');
+            const userName = document.getElementById('userName');
+            const userRole = document.getElementById('userRole');
+            const mobileUserAvatar = document.getElementById('mobileUserAvatar');
+            const guestMenu = document.getElementById('guestMenu');
+            const authenticatedMenu = document.getElementById('authenticatedMenu');
+            const authUserAvatar = document.getElementById('authUserAvatar');
+            const authUserInitials = document.getElementById('authUserInitials');
+            const authUserName = document.getElementById('authUserName');
+            const authUserRole = document.getElementById('authUserRole');
+            const userMgmtMenuItem = document.getElementById('userMgmtMenuItem');
+
+            if (user && user.username) {
+                // User is authenticated
+                const initials = user.display_name ? 
+                    user.display_name.split(' ').map(n => n[0]).join('').toUpperCase() :
+                    user.username.substring(0, 2).toUpperCase();
+                
+                const displayName = user.display_name || user.username;
+                const roles = user.roles ? user.roles.join(', ') : 'user';
+                const isAdmin = user.roles && user.roles.includes('admin');
+
+                // Update main toggle
+                userAvatar.className = 'user-avatar';
+                userAvatar.innerHTML = initials;
+                userName.textContent = displayName;
+                userRole.textContent = roles;
+
+                // Update mobile avatar
+                mobileUserAvatar.className = 'user-avatar';
+                mobileUserAvatar.innerHTML = initials;
+
+                // Update dropdown header
+                authUserAvatar.className = 'user-avatar';
+                authUserInitials.textContent = initials;
+                authUserName.textContent = displayName;
+                authUserRole.textContent = roles;
+
+                // Show/hide menu items
+                guestMenu.style.display = 'none';
+                authenticatedMenu.style.display = 'block';
+                userMgmtMenuItem.style.display = isAdmin ? 'block' : 'none';
+
+                console.log('User dropdown updated for authenticated user:', displayName);
+            } else {
+                // User is not authenticated (guest)
+                userAvatar.className = 'user-avatar guest';
+                userAvatar.innerHTML = '<i class="fas fa-user"></i>';
+                userName.textContent = 'Guest User';
+                userRole.textContent = 'Not Authenticated';
+
+                // Update mobile avatar
+                mobileUserAvatar.className = 'user-avatar guest';
+                mobileUserAvatar.innerHTML = '<i class="fas fa-user"></i>';
+
+                // Show guest menu
+                guestMenu.style.display = 'block';
+                authenticatedMenu.style.display = 'none';
+
+                console.log('User dropdown updated for guest user');
+            }
+        }
+
+        function logoutUser() {
+            // Clear token and user data
+            localStorage.removeItem('token');
+            
+            // Update UI to guest state
+            updateUserDropdown();
+            
+            // Show dashboard section
+            showSection('dashboard');
+            
+            // Show success message
+            setTimeout(() => {
+                alert('You have been logged out successfully.');
+            }, 300);
+            
+            console.log('User logged out');
+        }
+
+        // Initialize user dropdown on page load
+        function initializeUserDropdown() {
+            const token = localStorage.getItem('token');
+            if (token) {
+                // Verify token and get user info
+                fetch('/api/auth/verify', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.user) {
+                        updateUserDropdown(data.user);
+                    } else {
+                        // Token invalid, clear it
+                        localStorage.removeItem('token');
+                        updateUserDropdown();
+                    }
+                })
+                .catch(error => {
+                    console.log('Token verification failed:', error);
+                    localStorage.removeItem('token');
+                    updateUserDropdown();
+                });
+            } else {
+                updateUserDropdown();
+            }
+        }
+
         // Handle login form
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -1608,6 +2038,9 @@
                     `;
                     localStorage.setItem('token', data.token);
                     
+                    // Update user dropdown with authenticated user info
+                    updateUserDropdown(data.user);
+                    
                     // Debug: Log user roles
                     console.log('User logged in with roles:', data.user.roles);
                     
@@ -1636,7 +2069,9 @@
                         document.getElementById('userMgmtInterface').style.display = 'block';
                         loadUsers(); // Load users immediately after login
                     } else {
-                        console.log('Not admin user, hiding user management interface');
+                        console.log('Not admin user, staying on current section');
+                        // For non-admin users, just stay where they are or go to dashboard
+                        showSection('dashboard');
                     }
                 } else {
                     resultDiv.innerHTML = `
@@ -1876,6 +2311,13 @@
         // Initialize chat
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM Content Loaded - Initializing application...');
+            
+            // Initialize user dropdown first
+            try {
+                initializeUserDropdown();
+            } catch (error) {
+                console.error('Error initializing user dropdown:', error);
+            }
             
             // Test if basic functions work
             console.log('Testing navigation functions...');

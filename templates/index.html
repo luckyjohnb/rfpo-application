@@ -4851,11 +4851,16 @@
                             const uploadedPath = uploadData.path || uploadData.file_path || uploadData.url || uploadData.id;
                             
                             if (uploadedPath) {
+                                // Normalize path separators for cross-platform compatibility
+                                // Convert Windows backslashes to Unix forward slashes for Langflow
+                                const normalizedPath = uploadedPath.replace(/\\/g, '/');
+                                
                                 // Set the file path in tweaks for the File component
                                 requestBody.tweaks["File-QW4Au"] = {
-                                    "path": uploadedPath
+                                    "path": normalizedPath
                                 };
-                                console.log('✅ File path set in tweaks:', uploadedPath);
+                                console.log('✅ File path set in tweaks:', normalizedPath);
+                                console.log('Original path from server:', uploadedPath);
                                 addMessageToChat('bot', `📎 File uploaded successfully: ${firstFile.name}`);
                             } else {
                                 console.warn('⚠️ No file path returned from upload, falling back to content method');
@@ -4986,11 +4991,16 @@
                                 const uploadedPath = uploadData.path || uploadData.file_path || uploadData.url || uploadData.id;
                                 
                                 if (uploadedPath) {
+                                    // Normalize path separators for cross-platform compatibility
+                                    // Convert Windows backslashes to Unix forward slashes for Langflow
+                                    const normalizedPath = uploadedPath.replace(/\\/g, '/');
+                                    
                                     // Set the file path in tweaks for the File component
                                     requestBody.tweaks["File-QW4Au"] = {
-                                        "path": uploadedPath
+                                        "path": normalizedPath
                                     };
-                                    console.log('Text file path set in tweaks:', uploadedPath);
+                                    console.log('Text file path set in tweaks:', normalizedPath);
+                                    console.log('Original text file path from server:', uploadedPath);
                                 } else {
                                     throw new Error('No file path returned');
                                 }
@@ -5353,7 +5363,12 @@ This usually indicates a server configuration issue. Please check:
    - Check browser console for detailed errors
    - Verify Langflow supports file uploads
 
-3. For network errors:
+3. For path-related errors (File or directory not found):
+   - File paths are automatically normalized (Windows \\ → Unix /)
+   - Check that upload directory exists on Langflow server
+   - Verify file permissions on the server
+
+4. For network errors:
    - Check if URLs are accessible
    - Look for CORS issues in browser console
    - Verify firewall/proxy settings

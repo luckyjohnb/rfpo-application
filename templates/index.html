@@ -1841,6 +1841,9 @@
                                     </div>
                                     <div class="d-flex align-items-center">
                                         <span class="badge bg-success me-2" id="modelBadge">GPT-3.5</span>
+                                        <button class="btn btn-outline-info btn-sm me-1" onclick="showDebugInfo()" title="Debug Connection">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
                                         <button class="btn btn-outline-primary btn-sm" onclick="showSection('ai-config')" title="AI Configuration">
                                             <i class="fas fa-cog"></i>
                                         </button>
@@ -4721,8 +4724,25 @@
                                 throw new Error(errorMsg);
                             }
                             
-                            const uploadData = await uploadResponse.json();
-                            console.log('✅ File upload response:', uploadData);
+                            // Get response text first to handle parsing errors better
+                            const uploadResponseText = await uploadResponse.text();
+                            console.log('Raw upload response:', uploadResponseText);
+                            
+                            let uploadData;
+                            try {
+                                uploadData = JSON.parse(uploadResponseText);
+                                console.log('✅ File upload response:', uploadData);
+                            } catch (parseError) {
+                                console.error('Upload response JSON parsing error:', parseError);
+                                console.error('Upload response was not valid JSON:', uploadResponseText);
+                                
+                                // Check if response looks like HTML (common server error)
+                                if (uploadResponseText.trim().startsWith('<')) {
+                                    throw new Error(`File upload failed: Server returned HTML instead of JSON. Check if the upload endpoint exists and your server is configured correctly.`);
+                                } else {
+                                    throw new Error(`File upload failed: Server returned invalid JSON. Response: ${uploadResponseText.substring(0, 100)}...`);
+                                }
+                            }
                             
                             // Get the uploaded file path (handle different response formats)
                             const uploadedPath = uploadData.path || uploadData.file_path || uploadData.url || uploadData.id;
@@ -4839,8 +4859,25 @@
                             }
                             
                             if (uploadResponse && uploadResponse.ok) {
-                                const uploadData = await uploadResponse.json();
-                                console.log('Text file upload response:', uploadData);
+                                // Get response text first to handle parsing errors better
+                                const textUploadResponseText = await uploadResponse.text();
+                                console.log('Raw text upload response:', textUploadResponseText);
+                                
+                                let uploadData;
+                                try {
+                                    uploadData = JSON.parse(textUploadResponseText);
+                                    console.log('Text file upload response:', uploadData);
+                                } catch (parseError) {
+                                    console.error('Text upload response JSON parsing error:', parseError);
+                                    console.error('Text upload response was not valid JSON:', textUploadResponseText);
+                                    
+                                    // Check if response looks like HTML (common server error)
+                                    if (textUploadResponseText.trim().startsWith('<')) {
+                                        throw new Error(`Text file upload failed: Server returned HTML instead of JSON. Check if the upload endpoint exists and your server is configured correctly.`);
+                                    } else {
+                                        throw new Error(`Text file upload failed: Server returned invalid JSON. Response: ${textUploadResponseText.substring(0, 100)}...`);
+                                    }
+                                }
                                 
                                 // Get the uploaded file path
                                 const uploadedPath = uploadData.path || uploadData.file_path || uploadData.url || uploadData.id;
@@ -4911,8 +4948,25 @@
                     throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
                 
-                const data = await response.json();
-                console.log('Full Langflow response:', data);
+                // Get response text first to handle parsing errors better
+                const responseText = await response.text();
+                console.log('Raw response text:', responseText);
+                
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                    console.log('Parsed Langflow response:', data);
+                } catch (parseError) {
+                    console.error('JSON parsing error:', parseError);
+                    console.error('Response was not valid JSON:', responseText);
+                    
+                    // Check if response looks like HTML (common server error)
+                    if (responseText.trim().startsWith('<')) {
+                        throw new Error(`Server returned HTML instead of JSON. This usually means the endpoint doesn't exist or there's a server error. Check if your Langflow server is running and the flow ID is correct.`);
+                    } else {
+                        throw new Error(`Invalid JSON response from server. Expected JSON but got: ${responseText.substring(0, 100)}...`);
+                    }
+                }
                 
                 let botResponse = '';
                 
@@ -4949,7 +5003,34 @@
                 
             } catch (error) {
                 console.error('Langflow error:', error);
-                addMessageToChat('bot', `❌ Sorry, I encountered an error: ${error.message}. Please check your Langflow configuration and try again.`);
+                
+                // Provide more specific error messages based on the error type
+                let errorMessage = '';
+                if (error.message.includes('HTML instead of JSON')) {
+                    errorMessage = `❌ Server configuration error: The server returned an HTML page instead of JSON. This usually means:
+• The Langflow server URL or Flow ID is incorrect
+• The Langflow server is not running
+• The endpoint doesn't exist
+• There's a server-side error
+
+Please check your AI Configuration settings and ensure your Langflow server is accessible.`;
+                } else if (error.message.includes('Invalid JSON')) {
+                    errorMessage = `❌ Invalid server response: ${error.message}
+
+This usually indicates a server configuration issue. Please check:
+• Langflow server is running correctly
+• Flow ID is valid
+• API endpoints are properly configured`;
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMessage = `❌ Network error: Cannot connect to the server. Please check:
+• Langflow URL is correct
+• Server is running and accessible
+• No firewall or CORS issues`;
+                } else {
+                    errorMessage = `❌ Sorry, I encountered an error: ${error.message}. Please check your Langflow configuration and try again.`;
+                }
+                
+                addMessageToChat('bot', errorMessage);
                 
                 // Ensure UI state is reset on any error
                 isWaitingForResponse = false;
@@ -5116,6 +5197,73 @@
             }
             
             console.log('Model badge updated to:', currentModel);
+        }
+
+        function showDebugInfo() {
+            const langflowUrl = localStorage.getItem('langflowUrl') || 'Not configured';
+            const flowId = localStorage.getItem('flowId') || 'Not configured';
+            const apiKey = localStorage.getItem('apiKey') || 'Not configured';
+            
+            // Get current URLs that would be used
+            let baseUrl = 'Not available';
+            let localBaseUrl = 'Not available';
+            
+            try {
+                localBaseUrl = `${window.location.protocol}//${window.location.host}`;
+                if (langflowUrl) {
+                    const url = new URL(langflowUrl);
+                    baseUrl = `${url.protocol}//${url.host}`;
+                }
+            } catch (e) {
+                baseUrl = `Error parsing URL: ${e.message}`;
+            }
+            
+            const debugInfo = `
+🔧 **AI Assistant Debug Information**
+
+**Configuration:**
+• Langflow URL: ${langflowUrl}
+• Flow ID: ${flowId}
+• API Key: ${apiKey.length > 0 ? '✅ Configured (' + apiKey.length + ' chars)' : '❌ Not set'}
+
+**Runtime URLs:**
+• Base URL (Langflow): ${baseUrl}
+• Local URL (Flask): ${localBaseUrl}
+
+**File Upload Endpoints (will be tried in order):**
+• ${localBaseUrl}/api/v2/files/
+• ${localBaseUrl}/upload
+• ${baseUrl}/api/v2/files/
+• ${baseUrl}/api/v1/files/
+
+**Chat Endpoint:**
+• ${baseUrl}/api/v1/run/${flowId}
+
+**Troubleshooting:**
+1. If you get "HTML instead of JSON" errors:
+   - Check that Langflow URL and Flow ID are correct
+   - Ensure Langflow server is running
+   - Verify the flow exists and is deployed
+
+2. If file uploads fail:
+   - Try uploading without files first
+   - Check browser console for detailed errors
+   - Verify Langflow supports file uploads
+
+3. For network errors:
+   - Check if URLs are accessible
+   - Look for CORS issues in browser console
+   - Verify firewall/proxy settings
+
+**Test Actions:**
+• Click "Test Connection" in AI Configuration
+• Try a simple message without files first
+• Check browser Developer Tools → Console for detailed errors
+
+Need help? Check the AI Configuration section to update settings.
+            `;
+            
+            addMessageToChat('bot', debugInfo);
         }
 
         function toggleChatSettings() {

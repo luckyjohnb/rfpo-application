@@ -1097,6 +1097,215 @@
                 min-width: 200px;
             }
         }
+
+        /* Navigation Editor Styles */
+        .navigation-editor {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+        }
+
+        .menu-items-list {
+            min-height: 300px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem;
+        }
+
+        .menu-item-editor {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: 0.5rem;
+            padding: 0.75rem;
+            transition: all 0.2s;
+            cursor: move;
+            position: relative;
+        }
+
+        .menu-item-editor:hover {
+            box-shadow: var(--shadow-sm);
+            border-color: var(--primary-color);
+        }
+
+        .menu-item-editor.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+            z-index: 1000;
+        }
+
+        .menu-item-editor.drag-over {
+            border-top: 3px solid var(--primary-color);
+        }
+
+        .menu-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            gap: 0.5rem;
+        }
+
+        .menu-item-icon {
+            width: 20px;
+            text-align: center;
+            color: var(--gray-600);
+        }
+
+        .menu-item-label {
+            flex: 1;
+            font-weight: 500;
+            color: var(--gray-900);
+        }
+
+        .menu-item-controls {
+            display: flex;
+            gap: 0.25rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .menu-item-editor:hover .menu-item-controls {
+            opacity: 1;
+        }
+
+        .menu-item-btn {
+            padding: 0.25rem 0.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .menu-item-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .menu-item-btn.edit {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .menu-item-btn.edit:hover {
+            background: #ffeaa7;
+        }
+
+        .menu-item-btn.toggle {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .menu-item-btn.toggle:hover {
+            background: #bee5eb;
+        }
+
+        .menu-item-btn.delete {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .menu-item-btn.delete:hover {
+            background: #f5c6cb;
+        }
+
+        .menu-item-submenu {
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+            padding-left: 0.75rem;
+            border-left: 2px solid #e9ecef;
+        }
+
+        .menu-item-hidden {
+            opacity: 0.5;
+            background: #f8f9fa;
+        }
+
+        .menu-item-hidden .menu-item-label {
+            text-decoration: line-through;
+            color: var(--gray-500);
+        }
+
+        .role-badges {
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+
+        .role-badge {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .role-badge:hover {
+            transform: scale(1.05);
+        }
+
+        .role-badge.active {
+            box-shadow: 0 0 0 2px white, 0 0 0 4px var(--primary-color);
+        }
+
+        .editor-toolbar {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: var(--border-radius-sm);
+            padding: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .menu-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--gray-500);
+        }
+
+        .meta-badge {
+            background: var(--gray-200);
+            color: var(--gray-700);
+            padding: 0.125rem 0.375rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+        }
+
+        .meta-badge.roles {
+            background: #e7f3ff;
+            color: #0969da;
+        }
+
+        .drag-handle {
+            cursor: grab;
+            color: var(--gray-400);
+            margin-right: 0.5rem;
+        }
+
+        .drag-handle:hover {
+            color: var(--gray-600);
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .menu-item-editor.new {
+            animation: slideDown 0.3s ease-out;
+        }
     </style>
 </head>
 <body>
@@ -2056,51 +2265,54 @@
                     <div class="row">
                         <div class="col-lg-8">
                             <div class="feature-box">
-                                <h5 class="mb-4"><i class="fas fa-bars me-2"></i>Navigation Settings</h5>
-                                
-                                <div class="alert alert-info mb-4">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    This feature will allow you to customize menu items, reorder navigation elements, and manage user permissions for different sections.
+                                <div class="d-flex justify-content-between align-items-center mb-4">
+                                    <h5 class="mb-0"><i class="fas fa-bars me-2"></i>Navigation Items</h5>
+                                    <button class="btn btn-success btn-sm" onclick="addCustomMenuItem()">
+                                        <i class="fas fa-plus me-1"></i>
+                                        Add Menu Item
+                                    </button>
                                 </div>
                                 
-                                <div class="mb-3">
-                                    <label class="form-label">Current Navigation Structure</label>
-                                    <div class="nav-preview border rounded p-3" style="background: #f8f9fa;">
-                                        <div class="small text-muted mb-2">Preview of current navigation:</div>
-                                        <ul class="list-unstyled mb-0">
-                                            <li class="mb-1"><i class="fas fa-tachometer-alt me-2 text-primary"></i>Dashboard</li>
-                                            <li class="mb-1"><i class="fas fa-sign-in-alt me-2 text-primary"></i>Authentication</li>
-                                            <li class="mb-1"><i class="fas fa-file-upload me-2 text-primary"></i>File Upload</li>
-                                            <li class="mb-1"><i class="fas fa-users me-2 text-primary"></i>User Management</li>
-                                            <li class="mb-1"><i class="fas fa-comments me-2 text-primary"></i>AI Assistant</li>
-                                            <li class="mb-1">
-                                                <i class="fas fa-th-large me-2 text-primary"></i>Applications
-                                                <ul class="list-unstyled ms-4 mt-1">
-                                                    <li class="mb-1"><i class="fas fa-project-diagram me-2 text-secondary"></i>WBS APP</li>
-                                                </ul>
-                                            </li>
-                                            <li class="mb-1">
-                                                <i class="fas fa-cog me-2 text-primary"></i>Configuration
-                                                <ul class="list-unstyled ms-4 mt-1">
-                                                    <li class="mb-1"><i class="fas fa-robot me-2 text-secondary"></i>AI Configuration</li>
-                                                    <li class="mb-1"><i class="fas fa-cloud-upload-alt me-2 text-secondary"></i>File Upload Configuration</li>
-                                                    <li class="mb-1"><i class="fas fa-edit me-2 text-secondary"></i>Navigation Editor</li>
-                                                </ul>
-                                            </li>
-                                            <li class="mb-1"><i class="fas fa-flask me-2 text-primary"></i>Test API</li>
-                                        </ul>
+                                <!-- Navigation Editor Interface -->
+                                <div id="navigationEditor" class="navigation-editor">
+                                    <div class="editor-toolbar mb-3">
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="expandAllMenus()" title="Expand All">
+                                                <i class="fas fa-expand-alt"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="collapseAllMenus()" title="Collapse All">
+                                                <i class="fas fa-compress-alt"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="previewNavigation()" title="Preview Changes">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        <div class="ms-3 small text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Drag items to reorder • Click to edit • Toggle visibility
+                                        </div>
+                                    </div>
+
+                                    <div id="menuItemsList" class="menu-items-list">
+                                        <!-- Menu items will be loaded here dynamically -->
                                     </div>
                                 </div>
 
-                                <div class="d-flex gap-3">
-                                    <button class="btn btn-primary" onclick="saveNavConfig()" disabled>
-                                        <i class="fas fa-save me-1"></i>
-                                        Save Changes
-                                    </button>
-                                    <button class="btn btn-outline-secondary" onclick="resetNavConfig()" disabled>
-                                        <i class="fas fa-undo me-1"></i>
-                                        Reset to Default
-                                    </button>
+                                <div class="mt-4">
+                                    <div class="d-flex gap-3">
+                                        <button class="btn btn-primary" onclick="saveNavigationConfig()">
+                                            <i class="fas fa-save me-1"></i>
+                                            Save Navigation
+                                        </button>
+                                        <button class="btn btn-outline-primary" onclick="resetNavigationToDefault()">
+                                            <i class="fas fa-undo me-1"></i>
+                                            Reset to Default
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="exportNavigationConfig()">
+                                            <i class="fas fa-download me-1"></i>
+                                            Export Config
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 <div id="navEditorResult" class="mt-3"></div>
@@ -2108,6 +2320,24 @@
                         </div>
                         
                         <div class="col-lg-4">
+                            <div class="feature-box mb-3">
+                                <h6 class="mb-3"><i class="fas fa-cog me-2"></i>Role-Based Visibility</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enableRoleBasedNav" onchange="toggleRoleBasedNavigation()">
+                                    <label class="form-check-label" for="enableRoleBasedNav">
+                                        Enable role-based menu visibility
+                                    </label>
+                                </div>
+                                <div class="mt-3" id="roleSettings" style="display: none;">
+                                    <label class="form-label small">Available Roles:</label>
+                                    <div class="role-badges">
+                                        <span class="badge bg-primary role-badge" data-role="admin">Admin</span>
+                                        <span class="badge bg-secondary role-badge" data-role="user">User</span>
+                                        <span class="badge bg-success role-badge" data-role="guest">Guest</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="feature-box">
                                 <h6 class="mb-3"><i class="fas fa-lightbulb me-2"></i>Editor Features</h6>
                                 <ul class="list-unstyled">
@@ -2133,9 +2363,75 @@
                                     </li>
                                 </ul>
                                 
-                                <div class="alert alert-warning mt-4">
-                                    <small><i class="fas fa-exclamation-triangle me-1"></i>
-                                    <strong>Note:</strong> Navigation editor functionality is currently in development. This interface shows the planned features.</small>
+                                <div class="alert alert-info mt-4">
+                                    <small><i class="fas fa-info-circle me-1"></i>
+                                    <strong>Tip:</strong> Changes are saved to browser storage and will persist across sessions.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edit Menu Item Modal -->
+                    <div class="modal fade" id="editMenuModal" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Edit Menu Item</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <form id="editMenuForm">
+                                        <input type="hidden" id="editMenuId">
+                                        <div class="mb-3">
+                                            <label for="editMenuLabel" class="form-label">Label</label>
+                                            <input type="text" class="form-control" id="editMenuLabel" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="editMenuIcon" class="form-label">Icon (FontAwesome class)</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i id="editMenuIconPreview" class="fas fa-cog"></i></span>
+                                                <input type="text" class="form-control" id="editMenuIcon" placeholder="fas fa-cog" oninput="updateIconPreview()">
+                                            </div>
+                                            <div class="form-text">
+                                                Common icons: fas fa-home, fas fa-users, fas fa-cog, fas fa-chart-bar, fas fa-file
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="editMenuAction" class="form-label">Action</label>
+                                            <select class="form-control" id="editMenuAction">
+                                                <option value="section">Show Section</option>
+                                                <option value="url">Open URL</option>
+                                                <option value="function">Call Function</option>
+                                                <option value="submenu">Submenu Parent</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3" id="editMenuTargetContainer">
+                                            <label for="editMenuTarget" class="form-label">Target</label>
+                                            <input type="text" class="form-control" id="editMenuTarget" placeholder="dashboard">
+                                            <div class="form-text">Section ID, URL, or function name</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Role Visibility</label>
+                                            <div class="role-checkboxes">
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="checkbox" id="editRoleGuest" value="guest">
+                                                    <label class="form-check-label" for="editRoleGuest">Guest</label>
+                                                </div>
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="checkbox" id="editRoleUser" value="user">
+                                                    <label class="form-check-label" for="editRoleUser">User</label>
+                                                </div>
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="checkbox" id="editRoleAdmin" value="admin">
+                                                    <label class="form-check-label" for="editRoleAdmin">Admin</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-primary" onclick="saveMenuItemEdit()">Save Changes</button>
                                 </div>
                             </div>
                         </div>
@@ -2632,16 +2928,643 @@
         }
 
         // Navigation Editor Functions
+        let navigationConfig = {
+            items: [],
+            roleBasedVisibility: false
+        };
+
+        let draggedElement = null;
+        let currentEditingItem = null;
+
+        function initializeNavigationEditor() {
+            console.log('Initializing Navigation Editor...');
+            
+            // Load existing navigation configuration
+            loadNavigationConfig();
+            
+            // Render the navigation editor
+            renderNavigationEditor();
+            
+            // Load role-based settings
+            loadRoleBasedSettings();
+        }
+
+        function getDefaultNavigationConfig() {
+            return {
+                roleBasedVisibility: false,
+                items: [
+                    {
+                        id: 'dashboard',
+                        label: 'Dashboard',
+                        icon: 'fas fa-tachometer-alt',
+                        action: 'section',
+                        target: 'dashboard',
+                        visible: true,
+                        roles: ['guest', 'user', 'admin'],
+                        order: 1
+                    },
+                    {
+                        id: 'auth',
+                        label: 'Authentication',
+                        icon: 'fas fa-sign-in-alt',
+                        action: 'section',
+                        target: 'auth',
+                        visible: true,
+                        roles: ['guest', 'user', 'admin'],
+                        order: 2
+                    },
+                    {
+                        id: 'upload',
+                        label: 'File Upload',
+                        icon: 'fas fa-file-upload',
+                        action: 'section',
+                        target: 'upload',
+                        visible: true,
+                        roles: ['user', 'admin'],
+                        order: 3
+                    },
+                    {
+                        id: 'users',
+                        label: 'User Management',
+                        icon: 'fas fa-users',
+                        action: 'section',
+                        target: 'users',
+                        visible: true,
+                        roles: ['admin'],
+                        order: 4
+                    },
+                    {
+                        id: 'chat',
+                        label: 'AI Assistant',
+                        icon: 'fas fa-comments',
+                        action: 'function',
+                        target: 'openChatSection',
+                        visible: true,
+                        roles: ['user', 'admin'],
+                        order: 5
+                    },
+                    {
+                        id: 'applications',
+                        label: 'Applications',
+                        icon: 'fas fa-th-large',
+                        action: 'submenu',
+                        target: '',
+                        visible: true,
+                        roles: ['user', 'admin'],
+                        order: 6,
+                        submenu: [
+                            {
+                                id: 'wbs-app',
+                                label: 'WBS APP',
+                                icon: 'fas fa-project-diagram',
+                                action: 'section',
+                                target: 'wbs-app',
+                                visible: true,
+                                roles: ['user', 'admin']
+                            }
+                        ]
+                    },
+                    {
+                        id: 'configuration',
+                        label: 'Configuration',
+                        icon: 'fas fa-cog',
+                        action: 'submenu',
+                        target: '',
+                        visible: true,
+                        roles: ['admin'],
+                        order: 7,
+                        submenu: [
+                            {
+                                id: 'ai-config',
+                                label: 'AI Configuration',
+                                icon: 'fas fa-robot',
+                                action: 'section',
+                                target: 'ai-config',
+                                visible: true,
+                                roles: ['admin']
+                            },
+                            {
+                                id: 'file-config',
+                                label: 'File Upload Configuration',
+                                icon: 'fas fa-cloud-upload-alt',
+                                action: 'section',
+                                target: 'file-config',
+                                visible: true,
+                                roles: ['admin']
+                            },
+                            {
+                                id: 'nav-editor',
+                                label: 'Navigation Editor',
+                                icon: 'fas fa-edit',
+                                action: 'section',
+                                target: 'nav-editor',
+                                visible: true,
+                                roles: ['admin']
+                            }
+                        ]
+                    },
+                    {
+                        id: 'test-api',
+                        label: 'Test API',
+                        icon: 'fas fa-flask',
+                        action: 'function',
+                        target: 'testAPI',
+                        visible: true,
+                        roles: ['admin'],
+                        order: 8
+                    }
+                ]
+            };
+        }
+
+        function loadNavigationConfig() {
+            const saved = localStorage.getItem('navigationConfig');
+            if (saved) {
+                try {
+                    navigationConfig = JSON.parse(saved);
+                    console.log('Loaded navigation config:', navigationConfig);
+                } catch (e) {
+                    console.error('Error loading navigation config:', e);
+                    navigationConfig = getDefaultNavigationConfig();
+                }
+            } else {
+                navigationConfig = getDefaultNavigationConfig();
+            }
+        }
+
+        function saveNavigationConfig() {
+            try {
+                localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
+                console.log('Navigation config saved:', navigationConfig);
+                
+                // Apply the changes to the actual navigation
+                applyNavigationChanges();
+                
+                document.getElementById('navEditorResult').innerHTML = 
+                    '<div class="alert alert-success"><i class="fas fa-check me-2"></i>Navigation configuration saved successfully!</div>';
+                
+                setTimeout(() => {
+                    document.getElementById('navEditorResult').innerHTML = '';
+                }, 3000);
+            } catch (e) {
+                console.error('Error saving navigation config:', e);
+                document.getElementById('navEditorResult').innerHTML = 
+                    '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>Error saving navigation configuration.</div>';
+            }
+        }
+
+        function resetNavigationToDefault() {
+            if (confirm('Are you sure you want to reset the navigation to default settings? This will remove all custom menu items.')) {
+                navigationConfig = getDefaultNavigationConfig();
+                localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
+                renderNavigationEditor();
+                loadRoleBasedSettings();
+                
+                document.getElementById('navEditorResult').innerHTML = 
+                    '<div class="alert alert-info"><i class="fas fa-info me-2"></i>Navigation reset to default configuration.</div>';
+                
+                setTimeout(() => {
+                    document.getElementById('navEditorResult').innerHTML = '';
+                }, 3000);
+            }
+        }
+
+        function renderNavigationEditor() {
+            const container = document.getElementById('menuItemsList');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            // Sort items by order
+            const sortedItems = [...navigationConfig.items].sort((a, b) => (a.order || 0) - (b.order || 0));
+            
+            sortedItems.forEach((item, index) => {
+                const itemElement = createMenuItemElement(item, index);
+                container.appendChild(itemElement);
+            });
+            
+            // Initialize drag and drop
+            initializeDragAndDrop();
+        }
+
+        function createMenuItemElement(item, index) {
+            const div = document.createElement('div');
+            div.className = `menu-item-editor ${!item.visible ? 'menu-item-hidden' : ''}`;
+            div.draggable = true;
+            div.dataset.itemId = item.id;
+            div.dataset.index = index;
+            
+            const rolesText = item.roles ? item.roles.join(', ') : 'All roles';
+            const actionText = item.action === 'section' ? 'Show Section' : 
+                             item.action === 'function' ? 'Call Function' :
+                             item.action === 'url' ? 'Open URL' : 'Submenu';
+            
+            div.innerHTML = `
+                <div class="menu-item-header">
+                    <i class="fas fa-grip-vertical drag-handle"></i>
+                    <i class="${item.icon} menu-item-icon"></i>
+                    <span class="menu-item-label">${item.label}</span>
+                    <div class="menu-item-controls">
+                        <button class="menu-item-btn edit" onclick="editMenuItem('${item.id}')" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="menu-item-btn toggle" onclick="toggleMenuItemVisibility('${item.id}')" title="${item.visible ? 'Hide' : 'Show'}">
+                            <i class="fas fa-${item.visible ? 'eye-slash' : 'eye'}"></i>
+                        </button>
+                        <button class="menu-item-btn delete" onclick="deleteMenuItem('${item.id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="menu-item-meta">
+                    <span class="meta-badge">${actionText}</span>
+                    <span class="meta-badge roles">${rolesText}</span>
+                    ${item.target ? `<span class="meta-badge">→ ${item.target}</span>` : ''}
+                </div>
+            `;
+            
+            // Add submenu items if they exist
+            if (item.submenu && item.submenu.length > 0) {
+                const submenuContainer = document.createElement('div');
+                submenuContainer.className = 'menu-item-submenu';
+                
+                item.submenu.forEach(subItem => {
+                    const subElement = createSubmenuItemElement(subItem, item.id);
+                    submenuContainer.appendChild(subElement);
+                });
+                
+                div.appendChild(submenuContainer);
+            }
+            
+            return div;
+        }
+
+        function createSubmenuItemElement(subItem, parentId) {
+            const div = document.createElement('div');
+            div.className = `menu-item-editor ${!subItem.visible ? 'menu-item-hidden' : ''}`;
+            div.dataset.itemId = subItem.id;
+            div.dataset.parentId = parentId;
+            
+            const rolesText = subItem.roles ? subItem.roles.join(', ') : 'All roles';
+            const actionText = subItem.action === 'section' ? 'Show Section' : 
+                             subItem.action === 'function' ? 'Call Function' :
+                             subItem.action === 'url' ? 'Open URL' : 'Action';
+            
+            div.innerHTML = `
+                <div class="menu-item-header">
+                    <i class="${subItem.icon} menu-item-icon"></i>
+                    <span class="menu-item-label">${subItem.label}</span>
+                    <div class="menu-item-controls">
+                        <button class="menu-item-btn edit" onclick="editSubmenuItem('${parentId}', '${subItem.id}')" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="menu-item-btn toggle" onclick="toggleSubmenuItemVisibility('${parentId}', '${subItem.id}')" title="${subItem.visible ? 'Hide' : 'Show'}">
+                            <i class="fas fa-${subItem.visible ? 'eye-slash' : 'eye'}"></i>
+                        </button>
+                        <button class="menu-item-btn delete" onclick="deleteSubmenuItem('${parentId}', '${subItem.id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="menu-item-meta">
+                    <span class="meta-badge">${actionText}</span>
+                    <span class="meta-badge roles">${rolesText}</span>
+                    ${subItem.target ? `<span class="meta-badge">→ ${subItem.target}</span>` : ''}
+                </div>
+            `;
+            
+            return div;
+        }
+
+        function initializeDragAndDrop() {
+            const items = document.querySelectorAll('.menu-item-editor[data-index]');
+            
+            items.forEach(item => {
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleDrop);
+                item.addEventListener('dragend', handleDragEnd);
+                item.addEventListener('dragenter', handleDragEnter);
+                item.addEventListener('dragleave', handleDragLeave);
+            });
+        }
+
+        function handleDragStart(e) {
+            draggedElement = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.outerHTML);
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+
+        function handleDragEnter(e) {
+            if (this !== draggedElement) {
+                this.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            
+            if (draggedElement !== this) {
+                const draggedIndex = parseInt(draggedElement.dataset.index);
+                const targetIndex = parseInt(this.dataset.index);
+                
+                // Reorder the items in the configuration
+                const draggedItem = navigationConfig.items[draggedIndex];
+                navigationConfig.items.splice(draggedIndex, 1);
+                navigationConfig.items.splice(targetIndex, 0, draggedItem);
+                
+                // Update order numbers
+                navigationConfig.items.forEach((item, index) => {
+                    item.order = index + 1;
+                });
+                
+                // Re-render the editor
+                renderNavigationEditor();
+                
+                console.log('Items reordered:', navigationConfig.items.map(i => i.label));
+            }
+            
+            return false;
+        }
+
+        function handleDragEnd(e) {
+            const items = document.querySelectorAll('.menu-item-editor');
+            items.forEach(item => {
+                item.classList.remove('drag-over', 'dragging');
+            });
+            draggedElement = null;
+        }
+
+        function addCustomMenuItem() {
+            const newItem = {
+                id: 'custom_' + Date.now(),
+                label: 'New Menu Item',
+                icon: 'fas fa-star',
+                action: 'section',
+                target: 'dashboard',
+                visible: true,
+                roles: ['user', 'admin'],
+                order: navigationConfig.items.length + 1
+            };
+            
+            navigationConfig.items.push(newItem);
+            renderNavigationEditor();
+            
+            // Automatically open edit modal for the new item
+            setTimeout(() => {
+                editMenuItem(newItem.id);
+            }, 100);
+        }
+
+        function editMenuItem(itemId) {
+            const item = navigationConfig.items.find(i => i.id === itemId);
+            if (!item) return;
+            
+            currentEditingItem = { type: 'main', id: itemId };
+            
+            // Populate the modal
+            document.getElementById('editMenuId').value = itemId;
+            document.getElementById('editMenuLabel').value = item.label;
+            document.getElementById('editMenuIcon').value = item.icon;
+            document.getElementById('editMenuAction').value = item.action;
+            document.getElementById('editMenuTarget').value = item.target || '';
+            
+            // Set role checkboxes
+            document.getElementById('editRoleGuest').checked = item.roles.includes('guest');
+            document.getElementById('editRoleUser').checked = item.roles.includes('user');
+            document.getElementById('editRoleAdmin').checked = item.roles.includes('admin');
+            
+            updateIconPreview();
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('editMenuModal'));
+            modal.show();
+        }
+
+        function editSubmenuItem(parentId, itemId) {
+            const parentItem = navigationConfig.items.find(i => i.id === parentId);
+            if (!parentItem || !parentItem.submenu) return;
+            
+            const item = parentItem.submenu.find(i => i.id === itemId);
+            if (!item) return;
+            
+            currentEditingItem = { type: 'submenu', parentId: parentId, id: itemId };
+            
+            // Populate the modal
+            document.getElementById('editMenuId').value = itemId;
+            document.getElementById('editMenuLabel').value = item.label;
+            document.getElementById('editMenuIcon').value = item.icon;
+            document.getElementById('editMenuAction').value = item.action;
+            document.getElementById('editMenuTarget').value = item.target || '';
+            
+            // Set role checkboxes
+            document.getElementById('editRoleGuest').checked = item.roles.includes('guest');
+            document.getElementById('editRoleUser').checked = item.roles.includes('user');
+            document.getElementById('editRoleAdmin').checked = item.roles.includes('admin');
+            
+            updateIconPreview();
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('editMenuModal'));
+            modal.show();
+        }
+
+        function saveMenuItemEdit() {
+            if (!currentEditingItem) return;
+            
+            const label = document.getElementById('editMenuLabel').value;
+            const icon = document.getElementById('editMenuIcon').value;
+            const action = document.getElementById('editMenuAction').value;
+            const target = document.getElementById('editMenuTarget').value;
+            
+            const roles = [];
+            if (document.getElementById('editRoleGuest').checked) roles.push('guest');
+            if (document.getElementById('editRoleUser').checked) roles.push('user');
+            if (document.getElementById('editRoleAdmin').checked) roles.push('admin');
+            
+            let item;
+            if (currentEditingItem.type === 'main') {
+                item = navigationConfig.items.find(i => i.id === currentEditingItem.id);
+            } else {
+                const parentItem = navigationConfig.items.find(i => i.id === currentEditingItem.parentId);
+                item = parentItem.submenu.find(i => i.id === currentEditingItem.id);
+            }
+            
+            if (item) {
+                item.label = label;
+                item.icon = icon;
+                item.action = action;
+                item.target = target;
+                item.roles = roles;
+                
+                renderNavigationEditor();
+                
+                // Close the modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editMenuModal'));
+                modal.hide();
+                
+                console.log('Menu item updated:', item);
+            }
+        }
+
+        function updateIconPreview() {
+            const iconInput = document.getElementById('editMenuIcon');
+            const preview = document.getElementById('editMenuIconPreview');
+            
+            if (iconInput && preview) {
+                preview.className = iconInput.value || 'fas fa-cog';
+            }
+        }
+
+        function toggleMenuItemVisibility(itemId) {
+            const item = navigationConfig.items.find(i => i.id === itemId);
+            if (item) {
+                item.visible = !item.visible;
+                renderNavigationEditor();
+                console.log(`Menu item ${itemId} visibility:`, item.visible);
+            }
+        }
+
+        function toggleSubmenuItemVisibility(parentId, itemId) {
+            const parentItem = navigationConfig.items.find(i => i.id === parentId);
+            if (parentItem && parentItem.submenu) {
+                const item = parentItem.submenu.find(i => i.id === itemId);
+                if (item) {
+                    item.visible = !item.visible;
+                    renderNavigationEditor();
+                    console.log(`Submenu item ${itemId} visibility:`, item.visible);
+                }
+            }
+        }
+
+        function deleteMenuItem(itemId) {
+            if (confirm('Are you sure you want to delete this menu item?')) {
+                navigationConfig.items = navigationConfig.items.filter(i => i.id !== itemId);
+                renderNavigationEditor();
+                console.log(`Menu item ${itemId} deleted`);
+            }
+        }
+
+        function deleteSubmenuItem(parentId, itemId) {
+            if (confirm('Are you sure you want to delete this submenu item?')) {
+                const parentItem = navigationConfig.items.find(i => i.id === parentId);
+                if (parentItem && parentItem.submenu) {
+                    parentItem.submenu = parentItem.submenu.filter(i => i.id !== itemId);
+                    renderNavigationEditor();
+                    console.log(`Submenu item ${itemId} deleted`);
+                }
+            }
+        }
+
+        function toggleRoleBasedNavigation() {
+            const checkbox = document.getElementById('enableRoleBasedNav');
+            const roleSettings = document.getElementById('roleSettings');
+            
+            navigationConfig.roleBasedVisibility = checkbox.checked;
+            roleSettings.style.display = checkbox.checked ? 'block' : 'none';
+            
+            console.log('Role-based navigation:', navigationConfig.roleBasedVisibility);
+        }
+
+        function loadRoleBasedSettings() {
+            const checkbox = document.getElementById('enableRoleBasedNav');
+            const roleSettings = document.getElementById('roleSettings');
+            
+            if (checkbox) {
+                checkbox.checked = navigationConfig.roleBasedVisibility;
+                roleSettings.style.display = navigationConfig.roleBasedVisibility ? 'block' : 'none';
+            }
+        }
+
+        function expandAllMenus() {
+            // This would expand all submenu items in the editor
+            const submenuElements = document.querySelectorAll('.menu-item-submenu');
+            submenuElements.forEach(el => {
+                el.style.display = 'block';
+            });
+        }
+
+        function collapseAllMenus() {
+            // This would collapse all submenu items in the editor
+            const submenuElements = document.querySelectorAll('.menu-item-submenu');
+            submenuElements.forEach(el => {
+                el.style.display = 'none';
+            });
+        }
+
+        function previewNavigation() {
+            // Generate a preview of how the navigation will look
+            alert('Navigation preview would show here. This feature generates a live preview of the navigation based on current settings.');
+        }
+
+        function exportNavigationConfig() {
+            const dataStr = JSON.stringify(navigationConfig, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'navigation-config.json';
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function applyNavigationChanges() {
+            // This function would actually update the real navigation sidebar
+            // For now, we'll just log that changes would be applied
+            console.log('Applying navigation changes to sidebar...');
+            
+            // In a real implementation, this would:
+            // 1. Get the current user's role
+            // 2. Filter menu items based on role permissions
+            // 3. Update the actual sidebar HTML
+            // 4. Re-initialize event listeners
+            
+            document.getElementById('navEditorResult').innerHTML += 
+                '<div class="alert alert-warning mt-2"><i class="fas fa-info me-2"></i>Note: Live navigation updates require page refresh in this demo.</div>';
+        }
+
+        // Initialize the navigation editor when the nav-editor section is shown
+        function initNavEditorWhenShown() {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        const navEditor = document.getElementById('nav-editor');
+                        if (navEditor && navEditor.style.display !== 'none') {
+                            initializeNavigationEditor();
+                            observer.disconnect(); // Stop observing once initialized
+                        }
+                    }
+                });
+            });
+            
+            const navEditor = document.getElementById('nav-editor');
+            if (navEditor) {
+                observer.observe(navEditor, { attributes: true });
+            }
+        }
+
+        // Legacy function kept for compatibility
         function saveNavConfig() {
-            // Placeholder for navigation configuration save
-            document.getElementById('navEditorResult').innerHTML = 
-                '<div class="alert alert-info"><i class="fas fa-info me-2"></i>Navigation editor functionality is coming soon!</div>';
+            saveNavigationConfig();
         }
 
         function resetNavConfig() {
-            // Placeholder for navigation configuration reset
-            document.getElementById('navEditorResult').innerHTML = 
-                '<div class="alert alert-info"><i class="fas fa-info me-2"></i>Navigation reset functionality is coming soon!</div>';
+            resetNavigationToDefault();
         }
 
         // Load saved configurations on page load
@@ -3301,6 +4224,22 @@
                 addNavigationListeners();
             } catch (error) {
                 console.error('Error adding navigation listeners:', error);
+            }
+            
+            // Initialize navigation editor observer
+            try {
+                initNavEditorWhenShown();
+            } catch (error) {
+                console.error('Error initializing navigation editor:', error);
+            }
+            
+            // Load saved configurations
+            try {
+                loadSavedConfigurations();
+                setupLiveConfigurationUpdates();
+                setupDestinationPathUpdates();
+            } catch (error) {
+                console.error('Error loading saved configurations:', error);
             }
         });
 
@@ -4183,38 +5122,6 @@
             // Redirect to AI Configuration instead of showing settings
             showSection('ai-config');
         }
-
-        // Initialize page on load
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Page loaded, initializing...');
-            
-            // Initialize user dropdown
-            if (typeof initializeUserDropdown === 'function') {
-                initializeUserDropdown();
-            }
-            
-            // Load saved configurations
-            if (typeof loadSavedConfigurations === 'function') {
-                loadSavedConfigurations();
-            }
-            
-            // Setup live configuration updates
-            if (typeof setupLiveConfigurationUpdates === 'function') {
-                setupLiveConfigurationUpdates();
-            }
-            
-            // Setup destination path auto-generation
-            if (typeof setupDestinationPathUpdates === 'function') {
-                setupDestinationPathUpdates();
-            }
-            
-            // Update model badge
-            if (typeof updateModelBadge === 'function') {
-                updateModelBadge();
-            }
-            
-            console.log('Page initialization complete');
-        });
         
     </script>
 </body>

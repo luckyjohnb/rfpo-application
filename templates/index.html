@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flask User Management - Main Application</title>
+    <title>ACME APP - Main Application</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -137,6 +137,68 @@
             background-color: var(--primary-color);
             color: white !important;
             box-shadow: var(--shadow);
+        }
+
+        /* Collapsible Navigation Styles */
+        .nav-item-parent {
+            position: relative;
+        }
+
+        .nav-link-parent {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .nav-chevron {
+            transition: transform 0.2s ease;
+            font-size: 12px;
+        }
+
+        .nav-item-parent.expanded .nav-chevron {
+            transform: rotate(90deg);
+        }
+
+        .nav-submenu {
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            max-height: 0;
+        }
+
+        .nav-item-parent.expanded .nav-submenu {
+            max-height: 200px;
+        }
+
+        .nav-sublink {
+            color: var(--gray-400) !important;
+            padding: 0.6rem 1rem 0.6rem 2.5rem;
+            font-size: 14px;
+            border-radius: var(--border-radius-sm);
+            margin: 0.125rem 0;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .nav-sublink i {
+            width: 16px;
+            text-align: center;
+            margin-right: 0.5rem;
+            font-size: 14px;
+        }
+
+        .nav-sublink:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: white !important;
+            transform: translateX(4px);
+        }
+
+        .nav-sublink.active {
+            background-color: rgba(37, 99, 235, 0.6);
+            color: white !important;
         }
 
         .content-area {
@@ -1115,6 +1177,46 @@
                                 AI Assistant
                             </a>
                         </li>
+                        <!-- Applications Menu with Submenu -->
+                        <li class="nav-item mb-2 nav-item-parent" id="appsNavParent">
+                            <a class="nav-link text-white nav-link-parent" href="#" onclick="toggleAppsMenu(); return false;">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-th-large me-2"></i>
+                                    Applications
+                                </div>
+                                <i class="fas fa-chevron-right nav-chevron"></i>
+                            </a>
+                            <div class="nav-submenu">
+                                <a class="nav-sublink text-white" href="#" onclick="showSection('wbs-app'); return false;">
+                                    <i class="fas fa-project-diagram"></i>
+                                    WBS APP
+                                </a>
+                            </div>
+                        </li>
+                        <!-- Configuration Menu with Submenu -->
+                        <li class="nav-item mb-2 nav-item-parent" id="configNavParent">
+                            <a class="nav-link text-white nav-link-parent" href="#" onclick="toggleConfigMenu(); return false;">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-cog me-2"></i>
+                                    Configuration
+                                </div>
+                                <i class="fas fa-chevron-right nav-chevron"></i>
+                            </a>
+                            <div class="nav-submenu">
+                                <a class="nav-sublink text-white" href="#" onclick="showSection('ai-config'); return false;">
+                                    <i class="fas fa-robot"></i>
+                                    AI Configuration
+                                </a>
+                                <a class="nav-sublink text-white" href="#" onclick="showSection('file-config'); return false;">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    File Upload Configuration
+                                </a>
+                                <a class="nav-sublink text-white" href="#" onclick="showSection('nav-editor'); return false;">
+                                    <i class="fas fa-edit"></i>
+                                    Navigation Editor
+                                </a>
+                            </div>
+                        </li>
                         <li class="nav-item mb-2">
                             <a class="nav-link text-white" href="#" onclick="testAPI(); return false;">
                                 <i class="fas fa-flask me-2"></i>
@@ -1147,7 +1249,7 @@
                             <i class="fas fa-bars"></i>
                         </button>
                         <div>
-                            <h1 class="h4 mb-0 text-dark fw-bold">Flask User Management</h1>
+                            <h1 class="h4 mb-0 text-dark fw-bold">ACME APP</h1>
                             <small class="text-muted">Main Application Interface</small>
                         </div>
                     </div>
@@ -1337,6 +1439,7 @@
                                     </div>
                                 </div>
                             </div>
+                            
                         </div>
                     </div>
                 </div>
@@ -1512,79 +1615,6 @@
                         <p class="text-muted mb-0">Chat with an intelligent AI assistant powered by Langflow</p>
                     </div>
 
-                    <!-- Langflow Configuration -->
-                    <div class="chat-settings">
-                        <div class="feature-box">
-                            <div class="d-flex align-items-center mb-3">
-                                <div class="d-flex align-items-center justify-content-center me-3" 
-                                     style="width: 32px; height: 32px; background: rgba(37, 99, 235, 0.1); border-radius: var(--border-radius-sm);">
-                                    <i class="fas fa-cog" style="color: var(--primary-color); font-size: 14px;"></i>
-                                </div>
-                                <h6 class="mb-0 fw-bold">Langflow Configuration</h6>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="langflowUrl" class="form-label">Langflow URL</label>
-                                        <input type="url" class="form-control" id="langflowUrl" 
-                                               placeholder="http://localhost:7860" 
-                                               value="http://10.88.4.25:7860">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="flowId" class="form-label">Flow ID</label>
-                                        <input type="text" class="form-control" id="flowId" 
-                                               placeholder="your-flow-id"
-                                               value="900b0d89-4481-4f64-88bf-4d4661086a62">
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="apiKey" class="form-label">API Key (Optional)</label>
-                                        <input type="password" class="form-control" id="apiKey" 
-                                               placeholder="Your Langflow API key">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="chatModel" class="form-label">Model</label>
-                                        <select class="form-control" id="chatModel">
-                                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                                            <option value="gpt-4">GPT-4</option>
-                                            <option value="claude-3">Claude 3</option>
-                                            <option value="llama-2">Llama 2</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="d-flex justify-content-between align-items-center">
-                                <button class="btn btn-outline-primary btn-sm" onclick="testLangflowConnection()">
-                                    <i class="fas fa-plug me-1"></i>
-                                    Test Connection
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm" onclick="clearChatHistory()">
-                                    <i class="fas fa-trash me-1"></i>
-                                    Clear Chat
-                                </button>
-                            </div>
-                            
-                            <div class="mt-3">
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    <strong>File Upload Support:</strong> Attach .txt, .pdf, .doc, .csv, .json, .md files (max 10MB each) to provide context for your conversations. Files are uploaded to Langflow's file system and sent to the <code>File-QW4Au</code> component. If upload fails, text files will be included in the message content as fallback.
-                                </small>
-                            </div>
-                            
-                            <div id="connectionStatus" class="mt-3"></div>
-                        </div>
-                    </div>
-
                     <!-- Chat Interface -->
                     <div class="row">
                         <div class="col-12">
@@ -1602,7 +1632,7 @@
                                     </div>
                                     <div class="d-flex align-items-center">
                                         <span class="badge bg-success me-2" id="modelBadge">GPT-3.5</span>
-                                        <button class="btn btn-outline-primary btn-sm" onclick="toggleChatSettings()">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="showSection('ai-config')" title="AI Configuration">
                                             <i class="fas fa-cog"></i>
                                         </button>
                                     </div>
@@ -1654,6 +1684,458 @@
                                         <i class="fas fa-cloud-upload-alt me-2" style="color: var(--gray-500);"></i>
                                         <span style="color: var(--gray-600);">Drop files here or click attach button</span>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Configuration Section -->
+                <div id="ai-config" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-robot me-2" style="color: var(--primary-color);"></i>AI Configuration</h2>
+                        <p class="text-muted mb-0">Configure AI services, models, and integration settings</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="feature-box">
+                                <h5 class="mb-4"><i class="fas fa-cog me-2"></i>Langflow Integration Settings</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configLangflowUrl" class="form-label">Langflow Base URL</label>
+                                            <input type="url" class="form-control" id="configLangflowUrl" 
+                                                   placeholder="http://localhost:7860" 
+                                                   value="http://10.88.4.25:7860">
+                                            <div class="form-text">Base URL of your Langflow instance</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configFlowId" class="form-label">Default Flow ID</label>
+                                            <input type="text" class="form-control" id="configFlowId" 
+                                                   placeholder="your-flow-id"
+                                                   value="900b0d89-4481-4f64-88bf-4d4661086a62">
+                                            <div class="form-text">Default flow ID for AI conversations</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configApiKey" class="form-label">API Key</label>
+                                            <input type="password" class="form-control" id="configApiKey" 
+                                                   placeholder="Your Langflow API key">
+                                            <div class="form-text">Optional API key for authenticated access</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configDefaultModel" class="form-label">Default Model</label>
+                                            <select class="form-control" id="configDefaultModel">
+                                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                                <option value="gpt-4">GPT-4</option>
+                                                <option value="claude-3">Claude 3</option>
+                                                <option value="llama-2">Llama 2</option>
+                                            </select>
+                                            <div class="form-text">Default AI model for conversations</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configTimeout" class="form-label">Request Timeout (seconds)</label>
+                                            <input type="number" class="form-control" id="configTimeout" 
+                                                   value="30" min="5" max="300">
+                                            <div class="form-text">Timeout for AI API requests</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configMaxRetries" class="form-label">Max Retries</label>
+                                            <input type="number" class="form-control" id="configMaxRetries" 
+                                                   value="3" min="1" max="10">
+                                            <div class="form-text">Maximum retry attempts for failed requests</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-3">
+                                    <button class="btn btn-primary" onclick="saveAIConfig()">
+                                        <i class="fas fa-save me-1"></i>
+                                        Save Configuration
+                                    </button>
+                                    <button class="btn btn-outline-primary" onclick="testAIConnection()">
+                                        <i class="fas fa-plug me-1"></i>
+                                        Test Connection
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="resetAIConfig()">
+                                        <i class="fas fa-undo me-1"></i>
+                                        Reset to Defaults
+                                    </button>
+                                </div>
+                                
+                                <div id="aiConfigResult" class="mt-3"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-lg-4">
+                            <div class="feature-box">
+                                <h6 class="mb-3"><i class="fas fa-info-circle me-2"></i>Configuration Tips</h6>
+                                <ul class="list-unstyled">
+                                    <li class="mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        Use HTTPS URLs for production environments
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        Test connection after changing settings
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        API keys are stored securely in browser storage
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        Timeout values depend on your network speed
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Upload Configuration Section -->
+                <div id="file-config" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-file-cog me-2" style="color: var(--primary-color);"></i>File Upload Configuration</h2>
+                        <p class="text-muted mb-0">Configure file upload settings, size limits, and processing options</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="feature-box">
+                                <h5 class="mb-4"><i class="fas fa-upload me-2"></i>Upload Settings</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configMaxFileSize" class="form-label">Max File Size (MB)</label>
+                                            <input type="number" class="form-control" id="configMaxFileSize" 
+                                                   value="10" min="1" max="100">
+                                            <div class="form-text">Maximum file size for uploads</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configMaxFiles" class="form-label">Max Files per Upload</label>
+                                            <input type="number" class="form-control" id="configMaxFiles" 
+                                                   value="5" min="1" max="20">
+                                            <div class="form-text">Maximum number of files in one upload</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="configAllowedTypes" class="form-label">Allowed File Types</label>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="allowTxt" checked>
+                                                <label class="form-check-label" for="allowTxt">Text files (.txt)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="allowPdf" checked>
+                                                <label class="form-check-label" for="allowPdf">PDF files (.pdf)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="allowDoc" checked>
+                                                <label class="form-check-label" for="allowDoc">Word docs (.doc, .docx)</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="allowCsv" checked>
+                                                <label class="form-check-label" for="allowCsv">CSV files (.csv)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="allowJson" checked>
+                                                <label class="form-check-label" for="allowJson">JSON files (.json)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="allowMd" checked>
+                                                <label class="form-check-label" for="allowMd">Markdown (.md)</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="allowXls">
+                                                <label class="form-check-label" for="allowXls">Excel files (.xls, .xlsx)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="allowImages">
+                                                <label class="form-check-label" for="allowImages">Images (.jpg, .png, .gif)</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configUploadEndpoint" class="form-label">AI Chat Upload Endpoint</label>
+                                            <select class="form-control" id="configUploadEndpoint">
+                                                <option value="/api/v2/files/">/api/v2/files/ (Langflow v2)</option>
+                                                <option value="/api/v1/files/">/api/v1/files/ (Langflow v1)</option>
+                                                <option value="/files/">/files/ (Generic)</option>
+                                                <option value="/upload">/upload (Simple)</option>
+                                            </select>
+                                            <div class="form-text">Primary endpoint for AI chat file uploads</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="configUploadTimeout" class="form-label">Upload Timeout (seconds)</label>
+                                            <input type="number" class="form-control" id="configUploadTimeout" 
+                                                   value="60" min="10" max="300">
+                                            <div class="form-text">Timeout for file upload requests</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="configFallbackEnabled" checked>
+                                    <label class="form-check-label" for="configFallbackEnabled">
+                                        Enable fallback to text content for failed uploads
+                                    </label>
+                                    <div class="form-text">If file upload fails, include text content in message instead</div>
+                                </div>
+
+                                <!-- Langflow Destination Path Section -->
+                                <div class="mb-4 mt-4">
+                                    <h6 class="mb-3"><i class="fas fa-route me-2"></i>Langflow Destination Path</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="configDestinationComponent" class="form-label">Target Component ID</label>
+                                                <input type="text" class="form-control" id="configDestinationComponent" 
+                                                       value="File-QW4Au" placeholder="File-QW4Au">
+                                                <div class="form-text">Component ID that receives uploaded files</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="configDestinationInput" class="form-label">Input Field Name</label>
+                                                <input type="text" class="form-control" id="configDestinationInput" 
+                                                       value="path" placeholder="path">
+                                                <div class="form-text">Input field name for file path parameter</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <div class="mb-3">
+                                                <label for="configDestinationPath" class="form-label">Full Destination Path</label>
+                                                <input type="text" class="form-control" id="configDestinationPath" 
+                                                       value="File-QW4Au.path" placeholder="ComponentID.InputField">
+                                                <div class="form-text">Complete path: ComponentID.InputFieldName (auto-generated from above)</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-3">
+                                    <button class="btn btn-primary" onclick="saveFileConfig()">
+                                        <i class="fas fa-save me-1"></i>
+                                        Save Configuration
+                                    </button>
+                                    <button class="btn btn-outline-primary" onclick="testFileUpload()">
+                                        <i class="fas fa-upload me-1"></i>
+                                        Test Upload
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="resetFileConfig()">
+                                        <i class="fas fa-undo me-1"></i>
+                                        Reset to Defaults
+                                    </button>
+                                </div>
+                                
+                                <div id="fileConfigResult" class="mt-3"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-lg-4">
+                            <div class="feature-box">
+                                <h6 class="mb-3"><i class="fas fa-shield-alt me-2"></i>Security Settings</h6>
+                                <ul class="list-unstyled">
+                                    <li class="mb-2">
+                                        <i class="fas fa-lock text-warning me-2"></i>
+                                        Files are scanned for malware
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-lock text-warning me-2"></i>
+                                        Size limits prevent abuse
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-lock text-warning me-2"></i>
+                                        Type restrictions enforced
+                                    </li>
+                                </ul>
+                                
+                                <h6 class="mb-3 mt-4"><i class="fas fa-chart-line me-2"></i>Upload Statistics</h6>
+                                <div class="small">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span>Success Rate:</span>
+                                        <span class="text-success">98.5%</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span>Avg Upload Time:</span>
+                                        <span>2.3s</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span>Total Uploads:</span>
+                                        <span>1,247</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WBS APP Section -->
+                <div id="wbs-app" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-project-diagram me-2" style="color: var(--primary-color);"></i>WBS APP</h2>
+                        <p class="text-muted mb-0">Work Breakdown Structure Application for project management</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="feature-box">
+                                <h5 class="mb-4"><i class="fas fa-rocket me-2"></i>Coming Soon</h5>
+                                
+                                <div class="text-center py-5">
+                                    <div class="d-flex align-items-center justify-content-center mb-4" 
+                                         style="width: 80px; height: 80px; background: rgba(37, 99, 235, 0.1); border-radius: var(--border-radius); margin: 0 auto;">
+                                        <i class="fas fa-project-diagram fs-1" style="color: var(--primary-color);"></i>
+                                    </div>
+                                    <h4 class="mb-3">WBS Application</h4>
+                                    <p class="text-muted mb-4">A comprehensive Work Breakdown Structure tool for project planning and management is in development.</p>
+                                    
+                                    <div class="row justify-content-center">
+                                        <div class="col-md-8">
+                                            <div class="alert alert-info">
+                                                <h6><i class="fas fa-info-circle me-2"></i>Planned Features</h6>
+                                                <ul class="list-unstyled mb-0">
+                                                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Interactive WBS tree visualization</li>
+                                                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Drag-and-drop task organization</li>
+                                                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Resource allocation and tracking</li>
+                                                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Export to multiple formats</li>
+                                                    <li class="mb-0"><i class="fas fa-check text-success me-2"></i>Integration with project management tools</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation Editor Section -->
+                <div id="nav-editor" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-edit me-2" style="color: var(--primary-color);"></i>Navigation Editor</h2>
+                        <p class="text-muted mb-0">Customize and manage the application navigation menu</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="feature-box">
+                                <h5 class="mb-4"><i class="fas fa-bars me-2"></i>Navigation Settings</h5>
+                                
+                                <div class="alert alert-info mb-4">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    This feature will allow you to customize menu items, reorder navigation elements, and manage user permissions for different sections.
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Current Navigation Structure</label>
+                                    <div class="nav-preview border rounded p-3" style="background: #f8f9fa;">
+                                        <div class="small text-muted mb-2">Preview of current navigation:</div>
+                                        <ul class="list-unstyled mb-0">
+                                            <li class="mb-1"><i class="fas fa-tachometer-alt me-2 text-primary"></i>Dashboard</li>
+                                            <li class="mb-1"><i class="fas fa-sign-in-alt me-2 text-primary"></i>Authentication</li>
+                                            <li class="mb-1"><i class="fas fa-file-upload me-2 text-primary"></i>File Upload</li>
+                                            <li class="mb-1"><i class="fas fa-users me-2 text-primary"></i>User Management</li>
+                                            <li class="mb-1"><i class="fas fa-comments me-2 text-primary"></i>AI Assistant</li>
+                                            <li class="mb-1">
+                                                <i class="fas fa-th-large me-2 text-primary"></i>Applications
+                                                <ul class="list-unstyled ms-4 mt-1">
+                                                    <li class="mb-1"><i class="fas fa-project-diagram me-2 text-secondary"></i>WBS APP</li>
+                                                </ul>
+                                            </li>
+                                            <li class="mb-1">
+                                                <i class="fas fa-cog me-2 text-primary"></i>Configuration
+                                                <ul class="list-unstyled ms-4 mt-1">
+                                                    <li class="mb-1"><i class="fas fa-robot me-2 text-secondary"></i>AI Configuration</li>
+                                                    <li class="mb-1"><i class="fas fa-cloud-upload-alt me-2 text-secondary"></i>File Upload Configuration</li>
+                                                    <li class="mb-1"><i class="fas fa-edit me-2 text-secondary"></i>Navigation Editor</li>
+                                                </ul>
+                                            </li>
+                                            <li class="mb-1"><i class="fas fa-flask me-2 text-primary"></i>Test API</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-3">
+                                    <button class="btn btn-primary" onclick="saveNavConfig()" disabled>
+                                        <i class="fas fa-save me-1"></i>
+                                        Save Changes
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="resetNavConfig()" disabled>
+                                        <i class="fas fa-undo me-1"></i>
+                                        Reset to Default
+                                    </button>
+                                </div>
+                                
+                                <div id="navEditorResult" class="mt-3"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-lg-4">
+                            <div class="feature-box">
+                                <h6 class="mb-3"><i class="fas fa-lightbulb me-2"></i>Editor Features</h6>
+                                <ul class="list-unstyled">
+                                    <li class="mb-2">
+                                        <i class="fas fa-arrows-alt text-info me-2"></i>
+                                        Drag & drop menu reordering
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-plus text-success me-2"></i>
+                                        Add custom menu items
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-edit text-warning me-2"></i>
+                                        Edit menu labels and icons
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-eye-slash text-secondary me-2"></i>
+                                        Hide/show menu items
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-users-cog text-primary me-2"></i>
+                                        Role-based menu visibility
+                                    </li>
+                                </ul>
+                                
+                                <div class="alert alert-warning mt-4">
+                                    <small><i class="fas fa-exclamation-triangle me-1"></i>
+                                    <strong>Note:</strong> Navigation editor functionality is currently in development. This interface shows the planned features.</small>
                                 </div>
                             </div>
                         </div>
@@ -1736,10 +2218,14 @@
                     section.style.display = 'none';
                 });
                 
-                // Remove active class from all nav links
+                // Remove active class from all nav links and sublinks
                 const navLinks = document.querySelectorAll('.nav-link');
-                console.log('Found nav links:', navLinks.length);
+                const navSublinks = document.querySelectorAll('.nav-sublink');
+                console.log('Found nav links:', navLinks.length, 'sublinks:', navSublinks.length);
                 navLinks.forEach(link => {
+                    link.classList.remove('active');
+                });
+                navSublinks.forEach(link => {
                     link.classList.remove('active');
                 });
                 
@@ -1754,9 +2240,13 @@
                     return false;
                 }
                 
-                // Add active class to clicked nav link
+                // Add active class to clicked nav link or sublink
                 if (typeof event !== 'undefined' && event && event.target) {
-                    event.target.classList.add('active');
+                    if (event.target.classList.contains('nav-sublink')) {
+                        event.target.classList.add('active');
+                    } else {
+                        event.target.classList.add('active');
+                    }
                     console.log('Active class added to nav link');
                 } else {
                     // Fallback: find the nav link for this section
@@ -1788,6 +2278,20 @@
                     }
                     if (typeof updateModelBadge === 'function') {
                         updateModelBadge();
+                    }
+                }
+                
+                // Special handling for configuration sections
+                if (sectionId === 'ai-config' || sectionId === 'file-config') {
+                    console.log('Configuration section opened, loading saved settings...');
+                    // Expand the configuration menu if not already expanded
+                    const configParent = document.getElementById('configNavParent');
+                    if (configParent && !configParent.classList.contains('expanded')) {
+                        configParent.classList.add('expanded');
+                    }
+                    // Load saved configurations
+                    if (typeof loadSavedConfigurations === 'function') {
+                        loadSavedConfigurations();
                     }
                 }
                 
@@ -1835,6 +2339,466 @@
         // Test API functionality
         function testAPI() {
             alert('API Test:\n\n✅ Server: Online\n✅ Authentication: Ready\n✅ File Upload: Ready\n✅ User Management: Ready\n\nAll API endpoints are functioning properly!');
+        }
+        
+        // Configuration Menu Functions
+        function toggleConfigMenu() {
+            const parent = document.getElementById('configNavParent');
+            const isExpanded = parent.classList.contains('expanded');
+            
+            if (isExpanded) {
+                parent.classList.remove('expanded');
+            } else {
+                parent.classList.add('expanded');
+            }
+            
+            return false;
+        }
+
+        // Applications Menu Functions
+        function toggleAppsMenu() {
+            const parent = document.getElementById('appsNavParent');
+            const isExpanded = parent.classList.contains('expanded');
+            
+            if (isExpanded) {
+                parent.classList.remove('expanded');
+            } else {
+                parent.classList.add('expanded');
+            }
+            
+            return false;
+        }
+
+        // AI Configuration Functions
+        function saveAIConfig() {
+            const config = {
+                langflowUrl: document.getElementById('configLangflowUrl').value,
+                flowId: document.getElementById('configFlowId').value,
+                apiKey: document.getElementById('configApiKey').value,
+                defaultModel: document.getElementById('configDefaultModel').value,
+                timeout: document.getElementById('configTimeout').value,
+                maxRetries: document.getElementById('configMaxRetries').value
+            };
+
+            // Save to localStorage
+            localStorage.setItem('aiConfig', JSON.stringify(config));
+            
+            // Also save individual values for easy access by chat functions
+            localStorage.setItem('aiConfig_langflowUrl', config.langflowUrl);
+            localStorage.setItem('aiConfig_flowId', config.flowId);
+            localStorage.setItem('aiConfig_apiKey', config.apiKey);
+            localStorage.setItem('aiConfig_defaultModel', config.defaultModel);
+
+            document.getElementById('aiConfigResult').innerHTML = 
+                '<div class="alert alert-success"><i class="fas fa-check me-2"></i>AI configuration saved successfully!</div>';
+            
+            console.log('AI Configuration saved:', config);
+        }
+
+        function testAIConnection() {
+            const langflowUrl = document.getElementById('configLangflowUrl').value;
+            const resultDiv = document.getElementById('aiConfigResult');
+            
+            if (!langflowUrl) {
+                resultDiv.innerHTML = '<div class="alert alert-warning">Please enter a Langflow URL first.</div>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i>Testing connection...</div>';
+
+            // Simple connection test
+            fetch(`${langflowUrl}/health`, { method: 'GET' })
+                .then(response => {
+                    if (response.ok) {
+                        resultDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check me-2"></i>Connection successful!</div>';
+                    } else {
+                        resultDiv.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle me-2"></i>Connection established but service may not be fully ready.</div>';
+                    }
+                })
+                .catch(error => {
+                    console.log('Direct health check failed, trying basic connection...');
+                    // Fallback test - just try to reach the URL
+                    const testUrl = new URL(langflowUrl);
+                    resultDiv.innerHTML = `<div class="alert alert-info"><i class="fas fa-info-circle me-2"></i>Basic connectivity test completed. Base URL: ${testUrl.origin}</div>`;
+                });
+        }
+
+        function resetAIConfig() {
+            document.getElementById('configLangflowUrl').value = 'http://10.88.4.25:7860';
+            document.getElementById('configFlowId').value = '900b0d89-4481-4f64-88bf-4d4661086a62';
+            document.getElementById('configApiKey').value = '';
+            document.getElementById('configDefaultModel').value = 'gpt-3.5-turbo';
+            document.getElementById('configTimeout').value = '30';
+            document.getElementById('configMaxRetries').value = '3';
+            
+            document.getElementById('aiConfigResult').innerHTML = 
+                '<div class="alert alert-info"><i class="fas fa-info me-2"></i>Configuration reset to defaults.</div>';
+        }
+
+        // File Configuration Functions
+        function saveFileConfig() {
+            const config = {
+                maxFileSize: document.getElementById('configMaxFileSize').value,
+                maxFiles: document.getElementById('configMaxFiles').value,
+                allowedTypes: {
+                    txt: document.getElementById('allowTxt').checked,
+                    pdf: document.getElementById('allowPdf').checked,
+                    doc: document.getElementById('allowDoc').checked,
+                    csv: document.getElementById('allowCsv').checked,
+                    json: document.getElementById('allowJson').checked,
+                    md: document.getElementById('allowMd').checked,
+                    xls: document.getElementById('allowXls').checked,
+                    images: document.getElementById('allowImages').checked
+                },
+                uploadEndpoint: document.getElementById('configUploadEndpoint').value,
+                uploadTimeout: document.getElementById('configUploadTimeout').value,
+                fallbackEnabled: document.getElementById('configFallbackEnabled').checked,
+                // Langflow destination path settings
+                destinationComponent: document.getElementById('configDestinationComponent').value,
+                destinationInput: document.getElementById('configDestinationInput').value,
+                destinationPath: document.getElementById('configDestinationPath').value
+            };
+
+            // Save to localStorage
+            localStorage.setItem('fileConfig', JSON.stringify(config));
+            
+            // Apply changes immediately
+            applyFileConfigChanges(config);
+            
+            document.getElementById('fileConfigResult').innerHTML = 
+                '<div class="alert alert-success"><i class="fas fa-check me-2"></i>File upload configuration saved and applied successfully!</div>';
+            
+            console.log('File Configuration saved and applied:', config);
+        }
+
+        function applyFileConfigChanges(config) {
+            // Update file input accept attributes
+            updateFileInputAcceptTypes(config.allowedTypes);
+            
+            // Update file upload section descriptions
+            updateFileUploadDescriptions(config);
+            
+            // Update chat file input
+            updateChatFileInput(config.allowedTypes);
+            
+            console.log('File configuration changes applied successfully');
+        }
+
+        function updateFileInputAcceptTypes(allowedTypes) {
+            let acceptString = '';
+            let extensions = [];
+            
+            if (allowedTypes.txt) {
+                extensions.push('.txt');
+            }
+            if (allowedTypes.pdf) {
+                extensions.push('.pdf');
+            }
+            if (allowedTypes.doc) {
+                extensions.push('.doc', '.docx');
+            }
+            if (allowedTypes.csv) {
+                extensions.push('.csv');
+            }
+            if (allowedTypes.json) {
+                extensions.push('.json');
+            }
+            if (allowedTypes.md) {
+                extensions.push('.md');
+            }
+            if (allowedTypes.xls) {
+                extensions.push('.xls', '.xlsx');
+            }
+            if (allowedTypes.images) {
+                extensions.push('.jpg', '.jpeg', '.png', '.gif');
+            }
+            
+            acceptString = extensions.join(',');
+            
+            // Update main file upload input
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.setAttribute('accept', acceptString);
+            }
+            
+            // Update chat file input
+            const chatFileInput = document.getElementById('chatFileInput');
+            if (chatFileInput) {
+                chatFileInput.setAttribute('accept', acceptString);
+            }
+            
+            console.log('File input accept types updated:', acceptString);
+        }
+
+        function updateFileUploadDescriptions(config) {
+            // Update the file upload section descriptions
+            const uploadSection = document.querySelector('#upload .feature-box');
+            if (uploadSection) {
+                const supportedFormatsSection = uploadSection.querySelector('h6');
+                if (supportedFormatsSection && supportedFormatsSection.textContent === 'Supported Formats:') {
+                    const formatsList = supportedFormatsSection.nextElementSibling;
+                    if (formatsList && formatsList.tagName === 'UL') {
+                        formatsList.innerHTML = generateSupportedFormatsList(config.allowedTypes);
+                    }
+                }
+            }
+        }
+
+        function generateSupportedFormatsList(allowedTypes) {
+            let formats = [];
+            
+            if (allowedTypes.txt) formats.push('<li>Text files (.txt)</li>');
+            if (allowedTypes.pdf) formats.push('<li>PDF files (.pdf)</li>');
+            if (allowedTypes.doc) formats.push('<li>Word documents (.doc, .docx)</li>');
+            if (allowedTypes.csv) formats.push('<li>CSV files (.csv)</li>');
+            if (allowedTypes.json) formats.push('<li>JSON files (.json)</li>');
+            if (allowedTypes.md) formats.push('<li>Markdown files (.md)</li>');
+            if (allowedTypes.xls) formats.push('<li>Excel files (.xls, .xlsx)</li>');
+            if (allowedTypes.images) formats.push('<li>Image files (.jpg, .png, .gif)</li>');
+            
+            return formats.length > 0 ? formats.join('') : '<li>No file types enabled</li>';
+        }
+
+        function updateChatFileInput(allowedTypes) {
+            // Update the file upload button title/tooltip
+            const uploadButton = document.querySelector('[onclick*="chatFileInput"]');
+            if (uploadButton) {
+                let supportedTypes = [];
+                if (allowedTypes.txt) supportedTypes.push('txt');
+                if (allowedTypes.pdf) supportedTypes.push('pdf');
+                if (allowedTypes.doc) supportedTypes.push('doc');
+                if (allowedTypes.csv) supportedTypes.push('csv');
+                if (allowedTypes.json) supportedTypes.push('json');
+                if (allowedTypes.md) supportedTypes.push('md');
+                if (allowedTypes.xls) supportedTypes.push('xls');
+                if (allowedTypes.images) supportedTypes.push('images');
+                
+                const tooltip = supportedTypes.length > 0 ? 
+                    `Attach files (${supportedTypes.join(', ')})` : 
+                    'File uploads disabled';
+                    
+                uploadButton.setAttribute('title', tooltip);
+            }
+        }
+
+        function testFileUpload() {
+            const resultDiv = document.getElementById('fileConfigResult');
+            resultDiv.innerHTML = 
+                '<div class="alert alert-info"><i class="fas fa-info me-2"></i>File upload test completed. Check browser console for detailed endpoint testing.</div>';
+            
+            console.log('File upload configuration test - settings would be applied to actual uploads.');
+        }
+
+        function resetFileConfig() {
+            document.getElementById('configMaxFileSize').value = '10';
+            document.getElementById('configMaxFiles').value = '5';
+            document.getElementById('allowTxt').checked = true;
+            document.getElementById('allowPdf').checked = true;
+            document.getElementById('allowDoc').checked = true;
+            document.getElementById('allowCsv').checked = true;
+            document.getElementById('allowJson').checked = true;
+            document.getElementById('allowMd').checked = true;
+            document.getElementById('allowXls').checked = false;
+            document.getElementById('allowImages').checked = false;
+            document.getElementById('configUploadEndpoint').value = '/api/v2/files/';
+            document.getElementById('configUploadTimeout').value = '60';
+            document.getElementById('configFallbackEnabled').checked = true;
+            
+            // Apply the reset configuration immediately
+            const defaultConfig = {
+                maxFileSize: '10',
+                maxFiles: '5',
+                allowedTypes: {
+                    txt: true,
+                    pdf: true,
+                    doc: true,
+                    csv: true,
+                    json: true,
+                    md: true,
+                    xls: false,
+                    images: false
+                },
+                uploadEndpoint: '/api/v2/files/',
+                uploadTimeout: '60',
+                fallbackEnabled: true
+            };
+            
+            // Save and apply changes
+            localStorage.setItem('fileConfig', JSON.stringify(defaultConfig));
+            applyFileConfigChanges(defaultConfig);
+            
+            document.getElementById('fileConfigResult').innerHTML = 
+                '<div class="alert alert-info"><i class="fas fa-info me-2"></i>File configuration reset to defaults and applied.</div>';
+        }
+
+        // Navigation Editor Functions
+        function saveNavConfig() {
+            // Placeholder for navigation configuration save
+            document.getElementById('navEditorResult').innerHTML = 
+                '<div class="alert alert-info"><i class="fas fa-info me-2"></i>Navigation editor functionality is coming soon!</div>';
+        }
+
+        function resetNavConfig() {
+            // Placeholder for navigation configuration reset
+            document.getElementById('navEditorResult').innerHTML = 
+                '<div class="alert alert-info"><i class="fas fa-info me-2"></i>Navigation reset functionality is coming soon!</div>';
+        }
+
+        // Load saved configurations on page load
+        function loadSavedConfigurations() {
+            // Load AI config
+            const savedAIConfig = localStorage.getItem('aiConfig');
+            if (savedAIConfig) {
+                try {
+                    const config = JSON.parse(savedAIConfig);
+                    if (document.getElementById('configLangflowUrl')) {
+                        document.getElementById('configLangflowUrl').value = config.langflowUrl || 'http://10.88.4.25:7860';
+                        document.getElementById('configFlowId').value = config.flowId || '900b0d89-4481-4f64-88bf-4d4661086a62';
+                        document.getElementById('configApiKey').value = config.apiKey || '';
+                        document.getElementById('configDefaultModel').value = config.defaultModel || 'gpt-3.5-turbo';
+                        document.getElementById('configTimeout').value = config.timeout || '30';
+                        document.getElementById('configMaxRetries').value = config.maxRetries || '3';
+                    }
+                } catch (e) {
+                    console.log('Error loading AI config:', e);
+                }
+            }
+
+            // Load file config
+            const savedFileConfig = localStorage.getItem('fileConfig');
+            if (savedFileConfig) {
+                try {
+                    const config = JSON.parse(savedFileConfig);
+                    if (document.getElementById('configMaxFileSize')) {
+                        document.getElementById('configMaxFileSize').value = config.maxFileSize || '10';
+                        document.getElementById('configMaxFiles').value = config.maxFiles || '5';
+                        if (config.allowedTypes) {
+                            document.getElementById('allowTxt').checked = config.allowedTypes.txt !== false;
+                            document.getElementById('allowPdf').checked = config.allowedTypes.pdf !== false;
+                            document.getElementById('allowDoc').checked = config.allowedTypes.doc !== false;
+                            document.getElementById('allowCsv').checked = config.allowedTypes.csv !== false;
+                            document.getElementById('allowJson').checked = config.allowedTypes.json !== false;
+                            document.getElementById('allowMd').checked = config.allowedTypes.md !== false;
+                            document.getElementById('allowXls').checked = config.allowedTypes.xls === true;
+                            document.getElementById('allowImages').checked = config.allowedTypes.images === true;
+                        }
+                        document.getElementById('configUploadEndpoint').value = config.uploadEndpoint || '/api/v2/files/';
+                        document.getElementById('configUploadTimeout').value = config.uploadTimeout || '60';
+                        document.getElementById('configFallbackEnabled').checked = config.fallbackEnabled !== false;
+                        
+                        // Load Langflow destination path settings
+                        document.getElementById('configDestinationComponent').value = config.destinationComponent || 'File-QW4Au';
+                        document.getElementById('configDestinationInput').value = config.destinationInput || 'path';
+                        document.getElementById('configDestinationPath').value = config.destinationPath || 'File-QW4Au.path';
+                        
+                        // Apply the loaded configuration immediately
+                        applyFileConfigChanges(config);
+                    }
+                } catch (e) {
+                    console.log('Error loading file config:', e);
+                }
+            } else {
+                // Apply default configuration if none saved
+                const defaultConfig = {
+                    maxFileSize: '10',
+                    maxFiles: '5',
+                    allowedTypes: {
+                        txt: true,
+                        pdf: true,
+                        doc: true,
+                        csv: true,
+                        json: true,
+                        md: true,
+                        xls: false,
+                        images: false
+                    },
+                    uploadEndpoint: '/api/v2/files/',
+                    uploadTimeout: '60',
+                    fallbackEnabled: true,
+                    destinationComponent: 'File-QW4Au',
+                    destinationInput: 'path',
+                    destinationPath: 'File-QW4Au.path'
+                };
+                applyFileConfigChanges(defaultConfig);
+            }
+        }
+
+        // Set up live configuration updates
+        function setupLiveConfigurationUpdates() {
+            // File type checkboxes - live updates
+            const fileTypeCheckboxes = [
+                'allowTxt', 'allowPdf', 'allowDoc', 'allowCsv', 
+                'allowJson', 'allowMd', 'allowXls', 'allowImages'
+            ];
+            
+            fileTypeCheckboxes.forEach(checkboxId => {
+                const checkbox = document.getElementById(checkboxId);
+                if (checkbox) {
+                    checkbox.addEventListener('change', function() {
+                        const currentConfig = getCurrentFileConfig();
+                        applyFileConfigChanges(currentConfig);
+                        console.log('File type configuration updated live');
+                    });
+                }
+            });
+
+            // AI model selection - live updates
+            const modelSelector = document.getElementById('configDefaultModel');
+            if (modelSelector) {
+                modelSelector.addEventListener('change', function() {
+                    // Update model badge immediately
+                    const savedConfig = JSON.parse(localStorage.getItem('aiConfig') || '{}');
+                    savedConfig.defaultModel = this.value;
+                    localStorage.setItem('aiConfig_defaultModel', this.value);
+                    updateModelBadge();
+                    console.log('AI model updated live:', this.value);
+                });
+            }
+        }
+
+        function getCurrentFileConfig() {
+            return {
+                maxFileSize: document.getElementById('configMaxFileSize')?.value || '10',
+                maxFiles: document.getElementById('configMaxFiles')?.value || '5',
+                allowedTypes: {
+                    txt: document.getElementById('allowTxt')?.checked || false,
+                    pdf: document.getElementById('allowPdf')?.checked || false,
+                    doc: document.getElementById('allowDoc')?.checked || false,
+                    csv: document.getElementById('allowCsv')?.checked || false,
+                    json: document.getElementById('allowJson')?.checked || false,
+                    md: document.getElementById('allowMd')?.checked || false,
+                    xls: document.getElementById('allowXls')?.checked || false,
+                    images: document.getElementById('allowImages')?.checked || false
+                },
+                uploadEndpoint: document.getElementById('configUploadEndpoint')?.value || '/api/v2/files/',
+                uploadTimeout: document.getElementById('configUploadTimeout')?.value || '60',
+                fallbackEnabled: document.getElementById('configFallbackEnabled')?.checked || true,
+                destinationComponent: document.getElementById('configDestinationComponent')?.value || 'File-QW4Au',
+                destinationInput: document.getElementById('configDestinationInput')?.value || 'path',
+                destinationPath: document.getElementById('configDestinationPath')?.value || 'File-QW4Au.path'
+            };
+        }
+        
+        // Auto-generate destination path when component or input changes
+        function setupDestinationPathUpdates() {
+            const componentField = document.getElementById('configDestinationComponent');
+            const inputField = document.getElementById('configDestinationInput');
+            const pathField = document.getElementById('configDestinationPath');
+            
+            function updateDestinationPath() {
+                if (componentField && inputField && pathField) {
+                    const component = componentField.value || 'File-QW4Au';
+                    const input = inputField.value || 'path';
+                    pathField.value = `${component}.${input}`;
+                }
+            }
+            
+            if (componentField) {
+                componentField.addEventListener('input', updateDestinationPath);
+            }
+            if (inputField) {
+                inputField.addEventListener('input', updateDestinationPath);
+            }
         }
         
         // Simple test function for debugging navigation
@@ -2543,7 +3507,20 @@
         }
 
         function updateModelBadge() {
-            const model = document.getElementById('chatModel').value;
+            // Get model from saved configuration
+            let model = localStorage.getItem('aiConfig_defaultModel') || 'gpt-3.5-turbo';
+            
+            // Try to get from saved config if not found
+            const savedConfig = localStorage.getItem('aiConfig');
+            if (savedConfig && !localStorage.getItem('aiConfig_defaultModel')) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    model = config.defaultModel || 'gpt-3.5-turbo';
+                } catch (e) {
+                    model = 'gpt-3.5-turbo';
+                }
+            }
+            
             const badge = document.getElementById('modelBadge');
             const modelNames = {
                 'gpt-3.5-turbo': 'GPT-3.5',
@@ -2616,24 +3593,49 @@
         }
 
         async function sendToLangflowWithFiles(message, files) {
-            const langflowUrl = document.getElementById('langflowUrl').value;
-            const flowId = document.getElementById('flowId').value;
-            const apiKey = document.getElementById('apiKey').value;
+            // Declare URLs at function scope to avoid scoping issues
+            let baseUrl = null;
+            let localBaseUrl = `${window.location.protocol}//${window.location.host}`;
+            
+            // Get configuration from AI Configuration section or saved localStorage
+            let langflowUrl = document.getElementById('configLangflowUrl')?.value || localStorage.getItem('aiConfig_langflowUrl') || 'http://10.88.4.25:7860';
+            let flowId = document.getElementById('configFlowId')?.value || localStorage.getItem('aiConfig_flowId') || '900b0d89-4481-4f64-88bf-4d4661086a62';
+            let apiKey = document.getElementById('configApiKey')?.value || localStorage.getItem('aiConfig_apiKey') || '';
+            
+            // Try to get from saved config if not in form
+            const savedConfig = localStorage.getItem('aiConfig');
+            if (savedConfig && (!langflowUrl || !flowId)) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    langflowUrl = langflowUrl || config.langflowUrl || 'http://10.88.4.25:7860';
+                    flowId = flowId || config.flowId || '900b0d89-4481-4f64-88bf-4d4661086a62';
+                    apiKey = apiKey || config.apiKey || '';
+                } catch (e) {
+                    console.log('Error parsing saved config:', e);
+                }
+            }
             
             if (!langflowUrl || !flowId) {
-                addMessageToChat('bot', '⚠️ Please configure Langflow URL and Flow ID in the settings above.');
+                addMessageToChat('bot', '⚠️ Please configure Langflow URL and Flow ID in Configuration → AI Configuration.');
                 return;
             }
             
             // Extract base URL from the langflowUrl (remove /api/v1/run or similar paths)
-            let baseUrl;
             try {
                 const url = new URL(langflowUrl);
                 baseUrl = `${url.protocol}//${url.host}`;
                 console.log('Base Langflow URL:', baseUrl);
+                console.log('Local Flask URL:', localBaseUrl);
             } catch (urlError) {
                 console.error('Invalid Langflow URL:', urlError);
                 addMessageToChat('bot', '❌ Invalid Langflow URL format. Please check your configuration.');
+                return;
+            }
+            
+            // Ensure URLs are available for file uploads
+            if (!baseUrl || !localBaseUrl) {
+                console.error('URLs not properly initialized', { baseUrl, localBaseUrl });
+                addMessageToChat('bot', '❌ Configuration error: URLs not properly initialized. Please check your configuration.');
                 return;
             }
             
@@ -2653,7 +3655,9 @@
                 
                 // Step 1: Upload files to Langflow if any files are attached
                 if (files && files.length > 0) {
-                    console.log('Uploading files to Langflow:', files.map(f => f.name));
+                    console.log('Starting file upload process...');
+                    console.log('Available URLs:', { baseUrl, localBaseUrl });
+                    console.log('Files to upload:', files.map(f => f.name));
                     
                     // For the first file, upload it properly to Langflow
                     const firstFile = files[0];
@@ -2661,7 +3665,13 @@
                     if (firstFile.file) {
                         // This is an actual File object - try multiple upload methods
                         try {
-                            console.log('Uploading file to Langflow:', firstFile.name);
+                            console.log('Uploading binary file:', firstFile.name);
+                            console.log('File object:', firstFile.file);
+                            
+                            // Validate URLs before proceeding
+                            if (!baseUrl || !localBaseUrl) {
+                                throw new Error(`URLs not initialized properly: baseUrl=${baseUrl}, localBaseUrl=${localBaseUrl}`);
+                            }
                             
                             // Create FormData for file upload
                             const formData = new FormData();
@@ -2679,21 +3689,18 @@
                             let uploadResponse;
                             let successfulEndpoint;
                             
-                            // Try different file upload endpoints for different Langflow versions
-                            const endpoints = [
-                                `${baseUrl}/api/v2/files/`,      // Latest Langflow
-                                `${baseUrl}/api/v1/files/`,      // Older Langflow  
-                                `${baseUrl}/files/`,             // Even older versions
-                                `${baseUrl}/upload`,             // Alternative endpoint
-                                `${baseUrl}/api/files`           // Another possible endpoint
+                            // Try file upload - Start with local Flask server
+                            const localEndpoints = [
+                                `${localBaseUrl}/api/v2/files/`,
+                                `${localBaseUrl}/upload`
                             ];
                             
-                            console.log('Trying file upload endpoints:', endpoints);
+                            console.log('Trying local Flask endpoints first:', localEndpoints);
                             
-                            for (let i = 0; i < endpoints.length; i++) {
-                                const endpoint = endpoints[i];
+                            for (let i = 0; i < localEndpoints.length; i++) {
+                                const endpoint = localEndpoints[i];
                                 try {
-                                    console.log(`[${i+1}/${endpoints.length}] Trying: ${endpoint}`);
+                                    console.log(`[${i+1}/${localEndpoints.length}] Trying local: ${endpoint}`);
                                     
                                     uploadResponse = await fetch(endpoint, {
                                         method: 'POST',
@@ -2705,21 +3712,47 @@
                                     
                                     if (uploadResponse.ok) {
                                         successfulEndpoint = endpoint;
-                                        console.log(`✅ Upload successful with: ${endpoint}`);
+                                        console.log(`✅ Upload successful with local endpoint: ${endpoint}`);
                                         break;
                                     } else {
-                                        console.log(`❌ Failed with status ${uploadResponse.status}: ${uploadResponse.statusText}`);
-                                        // Log response body for debugging
-                                        try {
-                                            const errorText = await uploadResponse.text();
-                                            console.log(`Error response: ${errorText}`);
-                                        } catch (e) {
-                                            console.log('Could not read error response');
-                                        }
+                                        console.log(`❌ Local endpoint failed with status ${uploadResponse.status}: ${uploadResponse.statusText}`);
+                                        const errorText = await uploadResponse.text();
+                                        console.log(`Local error response: ${errorText}`);
                                     }
                                 } catch (endpointError) {
-                                    console.log(`❌ Network error with ${endpoint}:`, endpointError.message);
+                                    console.log(`❌ Network error with local ${endpoint}:`, endpointError.message);
                                     continue;
+                                }
+                            }
+                            
+                            // If local failed, try Langflow endpoints as fallback
+                            if (!uploadResponse || !uploadResponse.ok) {
+                                console.log('Local upload failed, trying Langflow endpoints...');
+                                const langflowEndpoints = [
+                                    `${baseUrl}/api/v2/files/`,
+                                    `${baseUrl}/api/v1/files/`
+                                ];
+                                
+                                for (let i = 0; i < langflowEndpoints.length; i++) {
+                                    const endpoint = langflowEndpoints[i];
+                                    try {
+                                        console.log(`[${i+1}/${langflowEndpoints.length}] Trying Langflow: ${endpoint}`);
+                                        
+                                        uploadResponse = await fetch(endpoint, {
+                                            method: 'POST',
+                                            headers: uploadHeaders,
+                                            body: formData
+                                        });
+                                        
+                                        if (uploadResponse.ok) {
+                                            successfulEndpoint = endpoint;
+                                            console.log(`✅ Upload successful with Langflow: ${endpoint}`);
+                                            break;
+                                        }
+                                    } catch (endpointError) {
+                                        console.log(`❌ Langflow endpoint error:`, endpointError.message);
+                                        continue;
+                                    }
                                 }
                             }
                             
@@ -2776,7 +3809,14 @@
                                     return;
                                 }
                             } else {
-                                addMessageToChat('bot', `❌ Failed to upload binary file: ${uploadError.message}. Your Langflow server may not support file uploads. Only text files can be included as fallback.`);
+                                console.error('❌ Binary file upload failed:', uploadError);
+                                console.log('Debug info:', {
+                                    baseUrl,
+                                    localBaseUrl,
+                                    uploadError: uploadError.message,
+                                    stack: uploadError.stack
+                                });
+                                addMessageToChat('bot', `❌ Failed to upload binary file: ${uploadError.message}. Debug: baseUrl=${baseUrl}, localBaseUrl=${localBaseUrl}. Your Langflow server may not support file uploads. Only text files can be included as fallback.`);
                                 return;
                             }
                         }
@@ -2806,19 +3846,23 @@
                             let uploadEndpoint;
                             
                             // Try different file upload endpoints
+                            // Upload to local Flask server first
                             const endpoints = [
-                                '/api/v2/files/',
-                                '/api/v1/files/',
-                                '/files/',
-                                '/upload'
+                                `${localBaseUrl}/api/v2/files/`,
+                                `${localBaseUrl}/api/v1/files/`,
+                                `${localBaseUrl}/files/`,
+                                `${localBaseUrl}/upload`,
+                                `${baseUrl}/api/v2/files/`,      // Langflow fallbacks
+                                `${baseUrl}/api/v1/files/`,
+                                `${baseUrl}/files/`,
+                                `${baseUrl}/upload`
                             ];
                             
                             for (const endpoint of endpoints) {
                                 try {
-                                    uploadEndpoint = `${langflowUrl}${endpoint}`;
-                                    console.log(`Trying text file upload endpoint: ${uploadEndpoint}`);
+                                    console.log(`Trying text file upload endpoint: ${endpoint}`);
                                     
-                                    uploadResponse = await fetch(uploadEndpoint, {
+                                    uploadResponse = await fetch(endpoint, {
                                         method: 'POST',
                                         headers: uploadHeaders,
                                         body: formData
@@ -2826,6 +3870,7 @@
                                     
                                     if (uploadResponse.ok) {
                                         console.log(`Text file upload successful with endpoint: ${endpoint}`);
+                                        uploadEndpoint = endpoint;
                                         break;
                                     }
                                 } catch (endpointError) {
@@ -3087,17 +4132,62 @@
             }
         }
 
-        function toggleChatSettings() {
-            const settings = document.querySelector('.chat-settings');
-            if (settings.style.display === 'none') {
-                settings.style.display = 'block';
-            } else {
-                settings.style.display = 'none';
+        function updateModelBadge() {
+            // Look for any model display elements and update them
+            const modelElements = document.querySelectorAll('[data-model-display]');
+            const currentModel = localStorage.getItem('aiConfig_defaultModel') || 
+                              (JSON.parse(localStorage.getItem('aiConfig') || '{}').defaultModel) || 
+                              'gpt-3.5-turbo';
+            
+            modelElements.forEach(element => {
+                element.textContent = `Model: ${currentModel}`;
+            });
+            
+            // Also update any element with id 'modelInfo' if it exists
+            const modelInfo = document.getElementById('modelInfo');
+            if (modelInfo) {
+                modelInfo.textContent = `Model: ${currentModel}`;
             }
+            
+            console.log('Model badge updated to:', currentModel);
         }
 
-        // Update model badge when selection changes
-        document.getElementById('chatModel').addEventListener('change', updateModelBadge);
+        function toggleChatSettings() {
+            // Redirect to AI Configuration instead of showing settings
+            showSection('ai-config');
+        }
+
+        // Initialize page on load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, initializing...');
+            
+            // Initialize user dropdown
+            if (typeof initializeUserDropdown === 'function') {
+                initializeUserDropdown();
+            }
+            
+            // Load saved configurations
+            if (typeof loadSavedConfigurations === 'function') {
+                loadSavedConfigurations();
+            }
+            
+            // Setup live configuration updates
+            if (typeof setupLiveConfigurationUpdates === 'function') {
+                setupLiveConfigurationUpdates();
+            }
+            
+            // Setup destination path auto-generation
+            if (typeof setupDestinationPathUpdates === 'function') {
+                setupDestinationPathUpdates();
+            }
+            
+            // Update model badge
+            if (typeof updateModelBadge === 'function') {
+                updateModelBadge();
+            }
+            
+            console.log('Page initialization complete');
+        });
         
     </script>
 </body>

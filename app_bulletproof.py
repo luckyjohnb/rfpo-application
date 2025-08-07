@@ -309,6 +309,47 @@ def upload_file_simple():
         print(f"ERROR in upload_file_simple: {e}")
         return jsonify({'success': False, 'error': f'Upload error: {str(e)}'})
 
+# Add Langflow-compatible file upload endpoints
+@app.route('/api/v1/files/', methods=['POST'])
+def upload_file_v1():
+    """Langflow v1 compatible file upload endpoint"""
+    return upload_file_simple()
+
+@app.route('/api/v2/files/', methods=['POST'])
+def upload_file_v2():
+    """Langflow v2 compatible file upload endpoint"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'})
+        
+        if file:
+            filename = file.filename
+            # Ensure uploads directory exists
+            os.makedirs('uploads', exist_ok=True)
+            filepath = os.path.join('uploads', filename)
+            file.save(filepath)
+            
+            # Return in Langflow v2 format
+            return jsonify({
+                'success': True,
+                'file_path': filepath,
+                'filename': filename,
+                'message': 'File uploaded successfully'
+            })
+        
+    except Exception as e:
+        print(f"ERROR in upload_file_v2: {e}")
+        return jsonify({'success': False, 'error': f'Upload error: {str(e)}'})
+
+@app.route('/files/', methods=['POST'])
+def upload_file_generic():
+    """Generic file upload endpoint"""
+    return upload_file_simple()
+
 @app.route('/api/users/<username>', methods=['DELETE'])
 @token_required_simple
 def delete_user_simple(current_user, username):

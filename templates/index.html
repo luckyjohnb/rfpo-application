@@ -3593,9 +3593,20 @@
         }
 
         async function sendToLangflowWithFiles(message, files) {
-            // Declare URLs at function scope to avoid scoping issues
+            console.log('sendToLangflowWithFiles called with:', { message, files: files?.length || 0 });
+            
+            // Declare and initialize URLs at function scope to avoid scoping issues
             let baseUrl = null;
-            let localBaseUrl = `${window.location.protocol}//${window.location.host}`;
+            let localBaseUrl = null;
+            
+            try {
+                localBaseUrl = `${window.location.protocol}//${window.location.host}`;
+                console.log('Local base URL initialized:', localBaseUrl);
+            } catch (urlError) {
+                console.error('Error initializing local base URL:', urlError);
+                addMessageToChat('bot', '❌ Configuration error: Could not determine local URL.');
+                return;
+            }
             
             // Get configuration from AI Configuration section or saved localStorage
             let langflowUrl = document.getElementById('configLangflowUrl')?.value || localStorage.getItem('aiConfig_langflowUrl') || 'http://10.88.4.25:7860';
@@ -3624,11 +3635,14 @@
             try {
                 const url = new URL(langflowUrl);
                 baseUrl = `${url.protocol}//${url.host}`;
-                console.log('Base Langflow URL:', baseUrl);
-                console.log('Local Flask URL:', localBaseUrl);
+                console.log('Base Langflow URL initialized:', baseUrl);
+                console.log('Local Flask URL initialized:', localBaseUrl);
             } catch (urlError) {
                 console.error('Invalid Langflow URL:', urlError);
                 addMessageToChat('bot', '❌ Invalid Langflow URL format. Please check your configuration.');
+                isWaitingForResponse = false;
+                document.getElementById('sendButton').disabled = false;
+                document.getElementById('chatStatus').textContent = 'Ready';
                 return;
             }
             
@@ -3636,6 +3650,9 @@
             if (!baseUrl || !localBaseUrl) {
                 console.error('URLs not properly initialized', { baseUrl, localBaseUrl });
                 addMessageToChat('bot', '❌ Configuration error: URLs not properly initialized. Please check your configuration.');
+                isWaitingForResponse = false;
+                document.getElementById('sendButton').disabled = false;
+                document.getElementById('chatStatus').textContent = 'Ready';
                 return;
             }
             
@@ -3667,10 +3684,13 @@
                         try {
                             console.log('Uploading binary file:', firstFile.name);
                             console.log('File object:', firstFile.file);
+                            console.log('Current URLs available:', { baseUrl, localBaseUrl });
                             
-                            // Validate URLs before proceeding
+                            // Double-check URLs before proceeding with file upload
                             if (!baseUrl || !localBaseUrl) {
-                                throw new Error(`URLs not initialized properly: baseUrl=${baseUrl}, localBaseUrl=${localBaseUrl}`);
+                                const errorMsg = `URLs not initialized properly in file upload: baseUrl=${baseUrl}, localBaseUrl=${localBaseUrl}`;
+                                console.error(errorMsg);
+                                throw new Error(errorMsg);
                             }
                             
                             // Create FormData for file upload
@@ -3934,8 +3954,8 @@
                 
                 // Use the same base URL extraction for consistency
                 const flowUrl = new URL(langflowUrl);
-                const baseUrl = `${flowUrl.protocol}//${flowUrl.host}`;
-                const runEndpoint = `${baseUrl}/api/v1/run/${flowId}`;
+                const runBaseUrl = `${flowUrl.protocol}//${flowUrl.host}`;
+                const runEndpoint = `${runBaseUrl}/api/v1/run/${flowId}`;
                 console.log('Flow execution endpoint:', runEndpoint);
                 
                 const response = await fetch(runEndpoint, {
@@ -3991,7 +4011,14 @@
             } catch (error) {
                 console.error('Langflow error:', error);
                 addMessageToChat('bot', `❌ Sorry, I encountered an error: ${error.message}. Please check your Langflow configuration and try again.`);
+                
+                // Ensure UI state is reset on any error
+                isWaitingForResponse = false;
+                document.getElementById('sendButton').disabled = false;
+                hideTypingIndicator();
+                document.getElementById('chatStatus').textContent = 'Online';
             } finally {
+                // Final cleanup to ensure UI is always reset
                 isWaitingForResponse = false;
                 document.getElementById('sendButton').disabled = false;
                 hideTypingIndicator();

@@ -4853,15 +4853,33 @@
                             if (uploadedPath) {
                                 // Normalize path separators for cross-platform compatibility
                                 // Convert Windows backslashes to Unix forward slashes for Langflow
-                                const normalizedPath = uploadedPath.replace(/\\/g, '/');
+                                let normalizedPath = uploadedPath.replace(/\\/g, '/');
+                                
+                                // Additional path cleaning - remove any double slashes and ensure proper format
+                                normalizedPath = normalizedPath.replace(/\/+/g, '/'); // Replace multiple slashes with single slash
+                                
+                                // If path doesn't start with /, ensure it's a relative path for Langflow
+                                if (normalizedPath.startsWith('/')) {
+                                    // For absolute paths, try to extract just the relative part after uploads
+                                    const uploadsIndex = normalizedPath.lastIndexOf('/uploads/');
+                                    if (uploadsIndex !== -1) {
+                                        normalizedPath = normalizedPath.substring(uploadsIndex + 1); // Keep 'uploads/filename'
+                                    }
+                                }
+                                
+                                // Get configured component ID for file destination
+                                const fileConfig = JSON.parse(localStorage.getItem('fileConfig') || '{}');
+                                const componentId = fileConfig.destinationComponent || 'File-QW4Au';
                                 
                                 // Set the file path in tweaks for the File component
-                                requestBody.tweaks["File-QW4Au"] = {
+                                requestBody.tweaks[componentId] = {
                                     "path": normalizedPath
                                 };
-                                console.log('✅ File path set in tweaks:', normalizedPath);
-                                console.log('Original path from server:', uploadedPath);
-                                addMessageToChat('bot', `📎 File uploaded successfully: ${firstFile.name}`);
+                                console.log('🔧 Component ID:', componentId);
+                                console.log('📁 Original server path:', uploadedPath);
+                                console.log('✅ Final normalized path:', normalizedPath);
+                                console.log('📋 Full tweaks object:', JSON.stringify(requestBody.tweaks, null, 2));
+                                addMessageToChat('bot', `📎 File uploaded successfully: ${firstFile.name} → ${normalizedPath}`);
                             } else {
                                 console.warn('⚠️ No file path returned from upload, falling back to content method');
                                 throw new Error('No file path returned from upload');
@@ -4993,14 +5011,31 @@
                                 if (uploadedPath) {
                                     // Normalize path separators for cross-platform compatibility
                                     // Convert Windows backslashes to Unix forward slashes for Langflow
-                                    const normalizedPath = uploadedPath.replace(/\\/g, '/');
+                                    let normalizedPath = uploadedPath.replace(/\\/g, '/');
+                                    
+                                    // Additional path cleaning - remove any double slashes and ensure proper format
+                                    normalizedPath = normalizedPath.replace(/\/+/g, '/'); // Replace multiple slashes with single slash
+                                    
+                                    // If path doesn't start with /, ensure it's a relative path for Langflow
+                                    if (normalizedPath.startsWith('/')) {
+                                        // For absolute paths, try to extract just the relative part after uploads
+                                        const uploadsIndex = normalizedPath.lastIndexOf('/uploads/');
+                                        if (uploadsIndex !== -1) {
+                                            normalizedPath = normalizedPath.substring(uploadsIndex + 1); // Keep 'uploads/filename'
+                                        }
+                                    }
+                                    
+                                    // Get configured component ID for file destination
+                                    const fileConfig = JSON.parse(localStorage.getItem('fileConfig') || '{}');
+                                    const componentId = fileConfig.destinationComponent || 'File-QW4Au';
                                     
                                     // Set the file path in tweaks for the File component
-                                    requestBody.tweaks["File-QW4Au"] = {
+                                    requestBody.tweaks[componentId] = {
                                         "path": normalizedPath
                                     };
-                                    console.log('Text file path set in tweaks:', normalizedPath);
-                                    console.log('Original text file path from server:', uploadedPath);
+                                    console.log('🔧 Text file component ID:', componentId);
+                                    console.log('📁 Original text file server path:', uploadedPath);
+                                    console.log('✅ Final text file normalized path:', normalizedPath);
                                 } else {
                                     throw new Error('No file path returned');
                                 }
@@ -5331,6 +5366,11 @@ This usually indicates a server configuration issue. Please check:
                 baseUrl = `Error parsing URL: ${e.message}`;
             }
             
+            // Get file configuration
+            const fileConfig = JSON.parse(localStorage.getItem('fileConfig') || '{}');
+            const componentId = fileConfig.destinationComponent || 'File-QW4Au';
+            const inputField = fileConfig.destinationInput || 'path';
+            
             const debugInfo = `
 🔧 **AI Assistant Debug Information**
 
@@ -5338,6 +5378,11 @@ This usually indicates a server configuration issue. Please check:
 • Langflow URL: ${langflowUrl}
 • Flow ID: ${flowId}
 • API Key: ${apiKey.length > 0 ? '✅ Configured (' + apiKey.length + ' chars)' : '❌ Not set'}
+
+**File Upload Configuration:**
+• Target Component: ${componentId}
+• Input Field: ${inputField}
+• Full Path: ${componentId}.${inputField}
 
 **Runtime URLs:**
 • Base URL (Langflow): ${baseUrl}

@@ -2696,6 +2696,7 @@
 
         function testAIConnection() {
             const langflowUrl = document.getElementById('configLangflowUrl').value;
+            const flowId = document.getElementById('configFlowId').value;
             const resultDiv = document.getElementById('aiConfigResult');
             
             if (!langflowUrl) {
@@ -2705,21 +2706,123 @@
 
             resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i>Testing connection...</div>';
 
-            // Simple connection test
-            fetch(`${langflowUrl}/health`, { method: 'GET' })
-                .then(response => {
-                    if (response.ok) {
-                        resultDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check me-2"></i>Connection successful!</div>';
-                    } else {
-                        resultDiv.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle me-2"></i>Connection established but service may not be fully ready.</div>';
+            // Test the actual flow endpoint that will be used
+            async function testConnection() {
+                try {
+                    const url = new URL(langflowUrl);
+                    const baseUrl = `${url.protocol}//${url.host}`;
+                    
+                    let testResults = [];
+                    
+                    // Test 1: Basic connectivity
+                    try {
+                        const healthResponse = await fetch(`${baseUrl}/health`, { 
+                            method: 'GET',
+                            timeout: 5000
+                        });
+                        if (healthResponse.ok) {
+                            testResults.push('✅ Health endpoint accessible');
+                        } else {
+                            testResults.push('⚠️ Health endpoint returned error: ' + healthResponse.status);
+                        }
+                    } catch (healthError) {
+                        testResults.push('❌ Health endpoint not accessible: ' + healthError.message);
                     }
-                })
-                .catch(error => {
-                    console.log('Direct health check failed, trying basic connection...');
-                    // Fallback test - just try to reach the URL
-                    const testUrl = new URL(langflowUrl);
-                    resultDiv.innerHTML = `<div class="alert alert-info"><i class="fas fa-info-circle me-2"></i>Basic connectivity test completed. Base URL: ${testUrl.origin}</div>`;
-                });
+                    
+                    // Test 2: Flow endpoint (if Flow ID provided)
+                    if (flowId) {
+                        try {
+                            const flowEndpoint = `${baseUrl}/api/v1/run/${flowId}`;
+                            const flowResponse = await fetch(flowEndpoint, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    input_value: "test",
+                                    output_type: "chat",
+                                    input_type: "chat"
+                                })
+                            });
+                            
+                            const responseText = await flowResponse.text();
+                            
+                            if (flowResponse.ok) {
+                                try {
+                                    JSON.parse(responseText);
+                                    testResults.push('✅ Flow endpoint accessible and returns valid JSON');
+                                } catch (parseError) {
+                                    testResults.push('⚠️ Flow endpoint accessible but returned invalid JSON');
+                                }
+                            } else {
+                                if (responseText.trim().startsWith('<')) {
+                                    testResults.push('❌ Flow endpoint returned HTML (likely 404 - check Flow ID)');
+                                } else {
+                                    testResults.push(`❌ Flow endpoint error: ${flowResponse.status} - ${responseText.substring(0, 100)}`);
+                                }
+                            }
+                        } catch (flowError) {
+                            testResults.push('❌ Flow endpoint test failed: ' + flowError.message);
+                        }
+                    } else {
+                        testResults.push('⚠️ No Flow ID provided - cannot test flow endpoint');
+                    }
+                    
+                    // Test 3: File upload endpoints
+                    const fileEndpoints = [
+                        `${baseUrl}/api/v2/files/`,
+                        `${baseUrl}/api/v1/files/`
+                    ];
+                    
+                    for (const endpoint of fileEndpoints) {
+                        try {
+                            const fileResponse = await fetch(endpoint, {
+                                method: 'OPTIONS'  // Just check if endpoint exists
+                            });
+                            if (fileResponse.ok || fileResponse.status === 405) {
+                                testResults.push(`✅ File endpoint accessible: ${endpoint}`);
+                            } else {
+                                testResults.push(`⚠️ File endpoint issue: ${endpoint} (${fileResponse.status})`);
+                            }
+                        } catch (fileError) {
+                            testResults.push(`❌ File endpoint not accessible: ${endpoint}`);
+                        }
+                    }
+                    
+                    // Display results
+                    const resultHtml = `
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle me-2"></i>Connection Test Results</h6>
+                            <ul class="mb-0">
+                                ${testResults.map(result => `<li>${result}</li>`).join('')}
+                            </ul>
+                            <hr>
+                            <strong>Base URL:</strong> ${baseUrl}<br>
+                            <strong>Flow Endpoint:</strong> ${baseUrl}/api/v1/run/${flowId || '[not-set]'}
+                        </div>
+                    `;
+                    
+                    resultDiv.innerHTML = resultHtml;
+                    
+                } catch (error) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h6><i class="fas fa-exclamation-triangle me-2"></i>Connection Test Failed</h6>
+                            <p>Error: ${error.message}</p>
+                            <p><strong>Check:</strong></p>
+                            <ul>
+                                <li>URL format is correct</li>
+                                <li>Langflow server is running</li>
+                                <li>No firewall blocking access</li>
+                                <li>CORS is properly configured</li>
+                            </ul>
+                        </div>
+                    `;
+                }
+            }
+            
+            testConnection();
         }
 
         function resetAIConfig() {

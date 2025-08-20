@@ -12,6 +12,9 @@ import jwt
 from datetime import datetime, timedelta
 from functools import wraps
 
+# Import settings management
+from app_settings import ApplicationSettings
+
 # Create Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dev-secret-key-for-testing'
@@ -20,6 +23,9 @@ app.config['MAX_CONTENT_LENGTH'] = 16777216  # 16MB
 
 # JWT Configuration
 JWT_SECRET_KEY = 'dev-jwt-secret-for-testing'
+
+# Initialize settings
+app_settings = ApplicationSettings()
 
 # Create directories
 os.makedirs('uploads', exist_ok=True)
@@ -44,7 +50,7 @@ def load_users_list():
     try:
         users_dict = load_users()
         print(f"DEBUG: load_users returned: {type(users_dict)} - {users_dict}")
-        
+
         if isinstance(users_dict, dict):
             users_list = list(users_dict.values())
             print(f"DEBUG: Converted to list: {users_list}")
@@ -65,15 +71,15 @@ def authenticate_user(username, password):
     """Authenticate user with username and password"""
     users = load_users()
     user = users.get(username)
-    
+
     if not user:
         return None
-    
+
     # Check password
     password_hash = user.get('password_hash', '')
     if bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
         return user
-    
+
     return None
 
 # Authentication decorator
@@ -84,27 +90,27 @@ def require_auth(f):
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({'success': False, 'message': 'No token provided'}), 401
-        
+
         try:
             if token.startswith('Bearer '):
                 token = token[7:]
-            
+
             payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
             users = load_users()
             user = users.get(payload.get('username'))
-            
+
             if not user:
                 return jsonify({'success': False, 'message': 'User not found'}), 401
-                
+
             request.current_user = user
-            
+
         except jwt.ExpiredSignatureError:
             return jsonify({'success': False, 'message': 'Token expired'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'success': False, 'message': 'Invalid token'}), 401
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)}), 401
-            
+
         return f(*args, **kwargs)
     return decorated_function
 
@@ -116,30 +122,30 @@ def token_required(f):
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({'success': False, 'message': 'No token provided'}), 401
-        
+
         try:
             if token.startswith('Bearer '):
                 token = token[7:]
-            
+
             payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
             users_list = load_users()
             # Convert list to dict for lookup
             users_dict = {user['username']: user for user in users_list}
             user = users_dict.get(payload.get('username'))
-            
+
             if not user:
                 return jsonify({'success': False, 'message': 'User not found'}), 401
-                
+
             # Pass user as first argument to the decorated function
             return f(user, *args, **kwargs)
-            
+
         except jwt.ExpiredSignatureError:
             return jsonify({'success': False, 'message': 'Token expired'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'success': False, 'message': 'Invalid token'}), 401
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)}), 401
-            
+
     return decorated_function
 
 # Routes
@@ -167,6 +173,11 @@ def hello():
         <li><a href="/">Landing Page</a></li>
     </ul>
     '''
+
+@app.route('/test-settings')
+def test_settings():
+    """Test page for settings functionality"""
+    return render_template('test_settings.html')
 
 @app.route('/app')
 def index():
@@ -199,23 +210,23 @@ def login():
         data = request.get_json()
         if not data:
             return jsonify({'success': False, 'message': 'No JSON data provided'})
-        
+
         username = data.get('username')
         password = data.get('password')
         remember_me = data.get('remember_me', False)
-        
+
         if not username or not password:
             return jsonify({'success': False, 'message': 'Username and password required'})
-        
+
         # Authenticate user
         user = authenticate_user(username, password)
         if not user:
             return jsonify({'success': False, 'message': 'Invalid credentials'})
-        
+
         # Check if user is active
         if user.get('status') != 'active':
             return jsonify({'success': False, 'message': 'Account is not active'})
-        
+
         # Generate JWT token
         expiry = datetime.utcnow() + (timedelta(days=30) if remember_me else timedelta(hours=24))
         payload = {
@@ -223,14 +234,14 @@ def login():
             'username': user['username'],
             'exp': expiry
         }
-        
+
         token = jwt.encode(payload, JWT_SECRET_KEY, algorithm='HS256')
-        
+
         # Update last login
         users = load_users()
         users[username]['last_login'] = datetime.utcnow().isoformat()
         save_users(users)
-        
+
         return jsonify({
             'success': True,
             'token': token,
@@ -242,7 +253,7 @@ def login():
                 'roles': user['roles']
             }
         })
-        
+
     except Exception as e:
         return jsonify({'success': False, 'message': f'Login error: {str(e)}'})
 
@@ -253,17 +264,17 @@ def validate_token():
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({'success': False, 'message': 'No token provided'})
-        
+
         if token.startswith('Bearer '):
             token = token[7:]
-        
+
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
         users = load_users()
         user = users.get(payload.get('username'))
-        
+
         if not user:
             return jsonify({'success': False, 'message': 'User not found'})
-        
+
         return jsonify({
             'success': True,
             'user': {
@@ -274,7 +285,7 @@ def validate_token():
                 'roles': user['roles']
             }
         })
-        
+
     except jwt.ExpiredSignatureError:
         return jsonify({'success': False, 'message': 'Token expired'})
     except jwt.InvalidTokenError:
@@ -289,17 +300,17 @@ def upload_file():
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No file selected'}), 400
-        
+
         file = request.files['file']
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
-        
+
         return jsonify({
             'success': True,
             'message': f'File {file.filename} uploaded successfully (demo)',
             'filename': file.filename
         })
-        
+
     except Exception as e:
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
@@ -324,7 +335,7 @@ def get_users(current_user):
     """Get all users (admin only)"""
     if 'admin' not in current_user.get('roles', []) and 'Administrator' not in current_user.get('roles', []):
         return jsonify({'success': False, 'message': 'Admin access required'}), 403
-    
+
     try:
         users = load_users_list()
         print(f"DEBUG: Loaded users: {users}")  # Debug print
@@ -333,7 +344,7 @@ def get_users(current_user):
         for user in users:
             print(f"DEBUG: Processing user: {user}")  # Debug print
             print(f"DEBUG: User type: {type(user)}")  # Debug print
-            
+
             # Create a new dict instead of copying
             safe_user = {
                 'id': user.get('id', ''),
@@ -345,13 +356,13 @@ def get_users(current_user):
                 'created_at': user.get('created_at', ''),
                 'last_login': user.get('last_login', '')
             }
-            
+
             # Normalize status field - convert status to is_active
             safe_user['is_active'] = safe_user['status'] == 'active'
-                
+
             print(f"DEBUG: Safe user after processing: {safe_user}")  # Debug print
             safe_users.append(safe_user)
-        
+
         print(f"DEBUG: Final safe_users: {safe_users}")  # Debug print
         return jsonify({'success': True, 'users': safe_users})
     except Exception as e:
@@ -366,7 +377,7 @@ def create_user(current_user):
     """Create new user (admin only)"""
     if 'admin' not in current_user.get('roles', []) and 'Administrator' not in current_user.get('roles', []):
         return jsonify({'success': False, 'message': 'Admin access required'}), 403
-    
+
     try:
         data = request.get_json()
         username = data.get('username', '').strip()
@@ -374,19 +385,19 @@ def create_user(current_user):
         display_name = data.get('display_name', '').strip()
         email = data.get('email', '').strip()
         roles = data.get('roles', ['user'])
-        
+
         # Validation
         if not username or not password:
             return jsonify({'success': False, 'message': 'Username and password are required'})
-        
+
         if len(password) < 8:
             return jsonify({'success': False, 'message': 'Password must be at least 8 characters'})
-        
+
         # Check if user exists
         users = load_users_list()
         if any(user['username'] == username for user in users):
             return jsonify({'success': False, 'message': 'Username already exists'})
-        
+
         # Create new user
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         new_user = {
@@ -404,10 +415,10 @@ def create_user(current_user):
             'locked_until': None,
             'audit_log': []
         }
-        
+
         users.append(new_user)
         save_users_list(users)
-        
+
         return jsonify({'success': True, 'message': 'User created successfully'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -418,18 +429,111 @@ def delete_user(current_user, username):
     """Delete user (admin only)"""
     if 'admin' not in current_user.get('roles', []) and 'Administrator' not in current_user.get('roles', []):
         return jsonify({'success': False, 'message': 'Admin access required'}), 403
-    
+
     if username == 'admin':
         return jsonify({'success': False, 'message': 'Cannot delete admin user'}), 400
-    
+
     try:
         users = load_users_list()
         users = [user for user in users if user['username'] != username]
         save_users_list(users)
-        
+
         return jsonify({'success': True, 'message': 'User deleted successfully'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+# Application Settings Endpoints
+@app.route('/api/settings', methods=['GET'])
+@token_required
+def get_settings(current_user):
+    """Get all application settings"""
+    try:
+        settings = app_settings.get_all_settings()
+        return jsonify({
+            'success': True,
+            'settings': settings,
+            'categories': app_settings.get_settings_categories(),
+            'metadata': app_settings.get_settings_metadata()
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/settings', methods=['POST'])
+@token_required
+def update_settings(current_user):
+    """Update multiple application settings"""
+    try:
+        data = request.get_json()
+        settings_updates = data.get('settings', {})
+
+        success = app_settings.update_multiple(settings_updates, current_user['username'])
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Settings updated successfully',
+                'settings': app_settings.get_all_settings()
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to update settings'}), 500
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/settings/<setting_key>', methods=['GET'])
+@token_required
+def get_setting(current_user, setting_key):
+    """Get a specific setting"""
+    try:
+        value = app_settings.get(setting_key)
+        if value is not None:
+            return jsonify({'success': True, 'key': setting_key, 'value': value})
+        else:
+            return jsonify({'success': False, 'error': 'Setting not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/settings/<setting_key>', methods=['PUT'])
+@token_required
+def update_setting(current_user, setting_key):
+    """Update a specific setting"""
+    try:
+        data = request.get_json()
+        value = data.get('value')
+
+        success = app_settings.set(setting_key, value)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Setting {setting_key} updated successfully',
+                'key': setting_key,
+                'value': value
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to update setting'}), 500
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/settings/reset', methods=['POST'])
+@token_required
+def reset_settings(current_user):
+    """Reset all settings to defaults"""
+    try:
+        success = app_settings.reset_to_defaults()
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Settings reset to defaults successfully',
+                'settings': app_settings.get_all_settings()
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to reset settings'}), 500
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Error Handlers
 @app.errorhandler(404)
@@ -450,9 +554,11 @@ if __name__ == '__main__':
     print("   http://127.0.0.1:5000/test")
     print("   http://127.0.0.1:5000/app")
     print("   http://127.0.0.1:5000/api/auth/login (POST)")
+    print("   http://127.0.0.1:5000/api/settings (GET/POST)")
     print("📋 Login credentials:")
     print("   Username: admin")
     print("   Password: Administrator123!")
+    print("💾 Settings functionality: ENABLED")
     print("=" * 60)
-    
+
     app.run(debug=True, host='127.0.0.1', port=5000)

@@ -1,0 +1,41 @@
+{
+  "users": [
+    {
+      "id": "admin-001",
+      "username": "admin",
+      "email": "admin@example.com",
+      "password_hash": "$2b$12$rOb4ZF7R8fJ1J1J1J1J1J1J1J1J1J1J1J1J1J1J1J1J1J1J1J1J1J1",
+      "display_name": "System Administrator",
+      "roles": ["Administrator"],
+      "status": "active",
+      "created_at": "2025-08-20T00:00:00Z",
+      "last_login": null,
+      "failed_login_attempts": 0,
+      "locked_until": null,
+      "audit_log": []
+    }
+  ],
+  "roles": {
+    "Administrator": {
+      "name": "Administrator",
+      "description": "Full system access",
+      "permissions": ["*"]
+    },
+    "Manager": {
+      "name": "Manager",
+      "description": "Management level access",
+      "permissions": ["read", "write", "manage_users"]
+    },
+    "User": {
+      "name": "User",
+      "description": "Standard user access",
+      "permissions": ["read", "write"]
+    },
+    "Inactive": {
+      "name": "Inactive",
+      "description": "No access",
+      "permissions": []
+    }
+  },
+  "audit_logs": []
+}

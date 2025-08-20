@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACME APP - Main Application</title>
+    <title id="page-title">{{ app_name or 'ACME App' }} - Main Application</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -57,7 +57,7 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border-right: 1px solid var(--gray-200);
         }
-        
+
         /* Mobile responsive sidebar */
         @media (max-width: 768px) {
             .sidebar {
@@ -85,14 +85,14 @@
                 display: none;
             }
         }
-        
+
         /* Desktop sidebar */
         @media (min-width: 769px) {
             .mobile-header {
                 display: none !important;
             }
         }
-        
+
         .mobile-header {
             background: white;
             color: var(--gray-900);
@@ -104,7 +104,7 @@
             border-bottom: 1px solid var(--gray-200);
             box-shadow: var(--shadow-sm);
         }
-        
+
         .sidebar-overlay {
             display: none;
             position: fixed;
@@ -116,7 +116,7 @@
             z-index: 1040;
             backdrop-filter: blur(4px);
         }
-        
+
         .nav-link {
             color: var(--gray-300) !important;
             border-radius: var(--border-radius-sm);
@@ -167,7 +167,7 @@
         }
 
         .nav-item-parent.expanded .nav-submenu {
-            max-height: 200px;
+            max-height: 500px;
         }
 
         .nav-sublink {
@@ -232,7 +232,7 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border: 1px solid var(--gray-200);
         }
-        
+
         /* Responsive feature box */
         @media (max-width: 768px) {
             .feature-box {
@@ -243,10 +243,49 @@
                 padding: 1rem;
             }
         }
-        
+
         .feature-box:hover {
             transform: translateY(-2px);
             box-shadow: var(--shadow-lg);
+        }
+
+        /* RFPO Stat Cards */
+        .stat-card {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--gray-200);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            height: 100%;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: var(--border-radius);
+            background: rgba(37, 99, 235, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+        }
+
+        .stat-icon i {
+            font-size: 1.5rem;
+        }
+
+        /* Responsive stat cards */
+        @media (max-width: 768px) {
+            .stat-card {
+                margin-bottom: 1rem;
+                padding: 1rem;
+            }
         }
 
         .status-indicator {
@@ -258,7 +297,7 @@
         }
         .status-online { background-color: var(--success-color); }
         .status-offline { background-color: var(--danger-color); }
-        
+
         /* Modern buttons */
         .btn {
             border-radius: var(--border-radius-sm);
@@ -395,7 +434,7 @@
             color: #1e40af;
             border-left: 4px solid var(--primary-color);
         }
-        
+
         /* Responsive table */
         .table {
             background: white;
@@ -436,7 +475,7 @@
                 font-size: 0.75rem;
             }
         }
-        
+
         /* Responsive form layouts */
         @media (max-width: 768px) {
             .user-management-row {
@@ -888,23 +927,23 @@
                 height: 65vh;
                 max-height: 500px;
             }
-            
+
             .message-bubble {
                 max-width: 85%;
             }
-            
+
             .chat-input {
                 font-size: 16px; /* Prevents zoom on iOS */
             }
-            
+
             .file-attachment .file-name {
                 font-size: 10px;
             }
-            
+
             .file-attachment .file-size {
                 font-size: 9px;
             }
-            
+
             .chat-input-container {
                 padding: 0.5rem;
             }
@@ -1086,11 +1125,11 @@
                 min-width: auto;
                 padding: 0.5rem;
             }
-            
+
             .user-info {
                 display: none;
             }
-            
+
             .user-dropdown-menu {
                 right: 0;
                 left: auto;
@@ -1314,7 +1353,7 @@
         <div class="d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center">
                 <i class="fas fa-users-cog fs-4 me-2" style="color: var(--primary-color);"></i>
-                <h5 class="mb-0 fw-bold">Flask App</h5>
+                <h5 class="mb-0 fw-bold" data-app-name>{{ app_name or 'Flask App' }}</h5>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <!-- Mobile User Dropdown -->
@@ -1341,12 +1380,12 @@
             <div class="col-md-3 col-lg-2 p-0 desktop-sidebar-col">
                 <div class="sidebar p-3" id="sidebar">
                     <div class="d-flex align-items-center mb-4">
-                        <div class="d-flex align-items-center justify-content-center me-3" 
+                        <div class="d-flex align-items-center justify-content-center me-3"
                              style="width: 40px; height: 40px; background: var(--primary-color); border-radius: var(--border-radius-sm);">
                             <i class="fas fa-users-cog text-white"></i>
                         </div>
                         <div>
-                            <h5 class="mb-0 text-white fw-bold">Flask App</h5>
+                            <h5 class="mb-0 text-white fw-bold" data-app-name>{{ app_name or 'Flask App' }}</h5>
                             <small class="text-gray-400">User Management</small>
                         </div>
                         <!-- Close button for mobile -->
@@ -1354,7 +1393,7 @@
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
-                    
+
                     <ul class="nav nav-pills flex-column">
                         <li class="nav-item mb-2">
                             <a class="nav-link text-white active" href="#" onclick="showSection('dashboard'); return false;">
@@ -1387,7 +1426,7 @@
                             </a>
                         </li>
                         <!-- Applications Menu with Submenu -->
-                        <li class="nav-item mb-2 nav-item-parent" id="appsNavParent">
+                        <li class="nav-item mb-2 nav-item-parent expanded" id="appsNavParent">
                             <a class="nav-link text-white nav-link-parent" href="#" onclick="toggleAppsMenu(); return false;">
                                 <div class="d-flex align-items-center">
                                     <i class="fas fa-th-large me-2"></i>
@@ -1395,7 +1434,11 @@
                                 </div>
                                 <i class="fas fa-chevron-right nav-chevron"></i>
                             </a>
-                            <div class="nav-submenu">
+                            <div class="nav-submenu" style="max-height: none !important; display: block !important;">
+                                <a class="nav-sublink text-white" href="#" onclick="showSection('rfpo-app'); return false;">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    RFPO
+                                </a>
                                 <a class="nav-sublink text-white" href="#" onclick="showSection('wbs-app'); return false;">
                                     <i class="fas fa-project-diagram"></i>
                                     WBS APP
@@ -1411,7 +1454,11 @@
                                 </div>
                                 <i class="fas fa-chevron-right nav-chevron"></i>
                             </a>
-                            <div class="nav-submenu">
+                            <div class="nav-submenu" style="max-height: none !important; display: block !important;">
+                                <a class="nav-sublink text-white" href="#" onclick="showSection('app-settings'); return false;">
+                                    <i class="fas fa-sliders-h"></i>
+                                    Application Settings
+                                </a>
                                 <a class="nav-sublink text-white" href="#" onclick="showSection('ai-config'); return false;">
                                     <i class="fas fa-robot"></i>
                                     AI Configuration
@@ -1435,15 +1482,15 @@
                     </ul>
 
                     <hr class="my-4" style="border-color: rgba(255, 255, 255, 0.1);">
-                    
+
                     <div class="px-2">
                         <div class="d-flex align-items-center mb-3">
                             <span class="status-indicator status-online"></span>
                             <small class="text-gray-300">Server Online</small>
                         </div>
                         <div class="text-gray-400" style="font-size: 12px;">
-                            <div class="mb-1">Version 2.0</div>
-                            <div>© 2025 Flask App</div>
+                            <div class="mb-1" data-app-version>Version {{ app_version or '2.0' }}</div>
+                            <div data-app-name>© 2025 {{ app_name or 'Flask App' }}</div>
                         </div>
                     </div>
                 </div>
@@ -1458,11 +1505,11 @@
                             <i class="fas fa-bars"></i>
                         </button>
                         <div>
-                            <h1 class="h4 mb-0 text-dark fw-bold">ACME APP</h1>
+                            <h1 class="h4 mb-0 text-dark fw-bold" data-app-name>{{ app_name or 'ACME App' }}</h1>
                             <small class="text-muted">Main Application Interface</small>
                         </div>
                     </div>
-                    
+
                     <!-- User Dropdown -->
                     <div class="user-dropdown" id="userDropdown">
                         <div class="user-dropdown-toggle" onclick="toggleUserDropdown()">
@@ -1475,7 +1522,7 @@
                             </div>
                             <i class="fas fa-chevron-down dropdown-chevron"></i>
                         </div>
-                        
+
                         <div class="user-dropdown-menu" id="userDropdownMenu">
                             <!-- Guest State Menu -->
                             <div id="guestMenu">
@@ -1500,7 +1547,7 @@
                                     API Status
                                 </button>
                             </div>
-                            
+
                             <!-- Authenticated User Menu -->
                             <div id="authenticatedMenu" style="display: none;">
                                 <div class="dropdown-header">
@@ -1553,7 +1600,7 @@
                     <div class="row">
                         <div class="col-lg-4 col-md-6 mb-3">
                             <div class="feature-box text-center">
-                                <div class="d-flex align-items-center justify-content-center mb-3" 
+                                <div class="d-flex align-items-center justify-content-center mb-3"
                                      style="width: 60px; height: 60px; background: rgba(37, 99, 235, 0.1); border-radius: var(--border-radius); margin: 0 auto;">
                                     <i class="fas fa-server fs-3" style="color: var(--primary-color);"></i>
                                 </div>
@@ -1564,7 +1611,7 @@
                         </div>
                         <div class="col-lg-4 col-md-6 mb-3">
                             <div class="feature-box text-center">
-                                <div class="d-flex align-items-center justify-content-center mb-3" 
+                                <div class="d-flex align-items-center justify-content-center mb-3"
                                      style="width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1); border-radius: var(--border-radius); margin: 0 auto;">
                                     <i class="fas fa-shield-alt fs-3" style="color: var(--success-color);"></i>
                                 </div>
@@ -1575,7 +1622,7 @@
                         </div>
                         <div class="col-lg-4 col-md-12 mb-3">
                             <div class="feature-box text-center">
-                                <div class="d-flex align-items-center justify-content-center mb-3" 
+                                <div class="d-flex align-items-center justify-content-center mb-3"
                                      style="width: 60px; height: 60px; background: rgba(245, 158, 11, 0.1); border-radius: var(--border-radius); margin: 0 auto;">
                                     <i class="fas fa-database fs-3" style="color: var(--warning-color);"></i>
                                 </div>
@@ -1590,7 +1637,7 @@
                         <div class="col-12">
                             <div class="feature-box">
                                 <div class="d-flex align-items-center mb-4">
-                                    <div class="d-flex align-items-center justify-content-center me-3" 
+                                    <div class="d-flex align-items-center justify-content-center me-3"
                                          style="width: 40px; height: 40px; background: rgba(37, 99, 235, 0.1); border-radius: var(--border-radius-sm);">
                                         <i class="fas fa-info-circle" style="color: var(--primary-color);"></i>
                                     </div>
@@ -1648,7 +1695,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                         </div>
                     </div>
                 </div>
@@ -1739,7 +1786,7 @@
                         <h2 class="mb-1"><i class="fas fa-users me-2" style="color: var(--primary-color);"></i>User Management</h2>
                         <p class="text-muted mb-0">Manage user accounts, roles, and permissions</p>
                     </div>
-                    
+
                     <!-- Authentication Check -->
                     <div id="userMgmtAuth" class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -1749,7 +1796,7 @@
                             Go to Login
                         </button>
                     </div>
-                    
+
                     <!-- User Management Interface (shown after login) -->
                     <div id="userMgmtInterface" style="display: none;">
                         <div class="row user-management-row">
@@ -1794,7 +1841,7 @@
                                     <div id="createUserResult" class="mt-3"></div>
                                 </div>
                             </div>
-                            
+
                             <!-- User List -->
                             <div class="col-md-8 user-list-col">
                                 <div class="feature-box">
@@ -1871,7 +1918,7 @@
                                 <div class="chat-input-container">
                                     <!-- File Attachments Display -->
                                     <div class="file-attachments" id="fileAttachments"></div>
-                                    
+
                                     <div class="chat-input-group">
                                         <div class="d-flex align-items-end gap-2">
                                             <!-- File Upload Button -->
@@ -1879,9 +1926,9 @@
                                                 <i class="fas fa-paperclip"></i>
                                             </button>
                                             <input type="file" id="chatFileInput" multiple accept=".txt,.pdf,.doc,.docx,.csv,.json,.md" style="display: none;">
-                                            
-                                            <textarea class="chat-input flex-fill" id="chatInput" 
-                                                      placeholder="Type your message..." 
+
+                                            <textarea class="chat-input flex-fill" id="chatInput"
+                                                      placeholder="Type your message..."
                                                       rows="1"
                                                       onkeydown="handleChatKeydown(event)"
                                                       oninput="autoResizeTextarea(this)"></textarea>
@@ -1890,11 +1937,325 @@
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     <!-- Compact File Upload Area (shown on demand) -->
                                     <div class="chat-file-upload" id="fileUploadArea" style="display: none;">
                                         <i class="fas fa-cloud-upload-alt me-2" style="color: var(--gray-500);"></i>
                                         <span style="color: var(--gray-600);">Drop files here or click attach button</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Application Settings Section -->
+                <div id="app-settings" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-sliders-h me-2" style="color: var(--primary-color);"></i>Application Settings</h2>
+                        <p class="text-muted mb-0">Configure application-wide settings and variables</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <!-- Settings Actions -->
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <div>
+                                    <button class="btn btn-primary" onclick="loadApplicationSettings()">
+                                        <i class="fas fa-sync me-2"></i>Reload Settings
+                                    </button>
+                                    <button class="btn btn-success ms-2" onclick="saveApplicationSettings()">
+                                        <i class="fas fa-save me-2"></i>Save Changes
+                                    </button>
+                                </div>
+                                <div>
+                                    <button class="btn btn-outline-warning" onclick="resetApplicationSettings()">
+                                        <i class="fas fa-undo me-2"></i>Reset to Defaults
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Settings Status -->
+                            <div id="settings-status" class="mb-3" style="display: none;"></div>
+
+                            <!-- Settings Tabs -->
+                            <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="identity-tab" data-bs-toggle="tab" data-bs-target="#identity-panel" type="button" role="tab">
+                                        <i class="fas fa-id-card me-2"></i>Application Identity
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="ui-tab" data-bs-toggle="tab" data-bs-target="#ui-panel" type="button" role="tab">
+                                        <i class="fas fa-palette me-2"></i>User Interface
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security-panel" type="button" role="tab">
+                                        <i class="fas fa-shield-alt me-2"></i>Security
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="system-tab" data-bs-toggle="tab" data-bs-target="#system-panel" type="button" role="tab">
+                                        <i class="fas fa-cogs me-2"></i>System
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#advanced-panel" type="button" role="tab">
+                                        <i class="fas fa-code me-2"></i>Advanced
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <!-- Settings Tab Content -->
+                            <div class="tab-content" id="settingsTabContent">
+                                <!-- Application Identity Panel -->
+                                <div class="tab-pane fade show active" id="identity-panel" role="tabpanel">
+                                    <div class="feature-box mt-3">
+                                        <h5 class="mb-4"><i class="fas fa-id-card me-2"></i>Application Identity</h5>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="application_name" class="form-label">Application Name <span class="text-danger">*</span></label>
+                                                    <input type="text" class="form-control" id="application_name" name="application_name" required>
+                                                    <div class="form-text">The name displayed throughout the application</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="application_version" class="form-label">Application Version</label>
+                                                    <input type="text" class="form-control" id="application_version" name="application_version" pattern="^\d+\.\d+(\.\d+)?$">
+                                                    <div class="form-text">Version number (e.g., 2.1.0)</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="company_name" class="form-label">Company Name</label>
+                                                    <input type="text" class="form-control" id="company_name" name="company_name">
+                                                    <div class="form-text">Organization using this application</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="application_description" class="form-label">Application Description</label>
+                                            <textarea class="form-control" id="application_description" name="application_description" rows="3" maxlength="500"></textarea>
+                                            <div class="form-text">Brief description of the application purpose</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- User Interface Panel -->
+                                <div class="tab-pane fade" id="ui-panel" role="tabpanel">
+                                    <div class="feature-box mt-3">
+                                        <h5 class="mb-4"><i class="fas fa-palette me-2"></i>User Interface Settings</h5>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="theme_color" class="form-label">Theme Color</label>
+                                                    <input type="color" class="form-control form-control-color" id="theme_color" name="theme_color">
+                                                    <div class="form-text">Primary color for the application theme</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="items_per_page" class="form-label">Items Per Page</label>
+                                                    <select class="form-select" id="items_per_page" name="items_per_page">
+                                                        <option value="5">5</option>
+                                                        <option value="10">10</option>
+                                                        <option value="20">20</option>
+                                                        <option value="50">50</option>
+                                                        <option value="100">100</option>
+                                                    </select>
+                                                    <div class="form-text">Default number of items to show per page</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="sidebar_width" class="form-label">Sidebar Width (px)</label>
+                                                    <input type="number" class="form-control" id="sidebar_width" name="sidebar_width" min="200" max="400">
+                                                    <div class="form-text">Width of the navigation sidebar</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check mt-4">
+                                                    <input class="form-check-input" type="checkbox" id="enable_dark_mode" name="enable_dark_mode">
+                                                    <label class="form-check-label" for="enable_dark_mode">
+                                                        Enable Dark Mode
+                                                    </label>
+                                                    <div class="form-text">Allow users to switch to dark theme</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Security Panel -->
+                                <div class="tab-pane fade" id="security-panel" role="tabpanel">
+                                    <div class="feature-box mt-3">
+                                        <h5 class="mb-4"><i class="fas fa-shield-alt me-2"></i>Security Settings</h5>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="session_timeout_hours" class="form-label">Session Timeout (Hours)</label>
+                                                    <input type="number" class="form-control" id="session_timeout_hours" name="session_timeout_hours" min="1" max="168">
+                                                    <div class="form-text">Hours before user sessions expire</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="password_min_length" class="form-label">Minimum Password Length</label>
+                                                    <input type="number" class="form-control" id="password_min_length" name="password_min_length" min="8" max="50">
+                                                    <div class="form-text">Minimum required password length</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="login_attempt_limit" class="form-label">Login Attempt Limit</label>
+                                                    <input type="number" class="form-control" id="login_attempt_limit" name="login_attempt_limit" min="3" max="10">
+                                                    <div class="form-text">Maximum failed login attempts</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="account_lockout_minutes" class="form-label">Account Lockout (Minutes)</label>
+                                                    <input type="number" class="form-control" id="account_lockout_minutes" name="account_lockout_minutes" min="5" max="1440">
+                                                    <div class="form-text">Minutes to lock account after failed attempts</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="require_strong_passwords" name="require_strong_passwords">
+                                                    <label class="form-check-label" for="require_strong_passwords">
+                                                        Require Strong Passwords
+                                                    </label>
+                                                    <div class="form-text">Enforce password complexity rules</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- System Panel -->
+                                <div class="tab-pane fade" id="system-panel" role="tabpanel">
+                                    <div class="feature-box mt-3">
+                                        <h5 class="mb-4"><i class="fas fa-cogs me-2"></i>System Settings</h5>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="max_file_size_mb" class="form-label">Max File Size (MB)</label>
+                                                    <input type="number" class="form-control" id="max_file_size_mb" name="max_file_size_mb" min="1" max="100">
+                                                    <div class="form-text">Maximum file upload size</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="log_level" class="form-label">Log Level</label>
+                                                    <select class="form-select" id="log_level" name="log_level">
+                                                        <option value="DEBUG">DEBUG</option>
+                                                        <option value="INFO">INFO</option>
+                                                        <option value="WARNING">WARNING</option>
+                                                        <option value="ERROR">ERROR</option>
+                                                    </select>
+                                                    <div class="form-text">Application logging verbosity</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="allowed_file_extensions" class="form-label">Allowed File Extensions</label>
+                                            <input type="text" class="form-control" id="allowed_file_extensions" name="allowed_file_extensions">
+                                            <div class="form-text">Comma-separated list of allowed file extensions</div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="enable_api_access" name="enable_api_access">
+                                                    <label class="form-check-label" for="enable_api_access">
+                                                        Enable API Access
+                                                    </label>
+                                                    <div class="form-text">Allow external API access</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="enable_file_logging" name="enable_file_logging">
+                                                    <label class="form-check-label" for="enable_file_logging">
+                                                        Enable File Logging
+                                                    </label>
+                                                    <div class="form-text">Save logs to files</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Advanced Panel -->
+                                <div class="tab-pane fade" id="advanced-panel" role="tabpanel">
+                                    <div class="feature-box mt-3">
+                                        <h5 class="mb-4"><i class="fas fa-code me-2"></i>Advanced Settings</h5>
+
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            <strong>Warning:</strong> These settings can affect application performance and stability. Change with caution.
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-3">
+                                                    <input class="form-check-input" type="checkbox" id="debug_mode" name="debug_mode">
+                                                    <label class="form-check-label" for="debug_mode">
+                                                        Debug Mode
+                                                    </label>
+                                                    <div class="form-text">Enable detailed error logging</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-3">
+                                                    <input class="form-check-input" type="checkbox" id="maintenance_mode" name="maintenance_mode">
+                                                    <label class="form-check-label" for="maintenance_mode">
+                                                        Maintenance Mode
+                                                    </label>
+                                                    <div class="form-text">Block normal user access</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-3">
+                                                    <input class="form-check-input" type="checkbox" id="enable_cache" name="enable_cache">
+                                                    <label class="form-check-label" for="enable_cache">
+                                                        Enable Cache
+                                                    </label>
+                                                    <div class="form-text">Use application caching</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="cache_timeout_minutes" class="form-label">Cache Timeout (Minutes)</label>
+                                                    <input type="number" class="form-control" id="cache_timeout_minutes" name="cache_timeout_minutes" min="1" max="1440">
+                                                    <div class="form-text">Cache expiration time</div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1913,13 +2274,13 @@
                         <div class="col-lg-8">
                             <div class="feature-box">
                                 <h5 class="mb-4"><i class="fas fa-cog me-2"></i>Langflow Integration Settings</h5>
-                                
+
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="configLangflowUrl" class="form-label">Langflow Base URL</label>
-                                            <input type="url" class="form-control" id="configLangflowUrl" 
-                                                   placeholder="http://localhost:7860" 
+                                            <input type="url" class="form-control" id="configLangflowUrl"
+                                                   placeholder="http://localhost:7860"
                                                    value="http://10.88.4.25:7860">
                                             <div class="form-text">Base URL of your Langflow instance</div>
                                         </div>
@@ -1927,19 +2288,19 @@
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="configFlowId" class="form-label">Default Flow ID</label>
-                                            <input type="text" class="form-control" id="configFlowId" 
+                                            <input type="text" class="form-control" id="configFlowId"
                                                    placeholder="your-flow-id"
                                                    value="900b0d89-4481-4f64-88bf-4d4661086a62">
                                             <div class="form-text">Default flow ID for AI conversations</div>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="configApiKey" class="form-label">API Key</label>
-                                            <input type="password" class="form-control" id="configApiKey" 
+                                            <input type="password" class="form-control" id="configApiKey"
                                                    placeholder="Your Langflow API key">
                                             <div class="form-text">Optional API key for authenticated access</div>
                                         </div>
@@ -1962,7 +2323,7 @@
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="configTimeout" class="form-label">Request Timeout (seconds)</label>
-                                            <input type="number" class="form-control" id="configTimeout" 
+                                            <input type="number" class="form-control" id="configTimeout"
                                                    value="30" min="5" max="300">
                                             <div class="form-text">Timeout for AI API requests</div>
                                         </div>
@@ -1970,7 +2331,7 @@
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="configMaxRetries" class="form-label">Max Retries</label>
-                                            <input type="number" class="form-control" id="configMaxRetries" 
+                                            <input type="number" class="form-control" id="configMaxRetries"
                                                    value="3" min="1" max="10">
                                             <div class="form-text">Maximum retry attempts for failed requests</div>
                                         </div>
@@ -1991,11 +2352,11 @@
                                         Reset to Defaults
                                     </button>
                                 </div>
-                                
+
                                 <div id="aiConfigResult" class="mt-3"></div>
                             </div>
                         </div>
-                        
+
                         <div class="col-lg-4">
                             <div class="feature-box">
                                 <h6 class="mb-3"><i class="fas fa-info-circle me-2"></i>Configuration Tips</h6>
@@ -2033,12 +2394,12 @@
                         <div class="col-lg-8">
                             <div class="feature-box">
                                 <h5 class="mb-4"><i class="fas fa-upload me-2"></i>Upload Settings</h5>
-                                
+
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="configMaxFileSize" class="form-label">Max File Size (MB)</label>
-                                            <input type="number" class="form-control" id="configMaxFileSize" 
+                                            <input type="number" class="form-control" id="configMaxFileSize"
                                                    value="10" min="1" max="100">
                                             <div class="form-text">Maximum file size for uploads</div>
                                         </div>
@@ -2046,7 +2407,7 @@
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="configMaxFiles" class="form-label">Max Files per Upload</label>
-                                            <input type="number" class="form-control" id="configMaxFiles" 
+                                            <input type="number" class="form-control" id="configMaxFiles"
                                                    value="5" min="1" max="20">
                                             <div class="form-text">Maximum number of files in one upload</div>
                                         </div>
@@ -2113,7 +2474,7 @@
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="configUploadTimeout" class="form-label">Upload Timeout (seconds)</label>
-                                            <input type="number" class="form-control" id="configUploadTimeout" 
+                                            <input type="number" class="form-control" id="configUploadTimeout"
                                                    value="60" min="10" max="300">
                                             <div class="form-text">Timeout for file upload requests</div>
                                         </div>
@@ -2135,7 +2496,7 @@
                                         <div class="col-md-6">
                                             <div class="mb-3">
                                                 <label for="configDestinationComponent" class="form-label">Target Component ID</label>
-                                                <input type="text" class="form-control" id="configDestinationComponent" 
+                                                <input type="text" class="form-control" id="configDestinationComponent"
                                                        value="File-QW4Au" placeholder="File-QW4Au">
                                                 <div class="form-text">Component ID that receives uploaded files</div>
                                             </div>
@@ -2143,7 +2504,7 @@
                                         <div class="col-md-6">
                                             <div class="mb-3">
                                                 <label for="configDestinationInput" class="form-label">Input Field Name</label>
-                                                <input type="text" class="form-control" id="configDestinationInput" 
+                                                <input type="text" class="form-control" id="configDestinationInput"
                                                        value="path" placeholder="path">
                                                 <div class="form-text">Input field name for file path parameter</div>
                                             </div>
@@ -2153,7 +2514,7 @@
                                         <div class="col-md-12">
                                             <div class="mb-3">
                                                 <label for="configDestinationPath" class="form-label">Full Destination Path</label>
-                                                <input type="text" class="form-control" id="configDestinationPath" 
+                                                <input type="text" class="form-control" id="configDestinationPath"
                                                        value="File-QW4Au.path" placeholder="ComponentID.InputField">
                                                 <div class="form-text">Complete path: ComponentID.InputFieldName (auto-generated from above)</div>
                                             </div>
@@ -2175,11 +2536,11 @@
                                         Reset to Defaults
                                     </button>
                                 </div>
-                                
+
                                 <div id="fileConfigResult" class="mt-3"></div>
                             </div>
                         </div>
-                        
+
                         <div class="col-lg-4">
                             <div class="feature-box">
                                 <h6 class="mb-3"><i class="fas fa-shield-alt me-2"></i>Security Settings</h6>
@@ -2197,7 +2558,7 @@
                                         Type restrictions enforced
                                     </li>
                                 </ul>
-                                
+
                                 <h6 class="mb-3 mt-4"><i class="fas fa-chart-line me-2"></i>Upload Statistics</h6>
                                 <div class="small">
                                     <div class="d-flex justify-content-between mb-1">
@@ -2229,15 +2590,15 @@
                         <div class="col-12">
                             <div class="feature-box">
                                 <h5 class="mb-4"><i class="fas fa-rocket me-2"></i>Coming Soon</h5>
-                                
+
                                 <div class="text-center py-5">
-                                    <div class="d-flex align-items-center justify-content-center mb-4" 
+                                    <div class="d-flex align-items-center justify-content-center mb-4"
                                          style="width: 80px; height: 80px; background: rgba(37, 99, 235, 0.1); border-radius: var(--border-radius); margin: 0 auto;">
                                         <i class="fas fa-project-diagram fs-1" style="color: var(--primary-color);"></i>
                                     </div>
                                     <h4 class="mb-3">WBS Application</h4>
                                     <p class="text-muted mb-4">A comprehensive Work Breakdown Structure tool for project planning and management is in development.</p>
-                                    
+
                                     <div class="row justify-content-center">
                                         <div class="col-md-8">
                                             <div class="alert alert-info">
@@ -2249,6 +2610,192 @@
                                                     <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Export to multiple formats</li>
                                                     <li class="mb-0"><i class="fas fa-check text-success me-2"></i>Integration with project management tools</li>
                                                 </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RFPO Application Section -->
+                <div id="rfpo-app" class="content-section" style="display: none;">
+                    <div class="mb-4">
+                        <h2 class="mb-1"><i class="fas fa-clipboard-list me-2" style="color: var(--primary-color);"></i>RFPO</h2>
+                        <p class="text-muted mb-0">Request for Purchase Order Operations - Comprehensive RFPO management system</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="feature-box">
+                                <div class="d-flex justify-content-between align-items-center mb-4">
+                                    <h5 class="mb-0"><i class="fas fa-file-contract me-2"></i>RFPO Management Dashboard</h5>
+                                    <div>
+                                        <button class="btn btn-primary btn-sm me-2" onclick="createNewRFPO()">
+                                            <i class="fas fa-plus me-1"></i>
+                                            New RFPO
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="importRFPOTemplate()">
+                                            <i class="fas fa-upload me-1"></i>
+                                            Import Template
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- RFPO Statistics Row -->
+                                <div class="row mb-4">
+                                    <div class="col-md-3">
+                                        <div class="stat-card text-center">
+                                            <div class="stat-icon mb-2">
+                                                <i class="fas fa-file-alt" style="color: var(--primary-color);"></i>
+                                            </div>
+                                            <h6 class="mb-1">Total RFPOs</h6>
+                                            <h4 class="mb-0" id="rfpo-total-count">12</h4>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="stat-card text-center">
+                                            <div class="stat-icon mb-2">
+                                                <i class="fas fa-clock" style="color: var(--warning-color);"></i>
+                                            </div>
+                                            <h6 class="mb-1">In Progress</h6>
+                                            <h4 class="mb-0" id="rfpo-progress-count">5</h4>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="stat-card text-center">
+                                            <div class="stat-icon mb-2">
+                                                <i class="fas fa-check-circle" style="color: var(--success-color);"></i>
+                                            </div>
+                                            <h6 class="mb-1">Completed</h6>
+                                            <h4 class="mb-0" id="rfpo-completed-count">7</h4>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="stat-card text-center">
+                                            <div class="stat-icon mb-2">
+                                                <i class="fas fa-exclamation-triangle" style="color: var(--danger-color);"></i>
+                                            </div>
+                                            <h6 class="mb-1">Overdue</h6>
+                                            <h4 class="mb-0" id="rfpo-overdue-count">2</h4>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- RFPO List Table -->
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th><i class="fas fa-hashtag me-1"></i>ID</th>
+                                                <th><i class="fas fa-file-contract me-1"></i>RFPO Title</th>
+                                                <th><i class="fas fa-building me-1"></i>Client</th>
+                                                <th><i class="fas fa-calendar me-1"></i>Due Date</th>
+                                                <th><i class="fas fa-info-circle me-1"></i>Status</th>
+                                                <th><i class="fas fa-user me-1"></i>Assigned To</th>
+                                                <th><i class="fas fa-cogs me-1"></i>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="rfpo-table-body">
+                                            <tr>
+                                                <td><span class="badge bg-primary">RFPO-001</span></td>
+                                                <td>IT Infrastructure Modernization</td>
+                                                <td>ACME Corporation</td>
+                                                <td>2025-09-15</td>
+                                                <td><span class="badge bg-warning">In Progress</span></td>
+                                                <td>John Smith</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editRFPO('RFPO-001')">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-success me-1" onclick="viewRFPO('RFPO-001')">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteRFPO('RFPO-001')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-primary">RFPO-002</span></td>
+                                                <td>Cloud Migration Services</td>
+                                                <td>Tech Solutions Inc</td>
+                                                <td>2025-08-30</td>
+                                                <td><span class="badge bg-danger">Overdue</span></td>
+                                                <td>Sarah Johnson</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editRFPO('RFPO-002')">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-success me-1" onclick="viewRFPO('RFPO-002')">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteRFPO('RFPO-002')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-primary">RFPO-003</span></td>
+                                                <td>Security Assessment & Consulting</td>
+                                                <td>SecureNet Ltd</td>
+                                                <td>2025-10-01</td>
+                                                <td><span class="badge bg-success">Completed</span></td>
+                                                <td>Mike Davis</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editRFPO('RFPO-003')">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-success me-1" onclick="viewRFPO('RFPO-003')">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-info" onclick="downloadRFPO('RFPO-003')">
+                                                        <i class="fas fa-download"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- RFPO Templates and Quick Actions -->
+                                <div class="row mt-4">
+                                    <div class="col-md-6">
+                                        <div class="card border-0 h-100" style="background: rgba(37, 99, 235, 0.05);">
+                                            <div class="card-body">
+                                                <h6 class="card-title"><i class="fas fa-file-alt me-2"></i>RFPO Templates</h6>
+                                                <p class="card-text text-muted mb-3">Use predefined templates to quickly create new RFPOs</p>
+                                                <div class="d-grid gap-2">
+                                                    <button class="btn btn-outline-primary btn-sm" onclick="useTemplate('it-services')">
+                                                        <i class="fas fa-server me-1"></i>IT Services Template
+                                                    </button>
+                                                    <button class="btn btn-outline-primary btn-sm" onclick="useTemplate('consulting')">
+                                                        <i class="fas fa-handshake me-1"></i>Consulting Template
+                                                    </button>
+                                                    <button class="btn btn-outline-primary btn-sm" onclick="useTemplate('software')">
+                                                        <i class="fas fa-code me-1"></i>Software Development Template
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card border-0 h-100" style="background: rgba(16, 185, 129, 0.05);">
+                                            <div class="card-body">
+                                                <h6 class="card-title"><i class="fas fa-chart-line me-2"></i>Analytics & Reports</h6>
+                                                <p class="card-text text-muted mb-3">Generate insights and reports on RFPO performance</p>
+                                                <div class="d-grid gap-2">
+                                                    <button class="btn btn-outline-success btn-sm" onclick="generateReport('summary')">
+                                                        <i class="fas fa-chart-bar me-1"></i>Summary Report
+                                                    </button>
+                                                    <button class="btn btn-outline-success btn-sm" onclick="generateReport('timeline')">
+                                                        <i class="fas fa-calendar-alt me-1"></i>Timeline Analysis
+                                                    </button>
+                                                    <button class="btn btn-outline-success btn-sm" onclick="generateReport('vendor')">
+                                                        <i class="fas fa-users me-1"></i>Vendor Performance
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -2275,7 +2822,7 @@
                                         Add Menu Item
                                     </button>
                                 </div>
-                                
+
                                 <!-- Navigation Editor Interface -->
                                 <div id="navigationEditor" class="navigation-editor">
                                     <div class="editor-toolbar mb-3">
@@ -2317,11 +2864,11 @@
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 <div id="navEditorResult" class="mt-3"></div>
                             </div>
                         </div>
-                        
+
                         <div class="col-lg-4">
                             <div class="feature-box mb-3">
                                 <h6 class="mb-3"><i class="fas fa-cog me-2"></i>Role-Based Visibility</h6>
@@ -2365,7 +2912,7 @@
                                         Role-based menu visibility
                                     </li>
                                 </ul>
-                                
+
                                 <div class="alert alert-info mt-4">
                                     <small><i class="fas fa-info-circle me-1"></i>
                                     <strong>Tip:</strong> Changes are saved to browser storage and will persist across sessions.</small>
@@ -2450,17 +2997,17 @@
         function openChatSection() {
             try {
                 console.log('Opening chat section...');
-                
+
                 // Hide all sections
                 document.querySelectorAll('.content-section').forEach(section => {
                     section.style.display = 'none';
                 });
-                
-                // Remove active class from all nav links  
+
+                // Remove active class from all nav links
                 document.querySelectorAll('.nav-link').forEach(link => {
                     link.classList.remove('active');
                 });
-                
+
                 // Show chat section
                 const chatSection = document.getElementById('chat');
                 if (chatSection) {
@@ -2470,17 +3017,17 @@
                     console.error('Chat section not found');
                     return false;
                 }
-                
+
                 // Add active class to current link
                 if (typeof event !== 'undefined' && event && event.target) {
                     event.target.classList.add('active');
                 }
-                
+
                 // Close mobile sidebar if function exists
                 if (typeof closeMobileSidebar === 'function') {
                     closeMobileSidebar();
                 }
-                
+
                 // Initialize chat if needed
                 if (typeof updateWelcomeTime === 'function') {
                     updateWelcomeTime();
@@ -2488,7 +3035,7 @@
                 if (typeof updateModelBadge === 'function') {
                     updateModelBadge();
                 }
-                
+
                 return false;
             } catch (error) {
                 console.error('Error in openChatSection:', error);
@@ -2498,13 +3045,13 @@
         function showSection(sectionId) {
             try {
                 console.log('showSection called with:', sectionId);
-                
+
                 // Validate input
                 if (!sectionId || typeof sectionId !== 'string') {
                     console.error('Invalid section ID provided:', sectionId);
                     return false;
                 }
-                
+
                 // Hide all sections
                 const sections = document.querySelectorAll('.content-section');
                 console.log('Found sections:', sections.length);
@@ -2512,11 +3059,11 @@
                     console.error('No content sections found!');
                     return false;
                 }
-                
+
                 sections.forEach(section => {
                     section.style.display = 'none';
                 });
-                
+
                 // Remove active class from all nav links and sublinks
                 const navLinks = document.querySelectorAll('.nav-link');
                 const navSublinks = document.querySelectorAll('.nav-sublink');
@@ -2527,7 +3074,7 @@
                 navSublinks.forEach(link => {
                     link.classList.remove('active');
                 });
-                
+
                 // Show selected section
                 const targetSection = document.getElementById(sectionId);
                 if (targetSection) {
@@ -2538,7 +3085,7 @@
                     console.log('Available sections:', Array.from(sections).map(s => s.id));
                     return false;
                 }
-                
+
                 // Add active class to clicked nav link or sublink
                 if (typeof event !== 'undefined' && event && event.target) {
                     if (event.target.classList.contains('nav-sublink')) {
@@ -2555,19 +3102,19 @@
                         console.log('Active class added to nav link (fallback)');
                     }
                 }
-                
+
                 // Close mobile sidebar if open
                 if (typeof closeMobileSidebar === 'function') {
                     closeMobileSidebar();
                 }
-                
+
                 // Special handling for user management section
                 if (sectionId === 'users') {
                     if (typeof checkAuthForUserMgmt === 'function') {
                         checkAuthForUserMgmt();
                     }
                 }
-                
+
                 // Special handling for chat section
                 if (sectionId === 'chat') {
                     console.log('Chat section opened, initializing...');
@@ -2579,9 +3126,9 @@
                         updateModelBadge();
                     }
                 }
-                
+
                 // Special handling for configuration sections
-                if (sectionId === 'ai-config' || sectionId === 'file-config') {
+                if (sectionId === 'ai-config' || sectionId === 'file-config' || sectionId === 'app-settings') {
                     console.log('Configuration section opened, loading saved settings...');
                     // Expand the configuration menu if not already expanded
                     const configParent = document.getElementById('configNavParent');
@@ -2592,10 +3139,14 @@
                     if (typeof loadSavedConfigurations === 'function') {
                         loadSavedConfigurations();
                     }
+                    // Load application settings if viewing app-settings
+                    if (sectionId === 'app-settings' && typeof loadApplicationSettings === 'function') {
+                        loadApplicationSettings();
+                    }
                 }
-                
+
                 return false;
-                
+
             } catch (error) {
                 console.error('Error in showSection:', error);
                 alert('Error opening section: ' + error.message);
@@ -2607,7 +3158,7 @@
         function toggleMobileSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
-            
+
             if (sidebar.classList.contains('show')) {
                 closeMobileSidebar();
             } else {
@@ -2620,7 +3171,7 @@
         function closeMobileSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
-            
+
             sidebar.classList.remove('show');
             overlay.style.display = 'none';
             document.body.style.overflow = '';
@@ -2639,32 +3190,37 @@
         function testAPI() {
             alert('API Test:\n\n✅ Server: Online\n✅ Authentication: Ready\n✅ File Upload: Ready\n✅ User Management: Ready\n\nAll API endpoints are functioning properly!');
         }
-        
+
         // Configuration Menu Functions
         function toggleConfigMenu() {
             const parent = document.getElementById('configNavParent');
             const isExpanded = parent.classList.contains('expanded');
-            
+
             if (isExpanded) {
                 parent.classList.remove('expanded');
             } else {
                 parent.classList.add('expanded');
             }
-            
+
             return false;
         }
 
         // Applications Menu Functions
         function toggleAppsMenu() {
+            console.log('toggleAppsMenu called');
             const parent = document.getElementById('appsNavParent');
+            console.log('Found parent element:', parent);
             const isExpanded = parent.classList.contains('expanded');
-            
+            console.log('Is currently expanded:', isExpanded);
+
             if (isExpanded) {
                 parent.classList.remove('expanded');
+                console.log('Removed expanded class');
             } else {
                 parent.classList.add('expanded');
+                console.log('Added expanded class');
             }
-            
+
             return false;
         }
 
@@ -2681,16 +3237,16 @@
 
             // Save to localStorage
             localStorage.setItem('aiConfig', JSON.stringify(config));
-            
+
             // Also save individual values for easy access by chat functions
             localStorage.setItem('aiConfig_langflowUrl', config.langflowUrl);
             localStorage.setItem('aiConfig_flowId', config.flowId);
             localStorage.setItem('aiConfig_apiKey', config.apiKey);
             localStorage.setItem('aiConfig_defaultModel', config.defaultModel);
 
-            document.getElementById('aiConfigResult').innerHTML = 
+            document.getElementById('aiConfigResult').innerHTML =
                 '<div class="alert alert-success"><i class="fas fa-check me-2"></i>AI configuration saved successfully!</div>';
-            
+
             console.log('AI Configuration saved:', config);
         }
 
@@ -2698,7 +3254,7 @@
             const langflowUrl = document.getElementById('configLangflowUrl').value;
             const flowId = document.getElementById('configFlowId').value;
             const resultDiv = document.getElementById('aiConfigResult');
-            
+
             if (!langflowUrl) {
                 resultDiv.innerHTML = '<div class="alert alert-warning">Please enter a Langflow URL first.</div>';
                 return;
@@ -2711,12 +3267,12 @@
                 try {
                     const url = new URL(langflowUrl);
                     const baseUrl = `${url.protocol}//${url.host}`;
-                    
+
                     let testResults = [];
-                    
+
                     // Test 1: Basic connectivity
                     try {
-                        const healthResponse = await fetch(`${baseUrl}/health`, { 
+                        const healthResponse = await fetch(`${baseUrl}/health`, {
                             method: 'GET',
                             timeout: 5000
                         });
@@ -2728,7 +3284,7 @@
                     } catch (healthError) {
                         testResults.push('❌ Health endpoint not accessible: ' + healthError.message);
                     }
-                    
+
                     // Test 2: Flow endpoint (if Flow ID provided)
                     if (flowId) {
                         try {
@@ -2745,9 +3301,9 @@
                                     input_type: "chat"
                                 })
                             });
-                            
+
                             const responseText = await flowResponse.text();
-                            
+
                             if (flowResponse.ok) {
                                 try {
                                     JSON.parse(responseText);
@@ -2768,13 +3324,13 @@
                     } else {
                         testResults.push('⚠️ No Flow ID provided - cannot test flow endpoint');
                     }
-                    
+
                     // Test 3: File upload endpoints
                     const fileEndpoints = [
                         `${baseUrl}/api/v2/files/`,
                         `${baseUrl}/api/v1/files/`
                     ];
-                    
+
                     for (const endpoint of fileEndpoints) {
                         try {
                             const fileResponse = await fetch(endpoint, {
@@ -2789,7 +3345,7 @@
                             testResults.push(`❌ File endpoint not accessible: ${endpoint}`);
                         }
                     }
-                    
+
                     // Display results
                     const resultHtml = `
                         <div class="alert alert-info">
@@ -2802,9 +3358,9 @@
                             <strong>Flow Endpoint:</strong> ${baseUrl}/api/v1/run/${flowId || '[not-set]'}
                         </div>
                     `;
-                    
+
                     resultDiv.innerHTML = resultHtml;
-                    
+
                 } catch (error) {
                     resultDiv.innerHTML = `
                         <div class="alert alert-danger">
@@ -2821,7 +3377,7 @@
                     `;
                 }
             }
-            
+
             testConnection();
         }
 
@@ -2832,8 +3388,8 @@
             document.getElementById('configDefaultModel').value = 'gpt-3.5-turbo';
             document.getElementById('configTimeout').value = '30';
             document.getElementById('configMaxRetries').value = '3';
-            
-            document.getElementById('aiConfigResult').innerHTML = 
+
+            document.getElementById('aiConfigResult').innerHTML =
                 '<div class="alert alert-info"><i class="fas fa-info me-2"></i>Configuration reset to defaults.</div>';
         }
 
@@ -2863,33 +3419,33 @@
 
             // Save to localStorage
             localStorage.setItem('fileConfig', JSON.stringify(config));
-            
+
             // Apply changes immediately
             applyFileConfigChanges(config);
-            
-            document.getElementById('fileConfigResult').innerHTML = 
+
+            document.getElementById('fileConfigResult').innerHTML =
                 '<div class="alert alert-success"><i class="fas fa-check me-2"></i>File upload configuration saved and applied successfully!</div>';
-            
+
             console.log('File Configuration saved and applied:', config);
         }
 
         function applyFileConfigChanges(config) {
             // Update file input accept attributes
             updateFileInputAcceptTypes(config.allowedTypes);
-            
+
             // Update file upload section descriptions
             updateFileUploadDescriptions(config);
-            
+
             // Update chat file input
             updateChatFileInput(config.allowedTypes);
-            
+
             console.log('File configuration changes applied successfully');
         }
 
         function updateFileInputAcceptTypes(allowedTypes) {
             let acceptString = '';
             let extensions = [];
-            
+
             if (allowedTypes.txt) {
                 extensions.push('.txt');
             }
@@ -2914,21 +3470,21 @@
             if (allowedTypes.images) {
                 extensions.push('.jpg', '.jpeg', '.png', '.gif');
             }
-            
+
             acceptString = extensions.join(',');
-            
+
             // Update main file upload input
             const fileInput = document.getElementById('fileInput');
             if (fileInput) {
                 fileInput.setAttribute('accept', acceptString);
             }
-            
+
             // Update chat file input
             const chatFileInput = document.getElementById('chatFileInput');
             if (chatFileInput) {
                 chatFileInput.setAttribute('accept', acceptString);
             }
-            
+
             console.log('File input accept types updated:', acceptString);
         }
 
@@ -2948,7 +3504,7 @@
 
         function generateSupportedFormatsList(allowedTypes) {
             let formats = [];
-            
+
             if (allowedTypes.txt) formats.push('<li>Text files (.txt)</li>');
             if (allowedTypes.pdf) formats.push('<li>PDF files (.pdf)</li>');
             if (allowedTypes.doc) formats.push('<li>Word documents (.doc, .docx)</li>');
@@ -2957,7 +3513,7 @@
             if (allowedTypes.md) formats.push('<li>Markdown files (.md)</li>');
             if (allowedTypes.xls) formats.push('<li>Excel files (.xls, .xlsx)</li>');
             if (allowedTypes.images) formats.push('<li>Image files (.jpg, .png, .gif)</li>');
-            
+
             return formats.length > 0 ? formats.join('') : '<li>No file types enabled</li>';
         }
 
@@ -2974,20 +3530,20 @@
                 if (allowedTypes.md) supportedTypes.push('md');
                 if (allowedTypes.xls) supportedTypes.push('xls');
                 if (allowedTypes.images) supportedTypes.push('images');
-                
-                const tooltip = supportedTypes.length > 0 ? 
-                    `Attach files (${supportedTypes.join(', ')})` : 
+
+                const tooltip = supportedTypes.length > 0 ?
+                    `Attach files (${supportedTypes.join(', ')})` :
                     'File uploads disabled';
-                    
+
                 uploadButton.setAttribute('title', tooltip);
             }
         }
 
         function testFileUpload() {
             const resultDiv = document.getElementById('fileConfigResult');
-            resultDiv.innerHTML = 
+            resultDiv.innerHTML =
                 '<div class="alert alert-info"><i class="fas fa-info me-2"></i>File upload test completed. Check browser console for detailed endpoint testing.</div>';
-            
+
             console.log('File upload configuration test - settings would be applied to actual uploads.');
         }
 
@@ -3005,7 +3561,7 @@
             document.getElementById('configUploadEndpoint').value = '/api/v2/files/';
             document.getElementById('configUploadTimeout').value = '60';
             document.getElementById('configFallbackEnabled').checked = true;
-            
+
             // Apply the reset configuration immediately
             const defaultConfig = {
                 maxFileSize: '10',
@@ -3024,12 +3580,12 @@
                 uploadTimeout: '60',
                 fallbackEnabled: true
             };
-            
+
             // Save and apply changes
             localStorage.setItem('fileConfig', JSON.stringify(defaultConfig));
             applyFileConfigChanges(defaultConfig);
-            
-            document.getElementById('fileConfigResult').innerHTML = 
+
+            document.getElementById('fileConfigResult').innerHTML =
                 '<div class="alert alert-info"><i class="fas fa-info me-2"></i>File configuration reset to defaults and applied.</div>';
         }
 
@@ -3044,13 +3600,13 @@
 
         function initializeNavigationEditor() {
             console.log('Initializing Navigation Editor...');
-            
+
             // Load existing navigation configuration
             loadNavigationConfig();
-            
+
             // Render the navigation editor
             renderNavigationEditor();
-            
+
             // Load role-based settings
             loadRoleBasedSettings();
         }
@@ -3125,6 +3681,15 @@
                                 icon: 'fas fa-project-diagram',
                                 action: 'section',
                                 target: 'wbs-app',
+                                visible: true,
+                                roles: ['user', 'admin']
+                            },
+                            {
+                                id: 'rfpo-app',
+                                label: 'RFPO',
+                                icon: 'fas fa-file-contract',
+                                action: 'section',
+                                target: 'rfpo-app',
                                 visible: true,
                                 roles: ['user', 'admin']
                             }
@@ -3202,19 +3767,19 @@
             try {
                 localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
                 console.log('Navigation config saved:', navigationConfig);
-                
+
                 // Apply the changes to the actual navigation
                 applyNavigationChanges();
-                
-                document.getElementById('navEditorResult').innerHTML = 
+
+                document.getElementById('navEditorResult').innerHTML =
                     '<div class="alert alert-success"><i class="fas fa-check me-2"></i>Navigation configuration saved successfully!</div>';
-                
+
                 setTimeout(() => {
                     document.getElementById('navEditorResult').innerHTML = '';
                 }, 3000);
             } catch (e) {
                 console.error('Error saving navigation config:', e);
-                document.getElementById('navEditorResult').innerHTML = 
+                document.getElementById('navEditorResult').innerHTML =
                     '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>Error saving navigation configuration.</div>';
             }
         }
@@ -3225,10 +3790,10 @@
                 localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
                 renderNavigationEditor();
                 loadRoleBasedSettings();
-                
-                document.getElementById('navEditorResult').innerHTML = 
+
+                document.getElementById('navEditorResult').innerHTML =
                     '<div class="alert alert-info"><i class="fas fa-info me-2"></i>Navigation reset to default configuration.</div>';
-                
+
                 setTimeout(() => {
                     document.getElementById('navEditorResult').innerHTML = '';
                 }, 3000);
@@ -3238,17 +3803,17 @@
         function renderNavigationEditor() {
             const container = document.getElementById('menuItemsList');
             if (!container) return;
-            
+
             container.innerHTML = '';
-            
+
             // Sort items by order
             const sortedItems = [...navigationConfig.items].sort((a, b) => (a.order || 0) - (b.order || 0));
-            
+
             sortedItems.forEach((item, index) => {
                 const itemElement = createMenuItemElement(item, index);
                 container.appendChild(itemElement);
             });
-            
+
             // Initialize drag and drop
             initializeDragAndDrop();
         }
@@ -3259,12 +3824,12 @@
             div.draggable = true;
             div.dataset.itemId = item.id;
             div.dataset.index = index;
-            
+
             const rolesText = item.roles ? item.roles.join(', ') : 'All roles';
-            const actionText = item.action === 'section' ? 'Show Section' : 
+            const actionText = item.action === 'section' ? 'Show Section' :
                              item.action === 'function' ? 'Call Function' :
                              item.action === 'url' ? 'Open URL' : 'Submenu';
-            
+
             div.innerHTML = `
                 <div class="menu-item-header">
                     <i class="fas fa-grip-vertical drag-handle"></i>
@@ -3288,20 +3853,20 @@
                     ${item.target ? `<span class="meta-badge">→ ${item.target}</span>` : ''}
                 </div>
             `;
-            
+
             // Add submenu items if they exist
             if (item.submenu && item.submenu.length > 0) {
                 const submenuContainer = document.createElement('div');
                 submenuContainer.className = 'menu-item-submenu';
-                
+
                 item.submenu.forEach(subItem => {
                     const subElement = createSubmenuItemElement(subItem, item.id);
                     submenuContainer.appendChild(subElement);
                 });
-                
+
                 div.appendChild(submenuContainer);
             }
-            
+
             return div;
         }
 
@@ -3310,12 +3875,12 @@
             div.className = `menu-item-editor ${!subItem.visible ? 'menu-item-hidden' : ''}`;
             div.dataset.itemId = subItem.id;
             div.dataset.parentId = parentId;
-            
+
             const rolesText = subItem.roles ? subItem.roles.join(', ') : 'All roles';
-            const actionText = subItem.action === 'section' ? 'Show Section' : 
+            const actionText = subItem.action === 'section' ? 'Show Section' :
                              subItem.action === 'function' ? 'Call Function' :
                              subItem.action === 'url' ? 'Open URL' : 'Action';
-            
+
             div.innerHTML = `
                 <div class="menu-item-header">
                     <i class="${subItem.icon} menu-item-icon"></i>
@@ -3338,13 +3903,13 @@
                     ${subItem.target ? `<span class="meta-badge">→ ${subItem.target}</span>` : ''}
                 </div>
             `;
-            
+
             return div;
         }
 
         function initializeDragAndDrop() {
             const items = document.querySelectorAll('.menu-item-editor[data-index]');
-            
+
             items.forEach(item => {
                 item.addEventListener('dragstart', handleDragStart);
                 item.addEventListener('dragover', handleDragOver);
@@ -3384,31 +3949,31 @@
             if (e.stopPropagation) {
                 e.stopPropagation();
             }
-            
+
             if (draggedElement !== this) {
                 const draggedIndex = parseInt(draggedElement.dataset.index);
                 const targetIndex = parseInt(this.dataset.index);
-                
+
                 // Reorder the items in the configuration
                 const draggedItem = navigationConfig.items[draggedIndex];
                 navigationConfig.items.splice(draggedIndex, 1);
                 navigationConfig.items.splice(targetIndex, 0, draggedItem);
-                
+
                 // Update order numbers
                 navigationConfig.items.forEach((item, index) => {
                     item.order = index + 1;
                 });
-                
+
                 // Save to localStorage
                 localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
-                
+
                 // Re-render the editor
                 renderNavigationEditor();
                 applyNavigationChanges(); // Update live navigation
-                
+
                 console.log('Items reordered:', navigationConfig.items.map(i => i.label));
             }
-            
+
             return false;
         }
 
@@ -3431,15 +3996,15 @@
                 roles: ['user', 'admin'],
                 order: navigationConfig.items.length + 1
             };
-            
+
             navigationConfig.items.push(newItem);
-            
+
             // Save to localStorage
             localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
-            
+
             renderNavigationEditor();
             applyNavigationChanges(); // Update live navigation
-            
+
             // Automatically open edit modal for the new item
             setTimeout(() => {
                 editMenuItem(newItem.id);
@@ -3449,23 +4014,23 @@
         function editMenuItem(itemId) {
             const item = navigationConfig.items.find(i => i.id === itemId);
             if (!item) return;
-            
+
             currentEditingItem = { type: 'main', id: itemId };
-            
+
             // Populate the modal
             document.getElementById('editMenuId').value = itemId;
             document.getElementById('editMenuLabel').value = item.label;
             document.getElementById('editMenuIcon').value = item.icon;
             document.getElementById('editMenuAction').value = item.action;
             document.getElementById('editMenuTarget').value = item.target || '';
-            
+
             // Set role checkboxes
             document.getElementById('editRoleGuest').checked = item.roles.includes('guest');
             document.getElementById('editRoleUser').checked = item.roles.includes('user');
             document.getElementById('editRoleAdmin').checked = item.roles.includes('admin');
-            
+
             updateIconPreview();
-            
+
             // Show the modal
             const modal = new bootstrap.Modal(document.getElementById('editMenuModal'));
             modal.show();
@@ -3474,26 +4039,26 @@
         function editSubmenuItem(parentId, itemId) {
             const parentItem = navigationConfig.items.find(i => i.id === parentId);
             if (!parentItem || !parentItem.submenu) return;
-            
+
             const item = parentItem.submenu.find(i => i.id === itemId);
             if (!item) return;
-            
+
             currentEditingItem = { type: 'submenu', parentId: parentId, id: itemId };
-            
+
             // Populate the modal
             document.getElementById('editMenuId').value = itemId;
             document.getElementById('editMenuLabel').value = item.label;
             document.getElementById('editMenuIcon').value = item.icon;
             document.getElementById('editMenuAction').value = item.action;
             document.getElementById('editMenuTarget').value = item.target || '';
-            
+
             // Set role checkboxes
             document.getElementById('editRoleGuest').checked = item.roles.includes('guest');
             document.getElementById('editRoleUser').checked = item.roles.includes('user');
             document.getElementById('editRoleAdmin').checked = item.roles.includes('admin');
-            
+
             updateIconPreview();
-            
+
             // Show the modal
             const modal = new bootstrap.Modal(document.getElementById('editMenuModal'));
             modal.show();
@@ -3501,17 +4066,17 @@
 
         function saveMenuItemEdit() {
             if (!currentEditingItem) return;
-            
+
             const label = document.getElementById('editMenuLabel').value;
             const icon = document.getElementById('editMenuIcon').value;
             const action = document.getElementById('editMenuAction').value;
             const target = document.getElementById('editMenuTarget').value;
-            
+
             const roles = [];
             if (document.getElementById('editRoleGuest').checked) roles.push('guest');
             if (document.getElementById('editRoleUser').checked) roles.push('user');
             if (document.getElementById('editRoleAdmin').checked) roles.push('admin');
-            
+
             let item;
             if (currentEditingItem.type === 'main') {
                 item = navigationConfig.items.find(i => i.id === currentEditingItem.id);
@@ -3519,24 +4084,24 @@
                 const parentItem = navigationConfig.items.find(i => i.id === currentEditingItem.parentId);
                 item = parentItem.submenu.find(i => i.id === currentEditingItem.id);
             }
-            
+
             if (item) {
                 item.label = label;
                 item.icon = icon;
                 item.action = action;
                 item.target = target;
                 item.roles = roles;
-                
+
                 // Save to localStorage
                 localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
-                
+
                 renderNavigationEditor();
                 applyNavigationChanges(); // Update live navigation
-                
+
                 // Close the modal
                 const modal = bootstrap.Modal.getInstance(document.getElementById('editMenuModal'));
                 modal.hide();
-                
+
                 console.log('Menu item updated and saved:', item);
             }
         }
@@ -3544,7 +4109,7 @@
         function updateIconPreview() {
             const iconInput = document.getElementById('editMenuIcon');
             const preview = document.getElementById('editMenuIconPreview');
-            
+
             if (iconInput && preview) {
                 preview.className = iconInput.value || 'fas fa-cog';
             }
@@ -3554,10 +4119,10 @@
             const item = navigationConfig.items.find(i => i.id === itemId);
             if (item) {
                 item.visible = !item.visible;
-                
+
                 // Save to localStorage
                 localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
-                
+
                 renderNavigationEditor();
                 applyNavigationChanges(); // Update live navigation
                 console.log(`Menu item ${itemId} visibility:`, item.visible);
@@ -3570,10 +4135,10 @@
                 const item = parentItem.submenu.find(i => i.id === itemId);
                 if (item) {
                     item.visible = !item.visible;
-                    
+
                     // Save to localStorage
                     localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
-                    
+
                     renderNavigationEditor();
                     applyNavigationChanges(); // Update live navigation
                     console.log(`Submenu item ${itemId} visibility:`, item.visible);
@@ -3584,10 +4149,10 @@
         function deleteMenuItem(itemId) {
             if (confirm('Are you sure you want to delete this menu item?')) {
                 navigationConfig.items = navigationConfig.items.filter(i => i.id !== itemId);
-                
+
                 // Save to localStorage
                 localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
-                
+
                 renderNavigationEditor();
                 applyNavigationChanges(); // Update live navigation
                 console.log(`Menu item ${itemId} deleted`);
@@ -3599,10 +4164,10 @@
                 const parentItem = navigationConfig.items.find(i => i.id === parentId);
                 if (parentItem && parentItem.submenu) {
                     parentItem.submenu = parentItem.submenu.filter(i => i.id !== itemId);
-                    
+
                     // Save to localStorage
                     localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
-                    
+
                     renderNavigationEditor();
                     applyNavigationChanges(); // Update live navigation
                     console.log(`Submenu item ${itemId} deleted`);
@@ -3613,13 +4178,13 @@
         function toggleRoleBasedNavigation() {
             const checkbox = document.getElementById('enableRoleBasedNav');
             const roleSettings = document.getElementById('roleSettings');
-            
+
             navigationConfig.roleBasedVisibility = checkbox.checked;
             roleSettings.style.display = checkbox.checked ? 'block' : 'none';
-            
+
             // Save to localStorage
             localStorage.setItem('navigationConfig', JSON.stringify(navigationConfig));
-            
+
             applyNavigationChanges(); // Update live navigation
             console.log('Role-based navigation:', navigationConfig.roleBasedVisibility);
         }
@@ -3627,7 +4192,7 @@
         function loadRoleBasedSettings() {
             const checkbox = document.getElementById('enableRoleBasedNav');
             const roleSettings = document.getElementById('roleSettings');
-            
+
             if (checkbox) {
                 checkbox.checked = navigationConfig.roleBasedVisibility;
                 roleSettings.style.display = navigationConfig.roleBasedVisibility ? 'block' : 'none';
@@ -3668,27 +4233,27 @@
 
         function applyNavigationChanges() {
             console.log('Applying navigation changes to sidebar...');
-            
+
             try {
                 // Use current navigation configuration
                 const items = navigationConfig.items || getDefaultNavigationConfig().items;
-                
+
                 // Get current user role (if any)
                 const currentUser = getCurrentUser();
                 const userRole = currentUser?.role || 'guest';
-                
+
                 console.log('Using navigation items:', items.length, 'User role:', userRole);
-                
+
                 // Get the navigation container
                 const navContainer = document.querySelector('#sidebar .nav.nav-pills.flex-column');
                 if (!navContainer) {
                     console.error('Navigation container not found');
                     return;
                 }
-                
+
                 // Clear existing navigation items
                 navContainer.innerHTML = '';
-                
+
                 // Build navigation HTML
                 items.forEach(item => {
                     // Check if item should be visible for current user role
@@ -3696,72 +4261,72 @@
                         console.log('Hiding item due to role restrictions:', item.label, 'for role:', userRole);
                         return;
                     }
-                    
+
                     console.log('Creating navigation item:', item.label);
                     const navItem = createNavigationItem(item);
                     navContainer.appendChild(navItem);
                 });
-                
+
                 // Re-initialize navigation functionality
                 initializeNavigationListeners();
-                
+
                 console.log('Navigation updated successfully');
-                
+
                 // Show visual notification
                 showNavigationUpdateNotification();
-                
+
                 // Show success message
                 const resultDiv = document.getElementById('navEditorResult');
                 if (resultDiv) {
-                    resultDiv.innerHTML = 
+                    resultDiv.innerHTML =
                         '<div class="alert alert-success mt-2"><i class="fas fa-check me-2"></i>Navigation updated successfully!</div>';
-                    
+
                     setTimeout(() => {
                         resultDiv.innerHTML = '';
                     }, 3000);
                 }
-                
+
             } catch (error) {
                 console.error('Error applying navigation changes:', error);
-                
+
                 const resultDiv = document.getElementById('navEditorResult');
                 if (resultDiv) {
-                    resultDiv.innerHTML = 
+                    resultDiv.innerHTML =
                         '<div class="alert alert-danger mt-2"><i class="fas fa-exclamation-triangle me-2"></i>Error updating navigation: ' + error.message + '</div>';
                 }
             }
         }
-        
+
         function shouldShowMenuItem(item, userRole) {
             // If role-based navigation is disabled, show all items
             const roleBasedEnabled = navigationConfig?.roleBasedVisibility || false;
             if (!roleBasedEnabled) {
                 return item.visible !== false;
             }
-            
+
             // Check role-based visibility
             if (item.roles && item.roles.length > 0) {
                 return item.roles.includes(userRole) && item.visible !== false;
             }
-            
+
             // Default to visible if no roles specified
             return item.visible !== false;
         }
-        
+
         function createNavigationItem(item) {
             const li = document.createElement('li');
             li.className = 'nav-item mb-2';
-            
+
             if (item.submenu && item.submenu.length > 0) {
                 // Create parent menu item with submenu
                 li.className += ' nav-item-parent';
                 li.id = item.id + 'NavParent';
-                
+
                 const link = document.createElement('a');
                 link.className = 'nav-link text-white nav-link-parent';
                 link.href = '#';
                 link.onclick = () => { toggleSubmenu(item.id); return false; };
-                
+
                 link.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="${item.icon} me-2"></i>
@@ -3769,21 +4334,21 @@
                     </div>
                     <i class="fas fa-chevron-right nav-chevron"></i>
                 `;
-                
+
                 const submenuDiv = document.createElement('div');
                 submenuDiv.className = 'nav-submenu';
-                
+
                 // Add submenu items
                 item.submenu.forEach(child => {
                     if (shouldShowMenuItem(child, getCurrentUser()?.role || 'guest')) {
                         const sublink = document.createElement('a');
                         sublink.className = 'nav-sublink text-white';
                         sublink.href = '#';
-                        sublink.onclick = () => { 
+                        sublink.onclick = () => {
                             if (child.action) {
-                                executeMenuAction(child.action, child.target); 
+                                executeMenuAction(child.action, child.target);
                             }
-                            return false; 
+                            return false;
                         };
                         sublink.innerHTML = `
                             <i class="${child.icon}"></i>
@@ -3792,37 +4357,37 @@
                         submenuDiv.appendChild(sublink);
                     }
                 });
-                
+
                 li.appendChild(link);
                 li.appendChild(submenuDiv);
-                
+
             } else {
                 // Create regular menu item
                 const link = document.createElement('a');
                 link.className = 'nav-link text-white';
                 if (item.id === 'dashboard') link.className += ' active';
                 link.href = '#';
-                link.onclick = () => { 
+                link.onclick = () => {
                     if (item.action) {
-                        executeMenuAction(item.action, item.target); 
+                        executeMenuAction(item.action, item.target);
                     }
-                    return false; 
+                    return false;
                 };
-                
+
                 link.innerHTML = `
                     <i class="${item.icon} me-2"></i>
                     ${item.label}
                 `;
-                
+
                 li.appendChild(link);
             }
-            
+
             return li;
         }
-        
+
         function executeMenuAction(action, target) {
             console.log('Executing menu action:', action, 'with target:', target);
-            
+
             switch (action) {
                 case 'section':
                 case 'showSection':
@@ -3862,24 +4427,24 @@
                     }
             }
         }
-        
+
         function toggleSubmenu(menuId) {
             const parentElement = document.getElementById(menuId + 'NavParent');
             if (parentElement) {
                 const isExpanded = parentElement.classList.contains('expanded');
-                
+
                 // Close all other submenus first
                 document.querySelectorAll('.nav-item-parent.expanded').forEach(item => {
                     if (item !== parentElement) {
                         item.classList.remove('expanded');
                     }
                 });
-                
+
                 // Toggle current submenu
                 parentElement.classList.toggle('expanded');
             }
         }
-        
+
         function getCurrentUser() {
             // Try to get current user from token or stored data
             const token = localStorage.getItem('token');
@@ -3894,7 +4459,7 @@
             }
             return { role: 'guest', username: 'Guest' };
         }
-        
+
         function initializeNavigationListeners() {
             // Re-initialize any global navigation listeners if needed
             // This ensures that dynamically created navigation items work properly
@@ -3924,10 +4489,10 @@
                 `;
                 document.body.appendChild(notification);
             }
-            
+
             notification.innerHTML = '<i class="fas fa-check me-2"></i>Navigation updated!';
             notification.style.opacity = '1';
-            
+
             // Hide after 2 seconds
             setTimeout(() => {
                 notification.style.opacity = '0';
@@ -3952,7 +4517,7 @@
                     }
                 });
             });
-            
+
             const navEditor = document.getElementById('nav-editor');
             if (navEditor) {
                 observer.observe(navEditor, { attributes: true });
@@ -4009,12 +4574,12 @@
                         document.getElementById('configUploadEndpoint').value = config.uploadEndpoint || '/api/v2/files/';
                         document.getElementById('configUploadTimeout').value = config.uploadTimeout || '60';
                         document.getElementById('configFallbackEnabled').checked = config.fallbackEnabled !== false;
-                        
+
                         // Load Langflow destination path settings
                         document.getElementById('configDestinationComponent').value = config.destinationComponent || 'File-QW4Au';
                         document.getElementById('configDestinationInput').value = config.destinationInput || 'path';
                         document.getElementById('configDestinationPath').value = config.destinationPath || 'File-QW4Au.path';
-                        
+
                         // Apply the loaded configuration immediately
                         applyFileConfigChanges(config);
                     }
@@ -4051,10 +4616,10 @@
         function setupLiveConfigurationUpdates() {
             // File type checkboxes - live updates
             const fileTypeCheckboxes = [
-                'allowTxt', 'allowPdf', 'allowDoc', 'allowCsv', 
+                'allowTxt', 'allowPdf', 'allowDoc', 'allowCsv',
                 'allowJson', 'allowMd', 'allowXls', 'allowImages'
             ];
-            
+
             fileTypeCheckboxes.forEach(checkboxId => {
                 const checkbox = document.getElementById(checkboxId);
                 if (checkbox) {
@@ -4102,13 +4667,13 @@
                 destinationPath: document.getElementById('configDestinationPath')?.value || 'File-QW4Au.path'
             };
         }
-        
+
         // Auto-generate destination path when component or input changes
         function setupDestinationPathUpdates() {
             const componentField = document.getElementById('configDestinationComponent');
             const inputField = document.getElementById('configDestinationInput');
             const pathField = document.getElementById('configDestinationPath');
-            
+
             function updateDestinationPath() {
                 if (componentField && inputField && pathField) {
                     const component = componentField.value || 'File-QW4Au';
@@ -4116,7 +4681,7 @@
                     pathField.value = `${component}.${input}`;
                 }
             }
-            
+
             if (componentField) {
                 componentField.addEventListener('input', updateDestinationPath);
             }
@@ -4124,7 +4689,7 @@
                 inputField.addEventListener('input', updateDestinationPath);
             }
         }
-        
+
         // Simple test function for debugging navigation
         function testNavigation() {
             console.log('=== Navigation Test ===');
@@ -4133,19 +4698,19 @@
             sections.forEach(section => {
                 console.log(`- ${section.id}: ${section.style.display || 'visible'}`);
             });
-            
+
             console.log('Available nav links:');
             const navLinks = document.querySelectorAll('.nav-link');
             navLinks.forEach((link, index) => {
                 console.log(`- Link ${index}: ${link.textContent.trim()}`);
             });
-            
+
             console.log('Current navigation config:', navigationConfig);
             console.log('Saved navigation config:', localStorage.getItem('navigationConfig'));
-            
+
             alert('Navigation test complete! Check console for details.');
         }
-        
+
         // Debug function to force save navigation config
         function debugSaveNavigation() {
             console.log('Debug: Force saving navigation config');
@@ -4154,7 +4719,7 @@
             applyNavigationChanges();
             alert('Navigation config force saved and applied!');
         }
-        
+
         // Debug function to force load navigation config
         function debugLoadNavigation() {
             console.log('Debug: Force loading navigation config');
@@ -4163,7 +4728,7 @@
             console.log('Loaded config:', navigationConfig);
             alert('Navigation config force loaded and applied!');
         }
-        
+
         // Global function to manually show sections (for console testing)
         window.showSectionManual = function(sectionId) {
             return showSection(sectionId);
@@ -4173,10 +4738,10 @@
         function toggleUserDropdown() {
             const dropdown = document.getElementById('userDropdown');
             const isShow = dropdown.classList.contains('show');
-            
+
             // Close all other dropdowns first
             closeAllDropdowns();
-            
+
             if (!isShow) {
                 dropdown.classList.add('show');
                 // Close dropdown when clicking outside
@@ -4218,10 +4783,10 @@
 
             if (user && user.username) {
                 // User is authenticated
-                const initials = user.display_name ? 
+                const initials = user.display_name ?
                     user.display_name.split(' ').map(n => n[0]).join('').toUpperCase() :
                     user.username.substring(0, 2).toUpperCase();
-                
+
                 const displayName = user.display_name || user.username;
                 const roles = user.roles ? user.roles.join(', ') : 'user';
                 const isAdmin = user.roles && user.roles.includes('admin');
@@ -4270,18 +4835,18 @@
         function logoutUser() {
             // Clear token and user data
             localStorage.removeItem('token');
-            
+
             // Update UI to guest state
             updateUserDropdown();
-            
+
             // Show dashboard section
             showSection('dashboard');
-            
+
             // Show success message
             setTimeout(() => {
                 alert('You have been logged out successfully.');
             }, 300);
-            
+
             console.log('User logged out');
         }
 
@@ -4318,13 +4883,13 @@
         // Handle login form
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const resultDiv = document.getElementById('authResult');
-            
+
             resultDiv.innerHTML = '<div class="alert alert-info">Attempting login...</div>';
-            
+
             fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
@@ -4346,33 +4911,33 @@
                         </div>
                     `;
                     localStorage.setItem('token', data.token);
-                    
+
                     // Update user dropdown with authenticated user info
                     updateUserDropdown(data.user);
-                    
+
                     // Debug: Log user roles
                     console.log('User logged in with roles:', data.user.roles);
-                    
+
                     // Show user management interface if user has admin role
                     if (data.user.roles.includes('admin')) {
                         console.log('Admin detected, redirecting to user management interface');
-                        
+
                         // Hide all sections first
                         document.querySelectorAll('.content-section').forEach(section => {
                             section.style.display = 'none';
                         });
-                        
+
                         // Remove active class from all nav links
                         document.querySelectorAll('.nav-link').forEach(link => {
                             link.classList.remove('active');
                         });
-                        
+
                         // Show user management section
                         document.getElementById('users').style.display = 'block';
-                        
+
                         // Make user management nav link active
                         document.querySelector('a[onclick="showSection(\'users\')"]').classList.add('active');
-                        
+
                         // Show the user management interface
                         document.getElementById('userMgmtAuth').style.display = 'none';
                         document.getElementById('userMgmtInterface').style.display = 'block';
@@ -4407,9 +4972,9 @@
                 document.getElementById('usersList').innerHTML = '<div class="alert alert-warning">Please login first</div>';
                 return;
             }
-            
+
             document.getElementById('usersList').innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading users...</div>';
-            
+
             fetch('/api/users', {
                 headers: {
                     'Authorization': 'Bearer ' + token
@@ -4421,12 +4986,12 @@
                 if (data.success) {
                     console.log('Users data:', data.users);
                     let usersHtml = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Username</th><th>Display Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-                    
+
                     data.users.forEach(user => {
                         console.log('Processing user:', user);
                         // Handle both status formats
                         const isActive = user.is_active !== undefined ? user.is_active : (user.status === 'active');
-                        
+
                         usersHtml += `
                             <tr>
                                 <td><strong>${user.username}</strong></td>
@@ -4442,7 +5007,7 @@
                             </tr>
                         `;
                     });
-                    
+
                     usersHtml += '</tbody></table></div>';
                     document.getElementById('usersList').innerHTML = usersHtml;
                 } else {
@@ -4453,12 +5018,12 @@
                 document.getElementById('usersList').innerHTML = `<div class="alert alert-danger">Connection error: ${error.message}</div>`;
             });
         }
-        
+
         function deleteUser(username) {
             if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
                 return;
             }
-            
+
             const token = localStorage.getItem('token');
             fetch(`/api/users/${username}`, {
                 method: 'DELETE',
@@ -4482,25 +5047,25 @@
         // Handle create user form
         document.getElementById('createUserForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             const token = localStorage.getItem('token');
             if (!token) {
                 document.getElementById('createUserResult').innerHTML = '<div class="alert alert-warning">Please login first</div>';
                 return;
             }
-            
+
             const username = document.getElementById('newUsername').value;
             const password = document.getElementById('newPassword').value;
             const displayName = document.getElementById('newDisplayName').value;
             const email = document.getElementById('newEmail').value;
-            
+
             const roles = [];
             if (document.getElementById('roleUser').checked) roles.push('user');
             if (document.getElementById('roleAdmin').checked) roles.push('admin');
-            
+
             const resultDiv = document.getElementById('createUserResult');
             resultDiv.innerHTML = '<div class="alert alert-info">Creating user...</div>';
-            
+
             fetch('/api/users', {
                 method: 'POST',
                 headers: {
@@ -4566,20 +5131,20 @@
         // Handle file upload
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             const fileInput = document.getElementById('fileInput');
             const resultDiv = document.getElementById('uploadResult');
-            
+
             if (!fileInput.files[0]) {
                 resultDiv.innerHTML = '<div class="alert alert-warning">Please select a file first.</div>';
                 return;
             }
-            
+
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
-            
+
             resultDiv.innerHTML = '<div class="alert alert-info">Uploading file...</div>';
-            
+
             fetch('/upload', {
                 method: 'POST',
                 body: formData
@@ -4620,14 +5185,14 @@
         // Initialize chat
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM Content Loaded - Initializing application...');
-            
+
             // Initialize user dropdown first
             try {
                 initializeUserDropdown();
             } catch (error) {
                 console.error('Error initializing user dropdown:', error);
             }
-            
+
             // Load and apply navigation configuration
             try {
                 console.log('Loading navigation configuration...');
@@ -4637,10 +5202,10 @@
             } catch (error) {
                 console.error('Error loading navigation configuration:', error);
             }
-            
+
             // Test if basic functions work
             console.log('Testing navigation functions...');
-            
+
             // Initialize chat functions
             try {
                 updateWelcomeTime();
@@ -4650,21 +5215,21 @@
             } catch (error) {
                 console.error('Error initializing chat:', error);
             }
-            
+
             // Add click event listeners as backup for navigation
             try {
                 addNavigationListeners();
             } catch (error) {
                 console.error('Error adding navigation listeners:', error);
             }
-            
+
             // Initialize navigation editor observer
             try {
                 initNavEditorWhenShown();
             } catch (error) {
                 console.error('Error initializing navigation editor:', error);
             }
-            
+
             // Load saved configurations
             try {
                 loadSavedConfigurations();
@@ -4673,13 +5238,20 @@
             } catch (error) {
                 console.error('Error loading saved configurations:', error);
             }
+
+            // Load application settings
+            try {
+                loadApplicationSettings();
+            } catch (error) {
+                console.error('Error loading application settings:', error);
+            }
         });
 
         // Backup navigation listeners in case onclick doesn't work
         function addNavigationListeners() {
             const navLinks = document.querySelectorAll('.nav-link[onclick*="showSection"]');
             console.log('Found nav links for backup listeners:', navLinks.length);
-            
+
             navLinks.forEach(link => {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
@@ -4692,7 +5264,7 @@
                     }
                 });
             });
-            
+
             // Special handler for chat section
             const chatLink = document.querySelector('.nav-link[onclick*="openChatSection"]');
             if (chatLink) {
@@ -4708,17 +5280,17 @@
             const fileInput = document.getElementById('chatFileInput');
             const uploadArea = document.getElementById('fileUploadArea');
             const inputContainer = document.querySelector('.chat-input-container');
-            
+
             // File input change handler
             fileInput.addEventListener('change', handleFileSelect);
-            
+
             // Drag and drop handlers on the entire input container
             inputContainer.addEventListener('dragover', function(e) {
                 e.preventDefault();
                 uploadArea.style.display = 'block';
                 uploadArea.classList.add('dragover');
             });
-            
+
             inputContainer.addEventListener('dragleave', function(e) {
                 e.preventDefault();
                 // Only hide if we're leaving the container entirely
@@ -4727,7 +5299,7 @@
                     uploadArea.classList.remove('dragover');
                 }
             });
-            
+
             inputContainer.addEventListener('drop', function(e) {
                 e.preventDefault();
                 uploadArea.style.display = 'none';
@@ -4749,7 +5321,7 @@
                     alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
                     continue;
                 }
-                
+
                 addFileAttachment(file);
             }
         }
@@ -4764,10 +5336,10 @@
                 type: file.type,
                 content: null
             };
-            
+
             console.log('Adding file attachment:', fileObj);
             attachedFiles.push(fileObj);
-            
+
             // Read file content if it's a text-based file
             if (isTextFile(file)) {
                 console.log('Reading text file:', file.name);
@@ -4783,31 +5355,31 @@
             } else {
                 console.log('Skipping binary file:', file.name);
             }
-            
+
             displayFileAttachments();
         }
 
         function isTextFile(file) {
             const textTypes = ['text/', 'application/json', 'application/csv', 'application/xml'];
             const textExtensions = ['.txt', '.md', '.csv', '.json', '.log', '.xml', '.yaml', '.yml', '.py', '.js', '.html', '.css'];
-            
+
             // Check MIME type
             if (textTypes.some(type => file.type.startsWith(type))) {
                 return true;
             }
-            
+
             // Check file extension
             if (textExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
                 return true;
             }
-            
+
             // Default to false for safety
             return false;
         }
 
         function getFileIcon(fileName, fileType) {
             const ext = fileName.toLowerCase().split('.').pop();
-            
+
             if (['pdf'].includes(ext)) return 'pdf';
             if (['doc', 'docx'].includes(ext)) return 'doc';
             if (['txt', 'md', 'log'].includes(ext)) return 'txt';
@@ -4825,19 +5397,19 @@
 
         function displayFileAttachments() {
             const container = document.getElementById('fileAttachments');
-            
+
             if (attachedFiles.length === 0) {
                 container.style.display = 'none';
                 return;
             }
-            
+
             container.style.display = 'block';
             container.innerHTML = '';
-            
+
             attachedFiles.forEach(file => {
                 const fileDiv = document.createElement('div');
                 fileDiv.className = 'file-attachment';
-                
+
                 const iconType = getFileIcon(file.name, file.type);
                 const iconMap = {
                     'pdf': 'fas fa-file-pdf',
@@ -4846,7 +5418,7 @@
                     'image': 'fas fa-file-image',
                     'default': 'fas fa-file'
                 };
-                
+
                 fileDiv.innerHTML = `
                     <div class="file-info">
                         <div class="file-icon ${iconType}">
@@ -4861,7 +5433,7 @@
                         <i class="fas fa-times"></i>
                     </button>
                 `;
-                
+
                 container.appendChild(fileDiv);
             });
         }
@@ -4880,7 +5452,7 @@
         function updateModelBadge() {
             // Get model from saved configuration
             let model = localStorage.getItem('aiConfig_defaultModel') || 'gpt-3.5-turbo';
-            
+
             // Try to get from saved config if not found
             const savedConfig = localStorage.getItem('aiConfig');
             if (savedConfig && !localStorage.getItem('aiConfig_defaultModel')) {
@@ -4891,7 +5463,7 @@
                     model = 'gpt-3.5-turbo';
                 }
             }
-            
+
             const badge = document.getElementById('modelBadge');
             const modelNames = {
                 'gpt-3.5-turbo': 'GPT-3.5',
@@ -4917,59 +5489,59 @@
         function sendMessage() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
-            
+
             if ((!message && attachedFiles.length === 0) || isWaitingForResponse) return;
-            
+
             // Create message content with attachments for display
             let messageContent = message;
             let attachmentInfo = '';
-            
+
             if (attachedFiles.length > 0) {
                 attachmentInfo = attachedFiles.map(file => {
                     let content = '';
                     if (file.content) {
                         // Truncate content for display only
-                        const truncated = file.content.length > 200 ? 
+                        const truncated = file.content.length > 200 ?
                             file.content.substring(0, 200) + '...' : file.content;
                         content = `\nContent preview: ${truncated}`;
                     }
                     return `📎 ${file.name} (${formatFileSize(file.size)})${content}`;
                 }).join('\n');
             }
-            
+
             // Add user message with attachments for display
             const displayMessage = message + (attachmentInfo ? '\n\n' + attachmentInfo : '');
             addMessageToChat('user', displayMessage);
-            
+
             // Store current attachments for Langflow
             const currentFiles = [...attachedFiles];
-            
+
             input.value = '';
             input.style.height = 'auto';
-            
+
             // Clear attachments UI after sending (but keep reference for Langflow)
             attachedFiles = [];
             displayFileAttachments();
-            
+
             // Save to history
             chatHistory.push({
-                type: 'user', 
-                content: displayMessage, 
+                type: 'user',
+                content: displayMessage,
                 timestamp: new Date().toISOString()
             });
             localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
-            
+
             // Send to Langflow with original message and files
             sendToLangflowWithFiles(message, currentFiles);
         }
 
         async function sendToLangflowWithFiles(message, files) {
             console.log('sendToLangflowWithFiles called with:', { message, files: files?.length || 0 });
-            
+
             // Declare and initialize URLs at function scope to avoid scoping issues
             let baseUrl = null;
             let localBaseUrl = null;
-            
+
             try {
                 localBaseUrl = `${window.location.protocol}//${window.location.host}`;
                 console.log('Local base URL initialized:', localBaseUrl);
@@ -4978,12 +5550,12 @@
                 addMessageToChat('bot', '❌ Configuration error: Could not determine local URL.');
                 return;
             }
-            
+
             // Get configuration from AI Configuration section or saved localStorage
             let langflowUrl = document.getElementById('configLangflowUrl')?.value || localStorage.getItem('aiConfig_langflowUrl') || 'http://10.88.4.25:7860';
             let flowId = document.getElementById('configFlowId')?.value || localStorage.getItem('aiConfig_flowId') || '900b0d89-4481-4f64-88bf-4d4661086a62';
             let apiKey = document.getElementById('configApiKey')?.value || localStorage.getItem('aiConfig_apiKey') || '';
-            
+
             // Try to get from saved config if not in form
             const savedConfig = localStorage.getItem('aiConfig');
             if (savedConfig && (!langflowUrl || !flowId)) {
@@ -4996,12 +5568,12 @@
                     console.log('Error parsing saved config:', e);
                 }
             }
-            
+
             if (!langflowUrl || !flowId) {
                 addMessageToChat('bot', '⚠️ Please configure Langflow URL and Flow ID in Configuration → AI Configuration.');
                 return;
             }
-            
+
             // Extract base URL from the langflowUrl (remove /api/v1/run or similar paths)
             try {
                 const url = new URL(langflowUrl);
@@ -5016,7 +5588,7 @@
                 document.getElementById('chatStatus').textContent = 'Ready';
                 return;
             }
-            
+
             // Ensure URLs are available for file uploads
             if (!baseUrl || !localBaseUrl) {
                 console.error('URLs not properly initialized', { baseUrl, localBaseUrl });
@@ -5026,12 +5598,12 @@
                 document.getElementById('chatStatus').textContent = 'Ready';
                 return;
             }
-            
+
             isWaitingForResponse = true;
             document.getElementById('sendButton').disabled = true;
             showTypingIndicator();
             document.getElementById('chatStatus').textContent = 'Processing files and thinking...';
-            
+
             try {
                 // Prepare the base request body
                 const requestBody = {
@@ -5040,67 +5612,67 @@
                     input_type: "chat",
                     tweaks: {}
                 };
-                
+
                 // Step 1: Upload files to Langflow if any files are attached
                 if (files && files.length > 0) {
                     console.log('Starting file upload process...');
                     console.log('Available URLs:', { baseUrl, localBaseUrl });
                     console.log('Files to upload:', files.map(f => f.name));
-                    
+
                     // For the first file, upload it properly to Langflow
                     const firstFile = files[0];
-                    
+
                     if (firstFile.file) {
                         // This is an actual File object - try multiple upload methods
                         try {
                             console.log('Uploading binary file:', firstFile.name);
                             console.log('File object:', firstFile.file);
                             console.log('Current URLs available:', { baseUrl, localBaseUrl });
-                            
+
                             // Double-check URLs before proceeding with file upload
                             if (!baseUrl || !localBaseUrl) {
                                 const errorMsg = `URLs not initialized properly in file upload: baseUrl=${baseUrl}, localBaseUrl=${localBaseUrl}`;
                                 console.error(errorMsg);
                                 throw new Error(errorMsg);
                             }
-                            
+
                             // Create FormData for file upload
                             const formData = new FormData();
                             formData.append('file', firstFile.file);
-                            
+
                             // Upload headers
                             const uploadHeaders = {
                                 'Accept': 'application/json'
                             };
-                            
+
                             if (apiKey) {
                                 uploadHeaders['x-api-key'] = apiKey;
                             }
-                            
+
                             let uploadResponse;
                             let successfulEndpoint;
-                            
+
                             // Try file upload - Start with local Flask server
                             const localEndpoints = [
                                 `${localBaseUrl}/api/v2/files/`,
                                 `${localBaseUrl}/upload`
                             ];
-                            
+
                             console.log('Trying local Flask endpoints first:', localEndpoints);
-                            
+
                             for (let i = 0; i < localEndpoints.length; i++) {
                                 const endpoint = localEndpoints[i];
                                 try {
                                     console.log(`[${i+1}/${localEndpoints.length}] Trying local: ${endpoint}`);
-                                    
+
                                     uploadResponse = await fetch(endpoint, {
                                         method: 'POST',
                                         headers: uploadHeaders,
                                         body: formData
                                     });
-                                    
+
                                     console.log(`Response status: ${uploadResponse.status} ${uploadResponse.statusText}`);
-                                    
+
                                     if (uploadResponse.ok) {
                                         successfulEndpoint = endpoint;
                                         console.log(`✅ Upload successful with local endpoint: ${endpoint}`);
@@ -5115,7 +5687,7 @@
                                     continue;
                                 }
                             }
-                            
+
                             // If local failed, try Langflow endpoints as fallback
                             if (!uploadResponse || !uploadResponse.ok) {
                                 console.log('Local upload failed, trying Langflow endpoints...');
@@ -5123,18 +5695,18 @@
                                     `${baseUrl}/api/v2/files/`,
                                     `${baseUrl}/api/v1/files/`
                                 ];
-                                
+
                                 for (let i = 0; i < langflowEndpoints.length; i++) {
                                     const endpoint = langflowEndpoints[i];
                                     try {
                                         console.log(`[${i+1}/${langflowEndpoints.length}] Trying Langflow: ${endpoint}`);
-                                        
+
                                         uploadResponse = await fetch(endpoint, {
                                             method: 'POST',
                                             headers: uploadHeaders,
                                             body: formData
                                         });
-                                        
+
                                         if (uploadResponse.ok) {
                                             successfulEndpoint = endpoint;
                                             console.log(`✅ Upload successful with Langflow: ${endpoint}`);
@@ -5146,17 +5718,17 @@
                                     }
                                 }
                             }
-                            
+
                             if (!uploadResponse || !uploadResponse.ok) {
                                 const errorMsg = `All file upload endpoints failed. Your Langflow server may not support file uploads.`;
                                 console.error(errorMsg);
                                 throw new Error(errorMsg);
                             }
-                            
+
                             // Get response text first to handle parsing errors better
                             const uploadResponseText = await uploadResponse.text();
                             console.log('Raw upload response:', uploadResponseText);
-                            
+
                             let uploadData;
                             try {
                                 uploadData = JSON.parse(uploadResponseText);
@@ -5164,7 +5736,7 @@
                             } catch (parseError) {
                                 console.error('Upload response JSON parsing error:', parseError);
                                 console.error('Upload response was not valid JSON:', uploadResponseText);
-                                
+
                                 // Check if response looks like HTML (common server error)
                                 if (uploadResponseText.trim().startsWith('<')) {
                                     throw new Error(`File upload failed: Server returned HTML instead of JSON. Check if the upload endpoint exists and your server is configured correctly.`);
@@ -5172,18 +5744,18 @@
                                     throw new Error(`File upload failed: Server returned invalid JSON. Response: ${uploadResponseText.substring(0, 100)}...`);
                                 }
                             }
-                            
+
                             // Get the uploaded file path (handle different response formats)
                             const uploadedPath = uploadData.path || uploadData.file_path || uploadData.url || uploadData.id;
-                            
+
                             if (uploadedPath) {
                                 // Normalize path separators for cross-platform compatibility
                                 // Convert Windows backslashes to Unix forward slashes for Langflow
                                 let normalizedPath = uploadedPath.replace(/\\/g, '/');
-                                
+
                                 // Additional path cleaning - remove any double slashes and ensure proper format
                                 normalizedPath = normalizedPath.replace(/\/+/g, '/'); // Replace multiple slashes with single slash
-                                
+
                                 // If path doesn't start with /, ensure it's a relative path for Langflow
                                 if (normalizedPath.startsWith('/')) {
                                     // For absolute paths, try to extract just the relative part after uploads
@@ -5192,11 +5764,11 @@
                                         normalizedPath = normalizedPath.substring(uploadsIndex + 1); // Keep 'uploads/filename'
                                     }
                                 }
-                                
+
                                 // Get configured component ID for file destination
                                 const fileConfig = JSON.parse(localStorage.getItem('fileConfig') || '{}');
                                 const componentId = fileConfig.destinationComponent || 'File-QW4Au';
-                                
+
                                 // Set the file path in tweaks for the File component
                                 requestBody.tweaks[componentId] = {
                                     "path": normalizedPath
@@ -5210,10 +5782,10 @@
                                 console.warn('⚠️ No file path returned from upload, falling back to content method');
                                 throw new Error('No file path returned from upload');
                             }
-                            
+
                         } catch (uploadError) {
                             console.error('❌ File upload error:', uploadError);
-                            
+
                             // Fallback: Read file content and include in message if it's a text file
                             if (isTextFile(firstFile.file)) {
                                 console.log('🔄 Falling back to text content method for:', firstFile.name);
@@ -5224,16 +5796,16 @@
                                         fileReader.onerror = reject;
                                         fileReader.readAsText(firstFile.file);
                                     });
-                                    
+
                                     firstFile.content = fileContent;
                                     console.log('✅ File content read successfully, length:', fileContent.length);
-                                    
+
                                     // Include content in the message as fallback
                                     const fileContents = `--- File: ${firstFile.name} ---\n${fileContent}\n--- End of ${firstFile.name} ---`;
                                     requestBody.input_value = `${message}\n\n--- ATTACHED FILE CONTENT ---\n${fileContents}\n--- END ATTACHED FILE ---`;
-                                    
+
                                     addMessageToChat('bot', `⚠️ File upload failed, but included text content from: ${firstFile.name}`);
-                                    
+
                                 } catch (readError) {
                                     console.error('❌ Failed to read file content:', readError);
                                     addMessageToChat('bot', `❌ Failed to upload file and couldn't read content: ${uploadError.message}. Please check your Langflow configuration.`);
@@ -5255,27 +5827,27 @@
                         // This is text content - create a temporary file and upload it
                         try {
                             console.log('Creating blob for text file:', firstFile.name);
-                            
+
                             // Create a blob from the text content
                             const blob = new Blob([firstFile.content], { type: 'text/plain' });
                             const file = new File([blob], firstFile.name, { type: 'text/plain' });
-                            
+
                             // Create FormData for file upload
                             const formData = new FormData();
                             formData.append('file', file);
-                            
+
                             // Upload headers
                             const uploadHeaders = {
                                 'Accept': 'application/json'
                             };
-                            
+
                             if (apiKey) {
                                 uploadHeaders['x-api-key'] = apiKey;
                             }
-                            
+
                             let uploadResponse;
                             let uploadEndpoint;
-                            
+
                             // Try different file upload endpoints
                             // Upload to local Flask server first
                             const endpoints = [
@@ -5288,17 +5860,17 @@
                                 `${baseUrl}/files/`,
                                 `${baseUrl}/upload`
                             ];
-                            
+
                             for (const endpoint of endpoints) {
                                 try {
                                     console.log(`Trying text file upload endpoint: ${endpoint}`);
-                                    
+
                                     uploadResponse = await fetch(endpoint, {
                                         method: 'POST',
                                         headers: uploadHeaders,
                                         body: formData
                                     });
-                                    
+
                                     if (uploadResponse.ok) {
                                         console.log(`Text file upload successful with endpoint: ${endpoint}`);
                                         uploadEndpoint = endpoint;
@@ -5309,12 +5881,12 @@
                                     continue;
                                 }
                             }
-                            
+
                             if (uploadResponse && uploadResponse.ok) {
                                 // Get response text first to handle parsing errors better
                                 const textUploadResponseText = await uploadResponse.text();
                                 console.log('Raw text upload response:', textUploadResponseText);
-                                
+
                                 let uploadData;
                                 try {
                                     uploadData = JSON.parse(textUploadResponseText);
@@ -5322,7 +5894,7 @@
                                 } catch (parseError) {
                                     console.error('Text upload response JSON parsing error:', parseError);
                                     console.error('Text upload response was not valid JSON:', textUploadResponseText);
-                                    
+
                                     // Check if response looks like HTML (common server error)
                                     if (textUploadResponseText.trim().startsWith('<')) {
                                         throw new Error(`Text file upload failed: Server returned HTML instead of JSON. Check if the upload endpoint exists and your server is configured correctly.`);
@@ -5330,18 +5902,18 @@
                                         throw new Error(`Text file upload failed: Server returned invalid JSON. Response: ${textUploadResponseText.substring(0, 100)}...`);
                                     }
                                 }
-                                
+
                                 // Get the uploaded file path
                                 const uploadedPath = uploadData.path || uploadData.file_path || uploadData.url || uploadData.id;
-                                
+
                                 if (uploadedPath) {
                                     // Normalize path separators for cross-platform compatibility
                                     // Convert Windows backslashes to Unix forward slashes for Langflow
                                     let normalizedPath = uploadedPath.replace(/\\/g, '/');
-                                    
+
                                     // Additional path cleaning - remove any double slashes and ensure proper format
                                     normalizedPath = normalizedPath.replace(/\/+/g, '/'); // Replace multiple slashes with single slash
-                                    
+
                                     // If path doesn't start with /, ensure it's a relative path for Langflow
                                     if (normalizedPath.startsWith('/')) {
                                         // For absolute paths, try to extract just the relative part after uploads
@@ -5350,11 +5922,11 @@
                                             normalizedPath = normalizedPath.substring(uploadsIndex + 1); // Keep 'uploads/filename'
                                         }
                                     }
-                                    
+
                                     // Get configured component ID for file destination
                                     const fileConfig = JSON.parse(localStorage.getItem('fileConfig') || '{}');
                                     const componentId = fileConfig.destinationComponent || 'File-QW4Au';
-                                    
+
                                     // Set the file path in tweaks for the File component
                                     requestBody.tweaks[componentId] = {
                                         "path": normalizedPath
@@ -5368,7 +5940,7 @@
                             } else {
                                 throw new Error(`Upload failed: ${uploadResponse?.status || 'Network Error'}`);
                             }
-                            
+
                         } catch (uploadError) {
                             console.error('Text file upload error:', uploadError);
                             // Fallback: include content in the message
@@ -5377,55 +5949,55 @@
                             requestBody.input_value = `${message}\n\n--- ATTACHED FILES CONTEXT ---\n${fileContents}\n--- END ATTACHED FILES ---`;
                         }
                     }
-                    
+
                     // Handle multiple files - for now, we include additional files in the message
                     if (files.length > 1) {
                         const additionalFiles = files.slice(1).filter(f => f.content);
                         if (additionalFiles.length > 0) {
-                            const additionalContents = additionalFiles.map(file => 
+                            const additionalContents = additionalFiles.map(file =>
                                 `--- Additional File: ${file.name} ---\n${file.content}\n--- End of ${file.name} ---`
                             ).join('\n\n');
                             requestBody.input_value += `\n\n--- ADDITIONAL FILES ---\n${additionalContents}\n--- END ADDITIONAL FILES ---`;
                         }
                     }
                 }
-                
+
                 console.log('Final Langflow request:', JSON.stringify(requestBody, null, 2));
-                
+
                 // Step 2: Send the request to run the flow
                 const runHeaders = {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 };
-                
+
                 if (apiKey) {
                     runHeaders['x-api-key'] = apiKey;
                 }
-                
+
                 // Use the same base URL extraction for consistency
                 const flowUrl = new URL(langflowUrl);
                 const runBaseUrl = `${flowUrl.protocol}//${flowUrl.host}`;
                 const runEndpoint = `${runBaseUrl}/api/v1/run/${flowId}`;
                 console.log('Flow execution endpoint:', runEndpoint);
-                
+
                 const response = await fetch(runEndpoint, {
                     method: 'POST',
                     headers: runHeaders,
                     body: JSON.stringify(requestBody)
                 });
-                
+
                 console.log('Langflow response status:', response.status);
-                
+
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error('Langflow error response:', errorText);
                     throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
-                
+
                 // Get response text first to handle parsing errors better
                 const responseText = await response.text();
                 console.log('Raw response text:', responseText);
-                
+
                 let data;
                 try {
                     data = JSON.parse(responseText);
@@ -5433,7 +6005,7 @@
                 } catch (parseError) {
                     console.error('JSON parsing error:', parseError);
                     console.error('Response was not valid JSON:', responseText);
-                    
+
                     // Check if response looks like HTML (common server error)
                     if (responseText.trim().startsWith('<')) {
                         throw new Error(`Server returned HTML instead of JSON. This usually means the endpoint doesn't exist or there's a server error. Check if your Langflow server is running and the flow ID is correct.`);
@@ -5441,9 +6013,9 @@
                         throw new Error(`Invalid JSON response from server. Expected JSON but got: ${responseText.substring(0, 100)}...`);
                     }
                 }
-                
+
                 let botResponse = '';
-                
+
                 // Parse Langflow response format - try multiple possible structures
                 if (data.outputs && data.outputs[0]) {
                     const output = data.outputs[0];
@@ -5467,17 +6039,17 @@
                     console.log('Unexpected response format:', data);
                     botResponse = '🤔 I received a response but couldn\'t parse it. Check the console for details.';
                 }
-                
+
                 // Add bot response
                 addMessageToChat('bot', botResponse);
-                
+
                 // Save to history
                 chatHistory.push({type: 'bot', content: botResponse, timestamp: new Date().toISOString()});
                 localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
-                
+
             } catch (error) {
                 console.error('Langflow error:', error);
-                
+
                 // Provide more specific error messages based on the error type
                 let errorMessage = '';
                 if (error.message.includes('HTML instead of JSON')) {
@@ -5503,9 +6075,9 @@ This usually indicates a server configuration issue. Please check:
                 } else {
                     errorMessage = `❌ Sorry, I encountered an error: ${error.message}. Please check your Langflow configuration and try again.`;
                 }
-                
+
                 addMessageToChat('bot', errorMessage);
-                
+
                 // Ensure UI state is reset on any error
                 isWaitingForResponse = false;
                 document.getElementById('sendButton').disabled = false;
@@ -5524,14 +6096,14 @@ This usually indicates a server configuration issue. Please check:
             const messagesContainer = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
-            
+
             const time = timestamp ? new Date(timestamp) : new Date();
             const timeString = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
+
             // Parse content to separate message and attachments
             let messageText = content;
             let attachmentSection = '';
-            
+
             if (content.includes('📎')) {
                 const parts = content.split('\n\n');
                 messageText = parts[0];
@@ -5541,7 +6113,7 @@ This usually indicates a server configuration issue. Please check:
                         const fileName = att.split('📎 ')[1].split(' (')[0];
                         const fileSize = att.match(/\(([^)]+)\)/)?.[1] || '';
                         const hasPreview = att.includes('Content preview:');
-                        
+
                         return `
                             <div class="message-attachment">
                                 <div class="attachment-header">
@@ -5554,7 +6126,7 @@ This usually indicates a server configuration issue. Please check:
                     }).join('');
                 }
             }
-            
+
             messageDiv.innerHTML = `
                 <div class="message-bubble">
                     ${messageText}
@@ -5562,7 +6134,7 @@ This usually indicates a server configuration issue. Please check:
                     <div class="message-time">${timeString}</div>
                 </div>
             `;
-            
+
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
@@ -5583,7 +6155,7 @@ This usually indicates a server configuration issue. Please check:
             const welcomeMessage = messagesContainer.firstElementChild;
             messagesContainer.innerHTML = '';
             messagesContainer.appendChild(welcomeMessage);
-            
+
             // Load history
             chatHistory.forEach(msg => {
                 addMessageToChat(msg.type, msg.content, msg.timestamp);
@@ -5602,21 +6174,21 @@ This usually indicates a server configuration issue. Please check:
             const langflowUrl = document.getElementById('langflowUrl').value;
             const flowId = document.getElementById('flowId').value;
             const statusDiv = document.getElementById('connectionStatus');
-            
+
             if (!langflowUrl || !flowId) {
                 statusDiv.innerHTML = '<div class="alert alert-warning">Please enter both Langflow URL and Flow ID.</div>';
                 return;
             }
-            
+
             statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i>Testing connection...</div>';
-            
+
             try {
                 const headers = {'Content-Type': 'application/json'};
                 const apiKey = document.getElementById('apiKey').value;
                 if (apiKey) {
                     headers['Authorization'] = `Bearer ${apiKey}`;
                 }
-                
+
                 // Test with a simple message and File component
                 const testRequest = {
                     input_value: "Hello, this is a connection test. Can you confirm you received this message?",
@@ -5629,15 +6201,15 @@ This usually indicates a server configuration issue. Please check:
                         }
                     }
                 };
-                
+
                 console.log('Test request to Langflow:', testRequest);
-                
+
                 const response = await fetch(`${langflowUrl}/${flowId}`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(testRequest)
                 });
-                
+
                 if (response.ok) {
                     const data = await response.json();
                     console.log('Test response from Langflow:', data);
@@ -5656,20 +6228,20 @@ This usually indicates a server configuration issue. Please check:
         function updateModelBadge() {
             // Look for any model display elements and update them
             const modelElements = document.querySelectorAll('[data-model-display]');
-            const currentModel = localStorage.getItem('aiConfig_defaultModel') || 
-                              (JSON.parse(localStorage.getItem('aiConfig') || '{}').defaultModel) || 
+            const currentModel = localStorage.getItem('aiConfig_defaultModel') ||
+                              (JSON.parse(localStorage.getItem('aiConfig') || '{}').defaultModel) ||
                               'gpt-3.5-turbo';
-            
+
             modelElements.forEach(element => {
                 element.textContent = `Model: ${currentModel}`;
             });
-            
+
             // Also update any element with id 'modelInfo' if it exists
             const modelInfo = document.getElementById('modelInfo');
             if (modelInfo) {
                 modelInfo.textContent = `Model: ${currentModel}`;
             }
-            
+
             console.log('Model badge updated to:', currentModel);
         }
 
@@ -5677,11 +6249,11 @@ This usually indicates a server configuration issue. Please check:
             const langflowUrl = localStorage.getItem('langflowUrl') || 'Not configured';
             const flowId = localStorage.getItem('flowId') || 'Not configured';
             const apiKey = localStorage.getItem('apiKey') || 'Not configured';
-            
+
             // Get current URLs that would be used
             let baseUrl = 'Not available';
             let localBaseUrl = 'Not available';
-            
+
             try {
                 localBaseUrl = `${window.location.protocol}//${window.location.host}`;
                 if (langflowUrl) {
@@ -5691,12 +6263,12 @@ This usually indicates a server configuration issue. Please check:
             } catch (e) {
                 baseUrl = `Error parsing URL: ${e.message}`;
             }
-            
+
             // Get file configuration
             const fileConfig = JSON.parse(localStorage.getItem('fileConfig') || '{}');
             const componentId = fileConfig.destinationComponent || 'File-QW4Au';
             const inputField = fileConfig.destinationInput || 'path';
-            
+
             const debugInfo = `
 🔧 **AI Assistant Debug Information**
 
@@ -5751,7 +6323,7 @@ This usually indicates a server configuration issue. Please check:
 
 Need help? Check the AI Configuration section to update settings.
             `;
-            
+
             addMessageToChat('bot', debugInfo);
         }
 
@@ -5759,7 +6331,305 @@ Need help? Check the AI Configuration section to update settings.
             // Redirect to AI Configuration instead of showing settings
             showSection('ai-config');
         }
-        
+
+        // Application Settings Functions
+        let currentSettings = {};
+
+        async function loadApplicationSettings() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    showSettingsStatus('Please log in to access settings.', 'warning');
+                    return;
+                }
+
+                const response = await fetch('/api/settings', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to load settings');
+                }
+
+                const data = await response.json();
+                currentSettings = data.settings;
+                populateSettingsForm(currentSettings);
+                showSettingsStatus('Settings loaded successfully.', 'success');
+
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showSettingsStatus('Error loading settings: ' + error.message, 'danger');
+            }
+        }
+
+        function populateSettingsForm(settings) {
+            // Populate all form fields with current settings
+            Object.keys(settings).forEach(key => {
+                const element = document.getElementById(key);
+                if (element) {
+                    if (element.type === 'checkbox') {
+                        element.checked = settings[key] === true || settings[key] === 'true';
+                    } else {
+                        element.value = settings[key] || '';
+                    }
+                }
+            });
+        }
+
+        async function saveApplicationSettings() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    showSettingsStatus('Please log in to save settings.', 'warning');
+                    return;
+                }
+
+                // Collect form data
+                const formData = collectSettingsFormData();
+
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        settings: formData
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to save settings');
+                }
+
+                const data = await response.json();
+                currentSettings = data.settings;
+                showSettingsStatus('Settings saved successfully!', 'success');
+
+                // Update application title if changed
+                updateApplicationTitle();
+
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                showSettingsStatus('Error saving settings: ' + error.message, 'danger');
+            }
+        }
+
+        function collectSettingsFormData() {
+            const formData = {};
+            const form = document.querySelector('#app-settings');
+            if (!form) return formData;
+
+            // Get all form inputs
+            const inputs = form.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                const name = input.name || input.id;
+                if (name) {
+                    if (input.type === 'checkbox') {
+                        formData[name] = input.checked;
+                    } else {
+                        formData[name] = input.value;
+                    }
+                }
+            });
+
+            return formData;
+        }
+
+        async function resetApplicationSettings() {
+            if (!confirm('Are you sure you want to reset all settings to defaults? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    showSettingsStatus('Please log in to reset settings.', 'warning');
+                    return;
+                }
+
+                const response = await fetch('/api/settings/reset', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to reset settings');
+                }
+
+                const data = await response.json();
+                currentSettings = data.settings;
+                populateSettingsForm(currentSettings);
+                showSettingsStatus('Settings reset to defaults successfully!', 'success');
+
+                // Update application title
+                updateApplicationTitle();
+
+            } catch (error) {
+                console.error('Error resetting settings:', error);
+                showSettingsStatus('Error resetting settings: ' + error.message, 'danger');
+            }
+        }
+
+        function showSettingsStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('settings-status');
+            if (!statusDiv) return;
+
+            statusDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            statusDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            statusDiv.style.display = 'block';
+
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        function updateApplicationTitle() {
+            const appName = document.getElementById('application_name')?.value || 'ACME App';
+            const appVersion = document.getElementById('application_version')?.value || '2.0';
+
+            // Update page title
+            document.title = `${appName} - Main Application`;
+
+            // Update any other references in the UI
+            const titleElements = document.querySelectorAll('[data-app-name]');
+            titleElements.forEach(element => {
+                if (element.tagName === 'DIV' && element.textContent.includes('©')) {
+                    element.textContent = `© 2025 ${appName}`;
+                } else {
+                    element.textContent = appName;
+                }
+            });
+
+            // Update version display
+            const versionElements = document.querySelectorAll('[data-app-version]');
+            versionElements.forEach(element => {
+                element.textContent = `Version ${appVersion}`;
+            });
+        }
+
+        // Get application setting value
+        function getApplicationSetting(key, defaultValue = '') {
+            return currentSettings[key] || defaultValue;
+        }
+
+        // Set application setting value
+        async function setApplicationSetting(key, value) {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    throw new Error('Authentication required');
+                }
+
+                const response = await fetch(`/api/settings/${key}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ value: value })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to update setting');
+                }
+
+                currentSettings[key] = value;
+                return true;
+
+            } catch (error) {
+                console.error('Error setting application setting:', error);
+                return false;
+            }
+        }
+
+        // RFPO Application Functions
+        function createNewRFPO() {
+            // Simulate creating a new RFPO
+            const rfpoId = 'RFPO-' + String(Date.now()).slice(-3);
+            const title = prompt('Enter RFPO Title:');
+            if (title) {
+                alert(`New RFPO created: ${rfpoId} - ${title}`);
+                // In a real application, this would make an API call to create the RFPO
+                console.log('Creating new RFPO:', { id: rfpoId, title: title });
+            }
+        }
+
+        function editRFPO(rfpoId) {
+            alert(`Opening RFPO editor for: ${rfpoId}`);
+            // In a real application, this would open an RFPO editing interface
+            console.log('Editing RFPO:', rfpoId);
+        }
+
+        function viewRFPO(rfpoId) {
+            alert(`Viewing RFPO details for: ${rfpoId}`);
+            // In a real application, this would show RFPO details
+            console.log('Viewing RFPO:', rfpoId);
+        }
+
+        function deleteRFPO(rfpoId) {
+            if (confirm(`Are you sure you want to delete ${rfpoId}?`)) {
+                alert(`RFPO ${rfpoId} has been deleted`);
+                // In a real application, this would make an API call to delete the RFPO
+                console.log('Deleting RFPO:', rfpoId);
+            }
+        }
+
+        function downloadRFPO(rfpoId) {
+            alert(`Downloading RFPO: ${rfpoId}`);
+            // In a real application, this would trigger a file download
+            console.log('Downloading RFPO:', rfpoId);
+        }
+
+        function importRFPOTemplate() {
+            alert('Opening template import dialog...');
+            // In a real application, this would open a file import dialog
+            console.log('Importing RFPO template');
+        }
+
+        function useTemplate(templateType) {
+            const templates = {
+                'it-services': 'IT Services RFPO Template',
+                'consulting': 'Consulting Services RFPO Template',
+                'software': 'Software Development RFPO Template'
+            };
+
+            const templateName = templates[templateType] || templateType;
+            alert(`Using template: ${templateName}`);
+            // In a real application, this would create a new RFPO based on the template
+            console.log('Using template:', templateType);
+        }
+
+        function generateReport(reportType) {
+            const reports = {
+                'summary': 'RFPO Summary Report',
+                'timeline': 'Timeline Analysis Report',
+                'vendor': 'Vendor Performance Report'
+            };
+
+            const reportName = reports[reportType] || reportType;
+            alert(`Generating ${reportName}...`);
+            // In a real application, this would generate and download the report
+            console.log('Generating report:', reportType);
+        }
+
     </script>
 </body>
 </html>

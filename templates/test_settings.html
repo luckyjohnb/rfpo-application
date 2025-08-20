@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings Test</title>
+</head>
+<body>
+    <h1>Application Settings Test</h1>
+
+    <button onclick="testLogin()">1. Test Login</button><br><br>
+    <button onclick="testLoadSettings()">2. Test Load Settings</button><br><br>
+    <button onclick="testUpdateSetting()">3. Test Update Setting</button><br><br>
+
+    <div id="results" style="border: 1px solid #ccc; padding: 10px; margin-top: 10px; white-space: pre-wrap;"></div>
+
+    <script>
+        let authToken = null;
+
+        function log(message) {
+            document.getElementById('results').innerHTML += message + '\n';
+        }
+
+        async function testLogin() {
+            log('Testing login...');
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: 'admin', password: 'Administrator123!'})
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    authToken = data.token;
+                    log('✅ Login successful! Token: ' + authToken.substring(0, 20) + '...');
+                } else {
+                    log('❌ Login failed: ' + data.message);
+                }
+            } catch (error) {
+                log('❌ Login error: ' + error.message);
+            }
+        }
+
+        async function testLoadSettings() {
+            if (!authToken) {
+                log('❌ Please login first');
+                return;
+            }
+
+            log('Testing load settings...');
+            try {
+                const response = await fetch('/api/settings', {
+                    headers: {'Authorization': 'Bearer ' + authToken}
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    log('✅ Settings loaded! Found ' + Object.keys(data.settings).length + ' settings');
+                    log('📋 Application name: ' + data.settings.application_name);
+                    log('🎨 Theme color: ' + data.settings.theme_color);
+                } else {
+                    log('❌ Failed to load settings: ' + data.error);
+                }
+            } catch (error) {
+                log('❌ Settings error: ' + error.message);
+            }
+        }
+
+        async function testUpdateSetting() {
+            if (!authToken) {
+                log('❌ Please login first');
+                return;
+            }
+
+            log('Testing update setting...');
+            try {
+                const response = await fetch('/api/settings/application_name', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({value: 'Updated Test App ' + new Date().getTime()})
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    log('✅ Setting updated! ' + data.key + ' = ' + data.value);
+                } else {
+                    log('❌ Failed to update setting: ' + data.error);
+                }
+            } catch (error) {
+                log('❌ Update error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -14,10 +14,11 @@ if not exist "venv\Scripts\activate.bat" (
 echo Activating virtual environment...
 call venv\Scripts\activate.bat
 
-echo Installing required packages...
-pip install flask bcrypt pyjwt pandas numpy werkzeug
+echo Installing required packages from requirements.txt...
+pip install -r requirements.txt
 
 echo.
+
 echo Checking if admin user exists...
 if not exist "config\users.json" (
     echo Creating admin user...
@@ -39,6 +40,10 @@ echo Press Ctrl+C to stop the server
 echo ============================================
 echo.
 
-python app_bulletproof.py
+
+set FLASK_APP=app.py
+set FLASK_ENV=development
+set FLASK_DEBUG=true
+python app.py
 
 pause

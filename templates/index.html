@@ -1454,14 +1454,14 @@
                                 </div>
                                 <i class="fas fa-chevron-right nav-chevron"></i>
                             </a>
-                            <div class="nav-submenu" style="max-height: none !important; display: block !important;">
-                                <a class="nav-sublink text-white" href="#" onclick="showSection('app-settings'); return false;">
-                                    <i class="fas fa-sliders-h"></i>
-                                    Application Settings
-                                </a>
+                            <div class="nav-submenu" style="max-height: 500px !important; display: block !important; overflow: visible !important;">
                                 <a class="nav-sublink text-white" href="#" onclick="showSection('ai-config'); return false;">
                                     <i class="fas fa-robot"></i>
                                     AI Configuration
+                                </a>
+                                <a class="nav-sublink text-white" href="#" onclick="showSection('app-settings'); return false;" style="background-color: rgba(37, 99, 235, 0.3) !important; border: 2px solid #2563eb !important;">
+                                    <i class="fas fa-sliders-h"></i>
+                                    🎚️ Application Settings
                                 </a>
                                 <a class="nav-sublink text-white" href="#" onclick="showSection('file-config'); return false;">
                                     <i class="fas fa-cloud-upload-alt"></i>
@@ -3706,6 +3706,15 @@
                         order: 7,
                         submenu: [
                             {
+                                id: 'app-settings',
+                                label: 'Application Settings',
+                                icon: 'fas fa-sliders-h',
+                                action: 'section',
+                                target: 'app-settings',
+                                visible: true,
+                                roles: ['admin']
+                            },
+                            {
                                 id: 'ai-config',
                                 label: 'AI Configuration',
                                 icon: 'fas fa-robot',
@@ -3749,6 +3758,10 @@
         }
 
         function loadNavigationConfig() {
+            // Temporarily force reset to pick up new Application Settings menu item
+            // Remove this line after the first load
+            localStorage.removeItem('navigationConfig');
+            
             const saved = localStorage.getItem('navigationConfig');
             if (saved) {
                 try {

@@ -9,34 +9,38 @@ class Consortium(db.Model):
     __tablename__ = 'consortiums'
     
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(256), nullable=False, unique=True)
-    abbrev = db.Column(db.String(32), nullable=False, unique=True)
+    consort_id = db.Column(db.String(32), unique=True, nullable=False)  # External consortium ID (e.g., "00000008")
+    
+    # Basic Information (matching form field names)
+    name = db.Column(db.String(255), nullable=False, unique=True)  # consort_name
+    abbrev = db.Column(db.String(20), nullable=False, unique=True)  # consort_abbrev
+    logo = db.Column(db.String(255))  # consort_logo_1 (logo filename for web)
     
     # Configuration flags
-    require_approved_vendor_list = db.Column(db.Boolean, default=False)
-    non_government_project_id = db.Column(db.Integer)  # Reference to non-gov project if selected
+    require_approved_vendors = db.Column(db.Boolean, default=True)  # consort_rfpo_approvedvendors (1=Yes, 0=No)
+    non_government_project_id = db.Column(db.String(32))  # consort_non_projects (project ID from dropdown)
     
-    # User permissions (stored as comma-separated user IDs)
-    viewer_user_ids = db.Column(db.Text)  # Users who can view all RFPOs for this consortium
-    limited_admin_user_ids = db.Column(db.Text)  # Users with limited admin abilities
+    # User permissions (stored as JSON arrays for multi-select fields)
+    rfpo_viewer_user_ids = db.Column(db.Text)  # consort_rfpo_viewers[] - JSON array of user IDs
+    rfpo_admin_user_ids = db.Column(db.Text)   # consort_rfpo_admin[] - JSON array of user IDs
     
     # Contact and document delivery information
-    invoicing_address = db.Column(db.Text)
+    invoicing_address = db.Column(db.Text)  # consort_invoicing_1 (textarea)
     
-    # Fax information
-    fax_recipient_name = db.Column(db.String(256))
-    fax_number = db.Column(db.String(32))
+    # Fax information for required documents
+    doc_fax_name = db.Column(db.String(255))  # consort_doc_faxname
+    doc_fax_number = db.Column(db.String(255))  # consort_doc_faxno
     
-    # Email information
-    email_recipient_name = db.Column(db.String(256))
-    email_address = db.Column(db.String(256))
+    # Email information for required documents
+    doc_email_name = db.Column(db.String(255))  # consort_doc_emailname
+    doc_email_address = db.Column(db.String(255))  # consort_doc_emailaddress
     
-    # Postal information
-    postal_recipient_name = db.Column(db.String(256))
-    postal_address = db.Column(db.Text)
+    # Postal information for required documents
+    doc_post_name = db.Column(db.String(255))  # consort_doc_postname
+    doc_post_address = db.Column(db.Text)  # consort_doc_postaddress (textarea)
     
     # Completed PO email
-    completed_po_email = db.Column(db.String(256))
+    po_email = db.Column(db.String(255))  # consort_po_email
     
     # Status and audit fields
     active = db.Column(db.Boolean, default=True)
@@ -45,62 +49,66 @@ class Consortium(db.Model):
     created_by = db.Column(db.String(64))
     updated_by = db.Column(db.String(64))
     
-    # Relationships
-    teams = db.relationship('Team', backref='consortium', lazy=True)
+    # Note: Teams reference this consortium via consortium_consort_id field
     
-    def get_viewer_users(self):
-        """Get list of viewer user IDs"""
-        if self.viewer_user_ids:
-            return [uid.strip() for uid in self.viewer_user_ids.split(',') if uid.strip()]
+    def get_rfpo_viewer_users(self):
+        """Get list of RFPO viewer user IDs"""
+        if self.rfpo_viewer_user_ids:
+            return json.loads(self.rfpo_viewer_user_ids)
         return []
     
-    def set_viewer_users(self, user_ids):
-        """Set viewer user IDs from a list"""
+    def set_rfpo_viewer_users(self, user_ids):
+        """Set RFPO viewer user IDs from a list"""
         if user_ids:
-            self.viewer_user_ids = ','.join(str(uid) for uid in user_ids)
+            # Filter out empty strings and 'none' values
+            filtered_ids = [uid for uid in user_ids if uid and uid != '']
+            self.rfpo_viewer_user_ids = json.dumps(filtered_ids)
         else:
-            self.viewer_user_ids = None
+            self.rfpo_viewer_user_ids = None
     
-    def get_limited_admin_users(self):
-        """Get list of limited admin user IDs"""
-        if self.limited_admin_user_ids:
-            return [uid.strip() for uid in self.limited_admin_user_ids.split(',') if uid.strip()]
+    def get_rfpo_admin_users(self):
+        """Get list of RFPO admin user IDs"""
+        if self.rfpo_admin_user_ids:
+            return json.loads(self.rfpo_admin_user_ids)
         return []
     
-    def set_limited_admin_users(self, user_ids):
-        """Set limited admin user IDs from a list"""
+    def set_rfpo_admin_users(self, user_ids):
+        """Set RFPO admin user IDs from a list"""
         if user_ids:
-            self.limited_admin_user_ids = ','.join(str(uid) for uid in user_ids)
+            # Filter out empty strings and 'none' values
+            filtered_ids = [uid for uid in user_ids if uid and uid != '']
+            self.rfpo_admin_user_ids = json.dumps(filtered_ids)
         else:
-            self.limited_admin_user_ids = None
+            self.rfpo_admin_user_ids = None
     
     def to_dict(self):
         return {
             'id': self.id,
-            'title': self.title,
+            'consort_id': self.consort_id,
+            'name': self.name,
             'abbrev': self.abbrev,
-            'require_approved_vendor_list': self.require_approved_vendor_list,
+            'logo': self.logo,
+            'require_approved_vendors': self.require_approved_vendors,
             'non_government_project_id': self.non_government_project_id,
-            'viewer_user_ids': self.get_viewer_users(),
-            'limited_admin_user_ids': self.get_limited_admin_users(),
+            'rfpo_viewer_user_ids': self.get_rfpo_viewer_users(),
+            'rfpo_admin_user_ids': self.get_rfpo_admin_users(),
             'invoicing_address': self.invoicing_address,
-            'fax_recipient_name': self.fax_recipient_name,
-            'fax_number': self.fax_number,
-            'email_recipient_name': self.email_recipient_name,
-            'email_address': self.email_address,
-            'postal_recipient_name': self.postal_recipient_name,
-            'postal_address': self.postal_address,
-            'completed_po_email': self.completed_po_email,
+            'doc_fax_name': self.doc_fax_name,
+            'doc_fax_number': self.doc_fax_number,
+            'doc_email_name': self.doc_email_name,
+            'doc_email_address': self.doc_email_address,
+            'doc_post_name': self.doc_post_name,
+            'doc_post_address': self.doc_post_address,
+            'po_email': self.po_email,
             'active': self.active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'created_by': self.created_by,
-            'updated_by': self.updated_by,
-            'team_count': len(self.teams) if self.teams else 0
+            'updated_by': self.updated_by
         }
     
     def __repr__(self):
-        return f'<Consortium {self.abbrev}: {self.title}>'
+        return f'<Consortium {self.consort_id} ({self.abbrev}): {self.name}>'
 
 class RFPO(db.Model):
     """Request for Purchase Order model"""
@@ -253,16 +261,17 @@ class Team(db.Model):
     __tablename__ = 'teams'
     
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(128), nullable=False)  # Team Name
-    description = db.Column(db.Text)  # Description
-    abbrev = db.Column(db.String(32), nullable=False, unique=True)  # Abbrev
+    record_id = db.Column(db.String(32), unique=True, nullable=False)  # External team ID (e.g., "00000098")
+    name = db.Column(db.String(255), nullable=False)  # team_name (increased to match form maxlength)
+    description = db.Column(db.Text)  # team_desc (textarea)
+    abbrev = db.Column(db.String(32), nullable=False, unique=True)  # team_abbrev
     
-    # Part of Consortium (optional - can be "none")
-    consortium_id = db.Column(db.Integer, db.ForeignKey('consortiums.id'), nullable=True)
+    # Part of Consortium (optional - references consort_id from dropdown)
+    consortium_consort_id = db.Column(db.String(32), nullable=True)  # team_consort (consortium's consort_id)
     
-    # Team-level user permissions
-    viewer_user_ids = db.Column(db.Text)  # Users who can view all RFPOs for this team
-    limited_admin_user_ids = db.Column(db.Text)  # Users with limited admin abilities on team
+    # Team-level user permissions (stored as JSON arrays)
+    rfpo_viewer_user_ids = db.Column(db.Text)  # team_rfpo_viewers[] - JSON array of user IDs
+    rfpo_admin_user_ids = db.Column(db.Text)   # team_rfpo_admin[] - JSON array of user IDs
     
     # Status and audit fields
     active = db.Column(db.Boolean, default=True)
@@ -271,43 +280,46 @@ class Team(db.Model):
     created_by = db.Column(db.String(64))
     updated_by = db.Column(db.String(64))
     
-    def get_viewer_users(self):
-        """Get list of viewer user IDs for this team"""
-        if self.viewer_user_ids:
-            return [uid.strip() for uid in self.viewer_user_ids.split(',') if uid.strip()]
+    def get_rfpo_viewer_users(self):
+        """Get list of RFPO viewer user IDs for this team"""
+        if self.rfpo_viewer_user_ids:
+            return json.loads(self.rfpo_viewer_user_ids)
         return []
     
-    def set_viewer_users(self, user_ids):
-        """Set viewer user IDs from a list"""
+    def set_rfpo_viewer_users(self, user_ids):
+        """Set RFPO viewer user IDs from a list"""
         if user_ids:
-            self.viewer_user_ids = ','.join(str(uid) for uid in user_ids)
+            # Filter out empty strings and 'none' values
+            filtered_ids = [uid for uid in user_ids if uid and uid != '']
+            self.rfpo_viewer_user_ids = json.dumps(filtered_ids)
         else:
-            self.viewer_user_ids = None
+            self.rfpo_viewer_user_ids = None
     
-    def get_limited_admin_users(self):
-        """Get list of limited admin user IDs for this team"""
-        if self.limited_admin_user_ids:
-            return [uid.strip() for uid in self.limited_admin_user_ids.split(',') if uid.strip()]
+    def get_rfpo_admin_users(self):
+        """Get list of RFPO admin user IDs for this team"""
+        if self.rfpo_admin_user_ids:
+            return json.loads(self.rfpo_admin_user_ids)
         return []
     
-    def set_limited_admin_users(self, user_ids):
-        """Set limited admin user IDs from a list"""
+    def set_rfpo_admin_users(self, user_ids):
+        """Set RFPO admin user IDs from a list"""
         if user_ids:
-            self.limited_admin_user_ids = ','.join(str(uid) for uid in user_ids)
+            # Filter out empty strings and 'none' values
+            filtered_ids = [uid for uid in user_ids if uid and uid != '']
+            self.rfpo_admin_user_ids = json.dumps(filtered_ids)
         else:
-            self.limited_admin_user_ids = None
+            self.rfpo_admin_user_ids = None
 
     def to_dict(self):
         return {
             'id': self.id,
+            'record_id': self.record_id,
             'name': self.name,
             'description': self.description,
             'abbrev': self.abbrev,
-            'consortium_id': self.consortium_id,
-            'consortium_name': self.consortium.title if self.consortium else None,
-            'consortium_abbrev': self.consortium.abbrev if self.consortium else None,
-            'viewer_user_ids': self.get_viewer_users(),
-            'limited_admin_user_ids': self.get_limited_admin_users(),
+            'consortium_consort_id': self.consortium_consort_id,
+            'rfpo_viewer_user_ids': self.get_rfpo_viewer_users(),
+            'rfpo_admin_user_ids': self.get_rfpo_admin_users(),
             'active': self.active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
@@ -317,5 +329,604 @@ class Team(db.Model):
         }
     
     def __repr__(self):
-        consortium_info = f" (Consortium: {self.consortium.abbrev})" if self.consortium else " (No Consortium)"
-        return f'<Team {self.abbrev}: {self.name}{consortium_info}>'
+        consortium_info = f" (Consortium: {self.consortium_consort_id})" if self.consortium_consort_id else " (No Consortium)"
+        return f'<Team {self.record_id} ({self.abbrev}): {self.name}{consortium_info}>'
+
+class User(db.Model):
+    """User model for managing system users"""
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    record_id = db.Column(db.String(32), unique=True, nullable=False)  # External user ID (e.g., "00004326")
+    
+    # Basic Information (from create form)
+    fullname = db.Column(db.String(100), nullable=False)  # Name
+    email = db.Column(db.String(255), nullable=False, unique=True)  # Email (used as login username)
+    password_hash = db.Column(db.String(255), nullable=False)  # Encrypted password
+    sex = db.Column(db.String(1))  # 'm' or 'f'
+    
+    # Company Information
+    company_code = db.Column(db.String(10))  # BP, CHEV, DOE, EM, FCA, FRD, GM, Lab, P66, SHL, xxx, USC
+    company = db.Column(db.String(100))  # Company name
+    position = db.Column(db.String(100))  # Job position/title
+    department = db.Column(db.String(100))  # Dept
+    
+    # Address Information
+    building_address = db.Column(db.String(100))  # Building/Int Mail address
+    address1 = db.Column(db.String(100))  # Address1
+    address2 = db.Column(db.String(100))  # Address2
+    city = db.Column(db.String(100))  # City
+    state = db.Column(db.String(2))  # State (2-letter code)
+    zip_code = db.Column(db.String(20))  # Zip
+    country = db.Column(db.String(100))  # Country
+    
+    # Contact Information
+    phone = db.Column(db.String(50))  # Tel
+    phone_ext = db.Column(db.String(8))  # Phone extension
+    mobile = db.Column(db.String(50))  # Mobile
+    fax = db.Column(db.String(50))  # Fax
+    
+    # System Permissions (stored as JSON for flexibility)
+    permissions = db.Column(db.Text)  # JSON: CAL_MEET_USER, GOD, RFPO_ADMIN, RFPO_USER, VROOM_ADMIN, VROOM_USER
+    
+    # Legacy fields (marked as deprecated in forms)
+    global_admin = db.Column(db.Boolean, default=False)  # Deprecated: "won't be used in future"
+    use_rfpo = db.Column(db.Boolean, default=False)  # Deprecated: "won't be used in future"
+    
+    # Web/System Settings
+    agreed_to_terms = db.Column(db.Boolean, default=False)  # Agreed to Ts&Cs
+    max_upload_size = db.Column(db.Integer, default=8388608)  # Max upload allowed (in bytes)
+    
+    # Session/Login Information
+    last_visit = db.Column(db.DateTime)
+    last_ip = db.Column(db.String(45))  # IPv4 or IPv6
+    last_browser = db.Column(db.Text)  # User agent string
+    
+    # Status and Audit
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    updated_by = db.Column(db.String(64))
+    
+    def get_permissions(self):
+        """Get list of user permissions"""
+        if self.permissions:
+            return json.loads(self.permissions)
+        return []
+    
+    def set_permissions(self, permission_list):
+        """Set user permissions from a list"""
+        if permission_list:
+            self.permissions = json.dumps(permission_list)
+        else:
+            self.permissions = None
+    
+    def has_permission(self, permission):
+        """Check if user has a specific permission"""
+        user_permissions = self.get_permissions()
+        return permission in user_permissions
+    
+    def is_super_admin(self):
+        """Check if user is a super admin (GOD permission)"""
+        return self.has_permission('GOD')
+    
+    def is_rfpo_admin(self):
+        """Check if user has RFPO admin permissions"""
+        return self.has_permission('RFPO_ADMIN') or self.is_super_admin()
+    
+    def is_rfpo_user(self):
+        """Check if user has RFPO user permissions"""
+        return self.has_permission('RFPO_USER') or self.is_rfpo_admin()
+    
+    def get_display_name(self):
+        """Get formatted display name"""
+        return self.fullname if self.fullname else self.email
+    
+    def get_full_address(self):
+        """Get formatted full address"""
+        address_parts = []
+        if self.building_address:
+            address_parts.append(self.building_address)
+        if self.address1:
+            address_parts.append(self.address1)
+        if self.address2:
+            address_parts.append(self.address2)
+        if self.city:
+            city_state_zip = self.city
+            if self.state:
+                city_state_zip += f", {self.state}"
+            if self.zip_code:
+                city_state_zip += f" {self.zip_code}"
+            address_parts.append(city_state_zip)
+        if self.country:
+            address_parts.append(self.country)
+        return "\n".join(address_parts)
+    
+    def get_teams(self):
+        """Get list of teams this user belongs to"""
+        return [ut.team for ut in self.user_teams if ut.team]
+    
+    def get_team_names(self):
+        """Get list of team names this user belongs to"""
+        return [team.name for team in self.get_teams()]
+    
+    def is_member_of_team(self, team_id):
+        """Check if user is a member of a specific team"""
+        return any(ut.team_id == team_id for ut in self.user_teams)
+    
+    def add_to_team(self, team_id, role='member', created_by=None):
+        """Add user to a team with specified role"""
+        if not self.is_member_of_team(team_id):
+            user_team = UserTeam(
+                user_id=self.id,
+                team_id=team_id,
+                role=role,
+                created_by=created_by
+            )
+            db.session.add(user_team)
+            return user_team
+        return None
+    
+    def remove_from_team(self, team_id):
+        """Remove user from a team"""
+        user_team = next((ut for ut in self.user_teams if ut.team_id == team_id), None)
+        if user_team:
+            db.session.delete(user_team)
+            return True
+        return False
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'record_id': self.record_id,
+            'fullname': self.fullname,
+            'email': self.email,
+            'sex': self.sex,
+            'company_code': self.company_code,
+            'company': self.company,
+            'position': self.position,
+            'department': self.department,
+            'building_address': self.building_address,
+            'address1': self.address1,
+            'address2': self.address2,
+            'city': self.city,
+            'state': self.state,
+            'zip_code': self.zip_code,
+            'country': self.country,
+            'phone': self.phone,
+            'phone_ext': self.phone_ext,
+            'mobile': self.mobile,
+            'fax': self.fax,
+            'permissions': self.get_permissions(),
+            'global_admin': self.global_admin,
+            'use_rfpo': self.use_rfpo,
+            'agreed_to_terms': self.agreed_to_terms,
+            'max_upload_size': self.max_upload_size,
+            'last_visit': self.last_visit.isoformat() if self.last_visit else None,
+            'last_ip': self.last_ip,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'updated_by': self.updated_by,
+            'display_name': self.get_display_name(),
+            'full_address': self.get_full_address(),
+            'teams': self.get_team_names(),
+            'team_count': len(self.user_teams),
+            'is_super_admin': self.is_super_admin(),
+            'is_rfpo_admin': self.is_rfpo_admin(),
+            'is_rfpo_user': self.is_rfpo_user()
+        }
+    
+    def __repr__(self):
+        return f'<User {self.record_id}: {self.get_display_name()}>'
+
+class UserTeam(db.Model):
+    """Association table for User-Team relationships (many-to-many)"""
+    __tablename__ = 'user_teams'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    
+    # Role/Permission within the team (optional)
+    role = db.Column(db.String(64))  # e.g., 'member', 'admin', 'viewer'
+    
+    # Audit fields
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    
+    # Unique constraint to prevent duplicate associations
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'team_id', name='uq_user_team'),
+    )
+    
+    # Relationships
+    user = db.relationship('User', backref=db.backref('user_teams', lazy=True, cascade='all, delete-orphan'))
+    team = db.relationship('Team', backref=db.backref('team_users', lazy=True, cascade='all, delete-orphan'))
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'team_id': self.team_id,
+            'role': self.role,
+            'user_name': self.user.fullname if self.user else None,
+            'user_email': self.user.email if self.user else None,
+            'team_name': self.team.name if self.team else None,
+            'team_abbrev': self.team.abbrev if self.team else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_by': self.created_by
+        }
+    
+    def __repr__(self):
+        return f'<UserTeam: {self.user.get_display_name() if self.user else "Unknown"} -> {self.team.name if self.team else "Unknown"}>'
+
+class Project(db.Model):
+    """Project model for managing non-government and research projects"""
+    __tablename__ = 'projects'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.String(32), unique=True, nullable=False)  # External project ID (e.g., "00000317")
+    
+    # Basic Information (matching form field names)
+    ref = db.Column(db.String(20), nullable=False, unique=True)  # project_ref
+    name = db.Column(db.String(255), nullable=False)  # project_name (Project Title)
+    description = db.Column(db.Text)  # project_description (textarea)
+    
+    # Multi-consortium membership (projects can be financed through multiple consortiums)
+    consortium_ids = db.Column(db.Text)  # project_consort[] - JSON array of consortium consort_ids
+    
+    # Optional team association
+    team_record_id = db.Column(db.String(32), nullable=True)  # project_team (team's record_id)
+    
+    # Project member permissions
+    rfpo_viewer_user_ids = db.Column(db.Text)  # project_rfpo_viewers[] - JSON array of user IDs
+    
+    # Project classification flags
+    gov_funded = db.Column(db.Boolean, default=True)  # project_gov (Gov Funded checkbox)
+    uni_project = db.Column(db.Boolean, default=False)  # project_uni (Uni Project checkbox)
+    
+    # Status and audit fields
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    updated_by = db.Column(db.String(64))
+    
+    def get_consortium_ids(self):
+        """Get list of consortium IDs this project belongs to"""
+        if self.consortium_ids:
+            return json.loads(self.consortium_ids)
+        return []
+    
+    def set_consortium_ids(self, consortium_id_list):
+        """Set consortium IDs from a list"""
+        if consortium_id_list:
+            # Filter out empty strings
+            filtered_ids = [cid for cid in consortium_id_list if cid and cid != '']
+            self.consortium_ids = json.dumps(filtered_ids)
+        else:
+            self.consortium_ids = None
+    
+    def get_rfpo_viewer_users(self):
+        """Get list of RFPO viewer user IDs for this project"""
+        if self.rfpo_viewer_user_ids:
+            return json.loads(self.rfpo_viewer_user_ids)
+        return []
+    
+    def set_rfpo_viewer_users(self, user_ids):
+        """Set RFPO viewer user IDs from a list"""
+        if user_ids:
+            # Filter out empty strings and 'none' values
+            filtered_ids = [uid for uid in user_ids if uid and uid != '']
+            self.rfpo_viewer_user_ids = json.dumps(filtered_ids)
+        else:
+            self.rfpo_viewer_user_ids = None
+    
+    def is_multi_consortium(self):
+        """Check if project belongs to multiple consortiums"""
+        return len(self.get_consortium_ids()) > 1
+    
+    def get_project_type(self):
+        """Get human-readable project type"""
+        types = []
+        if self.gov_funded:
+            types.append("Government Funded")
+        if self.uni_project:
+            types.append("University Project")
+        if not types:
+            types.append("Private/Other")
+        return ", ".join(types)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'project_id': self.project_id,
+            'ref': self.ref,
+            'name': self.name,
+            'description': self.description,
+            'consortium_ids': self.get_consortium_ids(),
+            'team_record_id': self.team_record_id,
+            'rfpo_viewer_user_ids': self.get_rfpo_viewer_users(),
+            'gov_funded': self.gov_funded,
+            'uni_project': self.uni_project,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'updated_by': self.updated_by,
+            'is_multi_consortium': self.is_multi_consortium(),
+            'project_type': self.get_project_type(),
+            'consortium_count': len(self.get_consortium_ids()),
+            'viewer_count': len(self.get_rfpo_viewer_users())
+        }
+    
+    def __repr__(self):
+        consortium_info = f" ({len(self.get_consortium_ids())} consortiums)" if self.get_consortium_ids() else " (No consortium)"
+        return f'<Project {self.project_id} ({self.ref}): {self.name}{consortium_info}>'
+
+class Vendor(db.Model):
+    """Vendor model for managing approved vendors"""
+    __tablename__ = 'vendors'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.String(32), unique=True, nullable=False)  # External vendor ID (e.g., "00000865")
+    
+    # Basic Information (matching form field names)
+    company_name = db.Column(db.String(255), nullable=False)  # vendor_company_name
+    
+    # Vendor Status
+    status = db.Column(db.String(20), default='live')  # vendor_status (live/withheld)
+    
+    # Vendor Classification
+    certs_reps = db.Column(db.Boolean, default=False)  # vendor_certs (Certs & Reps checkbox)
+    cert_date = db.Column(db.Date)  # vendor_cert_date (certification creation date)
+    cert_expire_date = db.Column(db.Date)  # vendor_cert_expire_date (certification expiration)
+    is_university = db.Column(db.Boolean, default=False)  # vendor_uni (Uni checkbox - disabled in form)
+    vendor_type = db.Column(db.Integer, default=0)  # vendor_type2 (0=None, 1=University, 2=Small Business, 3=Non Profit)
+    
+    # Consortium Approvals (stored as JSON for the checkbox fields)
+    approved_consortiums = db.Column(db.Text)  # consort_0 through consort_9 checkboxes as JSON array
+    
+    # One-time vendor project association
+    onetime_project_id = db.Column(db.String(32), nullable=True)  # vendor_onetime (project_id)
+    
+    # Default Contact Information
+    contact_name = db.Column(db.String(255))  # vendor_contact_name
+    contact_dept = db.Column(db.String(255))  # vendor_contact_dept
+    contact_tel = db.Column(db.String(255))  # vendor_contact_tel
+    contact_fax = db.Column(db.String(50))   # vendor_contact_fax
+    contact_address = db.Column(db.Text)     # vendor_address (textarea)
+    contact_city = db.Column(db.String(255)) # vendor_city
+    contact_state = db.Column(db.String(2))  # vendor_state (state dropdown)
+    contact_zip = db.Column(db.String(50))   # vendor_postal
+    contact_country = db.Column(db.String(50)) # vendor_country
+    
+    # Status and audit fields
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    updated_by = db.Column(db.String(64))
+    
+    def get_approved_consortiums(self):
+        """Get list of consortium abbreviations this vendor is approved for"""
+        if self.approved_consortiums:
+            return json.loads(self.approved_consortiums)
+        return []
+    
+    def set_approved_consortiums(self, consortium_list):
+        """Set approved consortiums from a list of abbreviations"""
+        if consortium_list:
+            # Filter out empty strings
+            filtered_consortiums = [c for c in consortium_list if c and c != '']
+            self.approved_consortiums = json.dumps(filtered_consortiums)
+        else:
+            self.approved_consortiums = None
+    
+    def is_approved_for_consortium(self, consortium_abbrev):
+        """Check if vendor is approved for a specific consortium"""
+        return consortium_abbrev in self.get_approved_consortiums()
+    
+    def get_vendor_type_display(self):
+        """Get human-readable vendor type"""
+        type_map = {
+            0: "None",
+            1: "University", 
+            2: "Small Business",
+            3: "Non Profit"
+        }
+        return type_map.get(self.vendor_type, "Unknown")
+    
+    def is_onetime_vendor(self):
+        """Check if this is a one-time vendor"""
+        return self.onetime_project_id is not None
+    
+    def get_full_contact_address(self):
+        """Get formatted full contact address"""
+        address_parts = []
+        if self.contact_address:
+            address_parts.append(self.contact_address)
+        if self.contact_city:
+            city_state_zip = self.contact_city
+            if self.contact_state:
+                city_state_zip += f", {self.contact_state}"
+            if self.contact_zip:
+                city_state_zip += f" {self.contact_zip}"
+            address_parts.append(city_state_zip)
+        if self.contact_country:
+            address_parts.append(self.contact_country)
+        return "\n".join(address_parts)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'vendor_id': self.vendor_id,
+            'company_name': self.company_name,
+            'status': self.status,
+            'certs_reps': self.certs_reps,
+            'cert_date': self.cert_date.isoformat() if self.cert_date else None,
+            'cert_expire_date': self.cert_expire_date.isoformat() if self.cert_expire_date else None,
+            'is_university': self.is_university,
+            'vendor_type': self.vendor_type,
+            'vendor_type_display': self.get_vendor_type_display(),
+            'approved_consortiums': self.get_approved_consortiums(),
+            'onetime_project_id': self.onetime_project_id,
+            'contact_name': self.contact_name,
+            'contact_dept': self.contact_dept,
+            'contact_tel': self.contact_tel,
+            'contact_fax': self.contact_fax,
+            'contact_address': self.contact_address,
+            'contact_city': self.contact_city,
+            'contact_state': self.contact_state,
+            'contact_zip': self.contact_zip,
+            'contact_country': self.contact_country,
+            'full_contact_address': self.get_full_contact_address(),
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'updated_by': self.updated_by,
+            'is_onetime_vendor': self.is_onetime_vendor(),
+            'consortium_count': len(self.get_approved_consortiums()),
+            'site_count': len(self.sites) if self.sites else 0
+        }
+    
+    def __repr__(self):
+        status_info = f" ({self.status})" if self.status != 'live' else ""
+        onetime_info = " [One-time]" if self.is_onetime_vendor() else ""
+        return f'<Vendor {self.vendor_id}: {self.company_name}{status_info}{onetime_info}>'
+
+class VendorSite(db.Model):
+    """Vendor site/contact model for managing multiple vendor contacts"""
+    __tablename__ = 'vendor_sites'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_site_id = db.Column(db.String(32), unique=True, nullable=False)  # External site ID (e.g., "00000905")
+    
+    # Vendor association
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
+    
+    # Contact Information (matching form field names)
+    contact_name = db.Column(db.String(255))  # vendor_site_contact_name
+    contact_dept = db.Column(db.String(255))  # vendor_site_contact_dept
+    contact_tel = db.Column(db.String(255))   # vendor_site_contact_tel
+    contact_fax = db.Column(db.String(50))    # vendor_site_contact_fax
+    contact_address = db.Column(db.Text)      # vendor_site_address (textarea)
+    contact_city = db.Column(db.String(255))  # vendor_site_city
+    contact_state = db.Column(db.String(2))   # vendor_site_state (state dropdown)
+    contact_zip = db.Column(db.String(50))    # vendor_site_postal
+    contact_country = db.Column(db.String(50)) # vendor_site_country
+    
+    # Status and audit fields
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    updated_by = db.Column(db.String(64))
+    
+    # Relationships
+    vendor = db.relationship('Vendor', backref=db.backref('sites', lazy=True, cascade='all, delete-orphan'))
+    
+    def get_full_contact_address(self):
+        """Get formatted full contact address"""
+        address_parts = []
+        if self.contact_address:
+            address_parts.append(self.contact_address)
+        if self.contact_city:
+            city_state_zip = self.contact_city
+            if self.contact_state:
+                city_state_zip += f", {self.contact_state}"
+            if self.contact_zip:
+                city_state_zip += f" {self.contact_zip}"
+            address_parts.append(city_state_zip)
+        if self.contact_country:
+            address_parts.append(self.contact_country)
+        return "\n".join(address_parts)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'vendor_site_id': self.vendor_site_id,
+            'vendor_id': self.vendor_id,
+            'vendor_name': self.vendor.company_name if self.vendor else None,
+            'contact_name': self.contact_name,
+            'contact_dept': self.contact_dept,
+            'contact_tel': self.contact_tel,
+            'contact_fax': self.contact_fax,
+            'contact_address': self.contact_address,
+            'contact_city': self.contact_city,
+            'contact_state': self.contact_state,
+            'contact_zip': self.contact_zip,
+            'contact_country': self.contact_country,
+            'full_contact_address': self.get_full_contact_address(),
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'updated_by': self.updated_by
+        }
+    
+    def __repr__(self):
+        vendor_name = self.vendor.company_name if self.vendor else "Unknown Vendor"
+        return f'<VendorSite {self.vendor_site_id}: {self.contact_name} @ {vendor_name}>'
+
+class List(db.Model):
+    """List model for key-value configuration and lookup data"""
+    __tablename__ = 'lists'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    list_id = db.Column(db.String(32), unique=True, nullable=False)  # External list ID (e.g., "0000000021")
+    
+    # Configuration fields (matching form field names)
+    type = db.Column(db.String(255), nullable=False)  # lists_type (e.g., "adminlevel")
+    key = db.Column(db.String(255), nullable=False)   # lists_key (e.g., "GOD")
+    value = db.Column(db.String(255), nullable=False) # lists_value (e.g., "Super Admin")
+    
+    # Status and audit fields
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    updated_by = db.Column(db.String(64))
+    
+    # Unique constraint to prevent duplicate type-key combinations
+    __table_args__ = (
+        db.UniqueConstraint('type', 'key', name='uq_list_type_key'),
+    )
+    
+    @classmethod
+    def get_by_type(cls, list_type):
+        """Get all list items of a specific type"""
+        return cls.query.filter_by(type=list_type, active=True).all()
+    
+    @classmethod
+    def get_value_by_key(cls, list_type, key):
+        """Get the value for a specific type-key combination"""
+        list_item = cls.query.filter_by(type=list_type, key=key, active=True).first()
+        return list_item.value if list_item else None
+    
+    @classmethod
+    def get_key_value_pairs(cls, list_type):
+        """Get all key-value pairs for a specific type as a dictionary"""
+        items = cls.get_by_type(list_type)
+        return {item.key: item.value for item in items}
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'list_id': self.list_id,
+            'type': self.type,
+            'key': self.key,
+            'value': self.value,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'updated_by': self.updated_by
+        }
+    
+    def __repr__(self):
+        return f'<List {self.list_id} ({self.type}): {self.key} = {self.value}>'

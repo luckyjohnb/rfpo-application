@@ -4,6 +4,104 @@ import json
 
 db = SQLAlchemy()
 
+class Consortium(db.Model):
+    """Consortium model for managing different consortiums"""
+    __tablename__ = 'consortiums'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(256), nullable=False, unique=True)
+    abbrev = db.Column(db.String(32), nullable=False, unique=True)
+    
+    # Configuration flags
+    require_approved_vendor_list = db.Column(db.Boolean, default=False)
+    non_government_project_id = db.Column(db.Integer)  # Reference to non-gov project if selected
+    
+    # User permissions (stored as comma-separated user IDs)
+    viewer_user_ids = db.Column(db.Text)  # Users who can view all RFPOs for this consortium
+    limited_admin_user_ids = db.Column(db.Text)  # Users with limited admin abilities
+    
+    # Contact and document delivery information
+    invoicing_address = db.Column(db.Text)
+    
+    # Fax information
+    fax_recipient_name = db.Column(db.String(256))
+    fax_number = db.Column(db.String(32))
+    
+    # Email information
+    email_recipient_name = db.Column(db.String(256))
+    email_address = db.Column(db.String(256))
+    
+    # Postal information
+    postal_recipient_name = db.Column(db.String(256))
+    postal_address = db.Column(db.Text)
+    
+    # Completed PO email
+    completed_po_email = db.Column(db.String(256))
+    
+    # Status and audit fields
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    updated_by = db.Column(db.String(64))
+    
+    # Relationships
+    teams = db.relationship('Team', backref='consortium', lazy=True)
+    
+    def get_viewer_users(self):
+        """Get list of viewer user IDs"""
+        if self.viewer_user_ids:
+            return [uid.strip() for uid in self.viewer_user_ids.split(',') if uid.strip()]
+        return []
+    
+    def set_viewer_users(self, user_ids):
+        """Set viewer user IDs from a list"""
+        if user_ids:
+            self.viewer_user_ids = ','.join(str(uid) for uid in user_ids)
+        else:
+            self.viewer_user_ids = None
+    
+    def get_limited_admin_users(self):
+        """Get list of limited admin user IDs"""
+        if self.limited_admin_user_ids:
+            return [uid.strip() for uid in self.limited_admin_user_ids.split(',') if uid.strip()]
+        return []
+    
+    def set_limited_admin_users(self, user_ids):
+        """Set limited admin user IDs from a list"""
+        if user_ids:
+            self.limited_admin_user_ids = ','.join(str(uid) for uid in user_ids)
+        else:
+            self.limited_admin_user_ids = None
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'abbrev': self.abbrev,
+            'require_approved_vendor_list': self.require_approved_vendor_list,
+            'non_government_project_id': self.non_government_project_id,
+            'viewer_user_ids': self.get_viewer_users(),
+            'limited_admin_user_ids': self.get_limited_admin_users(),
+            'invoicing_address': self.invoicing_address,
+            'fax_recipient_name': self.fax_recipient_name,
+            'fax_number': self.fax_number,
+            'email_recipient_name': self.email_recipient_name,
+            'email_address': self.email_address,
+            'postal_recipient_name': self.postal_recipient_name,
+            'postal_address': self.postal_address,
+            'completed_po_email': self.completed_po_email,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'updated_by': self.updated_by,
+            'team_count': len(self.teams) if self.teams else 0
+        }
+    
+    def __repr__(self):
+        return f'<Consortium {self.abbrev}: {self.title}>'
+
 class RFPO(db.Model):
     """Request for Purchase Order model"""
     __tablename__ = 'rfpos'
@@ -156,7 +254,7 @@ class Team(db.Model):
     name = db.Column(db.String(128), nullable=False)
     description = db.Column(db.Text)
     abbrev = db.Column(db.String(32), nullable=False, unique=True)
-    consortium_id = db.Column(db.Integer, nullable=False)
+    consortium_id = db.Column(db.Integer, db.ForeignKey('consortiums.id'), nullable=False)
     viewer_user_ids = db.Column(db.Text)  # Comma-separated user IDs
     limited_admin_user_ids = db.Column(db.Text)  # Comma-separated user IDs
     active = db.Column(db.Boolean, default=True)
@@ -177,6 +275,8 @@ class Team(db.Model):
             'description': self.description,
             'abbrev': self.abbrev,
             'consortium_id': self.consortium_id,
+            'consortium_name': self.consortium.title if self.consortium else None,
+            'consortium_abbrev': self.consortium.abbrev if self.consortium else None,
             'viewer_user_ids': self.viewer_user_ids.split(',') if self.viewer_user_ids else [],
             'limited_admin_user_ids': self.limited_admin_user_ids.split(',') if self.limited_admin_user_ids else [],
             'active': self.active,

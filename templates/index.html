@@ -1345,6 +1345,134 @@
         .menu-item-editor.new {
             animation: slideDown 0.3s ease-out;
         }
+
+        /* RFPO Tabs Styling - Better Contrast */
+        #rfpoTabs .nav-link {
+            color: #495057 !important;
+            background-color: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-bottom: none;
+            font-weight: 600;
+            padding: 12px 20px;
+            margin-right: 2px;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.3s ease;
+        }
+
+        #rfpoTabs .nav-link:hover {
+            color: #0056b3 !important;
+            background-color: #e9ecef;
+            border-color: #adb5bd;
+            transform: translateY(-2px);
+        }
+
+        #rfpoTabs .nav-link.active {
+            color: #ffffff !important;
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+        }
+
+        #rfpoTabs .nav-link.active:hover {
+            color: #ffffff !important;
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
+        }
+
+        /* RFPO Tab Content Styling */
+        .tab-content .tab-pane {
+            border: 2px solid #dee2e6;
+            border-radius: 0 8px 8px 8px;
+            background-color: #ffffff;
+            padding: 20px;
+            min-height: 400px;
+        }
+
+        /* Navigation Editor specific styles - CONTAINER FIX - PERMANENT */
+        #nav-editor {
+            /* Ensure proper dimensions */
+            min-height: 600px !important;
+            min-width: 800px !important;
+            width: 100% !important;
+            height: auto !important;
+
+            /* Proper positioning */
+            position: static !important;
+            /* display: block !important;  REMOVED */
+
+            /* Visual styling */
+            padding: 20px !important;
+            margin: 20px 0 !important;
+            background-color: #f8f9fa !important;
+            border: 2px solid #007bff !important;
+            border-radius: 8px !important;
+            box-sizing: border-box !important;
+
+            /* Prevent any hiding */
+            /* visibility: visible !important;  REMOVED */
+            opacity: 1 !important;
+            overflow: visible !important;
+            z-index: 1 !important;
+
+            /* Reset any problematic properties */
+            transform: none !important;
+            left: auto !important;
+            top: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            max-width: none !important;
+            max-height: none !important;
+            flex: none !important;
+        }
+
+        #nav-editor.active {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+
+        /* Ensure nav-editor content is visible and has proper layout */
+        #nav-editor * {
+            position: relative !important;
+            z-index: 1 !important;
+        }
+
+        /* Force the nav-editor container to expand */
+        #nav-editor .navigation-editor,
+        #nav-editor .feature-box,
+        #nav-editor .menu-items-list {
+            min-height: 200px !important;
+            display: block !important;
+            width: 100% !important;
+            background-color: white !important;
+            padding: 15px !important;
+            border: 1px solid #ddd !important;
+            margin: 10px 0 !important;
+        }
+
+        #nav-editor .content-section {
+            min-height: 500px !important;
+        }
+
+        .menu-items-list {
+            min-height: 300px !important;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .menu-item-card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .menu-item-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
@@ -2626,22 +2754,50 @@
                         <p class="text-muted mb-0">Request for Purchase Order Operations - Comprehensive RFPO management system</p>
                     </div>
 
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="feature-box">
-                                <div class="d-flex justify-content-between align-items-center mb-4">
-                                    <h5 class="mb-0"><i class="fas fa-file-contract me-2"></i>RFPO Management Dashboard</h5>
-                                    <div>
-                                        <button class="btn btn-primary btn-sm me-2" onclick="createNewRFPO()">
-                                            <i class="fas fa-plus me-1"></i>
-                                            New RFPO
-                                        </button>
-                                        <button class="btn btn-outline-secondary btn-sm" onclick="importRFPOTemplate()">
-                                            <i class="fas fa-upload me-1"></i>
-                                            Import Template
-                                        </button>
-                                    </div>
-                                </div>
+                    <!-- RFPO Navigation Tabs -->
+                    <ul class="nav nav-tabs mb-4" id="rfpoTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="rfpo-dashboard-tab" data-bs-toggle="tab" data-bs-target="#rfpo-dashboard" type="button" role="tab">
+                                <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="rfpo-teams-tab" data-bs-toggle="tab" data-bs-target="#rfpo-teams" type="button" role="tab">
+                                <i class="fas fa-users me-2"></i>Teams
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="rfpo-projects-tab" data-bs-toggle="tab" data-bs-target="#rfpo-projects" type="button" role="tab">
+                                <i class="fas fa-project-diagram me-2"></i>Projects
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="rfpo-reports-tab" data-bs-toggle="tab" data-bs-target="#rfpo-reports" type="button" role="tab">
+                                <i class="fas fa-chart-bar me-2"></i>Reports
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- RFPO Tab Content -->
+                    <div class="tab-content" id="rfpoTabContent">
+                        <!-- Dashboard Tab -->
+                        <div class="tab-pane fade show active" id="rfpo-dashboard" role="tabpanel">
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="feature-box">
+                                        <div class="d-flex justify-content-between align-items-center mb-4">
+                                            <h5 class="mb-0"><i class="fas fa-file-contract me-2"></i>RFPO Management Dashboard</h5>
+                                            <div>
+                                                <button class="btn btn-primary btn-sm me-2" onclick="createNewRFPO()">
+                                                    <i class="fas fa-plus me-1"></i>
+                                                    New RFPO
+                                                </button>
+                                                <button class="btn btn-outline-secondary btn-sm" onclick="importRFPOTemplate()">
+                                                    <i class="fas fa-upload me-1"></i>
+                                                    Import Template
+                                                </button>
+                                            </div>
+                                        </div>
 
                                 <!-- RFPO Statistics Row -->
                                 <div class="row mb-4">
@@ -2802,11 +2958,211 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Teams Tab -->
+                        <div class="tab-pane fade" id="rfpo-teams" role="tabpanel">
+                            <!-- DEBUG: Static content to test tab visibility -->
+                            <div class="alert alert-info mb-3">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Teams Tab Loaded!</strong> If you can see this message, the tab is working correctly.
+                            </div>
+
+                            <div class="row">
+                                <!-- Team Management Controls -->
+                                <div class="col-12 mb-4">
+                                    <div class="feature-box">
+                                        <div class="d-flex justify-content-between align-items-center mb-4">
+                                            <h5 class="mb-0"><i class="fas fa-users me-2"></i>Team Management</h5>
+                                            <div>
+                                                <button class="btn btn-success btn-sm me-2" onclick="createNewTeam()">
+                                                    <i class="fas fa-plus me-1"></i>Create Team
+                                                </button>
+                                                <button class="btn btn-outline-primary btn-sm me-2" onclick="refreshTeams()">
+                                                    <i class="fas fa-sync me-1"></i>Refresh
+                                                </button>
+                                                <button class="btn btn-outline-info btn-sm" onclick="loadTeams()">
+                                                    <i class="fas fa-download me-1"></i>Load Teams
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Team Statistics -->
+                                        <div class="row mb-4">
+                                            <div class="col-md-3">
+                                                <div class="stat-card text-center">
+                                                    <div class="stat-icon mb-2">
+                                                        <i class="fas fa-users" style="color: var(--primary-color);"></i>
+                                                    </div>
+                                                    <h6 class="mb-1">Total Teams</h6>
+                                                    <h4 class="mb-0" id="teams-total-count">0</h4>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="stat-card text-center">
+                                                    <div class="stat-icon mb-2">
+                                                        <i class="fas fa-check-circle" style="color: var(--success-color);"></i>
+                                                    </div>
+                                                    <h6 class="mb-1">Active Teams</h6>
+                                                    <h4 class="mb-0" id="teams-active-count">0</h4>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="stat-card text-center">
+                                                    <div class="stat-icon mb-2">
+                                                        <i class="fas fa-user-friends" style="color: var(--warning-color);"></i>
+                                                    </div>
+                                                    <h6 class="mb-1">Total Members</h6>
+                                                    <h4 class="mb-0" id="teams-members-count">0</h4>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="stat-card text-center">
+                                                    <div class="stat-icon mb-2">
+                                                        <i class="fas fa-building" style="color: var(--secondary-color);"></i>
+                                                    </div>
+                                                    <h6 class="mb-1">Consortiums</h6>
+                                                    <h4 class="mb-0" id="teams-consortiums-count">1</h4>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Teams Table -->
+                                        <div class="table-responsive">
+                                            <table class="table table-hover" id="teams-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th><i class="fas fa-hashtag me-1"></i>ID</th>
+                                                        <th><i class="fas fa-users me-1"></i>Team Name</th>
+                                                        <th><i class="fas fa-tag me-1"></i>Abbreviation</th>
+                                                        <th><i class="fas fa-building me-1"></i>Consortium</th>
+                                                        <th><i class="fas fa-info-circle me-1"></i>Status</th>
+                                                        <th><i class="fas fa-user-friends me-1"></i>Members</th>
+                                                        <th><i class="fas fa-calendar me-1"></i>Created</th>
+                                                        <th><i class="fas fa-cogs me-1"></i>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="teams-table-body">
+                                                    <tr>
+                                                        <td colspan="8" class="text-center text-muted py-4">
+                                                            <i class="fas fa-spinner fa-spin me-2"></i>Loading teams...
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+
+                                            <!-- No teams message (hidden by default) -->
+                                            <div id="no-teams-message" class="text-center py-5" style="display: none;">
+                                                <div class="mb-3">
+                                                    <i class="fas fa-users-slash fa-3x text-muted"></i>
+                                                </div>
+                                                <h5 class="text-muted">No Teams Found</h5>
+                                                <p class="text-muted mb-4">Get started by creating your first team or adding sample data.</p>
+                                                <button class="btn btn-primary me-2" onclick="createSampleTeams()">
+                                                    <i class="fas fa-magic me-1"></i>Create Sample Teams
+                                                </button>
+                                                <button class="btn btn-outline-primary" onclick="document.getElementById('add-team-btn').click()">
+                                                    <i class="fas fa-plus me-1"></i>Create New Team
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Create/Edit Team Form -->
+                                <div class="col-12">
+                                    <div class="feature-box" id="team-form-container" style="display: none;">
+                                        <h5 class="mb-4"><i class="fas fa-edit me-2"></i><span id="team-form-title">Create New Team</span></h5>
+                                        <form id="team-form">
+                                            <input type="hidden" id="team-id" value="">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="team-name" class="form-label">Team Name <span class="text-danger">*</span></label>
+                                                        <input type="text" class="form-control" id="team-name" required maxlength="128">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="team-abbrev" class="form-label">Abbreviation <span class="text-danger">*</span></label>
+                                                        <input type="text" class="form-control" id="team-abbrev" required maxlength="32">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="team-consortium" class="form-label">Consortium ID <span class="text-danger">*</span></label>
+                                                        <input type="number" class="form-control" id="team-consortium" required value="1">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="team-status" class="form-label">Status</label>
+                                                        <select class="form-control" id="team-status">
+                                                            <option value="true">Active</option>
+                                                            <option value="false">Inactive</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <div class="mb-3">
+                                                        <label for="team-description" class="form-label">Description</label>
+                                                        <textarea class="form-control" id="team-description" rows="3"></textarea>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="team-viewers" class="form-label">Viewer User IDs</label>
+                                                        <input type="text" class="form-control" id="team-viewers" placeholder="Comma-separated user IDs">
+                                                        <div class="form-text">Users who can view this team's data</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="team-admins" class="form-label">Admin User IDs</label>
+                                                        <input type="text" class="form-control" id="team-admins" placeholder="Comma-separated user IDs">
+                                                        <div class="form-text">Users who can manage this team</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-end gap-2">
+                                                <button type="button" class="btn btn-outline-secondary" onclick="cancelTeamForm()">
+                                                    <i class="fas fa-times me-1"></i>Cancel
+                                                </button>
+                                                <button type="submit" class="btn btn-primary">
+                                                    <i class="fas fa-save me-1"></i>Save Team
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Projects Tab -->
+                        <div class="tab-pane fade" id="rfpo-projects" role="tabpanel">
+                            <div class="feature-box">
+                                <h5 class="mb-4"><i class="fas fa-project-diagram me-2"></i>Project Management</h5>
+                                <p class="text-muted">Project management functionality will be implemented here.</p>
+                            </div>
+                        </div>
+
+                        <!-- Reports Tab -->
+                        <div class="tab-pane fade" id="rfpo-reports" role="tabpanel">
+                            <div class="feature-box">
+                                <h5 class="mb-4"><i class="fas fa-chart-bar me-2"></i>Reports & Analytics</h5>
+                                <p class="text-muted">Reporting functionality will be implemented here.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Navigation Editor Section -->
                 <div id="nav-editor" class="content-section" style="display: none;">
+                    <!-- Success indicator -->
+                    <div class="alert alert-success mb-3">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Navigation Editor</strong> - Customize and manage the application navigation menu
+                    </div>
+
                     <div class="mb-4">
                         <h2 class="mb-1"><i class="fas fa-edit me-2" style="color: var(--primary-color);"></i>Navigation Editor</h2>
                         <p class="text-muted mb-0">Customize and manage the application navigation menu</p>
@@ -2844,7 +3200,78 @@
                                     </div>
 
                                     <div id="menuItemsList" class="menu-items-list">
-                                        <!-- Menu items will be loaded here dynamically -->
+                                        <!-- Default navigation items for display -->
+                                        <div class="menu-item-card mb-3">
+                                            <div class="d-flex justify-content-between align-items-center p-3 border rounded">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-grip-vertical text-muted me-3" style="cursor: move;"></i>
+                                                    <div>
+                                                        <div class="fw-bold">Dashboard</div>
+                                                        <div class="small text-muted">Main dashboard section</div>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" type="checkbox" checked>
+                                                        <label class="form-check-label">Visible</label>
+                                                    </div>
+                                                    <button class="btn btn-sm btn-outline-primary">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="menu-item-card mb-3">
+                                            <div class="d-flex justify-content-between align-items-center p-3 border rounded">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-grip-vertical text-muted me-3" style="cursor: move;"></i>
+                                                    <div>
+                                                        <div class="fw-bold">RFPO</div>
+                                                        <div class="small text-muted">Request for Purchase Order Operations</div>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" type="checkbox" checked>
+                                                        <label class="form-check-label">Visible</label>
+                                                    </div>
+                                                    <button class="btn btn-sm btn-outline-primary">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="menu-item-card mb-3">
+                                            <div class="d-flex justify-content-between align-items-center p-3 border rounded">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-grip-vertical text-muted me-3" style="cursor: move;"></i>
+                                                    <div>
+                                                        <div class="fw-bold">Configuration</div>
+                                                        <div class="small text-muted">Application settings and configuration</div>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" type="checkbox" checked>
+                                                        <label class="form-check-label">Visible</label>
+                                                    </div>
+                                                    <button class="btn btn-sm btn-outline-primary">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -3052,7 +3479,7 @@
                     return false;
                 }
 
-                // Hide all sections
+                // Hide all sections and remove debug border
                 const sections = document.querySelectorAll('.content-section');
                 console.log('Found sections:', sections.length);
                 if (sections.length === 0) {
@@ -3062,6 +3489,8 @@
 
                 sections.forEach(section => {
                     section.style.display = 'none';
+                    section.classList.remove('active');
+                    section.style.border = '';
                 });
 
                 // Remove active class from all nav links and sublinks
@@ -3079,7 +3508,83 @@
                 const targetSection = document.getElementById(sectionId);
                 if (targetSection) {
                     targetSection.style.display = 'block';
-                    console.log('Section displayed successfully:', sectionId);
+
+                    // Special handling for nav-editor to ensure proper styling
+                    if (sectionId === 'nav-editor') {
+                        targetSection.classList.add('active');
+
+                        // Auto-fix container issues for nav-editor
+                        const parent = targetSection.parentElement;
+                        console.log('Nav-editor parent:', parent);
+
+                        // If it's inside tab-content, move it to content-area
+                        if (parent && parent.classList.contains('tab-content')) {
+                            console.log('⚠️ Auto-fixing: nav-editor inside tab-content, moving it...');
+                            const contentArea = document.querySelector('.content-area');
+                            if (contentArea) {
+                                contentArea.appendChild(targetSection);
+                                console.log('✅ Auto-moved nav-editor to content-area');
+                            }
+                        }
+
+                        // Force proper container styling - same as fixNavContainer
+                        targetSection.style.cssText = `
+                            display: block !important;
+                            visibility: visible !important;
+                            opacity: 1 !important;
+                            position: static !important;
+                            width: 100% !important;
+                            height: auto !important;
+                            min-height: 600px !important;
+                            min-width: 800px !important;
+                            max-width: none !important;
+                            max-height: none !important;
+                            padding: 30px !important;
+                            margin: 20px 0 !important;
+                            background-color: #f8f9fa !important;
+                            border: 3px solid #007bff !important;
+                            border-radius: 10px !important;
+                            box-sizing: border-box !important;
+                            overflow: visible !important;
+                            z-index: 1 !important;
+                            flex: none !important;
+                            transform: none !important;
+                            left: auto !important;
+                            top: auto !important;
+                            right: auto !important;
+                            bottom: auto !important;
+                        `;
+
+                        // Force all child elements to be visible
+                        const children = targetSection.querySelectorAll('*');
+                        children.forEach(child => {
+                            child.style.display = child.style.display === 'none' ? 'none' : 'block';
+                            child.style.visibility = 'visible';
+                            child.style.opacity = '1';
+                        });
+
+                        // Scroll to the nav-editor section to ensure it's visible
+                        setTimeout(() => {
+                            targetSection.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
+                            });
+                            console.log('✅ Navigation Editor auto-fixed and displayed');
+                        }, 100);
+                    }                    console.log('Section displayed successfully:', sectionId);
+
+                    // Debug: After switching, log all visible content-sections
+                    setTimeout(() => {
+                        const visibleSections = Array.from(document.querySelectorAll('.content-section'))
+                            .filter(s => window.getComputedStyle(s).display !== 'none');
+                        console.log('DEBUG: Visible content-sections after switch:', visibleSections.map(s => s.id));
+                        // Add a red border to any that are visible but not the target
+                        visibleSections.forEach(s => {
+                            if (s.id !== sectionId) {
+                                s.style.border = '3px solid red';
+                            }
+                        });
+                    }, 200);
                 } else {
                     console.error('Section not found:', sectionId);
                     console.log('Available sections:', Array.from(sections).map(s => s.id));
@@ -3128,7 +3633,7 @@
                 }
 
                 // Special handling for configuration sections
-                if (sectionId === 'ai-config' || sectionId === 'file-config' || sectionId === 'app-settings') {
+                if (sectionId === 'ai-config' || sectionId === 'file-config' || sectionId === 'app-settings' || sectionId === 'nav-editor') {
                     console.log('Configuration section opened, loading saved settings...');
                     // Expand the configuration menu if not already expanded
                     const configParent = document.getElementById('configNavParent');
@@ -3142,6 +3647,20 @@
                     // Load application settings if viewing app-settings
                     if (sectionId === 'app-settings' && typeof loadApplicationSettings === 'function') {
                         loadApplicationSettings();
+                    }
+                    // Initialize Navigation Editor if viewing nav-editor
+                    if (sectionId === 'nav-editor') {
+                        console.log('Initializing Navigation Editor...');
+                        // Force initialize the navigation editor
+                        if (typeof initializeNavigationEditor === 'function') {
+                            initializeNavigationEditor();
+                            console.log('Navigation Editor initialization function called');
+                        }
+                        // Ensure the menu items list is visible
+                        const menuItemsList = document.getElementById('menuItemsList');
+                        if (menuItemsList) {
+                            console.log('Navigation Editor menu items list found and initialized');
+                        }
                     }
                 }
 
@@ -3601,17 +4120,67 @@
         function initializeNavigationEditor() {
             console.log('Initializing Navigation Editor...');
 
-            // Load existing navigation configuration
-            loadNavigationConfig();
+            try {
+                // Auto-fix container issues before initializing
+                const navEditor = document.getElementById('nav-editor');
+                if (navEditor) {
+                    const parent = navEditor.parentElement;
 
-            // Render the navigation editor
-            renderNavigationEditor();
+                    // If it's inside tab-content, move it to content-area
+                    if (parent && parent.classList.contains('tab-content')) {
+                        console.log('⚠️ Init: nav-editor inside tab-content, moving it...');
+                        const contentArea = document.querySelector('.content-area');
+                        if (contentArea) {
+                            contentArea.appendChild(navEditor);
+                            console.log('✅ Init: moved nav-editor to content-area');
+                        }
+                    }
 
-            // Load role-based settings
-            loadRoleBasedSettings();
-        }
+                    // Apply container fix styling
+                    navEditor.style.minHeight = '600px';
+                    navEditor.style.minWidth = '800px';
+                    navEditor.style.width = '100%';
+                    navEditor.style.height = 'auto';
+                    navEditor.style.position = 'static';
+                    navEditor.style.boxSizing = 'border-box';
 
-        function getDefaultNavigationConfig() {
+                    console.log('✅ Container fixes applied during initialization');
+                }
+
+                // Load existing navigation configuration
+                loadNavigationConfig();
+
+                // Render the navigation editor
+                renderNavigationEditor();
+
+                // Load role-based settings
+                loadRoleBasedSettings();
+
+                console.log('Navigation Editor initialized successfully');
+
+                // Add a success indicator
+                if (navEditor) {
+                    const indicator = navEditor.querySelector('.alert-success');
+                    if (indicator) {
+                        indicator.style.display = 'block';
+                        indicator.innerHTML = '<i class="fas fa-check-circle me-2"></i><strong>Navigation Editor Loaded Successfully!</strong> Editor is ready for use.';
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error initializing Navigation Editor:', error);
+
+                // Show error indicator
+                const navEditor = document.getElementById('nav-editor');
+                if (navEditor) {
+                    const indicator = navEditor.querySelector('.alert-success');
+                    if (indicator) {
+                        indicator.className = 'alert alert-danger mb-3';
+                        indicator.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i><strong>Navigation Editor Error:</strong> ' + error.message;
+                    }
+                }
+            }
+        }        function getDefaultNavigationConfig() {
             return {
                 roleBasedVisibility: false,
                 items: [
@@ -3758,10 +4327,9 @@
         }
 
         function loadNavigationConfig() {
-            // Temporarily force reset to pick up new Application Settings menu item
-            // Remove this line after the first load
-            localStorage.removeItem('navigationConfig');
-            
+            // Only reset navigation config if it doesn't exist or is corrupted
+            let shouldReset = false;
+
             const saved = localStorage.getItem('navigationConfig');
             if (saved) {
                 try {
@@ -4519,11 +5087,13 @@
 
         // Initialize the navigation editor when the nav-editor section is shown
         function initNavEditorWhenShown() {
+            // Primary method: Use MutationObserver
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
                         const navEditor = document.getElementById('nav-editor');
                         if (navEditor && navEditor.style.display !== 'none') {
+                            console.log('Navigation Editor became visible, initializing...');
                             initializeNavigationEditor();
                             observer.disconnect(); // Stop observing once initialized
                         }
@@ -4534,7 +5104,24 @@
             const navEditor = document.getElementById('nav-editor');
             if (navEditor) {
                 observer.observe(navEditor, { attributes: true });
+                console.log('MutationObserver set up for Navigation Editor');
             }
+
+            // Fallback method: Set up a global function to manually initialize
+            window.forceInitNavEditor = function() {
+                console.log('Force initializing Navigation Editor...');
+                initializeNavigationEditor();
+            };
+
+            // Additional fallback: Initialize if nav-editor is already visible
+            setTimeout(() => {
+                const navEditor = document.getElementById('nav-editor');
+                if (navEditor && window.getComputedStyle(navEditor).display !== 'none') {
+                    console.log('Navigation Editor was already visible, initializing...');
+                    initializeNavigationEditor();
+                    observer.disconnect();
+                }
+            }, 1000);
         }
 
         // Legacy function kept for compatibility
@@ -5239,6 +5826,13 @@
             // Initialize navigation editor observer
             try {
                 initNavEditorWhenShown();
+
+                // Also try to pre-initialize navigation config
+                if (typeof loadNavigationConfig === 'function') {
+                    loadNavigationConfig();
+                    console.log('Navigation configuration pre-loaded');
+                }
+
             } catch (error) {
                 console.error('Error initializing navigation editor:', error);
             }
@@ -5257,6 +5851,32 @@
                 loadApplicationSettings();
             } catch (error) {
                 console.error('Error loading application settings:', error);
+            }
+
+            // Initialize navigation configuration immediately
+            try {
+                console.log('Pre-loading navigation configuration...');
+                if (typeof loadNavigationConfig === 'function') {
+                    loadNavigationConfig();
+                }
+
+                // Auto-fix nav-editor container on page load
+                const navEditor = document.getElementById('nav-editor');
+                if (navEditor) {
+                    const parent = navEditor.parentElement;
+                    if (parent && parent.classList.contains('tab-content')) {
+                        console.log('⚠️ Page load: nav-editor in wrong container, fixing...');
+                        const contentArea = document.querySelector('.content-area');
+                        if (contentArea) {
+                            contentArea.appendChild(navEditor);
+                            console.log('✅ Page load: nav-editor moved to correct container');
+                        }
+                    }
+                }
+
+                console.log('Navigation configuration loaded and container checked');
+            } catch (error) {
+                console.error('Error pre-loading navigation configuration:', error);
             }
         });
 
@@ -6642,6 +7262,1064 @@ Need help? Check the AI Configuration section to update settings.
             // In a real application, this would generate and download the report
             console.log('Generating report:', reportType);
         }
+
+        // Team Management Functions
+        async function loadTeams() {
+            try {
+                console.log('🔄 Loading teams...');
+                const token = localStorage.getItem('token');
+
+                if (!token) {
+                    console.error('❌ No authentication token found');
+                    showTeamError('Authentication required. Please log in.');
+                    return;
+                }
+
+                console.log('🔑 Using token:', token.substring(0, 20) + '...');
+
+                const response = await fetch('/api/teams', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('📡 API Response status:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('📊 API Response data:', data);
+
+                    // The API returns {teams: [...], total: ..., page: ..., pages: ...}
+                    const teams = data.teams || data; // Handle both formats
+                    console.log('👥 Teams array:', teams);
+
+                    displayTeams(teams);
+                    updateTeamStats(teams);
+                    console.log('✅ Teams loaded successfully');
+                } else {
+                    console.error('❌ Error loading teams:', response.status);
+                    const errorText = await response.text();
+                    console.error('❌ Error details:', errorText);
+
+                    if (response.status === 401) {
+                        showTeamError('Authentication failed. Please log in again.');
+                    } else {
+                        showTeamError('Failed to load teams. Status: ' + response.status);
+                    }
+                }
+            } catch (error) {
+                console.error('💥 Network error loading teams:', error);
+                showTeamError('Network error while loading teams: ' + error.message);
+            }
+        }
+
+        function displayTeams(teams) {
+            const tbody = document.getElementById('teams-table-body');
+            const teamsTable = document.getElementById('teams-table');
+            const noTeamsMessage = document.getElementById('no-teams-message');
+
+            if (teams.length === 0) {
+                // Hide table and show no-teams message
+                teamsTable.style.display = 'none';
+                noTeamsMessage.style.display = 'block';
+                return;
+            }
+
+            // Show table and hide no-teams message
+            teamsTable.style.display = 'table';
+            noTeamsMessage.style.display = 'none';
+
+            tbody.innerHTML = teams.map(team => `
+                <tr>
+                    <td><span class="badge bg-primary">${team.id}</span></td>
+                    <td><strong>${team.name}</strong></td>
+                    <td><span class="badge bg-secondary">${team.abbrev}</span></td>
+                    <td>${team.consortium_id}</td>
+                    <td>
+                        <span class="badge ${team.active ? 'bg-success' : 'bg-danger'}">
+                            ${team.active ? 'Active' : 'Inactive'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge bg-info">
+                            ${team.viewer_user_ids.length + team.limited_admin_user_ids.length} members
+                        </span>
+                    </td>
+                    <td>${new Date(team.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editTeam(${team.id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="viewTeam(${team.id})" title="View">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-${team.active ? 'warning' : 'success'}" onclick="${team.active ? 'deactivateTeam' : 'activateTeam'}(${team.id})" title="${team.active ? 'Deactivate' : 'Activate'}">
+                            <i class="fas fa-${team.active ? 'pause' : 'play'}"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteTeam(${team.id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateTeamStats(teams) {
+            document.getElementById('teams-total-count').textContent = teams.length;
+            document.getElementById('teams-active-count').textContent = teams.filter(t => t.active).length;
+
+            const totalMembers = teams.reduce((sum, team) =>
+                sum + team.viewer_user_ids.length + team.limited_admin_user_ids.length, 0);
+            document.getElementById('teams-members-count').textContent = totalMembers;
+
+            const consortiums = [...new Set(teams.map(t => t.consortium_id))].length;
+            document.getElementById('teams-consortiums-count').textContent = consortiums;
+        }
+
+        function createNewTeam() {
+            document.getElementById('team-form-title').textContent = 'Create New Team';
+            document.getElementById('team-form').reset();
+            document.getElementById('team-id').value = '';
+            document.getElementById('team-form-container').style.display = 'block';
+            document.getElementById('team-name').focus();
+        }
+
+        function editTeam(teamId) {
+            // Load team data and populate form
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                showTeamError('Authentication required. Please log in.');
+                return;
+            }
+
+            fetch(`/api/teams/${teamId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                })
+                .then(data => {
+                    // The API returns {team: {...}} format
+                    const team = data.team || data; // Handle both formats
+                    document.getElementById('team-form-title').textContent = 'Edit Team';
+                    document.getElementById('team-id').value = team.id;
+                    document.getElementById('team-name').value = team.name;
+                    document.getElementById('team-abbrev').value = team.abbrev;
+                    document.getElementById('team-consortium').value = team.consortium_id;
+                    document.getElementById('team-status').value = team.active.toString();
+                    document.getElementById('team-description').value = team.description || '';
+                    document.getElementById('team-viewers').value = (team.viewer_user_ids || []).join(', ');
+                    document.getElementById('team-admins').value = (team.limited_admin_user_ids || []).join(', ');
+                    document.getElementById('team-form-container').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error loading team:', error);
+                    showTeamError('Failed to load team data');
+                });
+        }
+
+        function viewTeam(teamId) {
+            alert(`Viewing team details for team ID: ${teamId}`);
+        }
+
+        async function deleteTeam(teamId) {
+            if (!confirm('Are you sure you want to delete this team? This action cannot be undone.')) {
+                return;
+            }
+
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                showTeamError('Authentication required. Please log in.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/teams/${teamId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    showTeamSuccess('Team deleted successfully');
+                    loadTeams(); // Refresh the list
+                } else {
+                    showTeamError('Failed to delete team');
+                }
+            } catch (error) {
+                console.error('Error deleting team:', error);
+                showTeamError('Network error while deleting team');
+            }
+        }
+
+        async function activateTeam(teamId) {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                showTeamError('Authentication required. Please log in.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/teams/${teamId}/activate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    showTeamSuccess('Team activated successfully');
+                    loadTeams();
+                } else {
+                    showTeamError('Failed to activate team');
+                }
+            } catch (error) {
+                console.error('Error activating team:', error);
+                showTeamError('Network error while activating team');
+            }
+        }
+
+        async function deactivateTeam(teamId) {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                showTeamError('Authentication required. Please log in.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/teams/${teamId}/deactivate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    showTeamSuccess('Team deactivated successfully');
+                    loadTeams();
+                } else {
+                    showTeamError('Failed to deactivate team');
+                }
+            } catch (error) {
+                console.error('Error deactivating team:', error);
+                showTeamError('Network error while deactivating team');
+            }
+        }
+
+        function refreshTeams() {
+            loadTeams();
+        }
+
+        function cancelTeamForm() {
+            document.getElementById('team-form-container').style.display = 'none';
+        }
+
+        // Team form submission
+        document.addEventListener('DOMContentLoaded', function() {
+            const teamForm = document.getElementById('team-form');
+            if (teamForm) {
+                teamForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+
+                    const token = localStorage.getItem('token');
+
+                    if (!token) {
+                        showTeamError('Authentication required. Please log in.');
+                        return;
+                    }
+
+                    const teamId = document.getElementById('team-id').value;
+                    const isEdit = teamId !== '';
+
+                    const teamData = {
+                        name: document.getElementById('team-name').value,
+                        abbrev: document.getElementById('team-abbrev').value,
+                        consortium_id: parseInt(document.getElementById('team-consortium').value),
+                        active: document.getElementById('team-status').value === 'true',
+                        description: document.getElementById('team-description').value,
+                        viewer_user_ids: document.getElementById('team-viewers').value.split(',').map(s => s.trim()).filter(s => s),
+                        limited_admin_user_ids: document.getElementById('team-admins').value.split(',').map(s => s.trim()).filter(s => s)
+                    };
+
+                    try {
+                        const url = isEdit ? `/api/teams/${teamId}` : '/api/teams';
+                        const method = isEdit ? 'PUT' : 'POST';
+
+                        const response = await fetch(url, {
+                            method: method,
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(teamData)
+                        });
+
+                        if (response.ok) {
+                            showTeamSuccess(`Team ${isEdit ? 'updated' : 'created'} successfully`);
+                            cancelTeamForm();
+                            loadTeams();
+                        } else {
+                            const errorData = await response.json();
+                            showTeamError(errorData.message || errorData.error || `Failed to ${isEdit ? 'update' : 'create'} team`);
+                        }
+                    } catch (error) {
+                        console.error('Error saving team:', error);
+                        showTeamError('Network error while saving team');
+                    }
+                });
+            }
+
+            // Add debugging for all RFPO tab clicks
+            const allRfpoTabs = document.querySelectorAll('#rfpoTabs .nav-link');
+            allRfpoTabs.forEach(tab => {
+                tab.addEventListener('click', function(e) {
+                    console.log('🎯 RFPO Tab clicked:', this.id, 'Target:', this.getAttribute('data-bs-target'));
+                });
+
+                tab.addEventListener('shown.bs.tab', function(e) {
+                    console.log('✅ RFPO Tab shown:', this.id, 'Target:', e.target.getAttribute('data-bs-target'));
+                });
+            });
+
+            // Load teams when the teams tab is shown
+            const teamsTab = document.getElementById('rfpo-teams-tab');
+            if (teamsTab) {
+                console.log('🔍 Teams tab element found, adding listeners');
+
+                teamsTab.addEventListener('click', function(e) {
+                    console.log('🎯 Teams tab clicked specifically');
+                });
+
+                teamsTab.addEventListener('shown.bs.tab', function(e) {
+                    console.log('✅ Teams tab shown, loading teams...');
+                    loadTeams();
+                });
+            } else {
+                console.error('❌ Teams tab element not found!');
+            }
+        });
+
+        async function createSampleTeams() {
+            const sampleTeams = [
+                {
+                    name: "Data Analytics Team",
+                    abbrev: "DAT",
+                    consortium: "Technology Consortium",
+                    status: "active"
+                },
+                {
+                    name: "Infrastructure Management",
+                    abbrev: "IM",
+                    consortium: "Operations Consortium",
+                    status: "active"
+                },
+                {
+                    name: "Security Assessment",
+                    abbrev: "SA",
+                    consortium: "Security Consortium",
+                    status: "active"
+                },
+                {
+                    name: "Project Coordination",
+                    abbrev: "PC",
+                    consortium: "Management Consortium",
+                    status: "active"
+                }
+            ];
+
+            try {
+                const token = localStorage.getItem('authToken');
+                if (!token) {
+                    showTeamError('Authentication required. Please log in.');
+                    return;
+                }
+
+                // Create each sample team
+                for (let teamData of sampleTeams) {
+                    const response = await fetch('/api/teams', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(teamData)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to create team: ${teamData.name}`);
+                    }
+                }
+
+                showTeamSuccess('Sample teams created successfully!');
+                loadTeams(); // Reload the teams list
+            } catch (error) {
+                console.error('Error creating sample teams:', error);
+                showTeamError('Failed to create sample teams: ' + error.message);
+            }
+        }
+
+        // Force show Navigation Editor function
+        window.forceShowNavEditor = function() {
+            console.log('🔧 Force showing Navigation Editor...');
+
+            // Hide all other sections
+            const allSections = document.querySelectorAll('.content-section');
+            allSections.forEach(section => {
+                section.style.display = 'none';
+            });
+
+            // Force show nav-editor
+            const navEditor = document.getElementById('nav-editor');
+            if (navEditor) {
+                navEditor.style.display = 'block';
+                navEditor.style.visibility = 'visible';
+                navEditor.style.opacity = '1';
+                navEditor.style.position = 'relative';
+                navEditor.style.minHeight = '600px';
+                navEditor.style.padding = '20px';
+                navEditor.style.backgroundColor = 'white';
+                navEditor.style.border = '2px solid #007bff';
+
+                console.log('✅ Navigation Editor forced to display');
+
+                // Check dimensions after forcing
+                setTimeout(() => {
+                    const rect = navEditor.getBoundingClientRect();
+                    console.log('📏 After forcing - dimensions:', rect);
+                }, 100);
+
+                return true;
+            }
+
+            console.log('❌ Navigation Editor element not found');
+            return false;
+        };
+
+        // Debug function to test Navigation Editor access
+        window.testNavEditor = function() {
+            console.log('🔍 Testing Navigation Editor access...');
+
+            // Check if the section exists
+            const navEditorSection = document.getElementById('nav-editor');
+            console.log('Nav Editor section found:', !!navEditorSection);
+
+            if (navEditorSection) {
+                console.log('Nav Editor section style.display:', navEditorSection.style.display);
+                console.log('Nav Editor section computed display:', window.getComputedStyle(navEditorSection).display);
+                console.log('Nav Editor section visibility:', window.getComputedStyle(navEditorSection).visibility);
+                console.log('Nav Editor section height:', window.getComputedStyle(navEditorSection).height);
+                console.log('Nav Editor section position:', window.getComputedStyle(navEditorSection).position);
+                console.log('Nav Editor section z-index:', window.getComputedStyle(navEditorSection).zIndex);
+
+                // Check the content area
+                const contentArea = document.querySelector('.content-area');
+                if (contentArea) {
+                    console.log('Content area found, style:', {
+                        display: window.getComputedStyle(contentArea).display,
+                        visibility: window.getComputedStyle(contentArea).visibility,
+                        height: window.getComputedStyle(contentArea).height,
+                        overflow: window.getComputedStyle(contentArea).overflow
+                    });
+                }
+            }
+
+            // Try to show it
+            try {
+                const result = showSection('nav-editor');
+                console.log('showSection result:', result);
+
+                // Check again after trying to show
+                if (navEditorSection) {
+                    console.log('After showSection - style.display:', navEditorSection.style.display);
+                    console.log('After showSection - computed display:', window.getComputedStyle(navEditorSection).display);
+                    console.log('After showSection - bounding rect:', navEditorSection.getBoundingClientRect());
+                }
+
+                // Force make it visible with inline styles
+                navEditorSection.style.display = 'block';
+                navEditorSection.style.visibility = 'visible';
+                navEditorSection.style.opacity = '1';
+                navEditorSection.style.position = 'relative';
+                navEditorSection.style.zIndex = '1';
+                navEditorSection.style.backgroundColor = '#f8f9fa';
+                navEditorSection.style.padding = '20px';
+                navEditorSection.style.border = '2px solid #007bff';
+
+                console.log('Forced visibility styles applied');
+
+            } catch (error) {
+                console.error('Error calling showSection:', error);
+            }
+
+            return 'Navigation Editor test complete - check console for details';
+        };
+
+        function showTeamSuccess(message) {
+            // Create a simple alert for now - could be enhanced with a proper notification system
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-success alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.parentNode.removeChild(alert);
+                }
+            }, 5000);
+        }
+
+        function showTeamError(message) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.parentNode.removeChild(alert);
+                }
+            }, 5000);
+        }
+
+        // Enhanced debug function for Navigation Editor
+        window.debugNavEditor = function() {
+            console.log('🛠️ Full Navigation Editor Debug...');
+
+            // Check all related functions exist
+            const functions = [
+                'showSection', 'initializeNavigationEditor', 'loadNavigationConfig',
+                'renderNavigationEditor', 'loadRoleBasedSettings'
+            ];
+
+            functions.forEach(funcName => {
+                console.log(`Function ${funcName}:`, typeof window[funcName] === 'function' ? '✅ Available' : '❌ Missing');
+            });
+
+            // Check navigation config
+            console.log('Navigation config:', typeof navigationConfig !== 'undefined' ? navigationConfig : 'Not loaded');
+
+            // Check menu items list
+            const menuItemsList = document.getElementById('menuItemsList');
+            console.log('Menu items list element:', menuItemsList ? '✅ Found' : '❌ Missing');
+
+            if (menuItemsList) {
+                console.log('Menu items list innerHTML length:', menuItemsList.innerHTML.length);
+                console.log('Menu items list children:', menuItemsList.children.length);
+            }
+
+            // Check for errors in loading
+            const navEditor = document.getElementById('nav-editor');
+            if (navEditor) {
+                const errorIndicator = navEditor.querySelector('.alert-danger');
+                if (errorIndicator) {
+                    console.log('❌ Error indicator found:', errorIndicator.textContent);
+                }
+
+                // Check visibility
+                console.log('Navigation Editor visibility:', {
+                    display: window.getComputedStyle(navEditor).display,
+                    visibility: window.getComputedStyle(navEditor).visibility,
+                    opacity: window.getComputedStyle(navEditor).opacity,
+                    height: window.getComputedStyle(navEditor).height
+                });
+            }
+
+            // Test manual show
+            console.log('Testing manual show...');
+            try {
+                showSection('nav-editor');
+                console.log('✅ showSection call successful');
+            } catch (error) {
+                console.log('❌ showSection error:', error);
+            }
+
+            return 'Debug completed. Check console for full report.';
+        };
+
+        // Super obvious test function
+        window.superTestNavEditor = function() {
+            console.log('🔴 SUPER TEST: Making Navigation Editor IMPOSSIBLE to miss!');
+
+            // First, let's check the current state
+            const navEditor = document.getElementById('nav-editor');
+            if (navEditor) {
+                console.log('📊 Current nav-editor state:', {
+                    display: window.getComputedStyle(navEditor).display,
+                    visibility: window.getComputedStyle(navEditor).visibility,
+                    opacity: window.getComputedStyle(navEditor).opacity,
+                    position: window.getComputedStyle(navEditor).position,
+                    zIndex: window.getComputedStyle(navEditor).zIndex,
+                    top: window.getComputedStyle(navEditor).top,
+                    left: window.getComputedStyle(navEditor).left,
+                    width: window.getComputedStyle(navEditor).width,
+                    height: window.getComputedStyle(navEditor).height
+                });
+
+                console.log('📐 Bounding rect:', navEditor.getBoundingClientRect());
+                console.log('📍 Scroll position:', { scrollTop: document.documentElement.scrollTop, scrollLeft: document.documentElement.scrollLeft });
+
+                // Force show the section with extreme styling
+                // Hide all other sections first
+                document.querySelectorAll('.content-section').forEach(section => {
+                    section.style.display = 'none';
+                    console.log(`Hidden section: ${section.id}`);
+                });
+
+                // Make nav-editor SUPER visible
+                navEditor.style.display = 'block';
+                navEditor.style.position = 'fixed';
+                navEditor.style.top = '0';
+                navEditor.style.left = '0';
+                navEditor.style.width = '100vw';
+                navEditor.style.height = '100vh';
+                navEditor.style.backgroundColor = '#ff0000';
+                navEditor.style.color = 'white';
+                navEditor.style.zIndex = '99999';
+                navEditor.style.padding = '50px';
+                navEditor.style.fontSize = '24px';
+                navEditor.style.border = '10px solid #000000';
+                navEditor.style.overflow = 'auto';
+
+                console.log('🔴 Applied extreme styling to nav-editor');
+                console.log('📐 New bounding rect:', navEditor.getBoundingClientRect());
+
+                // Add a close button
+                const existingCloseBtn = navEditor.querySelector('.super-test-close');
+                if (!existingCloseBtn) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.className = 'super-test-close';
+                    closeBtn.innerHTML = '❌ CLOSE SUPER TEST';
+                    closeBtn.style.position = 'fixed';
+                    closeBtn.style.top = '10px';
+                    closeBtn.style.right = '10px';
+                    closeBtn.style.fontSize = '20px';
+                    closeBtn.style.padding = '10px 20px';
+                    closeBtn.style.backgroundColor = '#ffffff';
+                    closeBtn.style.color = '#000000';
+                    closeBtn.style.border = '3px solid #000000';
+                    closeBtn.style.cursor = 'pointer';
+                    closeBtn.style.zIndex = '999999';
+                    closeBtn.onclick = function() {
+                        navEditor.style.position = '';
+                        navEditor.style.top = '';
+                        navEditor.style.left = '';
+                        navEditor.style.width = '';
+                        navEditor.style.height = '';
+                        navEditor.style.backgroundColor = '';
+                        navEditor.style.color = '';
+                        navEditor.style.zIndex = '';
+                        navEditor.style.padding = '';
+                        navEditor.style.fontSize = '';
+                        navEditor.style.border = '';
+                        navEditor.style.overflow = '';
+                        closeBtn.remove();
+                        showSection('dashboard'); // Go back to dashboard
+                        console.log('🔄 Super test closed, returned to dashboard');
+                    };
+                    document.body.appendChild(closeBtn);
+                }
+
+                console.log('🔴 Navigation Editor is now FULL SCREEN RED! If you don\'t see it, there\'s a deeper issue.');
+
+                // Add some diagnostic text
+                const diagnosticDiv = document.createElement('div');
+                diagnosticDiv.innerHTML = `
+                    <h1>🔴 SUPER TEST MODE ACTIVE</h1>
+                    <p>Navigation Editor ID: ${navEditor.id}</p>
+                    <p>Display: ${navEditor.style.display}</p>
+                    <p>Position: ${navEditor.style.position}</p>
+                    <p>Z-Index: ${navEditor.style.zIndex}</p>
+                    <p>Background: ${navEditor.style.backgroundColor}</p>
+                    <p>If you can see this text, the Navigation Editor element exists and is working!</p>
+                `;
+                navEditor.insertBefore(diagnosticDiv, navEditor.firstChild);
+
+            } else {
+                console.log('❌ Navigation Editor element not found!');
+                alert('ERROR: Navigation Editor element (#nav-editor) not found in the DOM!');
+            }
+
+            return 'Super test activated! Navigation Editor should be FULL SCREEN RED.';
+        };        // Container-specific fix for Navigation Editor
+        window.fixNavContainer = function() {
+            console.log('🔧 FIXING Navigation Editor container issues...');
+
+            const navEditor = document.getElementById('nav-editor');
+            if (!navEditor) {
+                console.error('❌ Navigation Editor element not found!');
+                return false;
+            }
+
+            // Hide all other sections
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.style.display = 'none';
+            });
+
+            // Remove nav-editor from any problematic parent containers
+            const parent = navEditor.parentElement;
+            console.log('Current parent:', parent);
+
+            // If it's inside tab-content, move it out
+            if (parent && parent.classList.contains('tab-content')) {
+                console.log('⚠️ Found nav-editor inside tab-content, moving it...');
+                const contentArea = document.querySelector('.content-area');
+                if (contentArea) {
+                    contentArea.appendChild(navEditor);
+                    console.log('✅ Moved nav-editor to content-area');
+                }
+            }
+
+            // Force proper styling for the container
+            navEditor.style.cssText = `
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                position: static !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 600px !important;
+                min-width: 800px !important;
+                max-width: none !important;
+                max-height: none !important;
+                padding: 30px !important;
+                margin: 20px 0 !important;
+                background-color: #f0f8ff !important;
+                border: 5px solid #ff0000 !important;
+                border-radius: 10px !important;
+                box-sizing: border-box !important;
+                overflow: visible !important;
+                z-index: 1 !important;
+                flex: none !important;
+                transform: none !important;
+                left: auto !important;
+                top: auto !important;
+                right: auto !important;
+                bottom: auto !important;
+            `;
+
+            // Force all child elements to be visible
+            const children = navEditor.querySelectorAll('*');
+            children.forEach(child => {
+                child.style.display = child.style.display === 'none' ? 'none' : 'block';
+                child.style.visibility = 'visible';
+                child.style.opacity = '1';
+            });
+
+            // Add active class
+            navEditor.classList.add('active');
+
+            // Force scroll to it
+            setTimeout(() => {
+                navEditor.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+
+                console.log('✅ Navigation Editor container fixed and should be visible!');
+                console.log('📐 New bounding rect:', navEditor.getBoundingClientRect());
+
+                // Add a big obvious header
+                const header = document.createElement('div');
+                header.style.cssText = `
+                    background: yellow !important;
+                    color: red !important;
+                    font-size: 32px !important;
+                    padding: 20px !important;
+                    text-align: center !important;
+                    border: 5px solid black !important;
+                    margin: 0 0 20px 0 !important;
+                `;
+                header.innerHTML = '🎯 NAVIGATION EDITOR IS NOW FIXED AND VISIBLE!';
+                navEditor.insertBefore(header, navEditor.firstChild);
+
+            }, 300);
+
+            // Initialize if needed
+            if (typeof initializeNavigationEditor === 'function') {
+                initializeNavigationEditor();
+            }
+
+            return true;
+        };
+
+        // Diagnostic function to check container structure
+        window.diagnoseNavEditor = function() {
+            console.log('🔍 DIAGNOSING Navigation Editor container structure...');
+
+            const navEditor = document.getElementById('nav-editor');
+            if (!navEditor) {
+                console.error('❌ Navigation Editor not found');
+                return;
+            }
+
+            console.log('📍 Navigation Editor element:', navEditor);
+            console.log('📦 Parent element:', navEditor.parentElement);
+            console.log('📦 Parent class:', navEditor.parentElement?.className);
+            console.log('📦 Parent computed styles:', {
+                display: window.getComputedStyle(navEditor.parentElement).display,
+                overflow: window.getComputedStyle(navEditor.parentElement).overflow,
+                height: window.getComputedStyle(navEditor.parentElement).height,
+                maxHeight: window.getComputedStyle(navEditor.parentElement).maxHeight,
+                position: window.getComputedStyle(navEditor.parentElement).position
+            });
+
+            console.log('📐 Navigation Editor bounding rect:', navEditor.getBoundingClientRect());
+            console.log('📐 Parent bounding rect:', navEditor.parentElement.getBoundingClientRect());
+
+            console.log('📊 Navigation Editor computed styles:', {
+                display: window.getComputedStyle(navEditor).display,
+                visibility: window.getComputedStyle(navEditor).visibility,
+                opacity: window.getComputedStyle(navEditor).opacity,
+                position: window.getComputedStyle(navEditor).position,
+                zIndex: window.getComputedStyle(navEditor).zIndex,
+                top: window.getComputedStyle(navEditor).top,
+                left: window.getComputedStyle(navEditor).left,
+                transform: window.getComputedStyle(navEditor).transform
+            });
+
+            // Check all content sections
+            console.log('📋 All content sections:');
+            document.querySelectorAll('.content-section').forEach((section, index) => {
+                const rect = section.getBoundingClientRect();
+                console.log(`${index + 1}. ${section.id}: display=${window.getComputedStyle(section).display}, bounds=${rect.width}x${rect.height} at ${rect.top},${rect.left}`);
+            });
+
+            // Check viewport
+            console.log('🖥️ Viewport info:', {
+                innerWidth: window.innerWidth,
+                innerHeight: window.innerHeight,
+                scrollX: window.scrollX,
+                scrollY: window.scrollY,
+                documentHeight: document.documentElement.scrollHeight
+            });
+
+            return 'Diagnosis complete - check console for detailed info';
+        };
+
+        // Ultimate Navigation Editor Test - Force it to appear exactly where dashboard is
+        window.ultimateNavTest = function() {
+            console.log('🎯 ULTIMATE TEST: Replacing dashboard with Navigation Editor content');
+
+            // Find the dashboard section
+            const dashboard = document.getElementById('dashboard');
+            const navEditor = document.getElementById('nav-editor');
+
+            if (!dashboard || !navEditor) {
+                console.error('❌ Required elements not found');
+                return false;
+            }
+
+            console.log('Dashboard element:', dashboard);
+            console.log('Nav Editor element:', navEditor);
+
+            // Clone the nav-editor content
+            const navEditorClone = navEditor.cloneNode(true);
+            navEditorClone.id = 'nav-editor-clone';
+            navEditorClone.style.display = 'block';
+            navEditorClone.style.visibility = 'visible';
+            navEditorClone.style.opacity = '1';
+            navEditorClone.style.position = 'static';
+            navEditorClone.style.backgroundColor = '#ffffcc';
+            navEditorClone.style.border = '5px solid #ff0000';
+            navEditorClone.style.padding = '20px';
+            navEditorClone.style.margin = '20px 0';
+
+            // Add a header to make it obvious
+            const header = document.createElement('div');
+            header.innerHTML = '<h1 style="color: red; background: yellow; padding: 20px; text-align: center; border: 3px solid black;">🎯 NAVIGATION EDITOR CLONE - If you see this, the content exists!</h1>';
+            navEditorClone.insertBefore(header, navEditorClone.firstChild);
+
+            // Replace dashboard content with nav editor clone
+            dashboard.innerHTML = '';
+            dashboard.appendChild(navEditorClone);
+
+            console.log('✅ Navigation Editor content cloned into dashboard section');
+            console.log('Dashboard new content:', dashboard.innerHTML.substring(0, 500) + '...');
+
+            // Also show the original nav-editor with extreme styling
+            navEditor.style.display = 'block';
+            navEditor.style.backgroundColor = '#ff0000';
+            navEditor.style.color = 'white';
+            navEditor.style.padding = '50px';
+            navEditor.style.margin = '50px 0';
+            navEditor.style.border = '10px solid #000000';
+            navEditor.style.fontSize = '18px';
+
+            console.log('🎯 Both dashboard replacement AND original nav-editor should now be visible');
+
+            return 'Ultimate test complete! Check both dashboard area and scroll down.';
+        };
+
+        // Direct fix for Navigation Editor visibility
+        window.fixNavEditor = function() {
+            console.log('🔧 FIXING Navigation Editor positioning and visibility...');
+
+            const navEditor = document.getElementById('nav-editor');
+            if (!navEditor) {
+                console.error('❌ Navigation Editor element not found!');
+                return false;
+            }
+
+            // Hide all other sections
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.style.display = 'none';
+            });
+
+            // Show and fix nav-editor
+            navEditor.style.display = 'block';
+            navEditor.style.visibility = 'visible';
+            navEditor.style.opacity = '1';
+            navEditor.style.position = 'static';
+            navEditor.style.transform = 'none';
+            navEditor.style.left = 'auto';
+            navEditor.style.top = 'auto';
+            navEditor.style.right = 'auto';
+            navEditor.style.bottom = 'auto';
+            navEditor.style.width = '100%';
+            navEditor.style.height = 'auto';
+            navEditor.style.maxWidth = 'none';
+            navEditor.style.maxHeight = 'none';
+            navEditor.style.overflow = 'visible';
+            navEditor.style.zIndex = '1';
+            navEditor.style.margin = '20px 0';
+            navEditor.style.padding = '20px';
+            navEditor.style.backgroundColor = '#f8f9fa';
+            navEditor.style.border = '3px solid #007bff';
+            navEditor.style.borderRadius = '8px';
+
+            // Add active class
+            navEditor.classList.add('active');
+
+            // Force scroll to it
+            setTimeout(() => {
+                navEditor.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+
+                // Add temporary red flash to make it obvious
+                const flash = document.createElement('div');
+                flash.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: rgba(255, 0, 0, 0.3);
+                    z-index: 10;
+                    animation: flash 2s ease-out;
+                    pointer-events: none;
+                `;
+                navEditor.style.position = 'relative';
+                navEditor.appendChild(flash);
+
+                setTimeout(() => {
+                    flash.remove();
+                }, 2000);
+
+                console.log('✅ Navigation Editor should now be visible with a red flash!');
+            }, 300);
+
+            // Initialize if needed
+            if (typeof initializeNavigationEditor === 'function') {
+                initializeNavigationEditor();
+            }
+
+            return true;
+        };
+
+        // Add CSS animation for flash effect
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes flash {
+                0% { opacity: 0.7; }
+                50% { opacity: 0.3; }
+                100% { opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Ultra-simple test that bypasses all existing styles
+        window.emergencyNavTest = function() {
+            console.log('🚨 EMERGENCY TEST: Creating completely new element');
+
+            // Remove any existing test elements
+            const existing = document.querySelectorAll('.emergency-test');
+            existing.forEach(el => el.remove());
+
+            // Create a completely new element that should be impossible to miss
+            const testDiv = document.createElement('div');
+            testDiv.className = 'emergency-test';
+            testDiv.style.cssText = `
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                background-color: red !important;
+                color: white !important;
+                z-index: 999999 !important;
+                display: block !important;
+                font-size: 48px !important;
+                text-align: center !important;
+                padding: 100px !important;
+                border: 20px solid black !important;
+                box-sizing: border-box !important;
+            `;
+
+            testDiv.innerHTML = `
+                <h1>🚨 EMERGENCY TEST ACTIVE 🚨</h1>
+                <p>If you can see this, JavaScript and DOM manipulation work fine.</p>
+                <p>If you can't see this, there's a fundamental browser issue.</p>
+                <button onclick="document.querySelector('.emergency-test').remove()"
+                        style="font-size: 24px; padding: 20px; margin: 20px; background: white; color: black; border: 3px solid black; cursor: pointer;">
+                    ❌ CLOSE TEST
+                </button>
+                <br><br>
+                <p>Original Navigation Editor element exists: ${document.getElementById('nav-editor') ? 'YES' : 'NO'}</p>
+                <p>Current page URL: ${window.location.href}</p>
+                <p>Viewport size: ${window.innerWidth}x${window.innerHeight}</p>
+            `;
+
+            // Append to body (not to any existing container)
+            document.body.appendChild(testDiv);
+
+            console.log('🚨 Emergency test element created and added to body');
+            console.log('Element style:', testDiv.style.cssText);
+            console.log('Element bounds:', testDiv.getBoundingClientRect());
+
+            return 'Emergency test activated! You should see a FULL RED SCREEN immediately.';
+        };
 
     </script>
 </body>

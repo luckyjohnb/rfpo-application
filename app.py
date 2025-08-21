@@ -1,3 +1,37 @@
+# --- Auth Verification Route for Frontend ---
+@app.route('/api/auth/verify', methods=['GET'])
+def verify_auth():
+    """Verify authentication status for current user (used by frontend)"""
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'authenticated': False, 'message': 'No token provided'}), 401
+
+    if token.startswith('Bearer '):
+        token = token[7:]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+        user = user_manager.get_user_by_id(payload['user_id'])
+        if not user:
+            return jsonify({'authenticated': False, 'message': 'User not found'}), 401
+        if user.get('status') != 'active':
+            return jsonify({'authenticated': False, 'message': 'Account not active'}), 401
+        return jsonify({
+            'authenticated': True,
+            'user': {
+                'id': user['id'],
+                'username': user['username'],
+                'display_name': user.get('display_name', ''),
+                'email': user['email'],
+                'roles': user['roles']
+            }
+        })
+    except jwt.ExpiredSignatureError:
+        return jsonify({'authenticated': False, 'message': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'authenticated': False, 'message': 'Invalid token'}), 401
+    except Exception as e:
+        return jsonify({'authenticated': False, 'message': str(e)}), 401
 from flask import Flask, render_template, request, jsonify, send_file
 import os
 import sys
@@ -53,6 +87,41 @@ Migrate(app, db)
 
 # JWT Configuration
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret-change-in-production')
+
+# --- Auth Verification Route for Frontend ---
+@app.route('/api/auth/verify', methods=['GET'])
+def verify_auth():
+    """Verify authentication status for current user (used by frontend)"""
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'authenticated': False, 'message': 'No token provided'}), 401
+
+    if token.startswith('Bearer '):
+        token = token[7:]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+        user = user_manager.get_user_by_id(payload['user_id'])
+        if not user:
+            return jsonify({'authenticated': False, 'message': 'User not found'}), 401
+        if user.get('status') != 'active':
+            return jsonify({'authenticated': False, 'message': 'Account not active'}), 401
+        return jsonify({
+            'authenticated': True,
+            'user': {
+                'id': user['id'],
+                'username': user['username'],
+                'display_name': user.get('display_name', ''),
+                'email': user['email'],
+                'roles': user['roles']
+            }
+        })
+    except jwt.ExpiredSignatureError:
+        return jsonify({'authenticated': False, 'message': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'authenticated': False, 'message': 'Invalid token'}), 401
+    except Exception as e:
+        return jsonify({'authenticated': False, 'message': str(e)}), 401
 
 
 # Create necessary directories

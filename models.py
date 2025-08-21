@@ -249,24 +249,53 @@ class DocumentChunk(db.Model):
         }
 
 class Team(db.Model):
+    """Team model for managing teams within consortiums"""
     __tablename__ = 'teams'
+    
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(128), nullable=False)
-    description = db.Column(db.Text)
-    abbrev = db.Column(db.String(32), nullable=False, unique=True)
-    consortium_id = db.Column(db.Integer, db.ForeignKey('consortiums.id'), nullable=False)
-    viewer_user_ids = db.Column(db.Text)  # Comma-separated user IDs
-    limited_admin_user_ids = db.Column(db.Text)  # Comma-separated user IDs
+    name = db.Column(db.String(128), nullable=False)  # Team Name
+    description = db.Column(db.Text)  # Description
+    abbrev = db.Column(db.String(32), nullable=False, unique=True)  # Abbrev
+    
+    # Part of Consortium (optional - can be "none")
+    consortium_id = db.Column(db.Integer, db.ForeignKey('consortiums.id'), nullable=True)
+    
+    # Team-level user permissions
+    viewer_user_ids = db.Column(db.Text)  # Users who can view all RFPOs for this team
+    limited_admin_user_ids = db.Column(db.Text)  # Users with limited admin abilities on team
+    
+    # Status and audit fields
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = db.Column(db.String(64))
     updated_by = db.Column(db.String(64))
-
-    __table_args__ = (
-        db.UniqueConstraint('name', 'consortium_id', name='uq_team_name_consortium'),
-        db.UniqueConstraint('abbrev', 'consortium_id', name='uq_team_abbrev_consortium'),
-    )
+    
+    def get_viewer_users(self):
+        """Get list of viewer user IDs for this team"""
+        if self.viewer_user_ids:
+            return [uid.strip() for uid in self.viewer_user_ids.split(',') if uid.strip()]
+        return []
+    
+    def set_viewer_users(self, user_ids):
+        """Set viewer user IDs from a list"""
+        if user_ids:
+            self.viewer_user_ids = ','.join(str(uid) for uid in user_ids)
+        else:
+            self.viewer_user_ids = None
+    
+    def get_limited_admin_users(self):
+        """Get list of limited admin user IDs for this team"""
+        if self.limited_admin_user_ids:
+            return [uid.strip() for uid in self.limited_admin_user_ids.split(',') if uid.strip()]
+        return []
+    
+    def set_limited_admin_users(self, user_ids):
+        """Set limited admin user IDs from a list"""
+        if user_ids:
+            self.limited_admin_user_ids = ','.join(str(uid) for uid in user_ids)
+        else:
+            self.limited_admin_user_ids = None
 
     def to_dict(self):
         return {
@@ -277,11 +306,16 @@ class Team(db.Model):
             'consortium_id': self.consortium_id,
             'consortium_name': self.consortium.title if self.consortium else None,
             'consortium_abbrev': self.consortium.abbrev if self.consortium else None,
-            'viewer_user_ids': self.viewer_user_ids.split(',') if self.viewer_user_ids else [],
-            'limited_admin_user_ids': self.limited_admin_user_ids.split(',') if self.limited_admin_user_ids else [],
+            'viewer_user_ids': self.get_viewer_users(),
+            'limited_admin_user_ids': self.get_limited_admin_users(),
             'active': self.active,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'created_by': self.created_by,
             'updated_by': self.updated_by,
+            'rfpo_count': len(self.rfpos) if self.rfpos else 0
         }
+    
+    def __repr__(self):
+        consortium_info = f" (Consortium: {self.consortium.abbrev})" if self.consortium else " (No Consortium)"
+        return f'<Team {self.abbrev}: {self.name}{consortium_info}>'

@@ -1,0 +1,259 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Create RFPO - Stage 2 - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📄 Create RFPO - Stage 2: Basic Information</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('rfpos') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to RFPOs
+        </a>
+    </div>
+</div>
+
+<!-- Progress indicator -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="progress" style="height: 8px;">
+            <div class="progress-bar bg-primary" role="progressbar" style="width: 50%" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-2">
+            <small class="text-success">✓ 1. Select Project</small>
+            <small class="text-primary fw-bold">2. Basic Info</small>
+            <small class="text-muted">3. Line Items</small>
+            <small class="text-muted">4. Review</small>
+        </div>
+    </div>
+</div>
+
+<!-- Selected Project & Consortium Info -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card bg-light">
+            <div class="card-body py-2">
+                <small class="text-muted">Selected Consortium:</small><br>
+                <strong>{{ consortium.abbrev }} - {{ consortium.name }}</strong>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-light">
+            <div class="card-body py-2">
+                <small class="text-muted">Selected Project:</small><br>
+                <strong>[{{ project.ref }}] {{ project.name }}</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row">
+                <!-- Left Column: Basic RFPO Info -->
+                <div class="col-md-6">
+                    <h5 class="mb-3">📋 RFPO Information</h5>
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">RFPO Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="title" name="title" required
+                               placeholder="Brief description of the purchase">
+                        <div class="form-text">Clear, concise title for this purchase order</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Detailed description of the purchase"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="government_agreement_number" class="form-label">Government Agreement Number</label>
+                        <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number">
+                        <div class="form-text">If applicable, reference number for government agreements</div>
+                    </div>
+                    
+                    <h5 class="mb-3 mt-4">📞 Requestor Information</h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Requestor</label>
+                        <input type="text" class="form-control" value="{{ current_user.get_display_name() }}" readonly>
+                        <div class="form-text">Current logged-in user</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="requestor_tel" class="form-label">Requestor Phone <span class="text-danger">*</span></label>
+                        <input type="tel" class="form-control" id="requestor_tel" name="requestor_tel" required
+                               value="{{ current_user_data.requestor_tel }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="requestor_location" class="form-label">Requestor Location <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="requestor_location" name="requestor_location" rows="2" required>{{ current_user_data.requestor_location }}</textarea>
+                    </div>
+                </div>
+                
+                <!-- Right Column: Shipping & Delivery -->
+                <div class="col-md-6">
+                    <h5 class="mb-3">📦 Shipping Information</h5>
+                    
+                    <div class="mb-3">
+                        <label for="shipto_name" class="form-label">Ship to Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="shipto_name" name="shipto_name" required
+                               value="{{ current_user_data.shipto_name }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="shipto_tel" class="form-label">Ship to Phone <span class="text-danger">*</span></label>
+                        <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="shipto_address" class="form-label">Ship to Address <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="shipto_address" name="shipto_address" rows="3" required>{{ current_user_data.shipto_address }}</textarea>
+                    </div>
+                    
+                    <h5 class="mb-3 mt-4">🚚 Delivery Information</h5>
+                    
+                    <div class="mb-3">
+                        <label for="delivery_date" class="form-label">Delivery Date</label>
+                        <input type="date" class="form-control" id="delivery_date" name="delivery_date">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="delivery_type" class="form-label">Delivery Type <span class="text-danger">*</span></label>
+                                <select class="form-select" id="delivery_type" name="delivery_type" required>
+                                    <option value="">-- Select type --</option>
+                                    <option value="FOB Seller's Plant">FOB Seller's Plant</option>
+                                    <option value="FOB Destination" selected>FOB Destination</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="delivery_payment" class="form-label">Payment <span class="text-danger">*</span></label>
+                                <select class="form-select" id="delivery_payment" name="delivery_payment" required>
+                                    <option value="">-- Select payment --</option>
+                                    <option value="Collect">Collect</option>
+                                    <option value="Prepaid" selected>Prepaid</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="delivery_routing" class="form-label">Routing <span class="text-danger">*</span></label>
+                                <select class="form-select" id="delivery_routing" name="delivery_routing" required>
+                                    <option value="">-- Select routing --</option>
+                                    <option value="Buyer's traffic" selected>Buyer's traffic</option>
+                                    <option value="Seller's traffic">Seller's traffic</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="payment_terms" class="form-label">Payment Terms</label>
+                                <select class="form-select" id="payment_terms" name="payment_terms">
+                                    <option value="Net 30" selected>Net 30</option>
+                                    <option value="Net 30th Prox">Net 30th Prox</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Vendor Selection (Optional) -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3">🏢 Vendor Selection (Optional)</h5>
+                    <p class="text-muted">You can select a vendor now or add it later when editing the RFPO.</p>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="vendor_id" class="form-label">Vendor</label>
+                                <select class="form-select" id="vendor_id" name="vendor_id" onchange="loadVendorSites()">
+                                    <option value="">-- Select approved vendor (optional) --</option>
+                                    {% for vendor in vendors %}
+                                    <option value="{{ vendor.id }}">{{ vendor.company_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="vendor_site_id" class="form-label">Vendor Contact/Site</label>
+                                <select class="form-select" id="vendor_site_id" name="vendor_site_id" disabled>
+                                    <option value="">-- Select vendor first --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('rfpo_create_stage1') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Project Selection
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            Create RFPO & Add Line Items <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function loadVendorSites() {
+    const vendorSelect = document.getElementById('vendor_id');
+    const siteSelect = document.getElementById('vendor_site_id');
+    
+    const vendorId = vendorSelect.value;
+    
+    if (!vendorId) {
+        siteSelect.disabled = true;
+        siteSelect.innerHTML = '<option value="">-- Select vendor first --</option>';
+        return;
+    }
+    
+    // Show loading
+    siteSelect.disabled = true;
+    siteSelect.innerHTML = '<option value="">Loading contacts...</option>';
+    
+    // Fetch sites for the selected vendor
+    fetch(`/api/vendor-sites/${vendorId}`)
+        .then(response => response.json())
+        .then(sites => {
+            siteSelect.innerHTML = '<option value="">-- Select contact/site (optional) --</option>';
+            
+            sites.forEach(site => {
+                const option = document.createElement('option');
+                option.value = site.id;
+                option.textContent = `${site.contact_name} - ${site.contact_city}, ${site.contact_state}`;
+                siteSelect.appendChild(option);
+            });
+            
+            siteSelect.disabled = false;
+            
+            if (sites.length === 0) {
+                siteSelect.innerHTML = '<option value="">No contacts available for this vendor</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading vendor sites:', error);
+            siteSelect.innerHTML = '<option value="">Error loading contacts</option>';
+        });
+}
+</script>
+{% endblock %}

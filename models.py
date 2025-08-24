@@ -116,13 +116,55 @@ class RFPO(db.Model):
     __tablename__ = 'rfpos'
     
     id = db.Column(db.Integer, primary_key=True)
-    rfpo_id = db.Column(db.String(64), unique=True, nullable=False)  # e.g., RFPO-001
+    rfpo_id = db.Column(db.String(64), unique=True, nullable=False)  # e.g., RFPO-TestProj3-2025-08-24-N01
     title = db.Column(db.String(256), nullable=False)
     description = db.Column(db.Text)
-    vendor = db.Column(db.String(128))
-    due_date = db.Column(db.Date)
-    status = db.Column(db.String(32), default='Draft')  # Draft, In Progress, Completed, etc.
+    
+    # Project and Team associations
+    project_id = db.Column(db.String(32), nullable=False)  # Project ID this RFPO belongs to
+    consortium_id = db.Column(db.String(32), nullable=False)  # Consortium ID
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    
+    # Government Agreement
+    government_agreement_number = db.Column(db.String(255))
+    
+    # Requestor Information
+    requestor_id = db.Column(db.String(32), nullable=False)  # User ID of requestor
+    requestor_tel = db.Column(db.String(50))
+    requestor_location = db.Column(db.Text)
+    
+    # Shipping Information
+    shipto_name = db.Column(db.String(255))
+    shipto_tel = db.Column(db.String(50))
+    shipto_address = db.Column(db.Text)
+    
+    # Invoice Information
+    invoice_address = db.Column(db.Text)
+    
+    # Delivery Information
+    delivery_date = db.Column(db.Date)
+    delivery_type = db.Column(db.String(100))  # FOB Seller's Plant, FOB Destination
+    delivery_payment = db.Column(db.String(100))  # Collect, Prepaid
+    delivery_routing = db.Column(db.String(100))  # Buyer's traffic, Seller's traffic
+    payment_terms = db.Column(db.String(100), default='Net 30')
+    
+    # Vendor Information
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'))
+    vendor_site_id = db.Column(db.Integer, db.ForeignKey('vendor_sites.id'))
+    
+    # Financial Information
+    subtotal = db.Column(db.Numeric(12, 2), default=0.00)
+    cost_share_description = db.Column(db.String(255))
+    cost_share_type = db.Column(db.String(20), default='total')  # 'total' or 'percent'
+    cost_share_amount = db.Column(db.Numeric(12, 2), default=0.00)
+    total_amount = db.Column(db.Numeric(12, 2), default=0.00)
+    
+    # Optional Comments (not included in RFPO)
+    comments = db.Column(db.Text)
+    
+    # Status and tracking
+    status = db.Column(db.String(32), default='Draft')  # Draft, Submitted, Approved, etc.
+    due_date = db.Column(db.Date)
     created_by = db.Column(db.String(64), nullable=False)
     updated_by = db.Column(db.String(64))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -130,7 +172,10 @@ class RFPO(db.Model):
     
     # Relationships
     team = db.relationship('Team', backref=db.backref('rfpos', lazy=True))
+    vendor = db.relationship('Vendor', backref=db.backref('rfpos', lazy=True))
+    vendor_site = db.relationship('VendorSite', backref=db.backref('rfpos', lazy=True))
     files = db.relationship('UploadedFile', backref='rfpo', lazy=True, cascade='all, delete-orphan')
+    line_items = db.relationship('RFPOLineItem', backref='rfpo', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
         return {
@@ -138,16 +183,97 @@ class RFPO(db.Model):
             'rfpo_id': self.rfpo_id,
             'title': self.title,
             'description': self.description,
-            'vendor': self.vendor,
-            'due_date': self.due_date.isoformat() if self.due_date else None,
-            'status': self.status,
+            'project_id': self.project_id,
+            'consortium_id': self.consortium_id,
             'team_id': self.team_id,
+            'government_agreement_number': self.government_agreement_number,
+            'requestor_id': self.requestor_id,
+            'requestor_tel': self.requestor_tel,
+            'requestor_location': self.requestor_location,
+            'shipto_name': self.shipto_name,
+            'shipto_tel': self.shipto_tel,
+            'shipto_address': self.shipto_address,
+            'invoice_address': self.invoice_address,
+            'delivery_date': self.delivery_date.isoformat() if self.delivery_date else None,
+            'delivery_type': self.delivery_type,
+            'delivery_payment': self.delivery_payment,
+            'delivery_routing': self.delivery_routing,
+            'payment_terms': self.payment_terms,
+            'vendor_id': self.vendor_id,
+            'vendor_site_id': self.vendor_site_id,
+            'vendor_name': self.vendor.company_name if self.vendor else None,
+            'subtotal': float(self.subtotal) if self.subtotal else 0.00,
+            'cost_share_description': self.cost_share_description,
+            'cost_share_type': self.cost_share_type,
+            'cost_share_amount': float(self.cost_share_amount) if self.cost_share_amount else 0.00,
+            'total_amount': float(self.total_amount) if self.total_amount else 0.00,
+            'comments': self.comments,
+            'status': self.status,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
             'created_by': self.created_by,
             'updated_by': self.updated_by,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'file_count': len(self.files) if self.files else 0
+            'file_count': len(self.files) if self.files else 0,
+            'line_item_count': len(self.line_items) if self.line_items else 0
         }
+
+class RFPOLineItem(db.Model):
+    """Line items for RFPO purchase orders"""
+    __tablename__ = 'rfpo_line_items'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    rfpo_id = db.Column(db.Integer, db.ForeignKey('rfpos.id'), nullable=False)
+    line_number = db.Column(db.Integer, nullable=False)  # Order in the RFPO (1, 2, 3...)
+    
+    # Line item details
+    quantity = db.Column(db.Integer, default=0)
+    description = db.Column(db.Text, nullable=False)
+    unit_price = db.Column(db.Numeric(12, 2), default=0.00)
+    total_price = db.Column(db.Numeric(12, 2), default=0.00)
+    
+    # Capital Equipment Information (optional)
+    is_capital_equipment = db.Column(db.Boolean, default=False)
+    capital_description = db.Column(db.String(255))
+    capital_serial_id = db.Column(db.String(100))
+    capital_location = db.Column(db.String(255))
+    capital_acquisition_date = db.Column(db.Date)
+    capital_condition = db.Column(db.String(255))
+    capital_acquisition_cost = db.Column(db.Numeric(12, 2))
+    
+    # Audit fields
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def calculate_total(self):
+        """Calculate total price from quantity and unit price"""
+        if self.quantity and self.unit_price:
+            self.total_price = self.quantity * self.unit_price
+        else:
+            self.total_price = 0.00
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'rfpo_id': self.rfpo_id,
+            'line_number': self.line_number,
+            'quantity': self.quantity,
+            'description': self.description,
+            'unit_price': float(self.unit_price) if self.unit_price else 0.00,
+            'total_price': float(self.total_price) if self.total_price else 0.00,
+            'is_capital_equipment': self.is_capital_equipment,
+            'capital_description': self.capital_description,
+            'capital_serial_id': self.capital_serial_id,
+            'capital_location': self.capital_location,
+            'capital_acquisition_date': self.capital_acquisition_date.isoformat() if self.capital_acquisition_date else None,
+            'capital_condition': self.capital_condition,
+            'capital_acquisition_cost': float(self.capital_acquisition_cost) if self.capital_acquisition_cost else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def __repr__(self):
+        return f'<RFPOLineItem {self.line_number}: {self.description[:50]}... ({self.quantity} @ ${self.unit_price})>'
 
 class UploadedFile(db.Model):
     """Uploaded files associated with RFPOs"""

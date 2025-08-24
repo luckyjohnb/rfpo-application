@@ -1,0 +1,571 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Edit RFPO {{ rfpo.rfpo_id }} - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📄 Edit RFPO: {{ rfpo.rfpo_id }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('rfpos') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<!-- RFPO Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body py-2">
+                <small class="text-muted">RFPO ID:</small><br>
+                <strong>{{ rfpo.rfpo_id }}</strong>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body py-2">
+                <small class="text-muted">Project:</small><br>
+                <strong>[{{ project.ref if project }}] {{ project.name if project else 'Unknown' }}</strong>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body py-2">
+                <small class="text-muted">Consortium:</small><br>
+                <strong>{{ consortium.abbrev if consortium else 'Unknown' }}</strong>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body py-2">
+                <small class="text-muted">Total Amount:</small><br>
+                <strong class="text-success">${{ "%.2f"|format(rfpo.total_amount) }}</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Tabs -->
+<ul class="nav nav-tabs" id="rfpoTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="line-items-tab" data-bs-toggle="tab" data-bs-target="#line-items" type="button" role="tab">
+            📝 Line Items ({{ rfpo.line_items|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="basic-info-tab" data-bs-toggle="tab" data-bs-target="#basic-info" type="button" role="tab">
+            📋 Basic Information
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="shipping-tab" data-bs-toggle="tab" data-bs-target="#shipping" type="button" role="tab">
+            📦 Shipping & Delivery
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="vendor-tab" data-bs-toggle="tab" data-bs-target="#vendor" type="button" role="tab">
+            🏢 Vendor Information
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="rfpoTabContent">
+    <!-- Line Items Tab -->
+    <div class="tab-pane fade show active" id="line-items" role="tabpanel">
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📝 Line Items</h5>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addLineItemModal">
+                    <i class="fas fa-plus"></i> Add Line Item
+                </button>
+            </div>
+            <div class="card-body">
+                {% if rfpo.line_items %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Qty</th>
+                                <th>Description</th>
+                                <th>Unit Price</th>
+                                <th>Total</th>
+                                <th>Capital</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in rfpo.line_items|sort(attribute='line_number') %}
+                            <tr>
+                                <td>{{ item.line_number }}</td>
+                                <td>{{ item.quantity }}</td>
+                                <td>
+                                    {{ item.description }}
+                                    {% if item.is_capital_equipment %}
+                                    <br><small class="text-info"><i class="fas fa-tools"></i> Capital Equipment</small>
+                                    {% endif %}
+                                </td>
+                                <td>${{ "%.2f"|format(item.unit_price) }}</td>
+                                <td class="fw-bold">${{ "%.2f"|format(item.total_price) }}</td>
+                                <td>
+                                    {% if item.is_capital_equipment %}
+                                    <span class="badge bg-warning">YES</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">NO</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('rfpo_delete_line_item', rfpo_id=rfpo.id, line_item_id=item.id) }}" 
+                                          style="display: inline;" onsubmit="return confirm('Delete this line item?')">
+                                        <button type="submit" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-info">
+                                <td colspan="4" class="text-end"><strong>Subtotal:</strong></td>
+                                <td class="fw-bold">${{ "%.2f"|format(rfpo.subtotal) }}</td>
+                                <td colspan="2"></td>
+                            </tr>
+                            {% if rfpo.cost_share_amount and rfpo.cost_share_amount > 0 %}
+                            <tr class="table-warning">
+                                <td colspan="4" class="text-end">
+                                    <strong>Vendor Cost Share:</strong><br>
+                                    <small>{{ rfpo.cost_share_description }}</small>
+                                </td>
+                                <td class="fw-bold">-${{ "%.2f"|format(rfpo.cost_share_amount) }}</td>
+                                <td colspan="2"></td>
+                            </tr>
+                            {% endif %}
+                            <tr class="table-success">
+                                <td colspan="4" class="text-end"><strong>Net Total:</strong></td>
+                                <td class="fw-bold fs-5">${{ "%.2f"|format(rfpo.total_amount) }}</td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No line items yet</h5>
+                    <p class="text-muted">Click "Add Line Item" to add purchase items to this RFPO.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Basic Information Tab -->
+    <div class="tab-pane fade" id="basic-info" role="tabpanel">
+        <div class="card mt-3">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">📋 RFPO Information</h5>
+                            
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="title" name="title" 
+                                       value="{{ rfpo.title }}" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Description</label>
+                                <textarea class="form-control" id="description" name="description" rows="3">{{ rfpo.description or '' }}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="government_agreement_number" class="form-label">Government Agreement Number</label>
+                                <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number" 
+                                       value="{{ rfpo.government_agreement_number or '' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="status" class="form-label">Status</label>
+                                <select class="form-select" id="status" name="status">
+                                    <option value="Draft" {{ 'selected' if rfpo.status == 'Draft' }}>Draft</option>
+                                    <option value="Submitted" {{ 'selected' if rfpo.status == 'Submitted' }}>Submitted</option>
+                                    <option value="In Review" {{ 'selected' if rfpo.status == 'In Review' }}>In Review</option>
+                                    <option value="Approved" {{ 'selected' if rfpo.status == 'Approved' }}>Approved</option>
+                                    <option value="Rejected" {{ 'selected' if rfpo.status == 'Rejected' }}>Rejected</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h5 class="mb-3">📞 Requestor Information</h5>
+                            
+                            <div class="mb-3">
+                                <label for="requestor_tel" class="form-label">Requestor Phone</label>
+                                <input type="tel" class="form-control" id="requestor_tel" name="requestor_tel" 
+                                       value="{{ rfpo.requestor_tel or '' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="requestor_location" class="form-label">Requestor Location</label>
+                                <textarea class="form-control" id="requestor_location" name="requestor_location" rows="2">{{ rfpo.requestor_location or '' }}</textarea>
+                            </div>
+                            
+                            <h5 class="mb-3 mt-4">💰 Cost Sharing</h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="cost_share_amount" class="form-label">Cost Share Amount ($)</label>
+                                        <input type="number" step="0.01" class="form-control" id="cost_share_amount" name="cost_share_amount" 
+                                               value="{{ rfpo.cost_share_amount or '' }}">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="cost_share_type" class="form-label">Cost Share Type</label>
+                                        <select class="form-select" id="cost_share_type" name="cost_share_type">
+                                            <option value="total" {{ 'selected' if rfpo.cost_share_type == 'total' }}>Total Dollars</option>
+                                            <option value="percent" {{ 'selected' if rfpo.cost_share_type == 'percent' }}>Percentage</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="cost_share_description" class="form-label">Cost Share Description</label>
+                                <input type="text" class="form-control" id="cost_share_description" name="cost_share_description" 
+                                       value="{{ rfpo.cost_share_description or '' }}" placeholder="e.g., Vendor contribution">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="comments" class="form-label">Optional Comments</label>
+                                <textarea class="form-control" id="comments" name="comments" rows="3" 
+                                          placeholder="Comments not included in RFPO">{{ rfpo.comments or '' }}</textarea>
+                                <div class="form-text">These comments are for internal use only and will not appear on the RFPO.</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Shipping Tab -->
+    <div class="tab-pane fade" id="shipping" role="tabpanel">
+        <div class="card mt-3">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">📦 Shipping Information</h5>
+                            
+                            <div class="mb-3">
+                                <label for="shipto_name" class="form-label">Ship to Name</label>
+                                <input type="text" class="form-control" id="shipto_name" name="shipto_name" 
+                                       value="{{ rfpo.shipto_name or '' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="shipto_tel" class="form-label">Ship to Phone</label>
+                                <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" 
+                                       value="{{ rfpo.shipto_tel or '' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="shipto_address" class="form-label">Ship to Address</label>
+                                <textarea class="form-control" id="shipto_address" name="shipto_address" rows="3">{{ rfpo.shipto_address or '' }}</textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h5 class="mb-3">🚚 Delivery Information</h5>
+                            
+                            <div class="mb-3">
+                                <label for="delivery_date" class="form-label">Delivery Date</label>
+                                <input type="date" class="form-control" id="delivery_date" name="delivery_date" 
+                                       value="{{ rfpo.delivery_date.strftime('%Y-%m-%d') if rfpo.delivery_date else '' }}">
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="delivery_type" class="form-label">Delivery Type</label>
+                                        <select class="form-select" id="delivery_type" name="delivery_type">
+                                            <option value="">-- Select --</option>
+                                            <option value="FOB Seller's Plant" {{ 'selected' if rfpo.delivery_type == "FOB Seller's Plant" }}>FOB Seller's Plant</option>
+                                            <option value="FOB Destination" {{ 'selected' if rfpo.delivery_type == 'FOB Destination' }}>FOB Destination</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="delivery_payment" class="form-label">Payment</label>
+                                        <select class="form-select" id="delivery_payment" name="delivery_payment">
+                                            <option value="">-- Select --</option>
+                                            <option value="Collect" {{ 'selected' if rfpo.delivery_payment == 'Collect' }}>Collect</option>
+                                            <option value="Prepaid" {{ 'selected' if rfpo.delivery_payment == 'Prepaid' }}>Prepaid</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="delivery_routing" class="form-label">Routing</label>
+                                        <select class="form-select" id="delivery_routing" name="delivery_routing">
+                                            <option value="">-- Select --</option>
+                                            <option value="Buyer's traffic" {{ 'selected' if rfpo.delivery_routing == "Buyer's traffic" }}>Buyer's traffic</option>
+                                            <option value="Seller's traffic" {{ 'selected' if rfpo.delivery_routing == "Seller's traffic" }}>Seller's traffic</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="payment_terms" class="form-label">Payment Terms</label>
+                                        <select class="form-select" id="payment_terms" name="payment_terms">
+                                            <option value="Net 30" {{ 'selected' if rfpo.payment_terms == 'Net 30' }}>Net 30</option>
+                                            <option value="Net 30th Prox" {{ 'selected' if rfpo.payment_terms == 'Net 30th Prox' }}>Net 30th Prox</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Vendor Tab -->
+    <div class="tab-pane fade" id="vendor" role="tabpanel">
+        <div class="card mt-3">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">🏢 Vendor Selection</h5>
+                            
+                            <div class="mb-3">
+                                <label for="vendor_id" class="form-label">Vendor</label>
+                                <select class="form-select" id="vendor_id" name="vendor_id" onchange="loadVendorSites()">
+                                    <option value="">-- Select vendor --</option>
+                                    {% for vendor in vendors %}
+                                    <option value="{{ vendor.id }}" {{ 'selected' if rfpo.vendor_id == vendor.id }}>
+                                        {{ vendor.company_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="vendor_site_id" class="form-label">Vendor Contact/Site</label>
+                                <select class="form-select" id="vendor_site_id" name="vendor_site_id">
+                                    <option value="">-- Select vendor first --</option>
+                                    {% if rfpo.vendor_site %}
+                                    <option value="{{ rfpo.vendor_site.id }}" selected>
+                                        {{ rfpo.vendor_site.contact_name }} - {{ rfpo.vendor_site.contact_city }}, {{ rfpo.vendor_site.contact_state }}
+                                    </option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            {% if rfpo.vendor %}
+                            <h5 class="mb-3">📋 Current Vendor Information</h5>
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6>{{ rfpo.vendor.company_name }}</h6>
+                                    {% if rfpo.vendor_site %}
+                                    <p class="mb-1"><strong>Contact:</strong> {{ rfpo.vendor_site.contact_name }}</p>
+                                    {% if rfpo.vendor_site.contact_dept %}
+                                    <p class="mb-1"><strong>Department:</strong> {{ rfpo.vendor_site.contact_dept }}</p>
+                                    {% endif %}
+                                    <p class="mb-1"><strong>Phone:</strong> {{ rfpo.vendor_site.contact_tel }}</p>
+                                    <p class="mb-0"><strong>Address:</strong></p>
+                                    <address class="mb-0">{{ rfpo.vendor_site.get_full_contact_address()|replace('\n', '<br>')|safe }}</address>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Line Item Modal -->
+<div class="modal fade" id="addLineItemModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">➕ Add Line Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('rfpo_add_line_item', rfpo_id=rfpo.id) }}">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quantity" class="form-label">Quantity <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="quantity" name="quantity" min="1" value="1" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="description" name="description" rows="3" required
+                                          placeholder="Detailed description of the item or service"></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="unit_price" class="form-label">Unit Price ($) <span class="text-danger">*</span></label>
+                                <input type="number" step="0.01" class="form-control" id="unit_price" name="unit_price" min="0" required>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="is_capital_equipment" name="is_capital_equipment" 
+                                           onchange="toggleCapitalFields()">
+                                    <label class="form-check-label" for="is_capital_equipment">
+                                        <strong>Capital Equipment</strong>
+                                    </label>
+                                </div>
+                                <small class="form-text text-muted">Check if this is capital equipment requiring tracking</small>
+                            </div>
+                            
+                            <div id="capitalFields" style="display: none;">
+                                <div class="mb-3">
+                                    <label for="capital_description" class="form-label">Capital Description</label>
+                                    <input type="text" class="form-control" id="capital_description" name="capital_description">
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="capital_serial_id" class="form-label">Serial/ID No.</label>
+                                            <input type="text" class="form-control" id="capital_serial_id" name="capital_serial_id">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="capital_acquisition_date" class="form-label">Acquisition Date</label>
+                                            <input type="date" class="form-control" id="capital_acquisition_date" name="capital_acquisition_date">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="capital_location" class="form-label">Location</label>
+                                            <input type="text" class="form-control" id="capital_location" name="capital_location">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="capital_condition" class="form-label">Condition</label>
+                                            <input type="text" class="form-control" id="capital_condition" name="capital_condition">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="capital_acquisition_cost" class="form-label">Acquisition Cost ($)</label>
+                                    <input type="number" step="0.01" class="form-control" id="capital_acquisition_cost" name="capital_acquisition_cost">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Line Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleCapitalFields() {
+    const checkbox = document.getElementById('is_capital_equipment');
+    const fields = document.getElementById('capitalFields');
+    fields.style.display = checkbox.checked ? 'block' : 'none';
+}
+
+function loadVendorSites() {
+    const vendorSelect = document.getElementById('vendor_id');
+    const siteSelect = document.getElementById('vendor_site_id');
+    
+    const vendorId = vendorSelect.value;
+    
+    if (!vendorId) {
+        siteSelect.disabled = true;
+        siteSelect.innerHTML = '<option value="">-- Select vendor first --</option>';
+        return;
+    }
+    
+    // Show loading
+    siteSelect.disabled = true;
+    siteSelect.innerHTML = '<option value="">Loading contacts...</option>';
+    
+    // Fetch sites for the selected vendor
+    fetch(`/api/vendor-sites/${vendorId}`)
+        .then(response => response.json())
+        .then(sites => {
+            siteSelect.innerHTML = '<option value="">-- Select contact/site (optional) --</option>';
+            
+            sites.forEach(site => {
+                const option = document.createElement('option');
+                option.value = site.id;
+                option.textContent = `${site.contact_name} - ${site.contact_city}, ${site.contact_state}`;
+                siteSelect.appendChild(option);
+            });
+            
+            siteSelect.disabled = false;
+            
+            if (sites.length === 0) {
+                siteSelect.innerHTML = '<option value="">No contacts available for this vendor</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading vendor sites:', error);
+            siteSelect.innerHTML = '<option value="">Error loading contacts</option>';
+        });
+}
+</script>
+{% endblock %}

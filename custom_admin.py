@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 
 # Import your models
-from models import db, User, Consortium, Team, RFPO, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam
+from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam
 
 def create_app():
     """Create Flask application with custom admin panel"""
@@ -613,65 +613,289 @@ def create_app():
         rfpos = RFPO.query.all()
         return render_template('admin/rfpos.html', rfpos=rfpos)
     
-    @app.route('/rfpo/new', methods=['GET', 'POST'])
+    @app.route('/rfpo/new', methods=['GET'])
     @login_required
     def rfpo_new():
-        """Create new RFPO"""
+        """Start RFPO creation process - redirect to stage 1"""
+        return redirect(url_for('rfpo_create_stage1'))
+    
+    @app.route('/rfpo/create/stage1', methods=['GET', 'POST'])
+    @login_required
+    def rfpo_create_stage1():
+        """RFPO Creation Stage 1: Select Consortium and Project"""
         if request.method == 'POST':
             try:
-                # Auto-generate RFPO ID
-                rfpo_count = RFPO.query.count() + 1
-                rfpo_id = f"RFPO-{datetime.now().strftime('%Y')}-{rfpo_count:03d}"
+                consortium_id = request.form.get('consortium_id')
+                project_id = request.form.get('project_id')
                 
+                if not consortium_id or not project_id:
+                    flash('❌ Please select both consortium and project.', 'error')
+                    return redirect(url_for('rfpo_create_stage1'))
+                
+                # Store selections in session for next stage
+                from flask import session
+                session['rfpo_consortium_id'] = consortium_id
+                session['rfpo_project_id'] = project_id
+                
+                return redirect(url_for('rfpo_create_stage2'))
+                
+            except Exception as e:
+                flash(f'❌ Error in stage 1: {str(e)}', 'error')
+        
+        consortiums = Consortium.query.filter_by(active=True).all()
+        return render_template('admin/rfpo_stage1.html', consortiums=consortiums)
+    
+    @app.route('/rfpo/create/stage2', methods=['GET', 'POST'])
+    @login_required
+    def rfpo_create_stage2():
+        """RFPO Creation Stage 2: Basic Information and Vendor Selection"""
+        from flask import session
+        
+        consortium_id = session.get('rfpo_consortium_id')
+        project_id = session.get('rfpo_project_id')
+        
+        if not consortium_id or not project_id:
+            flash('❌ Please start from stage 1.', 'error')
+            return redirect(url_for('rfpo_create_stage1'))
+        
+        consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
+        project = Project.query.filter_by(project_id=project_id).first()
+        
+        if request.method == 'POST':
+            try:
+                # Generate RFPO ID based on project
+                today = datetime.now()
+                date_str = today.strftime('%Y-%m-%d')
+                existing_count = RFPO.query.filter(
+                    RFPO.rfpo_id.like(f'RFPO-{project.ref}-%{date_str}%')
+                ).count()
+                rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
+                
+                # Get team from project or use default
+                team = Team.query.filter_by(record_id=project.team_record_id).first() if project.team_record_id else None
+                if not team:
+                    team = Team.query.filter_by(active=True).first()
+                
+                if not team:
+                    flash('❌ No active teams available.', 'error')
+                    return redirect(url_for('rfpo_create_stage1'))
+                
+                # Create RFPO with enhanced model
                 rfpo = RFPO(
                     rfpo_id=rfpo_id,
                     title=request.form.get('title'),
                     description=request.form.get('description'),
-                    vendor=request.form.get('vendor'),
-                    due_date=datetime.strptime(request.form.get('due_date'), '%Y-%m-%d').date() if request.form.get('due_date') else None,
-                    status=request.form.get('status', 'Draft'),
-                    team_id=int(request.form.get('team_id')),
+                    project_id=project.project_id,
+                    consortium_id=consortium.consort_id,
+                    team_id=team.id,
+                    government_agreement_number=request.form.get('government_agreement_number'),
+                    requestor_id=current_user.record_id,
+                    requestor_tel=request.form.get('requestor_tel'),
+                    requestor_location=request.form.get('requestor_location'),
+                    shipto_name=request.form.get('shipto_name'),
+                    shipto_tel=request.form.get('shipto_tel'),
+                    shipto_address=request.form.get('shipto_address'),
+                    invoice_address=consortium.invoicing_address or """United States Council for Automotive 
+Research LLC
+Attn: Accounts Payable
+3000 Town Center Building, Suite 35
+Southfield, MI  48075""",
+                    delivery_date=datetime.strptime(request.form.get('delivery_date'), '%Y-%m-%d').date() if request.form.get('delivery_date') else None,
+                    delivery_type=request.form.get('delivery_type'),
+                    delivery_payment=request.form.get('delivery_payment'),
+                    delivery_routing=request.form.get('delivery_routing'),
+                    payment_terms=request.form.get('payment_terms', 'Net 30'),
+                    vendor_id=int(request.form.get('vendor_id')) if request.form.get('vendor_id') else None,
+                    vendor_site_id=int(request.form.get('vendor_site_id')) if request.form.get('vendor_site_id') else None,
                     created_by=current_user.get_display_name()
                 )
                 
                 db.session.add(rfpo)
                 db.session.commit()
                 
-                flash('✅ RFPO created successfully!', 'success')
-                return redirect(url_for('rfpos'))
+                # Clear session data
+                session.pop('rfpo_consortium_id', None)
+                session.pop('rfpo_project_id', None)
+                
+                flash('✅ RFPO created successfully! You can now add line items.', 'success')
+                return redirect(url_for('rfpo_edit', id=rfpo.id))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error creating RFPO: {str(e)}', 'error')
         
         teams = Team.query.filter_by(active=True).all()
-        return render_template('admin/rfpo_form.html', rfpo=None, action='Create', teams=teams)
+        vendors = Vendor.query.filter_by(active=True).all()
+        
+        # Pre-fill form with current user data
+        current_user_data = {
+            'requestor_tel': current_user.phone,
+            'requestor_location': f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
+            'shipto_name': current_user.get_display_name(),
+            'shipto_address': f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}"
+        }
+        
+        return render_template('admin/rfpo_stage2.html', 
+                             consortium=consortium, 
+                             project=project,
+                             teams=teams,
+                             vendors=vendors,
+                             current_user_data=current_user_data)
     
     @app.route('/rfpo/<int:id>/edit', methods=['GET', 'POST'])
     @login_required
     def rfpo_edit(id):
-        """Edit RFPO"""
+        """Edit RFPO with line items"""
         rfpo = RFPO.query.get_or_404(id)
         
         if request.method == 'POST':
             try:
+                # Update basic RFPO information
                 rfpo.title = request.form.get('title')
                 rfpo.description = request.form.get('description')
-                rfpo.vendor = request.form.get('vendor')
-                rfpo.due_date = datetime.strptime(request.form.get('due_date'), '%Y-%m-%d').date() if request.form.get('due_date') else None
+                rfpo.government_agreement_number = request.form.get('government_agreement_number')
+                rfpo.requestor_tel = request.form.get('requestor_tel')
+                rfpo.requestor_location = request.form.get('requestor_location')
+                rfpo.shipto_name = request.form.get('shipto_name')
+                rfpo.shipto_tel = request.form.get('shipto_tel')
+                rfpo.shipto_address = request.form.get('shipto_address')
+                rfpo.delivery_date = datetime.strptime(request.form.get('delivery_date'), '%Y-%m-%d').date() if request.form.get('delivery_date') else None
+                rfpo.delivery_type = request.form.get('delivery_type')
+                rfpo.delivery_payment = request.form.get('delivery_payment')
+                rfpo.delivery_routing = request.form.get('delivery_routing')
+                rfpo.payment_terms = request.form.get('payment_terms', 'Net 30')
+                rfpo.vendor_id = int(request.form.get('vendor_id')) if request.form.get('vendor_id') else None
+                rfpo.vendor_site_id = int(request.form.get('vendor_site_id')) if request.form.get('vendor_site_id') else None
                 rfpo.status = request.form.get('status', 'Draft')
-                rfpo.team_id = int(request.form.get('team_id'))
+                rfpo.comments = request.form.get('comments')
                 rfpo.updated_by = current_user.get_display_name()
+                
+                # Handle cost sharing
+                rfpo.cost_share_description = request.form.get('cost_share_description')
+                rfpo.cost_share_type = request.form.get('cost_share_type', 'total')
+                cost_share_amount = request.form.get('cost_share_amount')
+                if cost_share_amount:
+                    try:
+                        rfpo.cost_share_amount = float(cost_share_amount)
+                    except ValueError:
+                        rfpo.cost_share_amount = 0.00
+                
+                # Recalculate totals
+                subtotal = sum(float(item.total_price) for item in rfpo.line_items)
+                rfpo.subtotal = subtotal
+                rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
                 
                 db.session.commit()
                 
                 flash('✅ RFPO updated successfully!', 'success')
-                return redirect(url_for('rfpos'))
+                return redirect(url_for('rfpo_edit', id=rfpo.id))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error updating RFPO: {str(e)}', 'error')
         
         teams = Team.query.filter_by(active=True).all()
-        return render_template('admin/rfpo_form.html', rfpo=rfpo, action='Edit', teams=teams)
+        vendors = Vendor.query.filter_by(active=True).all()
+        
+        # Get project and consortium info
+        project = Project.query.filter_by(project_id=rfpo.project_id).first()
+        consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+        
+        return render_template('admin/rfpo_edit.html', 
+                             rfpo=rfpo, 
+                             teams=teams, 
+                             vendors=vendors,
+                             project=project,
+                             consortium=consortium)
+    
+    @app.route('/rfpo/<int:rfpo_id>/line-item/add', methods=['POST'])
+    @login_required
+    def rfpo_add_line_item(rfpo_id):
+        """Add line item to RFPO"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        try:
+            # Get next line number
+            max_line = db.session.query(db.func.max(RFPOLineItem.line_number)).filter_by(rfpo_id=rfpo.id).scalar()
+            next_line_number = (max_line or 0) + 1
+            
+            # Create line item
+            line_item = RFPOLineItem(
+                rfpo_id=rfpo.id,
+                line_number=next_line_number,
+                quantity=int(request.form.get('quantity', 1)),
+                description=request.form.get('description', ''),
+                unit_price=float(request.form.get('unit_price', 0.00)),
+                is_capital_equipment=bool(request.form.get('is_capital_equipment')),
+                capital_description=request.form.get('capital_description'),
+                capital_serial_id=request.form.get('capital_serial_id'),
+                capital_location=request.form.get('capital_location'),
+                capital_condition=request.form.get('capital_condition')
+            )
+            
+            # Handle capital equipment date
+            capital_date = request.form.get('capital_acquisition_date')
+            if capital_date:
+                try:
+                    line_item.capital_acquisition_date = datetime.strptime(capital_date, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+            
+            # Handle capital cost
+            capital_cost = request.form.get('capital_acquisition_cost')
+            if capital_cost:
+                try:
+                    line_item.capital_acquisition_cost = float(capital_cost)
+                except ValueError:
+                    pass
+            
+            line_item.calculate_total()
+            
+            db.session.add(line_item)
+            
+            # Update RFPO totals
+            subtotal = sum(float(item.total_price) for item in rfpo.line_items) + float(line_item.total_price)
+            rfpo.subtotal = subtotal
+            rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
+            
+            db.session.commit()
+            
+            flash(f'✅ Line item #{next_line_number} added successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error adding line item: {str(e)}', 'error')
+        
+        return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
+    @app.route('/rfpo/<int:rfpo_id>/line-item/<int:line_item_id>/delete', methods=['POST'])
+    @login_required
+    def rfpo_delete_line_item(rfpo_id, line_item_id):
+        """Delete line item from RFPO"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        line_item = RFPOLineItem.query.get_or_404(line_item_id)
+        
+        if line_item.rfpo_id != rfpo.id:
+            flash('❌ Line item does not belong to this RFPO.', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+        
+        try:
+            db.session.delete(line_item)
+            
+            # Update RFPO totals
+            subtotal = sum(float(item.total_price) for item in rfpo.line_items if item.id != line_item_id)
+            rfpo.subtotal = subtotal
+            rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
+            
+            db.session.commit()
+            
+            flash(f'✅ Line item #{line_item.line_number} deleted successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error deleting line item: {str(e)}', 'error')
+        
+        return redirect(url_for('rfpo_edit', id=rfpo_id))
     
     @app.route('/rfpo/<int:id>/delete', methods=['POST'])
     @login_required
@@ -1303,6 +1527,45 @@ def create_app():
                 'abbrev': consortium.abbrev
             })
         return jsonify(consortium_data)
+    
+    @app.route('/api/projects/<consortium_id>')
+    @login_required
+    def api_projects_for_consortium(consortium_id):
+        """Get projects for a specific consortium"""
+        projects = Project.query.filter(
+            Project.consortium_ids.like(f'%{consortium_id}%'),
+            Project.active == True
+        ).all()
+        
+        project_data = []
+        for project in projects:
+            project_data.append({
+                'id': project.project_id,
+                'ref': project.ref,
+                'name': project.name,
+                'description': project.description,
+                'gov_funded': project.gov_funded,
+                'uni_project': project.uni_project
+            })
+        return jsonify(project_data)
+    
+    @app.route('/api/vendor-sites/<int:vendor_id>')
+    @login_required
+    def api_vendor_sites(vendor_id):
+        """Get sites for a specific vendor"""
+        vendor = Vendor.query.get_or_404(vendor_id)
+        site_data = []
+        for site in vendor.sites:
+            site_data.append({
+                'id': site.id,
+                'contact_name': site.contact_name,
+                'contact_dept': site.contact_dept,
+                'contact_tel': site.contact_tel,
+                'contact_city': site.contact_city,
+                'contact_state': site.contact_state,
+                'full_address': site.get_full_contact_address()
+            })
+        return jsonify(site_data)
     
     return app
 

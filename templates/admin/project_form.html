@@ -1,0 +1,407 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action }} Project - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📊 {{ action }} Project</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('projects') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="mb-3">📋 Basic Information</h5>
+                    
+                    {% if project %}
+                    <div class="mb-3">
+                        <label for="project_id" class="form-label">Project ID</label>
+                        <input type="text" class="form-control" id="project_id" name="project_id" 
+                               value="{{ project.project_id }}" readonly>
+                        <div class="form-text">Auto-generated unique identifier</div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Project ID</strong> will be auto-generated when you save
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="ref" class="form-label">Reference <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="ref" name="ref" 
+                               value="{{ project.ref if project else '' }}" required
+                               placeholder="e.g., PROJ-2024-001">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Project Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               value="{{ project.name if project else '' }}" required
+                               placeholder="Project title">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" 
+                                  rows="4" placeholder="Project description">{{ project.description if project else '' }}</textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="team_record_id" class="form-label">Team</label>
+                        <select class="form-control" id="team_record_id" name="team_record_id">
+                            <option value="">None (No Team Assignment)</option>
+                            {% for team in teams %}
+                            <option value="{{ team.record_id }}" 
+                                    {{ 'selected' if project and project.team_record_id == team.record_id else '' }}>
+                                [{{ team.abbrev }}] {{ team.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select the team responsible for this project</div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h5 class="mb-3">🏢 Associations</h5>
+                    
+                    <!-- Consortium Selection -->
+                    <div class="mb-4">
+                        <label class="form-label">Associated Consortiums</label>
+                        <input type="text" class="form-control mb-2" id="consortiumSearch" placeholder="🔍 Search consortiums..." onkeyup="filterConsortiums()">
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-muted">🏢 Available Consortiums</h6>
+                                <div class="border rounded p-2" style="height: 150px; overflow-y: auto;" id="availableConsortiums">
+                                    <div class="text-muted p-2">Loading consortiums...</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted">✅ Associated Consortiums</h6>
+                                <div class="border rounded p-2 bg-light" style="height: 150px; overflow-y: auto;" id="selectedConsortiums">
+                                    <div class="text-muted p-2">No consortiums selected</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="consortium_ids" name="consortium_ids" value="{{ project.consortium_ids_display if project else '' }}">
+                        <div class="form-text mt-2">Select consortiums that finance this project</div>
+                    </div>
+                    
+                    <!-- RFPO Viewer Users Selection -->
+                    <div class="mb-4">
+                        <label class="form-label">RFPO Viewer Users</label>
+                        <input type="text" class="form-control mb-2" id="userSearch" placeholder="🔍 Search users by name..." onkeyup="filterUsers()">
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-muted">👥 Available Users</h6>
+                                <div class="border rounded p-2" style="height: 150px; overflow-y: auto;" id="availableUsers">
+                                    <div class="text-muted p-2">Loading users...</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted">👁️ Selected Viewers</h6>
+                                <div class="border rounded p-2 bg-light" style="height: 150px; overflow-y: auto;" id="selectedUsers">
+                                    <div class="text-muted p-2">No users selected</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="rfpo_viewer_user_ids" name="rfpo_viewer_user_ids" value="{{ project.rfpo_viewer_user_ids_display if project else '' }}">
+                        <div class="form-text mt-2">Select users who can view RFPOs for this project</div>
+                    </div>
+                    
+                    <h5 class="mb-3 mt-4">🏛️ Project Type</h5>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="gov_funded" 
+                                   name="gov_funded" value="1"
+                                   {{ 'checked' if project and project.gov_funded else '' }}>
+                            <label class="form-check-label" for="gov_funded">
+                                Government Funded
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="uni_project" 
+                                   name="uni_project" value="1"
+                                   {{ 'checked' if project and project.uni_project else '' }}>
+                            <label class="form-check-label" for="uni_project">
+                                University Project
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="active" 
+                                   name="active" value="1"
+                                   {{ 'checked' if not project or project.active else '' }}>
+                            <label class="form-check-label" for="active">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('projects') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Project
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allConsortiums = [];
+let allUsers = [];
+let selectedConsortiums = [];
+let selectedUsers = [];
+
+// Load all data when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadConsortiums();
+    loadUsers();
+    
+    // Parse existing selections if editing
+    const existingConsortiums = document.getElementById('consortium_ids').value;
+    const existingUsers = document.getElementById('rfpo_viewer_user_ids').value;
+    
+    if (existingConsortiums) {
+        selectedConsortiums = existingConsortiums.split(',').map(s => s.trim()).filter(s => s);
+    }
+    if (existingUsers) {
+        selectedUsers = existingUsers.split(',').map(s => s.trim()).filter(s => s);
+    }
+});
+
+function loadConsortiums() {
+    fetch('/api/consortiums')
+        .then(response => response.json())
+        .then(consortiums => {
+            allConsortiums = consortiums;
+            displayAvailableConsortiums();
+            displaySelectedConsortiums();
+        })
+        .catch(error => {
+            console.error('Error loading consortiums:', error);
+            document.getElementById('availableConsortiums').innerHTML = '<div class="text-danger p-2">Error loading consortiums</div>';
+        });
+}
+
+function loadUsers() {
+    fetch('/api/users')
+        .then(response => response.json())
+        .then(users => {
+            allUsers = users;
+            displayAvailableUsers();
+            displaySelectedUsers();
+        })
+        .catch(error => {
+            console.error('Error loading users:', error);
+            document.getElementById('availableUsers').innerHTML = '<div class="text-danger p-2">Error loading users</div>';
+        });
+}
+
+function filterConsortiums() {
+    displayAvailableConsortiums();
+}
+
+function filterUsers() {
+    displayAvailableUsers();
+}
+
+function displayAvailableConsortiums() {
+    const searchTerm = document.getElementById('consortiumSearch').value.toLowerCase();
+    
+    // Filter consortiums: not selected and matching search term
+    const availableConsortiums = allConsortiums.filter(consortium => 
+        !selectedConsortiums.includes(consortium.id) &&
+        (consortium.name.toLowerCase().includes(searchTerm) || 
+         consortium.abbrev.toLowerCase().includes(searchTerm))
+    );
+    
+    if (availableConsortiums.length === 0) {
+        document.getElementById('availableConsortiums').innerHTML = '<div class="text-muted p-2">No available consortiums</div>';
+        return;
+    }
+    
+    let html = '';
+    availableConsortiums.forEach(consortium => {
+        html += `
+            <div class="d-flex align-items-center p-2 border-bottom consortium-item" style="cursor: pointer;" onclick="addConsortium('${consortium.id}')">
+                <div class="me-2">
+                    <i class="fas fa-plus-circle text-success"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div><strong>[${consortium.abbrev}]</strong> ${consortium.name}</div>
+                    <small class="text-muted">ID: ${consortium.id}</small>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('availableConsortiums').innerHTML = html;
+}
+
+function displaySelectedConsortiums() {
+    if (selectedConsortiums.length === 0) {
+        document.getElementById('selectedConsortiums').innerHTML = '<div class="text-muted p-2">No consortiums selected</div>';
+        return;
+    }
+    
+    let html = '';
+    selectedConsortiums.forEach(consortiumId => {
+        const consortium = allConsortiums.find(c => c.id === consortiumId);
+        if (consortium) {
+            html += `
+                <div class="d-flex align-items-center p-2 border-bottom consortium-item" style="cursor: pointer;" onclick="removeConsortium('${consortiumId}')">
+                    <div class="me-2">
+                        <i class="fas fa-minus-circle text-danger"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div><strong>[${consortium.abbrev}]</strong> ${consortium.name}</div>
+                        <small class="text-muted">Associated with project</small>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById('selectedConsortiums').innerHTML = html;
+}
+
+function displayAvailableUsers() {
+    const searchTerm = document.getElementById('userSearch').value.toLowerCase();
+    
+    // Filter users: not selected and matching search term
+    const availableUsers = allUsers.filter(user => 
+        !selectedUsers.includes(user.id) &&
+        (user.name.toLowerCase().includes(searchTerm) || 
+         user.email.toLowerCase().includes(searchTerm) ||
+         user.id.toLowerCase().includes(searchTerm))
+    );
+    
+    if (availableUsers.length === 0) {
+        document.getElementById('availableUsers').innerHTML = '<div class="text-muted p-2">No available users</div>';
+        return;
+    }
+    
+    let html = '';
+    availableUsers.forEach(user => {
+        html += `
+            <div class="d-flex align-items-center p-2 border-bottom user-item" style="cursor: pointer;" onclick="addUser('${user.id}')">
+                <div class="me-2">
+                    <i class="fas fa-plus-circle text-success"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div><strong>${user.name}</strong> <small class="text-muted">(${user.id})</small></div>
+                    <small class="text-muted">${user.email}</small>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('availableUsers').innerHTML = html;
+}
+
+function displaySelectedUsers() {
+    if (selectedUsers.length === 0) {
+        document.getElementById('selectedUsers').innerHTML = '<div class="text-muted p-2">No users selected</div>';
+        return;
+    }
+    
+    let html = '';
+    selectedUsers.forEach(userId => {
+        const user = allUsers.find(u => u.id === userId);
+        if (user) {
+            html += `
+                <div class="d-flex align-items-center p-2 border-bottom user-item" style="cursor: pointer;" onclick="removeUser('${userId}')">
+                    <div class="me-2">
+                        <i class="fas fa-minus-circle text-danger"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div><strong>${user.name}</strong> <small class="text-muted">(${user.id})</small></div>
+                        <small class="text-muted">${user.email}</small>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById('selectedUsers').innerHTML = html;
+}
+
+function addConsortium(consortiumId) {
+    if (!selectedConsortiums.includes(consortiumId)) {
+        selectedConsortiums.push(consortiumId);
+        document.getElementById('consortium_ids').value = selectedConsortiums.join(', ');
+        
+        // Refresh both lists
+        displayAvailableConsortiums();
+        displaySelectedConsortiums();
+    }
+}
+
+function removeConsortium(consortiumId) {
+    const index = selectedConsortiums.indexOf(consortiumId);
+    if (index > -1) {
+        selectedConsortiums.splice(index, 1);
+        document.getElementById('consortium_ids').value = selectedConsortiums.join(', ');
+        
+        // Refresh both lists
+        displayAvailableConsortiums();
+        displaySelectedConsortiums();
+    }
+}
+
+function addUser(userId) {
+    if (!selectedUsers.includes(userId)) {
+        selectedUsers.push(userId);
+        document.getElementById('rfpo_viewer_user_ids').value = selectedUsers.join(', ');
+        
+        // Refresh both lists
+        displayAvailableUsers();
+        displaySelectedUsers();
+    }
+}
+
+function removeUser(userId) {
+    const index = selectedUsers.indexOf(userId);
+    if (index > -1) {
+        selectedUsers.splice(index, 1);
+        document.getElementById('rfpo_viewer_user_ids').value = selectedUsers.join(', ');
+        
+        // Refresh both lists
+        displayAvailableUsers();
+        displaySelectedUsers();
+    }
+}
+</script>
+
+<style>
+.consortium-item:hover, .user-item:hover {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}

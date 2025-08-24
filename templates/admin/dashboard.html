@@ -1,0 +1,201 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📊 Dashboard</h1>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-primary border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-primary text-uppercase mb-1">Consortiums</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.consortiums }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-building fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-success border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-success text-uppercase mb-1">Teams</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.teams }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-info border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-info text-uppercase mb-1">RFPOs</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.rfpos }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-file-contract fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-warning border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-warning text-uppercase mb-1">Users</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.users }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-user fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🚀 Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('consortium_new') }}" class="btn btn-primary w-100">
+                            <i class="fas fa-plus"></i> New Consortium
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('team_new') }}" class="btn btn-success w-100">
+                            <i class="fas fa-plus"></i> New Team
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('rfpo_new') }}" class="btn btn-info w-100">
+                            <i class="fas fa-plus"></i> New RFPO
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('user_new') }}" class="btn btn-warning w-100">
+                            <i class="fas fa-plus"></i> New User
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0 text-primary">📋 Recent RFPOs</h6>
+            </div>
+            <div class="card-body">
+                {% if recent_rfpos %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>RFPO ID</th>
+                                    <th>Title</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rfpo in recent_rfpos %}
+                                <tr>
+                                    <td><small><strong>{{ rfpo.rfpo_id }}</strong></small></td>
+                                    <td><small>{{ rfpo.title[:30] }}{% if rfpo.title|length > 30 %}...{% endif %}</small></td>
+                                    <td><span class="badge bg-primary">{{ rfpo.status }}</span></td>
+                                    <td><small>{{ rfpo.created_at.strftime('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No RFPOs found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0 text-success">📁 Recent File Uploads</h6>
+            </div>
+            <div class="card-body">
+                {% if recent_files %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Filename</th>
+                                    <th>Status</th>
+                                    <th>Size</th>
+                                    <th>Uploaded</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for file in recent_files %}
+                                <tr>
+                                    <td><small>{{ file.original_filename[:25] }}{% if file.original_filename|length > 25 %}...{% endif %}</small></td>
+                                    <td>
+                                        {% if file.processing_status == 'completed' %}
+                                            <span class="badge bg-success">{{ file.processing_status }}</span>
+                                        {% elif file.processing_status == 'failed' %}
+                                            <span class="badge bg-danger">{{ file.processing_status }}</span>
+                                        {% elif file.processing_status == 'processing' %}
+                                            <span class="badge bg-warning">{{ file.processing_status }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ file.processing_status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><small>{{ "%.1f"|format(file.file_size / 1024) }} KB</small></td>
+                                    <td><small>{{ file.uploaded_at.strftime('%Y-%m-%d') if file.uploaded_at else '' }}</small></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No files uploaded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.text-gray-300 { color: #dee2e6 !important; }
+.text-gray-800 { color: #343a40 !important; }
+</style>
+{% endblock %}

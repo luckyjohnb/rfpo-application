@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
 from datetime import datetime
 import json
 
@@ -332,7 +333,7 @@ class Team(db.Model):
         consortium_info = f" (Consortium: {self.consortium_consort_id})" if self.consortium_consort_id else " (No Consortium)"
         return f'<Team {self.record_id} ({self.abbrev}): {self.name}{consortium_info}>'
 
-class User(db.Model):
+class User(UserMixin, db.Model):
     """User model for managing system users"""
     __tablename__ = 'users'
     

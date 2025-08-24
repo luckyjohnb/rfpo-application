@@ -1,0 +1,1328 @@
+#!/usr/bin/env python3
+"""
+Custom RFPO Admin Panel - NO Flask-Admin Dependencies
+Built from scratch to avoid WTForms compatibility issues.
+"""
+
+from flask import Flask, request, redirect, url_for, flash, render_template, jsonify
+from flask_login import LoginManager, login_required, current_user, login_user, logout_user
+from werkzeug.security import check_password_hash
+from werkzeug.utils import secure_filename
+from sqlalchemy import desc
+import json
+import os
+from datetime import datetime
+
+# Import your models
+from models import db, User, Consortium, Team, RFPO, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam
+
+def create_app():
+    """Create Flask application with custom admin panel"""
+    app = Flask(__name__)
+    
+    # Configuration
+    app.config['SECRET_KEY'] = 'rfpo-admin-secret-key-change-in-production'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///rfpo_admin.db'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Initialize extensions
+    db.init_app(app)
+    
+    # Initialize Flask-Login
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+    
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+    
+    # Helper functions
+    def format_json_field(value):
+        """Format JSON field for display"""
+        if not value:
+            return 'None'
+        try:
+            if isinstance(value, str):
+                data = json.loads(value)
+            else:
+                data = value
+            return ', '.join(data) if isinstance(data, list) else str(data)
+        except:
+            return str(value)
+    
+    def parse_comma_list(value):
+        """Parse comma-separated string to list"""
+        if not value:
+            return []
+        return [item.strip() for item in value.split(',') if item.strip()]
+    
+    def generate_next_id(model_class, id_field, prefix='', length=8):
+        """Generate next auto-incremented ID for external ID fields"""
+        try:
+            # Get the highest existing ID and increment
+            max_record = db.session.query(model_class).order_by(getattr(model_class, id_field).desc()).first()
+            if max_record:
+                current_id = getattr(max_record, id_field)
+                try:
+                    # Extract numeric part and increment
+                    current_num = int(current_id.replace(prefix, '').lstrip('0') or '0')
+                    next_num = current_num + 1
+                except (ValueError, AttributeError):
+                    # If parsing fails, use count + 1
+                    next_num = db.session.query(model_class).count() + 1
+            else:
+                next_num = 1
+            
+            # Keep trying until we find a unique ID
+            for attempt in range(100):  # Prevent infinite loop
+                candidate_id = f"{prefix}{(next_num + attempt):0{length}d}" if prefix else f"{(next_num + attempt):0{length}d}"
+                existing = db.session.query(model_class).filter(getattr(model_class, id_field) == candidate_id).first()
+                if not existing:
+                    return candidate_id
+            
+            # Final fallback to timestamp
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            return f"{prefix}{timestamp}" if prefix else timestamp
+            
+        except Exception as e:
+            # Fallback to timestamp-based ID
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            return f"{prefix}{timestamp}" if prefix else timestamp
+    
+    def handle_file_upload(file, upload_folder):
+        """Handle file upload and return filename"""
+        if file and file.filename and file.filename != '':
+            try:
+                # Secure the filename
+                filename = secure_filename(file.filename)
+                
+                # Add timestamp to avoid conflicts
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+                filename = f"{timestamp}{filename}"
+                
+                # Ensure upload folder exists
+                os.makedirs(upload_folder, exist_ok=True)
+                
+                # Save file
+                file_path = os.path.join(upload_folder, filename)
+                file.save(file_path)
+                
+                return filename
+            except Exception as e:
+                print(f"File upload error: {e}")
+                return None
+        return None
+    
+    # Authentication routes
+    @app.route('/login', methods=['GET', 'POST'])
+    def login():
+        if request.method == 'POST':
+            email = request.form.get('email')
+            password = request.form.get('password')
+            
+            user = User.query.filter_by(email=email, active=True).first()
+            
+            if user and check_password_hash(user.password_hash, password):
+                if user.is_super_admin() or user.is_rfpo_admin():
+                    login_user(user)
+                    flash(f'Welcome {user.get_display_name()}! 🎉', 'success')
+                    return redirect(url_for('dashboard'))
+                else:
+                    flash('❌ You do not have admin privileges.', 'error')
+            else:
+                flash('❌ Invalid email or password.', 'error')
+        
+        return render_template('admin/login.html')
+    
+    @app.route('/logout')
+    @login_required
+    def logout():
+        logout_user()
+        flash('👋 You have been logged out.', 'info')
+        return redirect(url_for('login'))
+    
+    @app.route('/')
+    @login_required
+    def dashboard():
+        """Main dashboard"""
+        stats = {
+            'consortiums': Consortium.query.filter_by(active=True).count(),
+            'teams': Team.query.filter_by(active=True).count(),
+            'rfpos': RFPO.query.count(),
+            'users': User.query.filter_by(active=True).count(),
+            'vendors': Vendor.query.filter_by(active=True).count(),
+            'projects': Project.query.filter_by(active=True).count(),
+            'uploaded_files': UploadedFile.query.count(),
+        }
+        
+        recent_rfpos = RFPO.query.order_by(desc(RFPO.created_at)).limit(5).all()
+        recent_files = UploadedFile.query.order_by(desc(UploadedFile.uploaded_at)).limit(5).all()
+        
+        return render_template('admin/dashboard.html', 
+                             stats=stats, 
+                             recent_rfpos=recent_rfpos, 
+                             recent_files=recent_files)
+    
+    # Consortium routes
+    @app.route('/consortiums')
+    @login_required
+    def consortiums():
+        """List all consortiums with counts"""
+        consortiums = Consortium.query.all()
+        
+        # Calculate counts for each consortium
+        for consortium in consortiums:
+            # Count projects associated with this consortium
+            consortium.project_count = Project.query.filter(
+                Project.consortium_ids.like(f'%{consortium.consort_id}%'),
+                Project.active == True
+            ).count()
+            
+            # Count RFPOs through teams associated with this consortium
+            consortium.rfpo_count = RFPO.query.join(Team).filter(
+                Team.consortium_consort_id == consortium.consort_id
+            ).count()
+            
+            # Count viewers and admins
+            consortium.viewer_count = len(consortium.get_rfpo_viewer_users())
+            consortium.admin_count = len(consortium.get_rfpo_admin_users())
+        
+        return render_template('admin/consortiums.html', consortiums=consortiums, format_json=format_json_field)
+    
+    @app.route('/consortium/new', methods=['GET', 'POST'])
+    @login_required
+    def consortium_new():
+        """Create new consortium"""
+        if request.method == 'POST':
+            try:
+                # Auto-generate consortium ID
+                consort_id = generate_next_id(Consortium, 'consort_id', '', 8)
+                
+                # Handle logo upload
+                logo_filename = None
+                if 'logo_file' in request.files:
+                    logo_file = request.files['logo_file']
+                    if logo_file.filename and logo_file.filename != '':
+                        logo_filename = handle_file_upload(logo_file, 'uploads/logos')
+                        if logo_filename:
+                            flash(f'📷 Logo uploaded: {logo_filename}', 'info')
+                
+                # Build invoicing address from structured inputs
+                invoicing_parts = []
+                if request.form.get('invoicing_street'):
+                    invoicing_parts.append(request.form.get('invoicing_street'))
+                
+                city_state_zip = []
+                if request.form.get('invoicing_city'):
+                    city_state_zip.append(request.form.get('invoicing_city'))
+                if request.form.get('invoicing_state'):
+                    city_state_zip[-1] = f"{city_state_zip[-1]}, {request.form.get('invoicing_state')}" if city_state_zip else request.form.get('invoicing_state')
+                if request.form.get('invoicing_zip'):
+                    city_state_zip[-1] = f"{city_state_zip[-1]} {request.form.get('invoicing_zip')}" if city_state_zip else request.form.get('invoicing_zip')
+                
+                if city_state_zip:
+                    invoicing_parts.extend(city_state_zip)
+                if request.form.get('invoicing_country'):
+                    invoicing_parts.append(request.form.get('invoicing_country'))
+                
+                invoicing_address = '\n'.join(invoicing_parts)
+                
+                consortium = Consortium(
+                    consort_id=consort_id,
+                    name=request.form.get('name'),
+                    abbrev=request.form.get('abbrev'),
+                    logo=logo_filename,
+                    require_approved_vendors=bool(request.form.get('require_approved_vendors')),
+                    non_government_project_id=request.form.get('non_government_project_id') or None,
+                    invoicing_address=invoicing_address,
+                    doc_fax_name=request.form.get('doc_fax_name'),
+                    doc_fax_number=request.form.get('doc_fax_number'),
+                    doc_email_name=request.form.get('doc_email_name'),
+                    doc_email_address=request.form.get('doc_email_address'),
+                    doc_post_name=request.form.get('doc_post_name'),
+                    doc_post_address=request.form.get('doc_post_address'),
+                    po_email=request.form.get('po_email'),
+                    active=bool(request.form.get('active', True)),
+                    created_by=current_user.get_display_name()
+                )
+                
+                # Handle JSON fields from user selection interface
+                viewer_users = parse_comma_list(request.form.get('rfpo_viewer_user_ids'))
+                admin_users = parse_comma_list(request.form.get('rfpo_admin_user_ids'))
+                
+                if viewer_users:
+                    consortium.set_rfpo_viewer_users(viewer_users)
+                if admin_users:
+                    consortium.set_rfpo_admin_users(admin_users)
+                
+                db.session.add(consortium)
+                db.session.commit()
+                
+                flash('✅ Consortium created successfully!', 'success')
+                return redirect(url_for('consortiums'))
+                
+            except Exception as e:
+                db.session.rollback()  # Important: rollback the failed transaction
+                flash(f'❌ Error creating consortium: {str(e)}', 'error')
+        
+        # Get non-government projects for dropdown
+        non_gov_projects = Project.query.filter_by(gov_funded=False, active=True).all()
+        return render_template('admin/consortium_form.html', consortium=None, action='Create', non_gov_projects=non_gov_projects)
+    
+    @app.route('/consortium/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def consortium_edit(id):
+        """Edit consortium"""
+        consortium = Consortium.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                # Handle logo upload
+                if 'logo_file' in request.files:
+                    logo_file = request.files['logo_file']
+                    if logo_file.filename:
+                        # Delete old logo if exists
+                        if consortium.logo:
+                            old_logo_path = os.path.join('uploads/logos', consortium.logo)
+                            if os.path.exists(old_logo_path):
+                                os.remove(old_logo_path)
+                        
+                        # Upload new logo
+                        consortium.logo = handle_file_upload(logo_file, 'uploads/logos')
+                
+                # Build invoicing address from structured inputs
+                invoicing_parts = []
+                if request.form.get('invoicing_street'):
+                    invoicing_parts.append(request.form.get('invoicing_street'))
+                
+                city_state_zip = []
+                if request.form.get('invoicing_city'):
+                    city_state_zip.append(request.form.get('invoicing_city'))
+                if request.form.get('invoicing_state'):
+                    city_state_zip[-1] = f"{city_state_zip[-1]}, {request.form.get('invoicing_state')}" if city_state_zip else request.form.get('invoicing_state')
+                if request.form.get('invoicing_zip'):
+                    city_state_zip[-1] = f"{city_state_zip[-1]} {request.form.get('invoicing_zip')}" if city_state_zip else request.form.get('invoicing_zip')
+                
+                if city_state_zip:
+                    invoicing_parts.extend(city_state_zip)
+                if request.form.get('invoicing_country'):
+                    invoicing_parts.append(request.form.get('invoicing_country'))
+                
+                consortium.name = request.form.get('name')
+                consortium.abbrev = request.form.get('abbrev')
+                consortium.require_approved_vendors = bool(request.form.get('require_approved_vendors'))
+                consortium.non_government_project_id = request.form.get('non_government_project_id') or None
+                consortium.invoicing_address = '\n'.join(invoicing_parts)
+                consortium.doc_fax_name = request.form.get('doc_fax_name')
+                consortium.doc_fax_number = request.form.get('doc_fax_number')
+                consortium.doc_email_name = request.form.get('doc_email_name')
+                consortium.doc_email_address = request.form.get('doc_email_address')
+                consortium.doc_post_name = request.form.get('doc_post_name')
+                consortium.doc_post_address = request.form.get('doc_post_address')
+                consortium.po_email = request.form.get('po_email')
+                consortium.active = bool(request.form.get('active'))
+                consortium.updated_by = current_user.get_display_name()
+                
+                # Handle JSON fields from user selection interface
+                viewer_users = parse_comma_list(request.form.get('rfpo_viewer_user_ids'))
+                admin_users = parse_comma_list(request.form.get('rfpo_admin_user_ids'))
+                
+                consortium.set_rfpo_viewer_users(viewer_users)
+                consortium.set_rfpo_admin_users(admin_users)
+                
+                db.session.commit()
+                
+                flash('✅ Consortium updated successfully!', 'success')
+                return redirect(url_for('consortiums'))
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'❌ Error updating consortium: {str(e)}', 'error')
+        
+        # Pre-populate JSON fields for editing
+        consortium.rfpo_viewer_user_ids_display = ', '.join(consortium.get_rfpo_viewer_users())
+        consortium.rfpo_admin_user_ids_display = ', '.join(consortium.get_rfpo_admin_users())
+        
+        # Parse invoicing address for structured inputs
+        if consortium.invoicing_address:
+            address_lines = consortium.invoicing_address.split('\n')
+            consortium.invoicing_street = address_lines[0] if len(address_lines) > 0 else ''
+            if len(address_lines) > 1:
+                # Parse city, state, zip from second line
+                city_state_zip = address_lines[1]
+                parts = city_state_zip.split(',')
+                consortium.invoicing_city = parts[0].strip() if len(parts) > 0 else ''
+                if len(parts) > 1:
+                    state_zip = parts[1].strip().split(' ')
+                    consortium.invoicing_state = state_zip[0] if len(state_zip) > 0 else ''
+                    consortium.invoicing_zip = state_zip[1] if len(state_zip) > 1 else ''
+            consortium.invoicing_country = address_lines[2] if len(address_lines) > 2 else 'United States'
+        
+        non_gov_projects = Project.query.filter_by(gov_funded=False, active=True).all()
+        return render_template('admin/consortium_form.html', consortium=consortium, action='Edit', non_gov_projects=non_gov_projects)
+    
+    @app.route('/consortium/<int:id>/delete', methods=['POST'])
+    @login_required
+    def consortium_delete(id):
+        """Delete consortium"""
+        consortium = Consortium.query.get_or_404(id)
+        try:
+            db.session.delete(consortium)
+            db.session.commit()
+            flash('✅ Consortium deleted successfully!', 'success')
+        except Exception as e:
+            flash(f'❌ Error deleting consortium: {str(e)}', 'error')
+        return redirect(url_for('consortiums'))
+    
+    @app.route('/uploads/logos/<filename>')
+    def uploaded_logo(filename):
+        """Serve uploaded logo files"""
+        from flask import send_from_directory
+        return send_from_directory('uploads/logos', filename)
+    
+    # Teams routes
+    @app.route('/teams')
+    @login_required
+    def teams():
+        """List all teams with counts and consortium info"""
+        teams = Team.query.all()
+        
+        # Calculate counts and consortium info for each team
+        for team in teams:
+            # Count projects associated with this team
+            team.project_count = Project.query.filter_by(
+                team_record_id=team.record_id,
+                active=True
+            ).count()
+            
+            # Count viewers and admins
+            team.viewer_count = len(team.get_rfpo_viewer_users())
+            team.admin_count = len(team.get_rfpo_admin_users())
+            
+            # Get consortium info for badge display
+            if team.consortium_consort_id:
+                consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                if consortium:
+                    team.consortium_name = consortium.name
+                    team.consortium_abbrev = consortium.abbrev
+                else:
+                    team.consortium_name = team.consortium_consort_id
+                    team.consortium_abbrev = team.consortium_consort_id
+            else:
+                team.consortium_name = None
+                team.consortium_abbrev = None
+        
+        return render_template('admin/teams.html', teams=teams, format_json=format_json_field)
+    
+    @app.route('/team/new', methods=['GET', 'POST'])
+    @login_required
+    def team_new():
+        """Create new team"""
+        if request.method == 'POST':
+            try:
+                # Auto-generate team record ID
+                record_id = generate_next_id(Team, 'record_id', '', 8)
+                
+                team = Team(
+                    record_id=record_id,
+                    name=request.form.get('name'),
+                    abbrev=request.form.get('abbrev'),
+                    description=request.form.get('description'),
+                    consortium_consort_id=request.form.get('consortium_consort_id') or None,
+                    active=bool(request.form.get('active', True)),
+                    created_by=current_user.get_display_name()
+                )
+                
+                # Handle JSON fields
+                viewer_users = parse_comma_list(request.form.get('rfpo_viewer_user_ids'))
+                admin_users = parse_comma_list(request.form.get('rfpo_admin_user_ids'))
+                
+                if viewer_users:
+                    team.set_rfpo_viewer_users(viewer_users)
+                if admin_users:
+                    team.set_rfpo_admin_users(admin_users)
+                
+                db.session.add(team)
+                db.session.commit()
+                
+                flash('✅ Team created successfully!', 'success')
+                return redirect(url_for('teams'))
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'❌ Error creating team: {str(e)}', 'error')
+        
+        consortiums = Consortium.query.filter_by(active=True).all()
+        return render_template('admin/team_form.html', team=None, action='Create', consortiums=consortiums)
+    
+    @app.route('/team/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def team_edit(id):
+        """Edit team"""
+        team = Team.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                team.record_id = request.form.get('record_id')
+                team.name = request.form.get('name')
+                team.abbrev = request.form.get('abbrev')
+                team.description = request.form.get('description')
+                team.consortium_consort_id = request.form.get('consortium_consort_id') or None
+                team.active = bool(request.form.get('active'))
+                team.updated_by = current_user.get_display_name()
+                
+                # Handle JSON fields
+                viewer_users = parse_comma_list(request.form.get('rfpo_viewer_user_ids'))
+                admin_users = parse_comma_list(request.form.get('rfpo_admin_user_ids'))
+                
+                team.set_rfpo_viewer_users(viewer_users)
+                team.set_rfpo_admin_users(admin_users)
+                
+                db.session.commit()
+                
+                flash('✅ Team updated successfully!', 'success')
+                return redirect(url_for('teams'))
+                
+            except Exception as e:
+                flash(f'❌ Error updating team: {str(e)}', 'error')
+        
+        # Pre-populate JSON fields for editing
+        team.rfpo_viewer_user_ids_display = ', '.join(team.get_rfpo_viewer_users())
+        team.rfpo_admin_user_ids_display = ', '.join(team.get_rfpo_admin_users())
+        
+        consortiums = Consortium.query.filter_by(active=True).all()
+        return render_template('admin/team_form.html', team=team, action='Edit', consortiums=consortiums)
+    
+    @app.route('/team/<int:id>/delete', methods=['POST'])
+    @login_required
+    def team_delete(id):
+        """Delete team"""
+        team = Team.query.get_or_404(id)
+        try:
+            db.session.delete(team)
+            db.session.commit()
+            flash('✅ Team deleted successfully!', 'success')
+        except Exception as e:
+            flash(f'❌ Error deleting team: {str(e)}', 'error')
+        return redirect(url_for('teams'))
+    
+    # Users routes
+    @app.route('/users')
+    @login_required
+    def users():
+        """List all users"""
+        users = User.query.all()
+        return render_template('admin/users.html', users=users, format_json=format_json_field)
+    
+    @app.route('/user/new', methods=['GET', 'POST'])
+    @login_required
+    def user_new():
+        """Create new user"""
+        if request.method == 'POST':
+            try:
+                from werkzeug.security import generate_password_hash
+                
+                # Auto-generate user record ID
+                record_id = generate_next_id(User, 'record_id', '', 8)
+                
+                user = User(
+                    record_id=record_id,
+                    fullname=request.form.get('fullname'),
+                    email=request.form.get('email'),
+                    password_hash=generate_password_hash(request.form.get('password', 'changeme123')),
+                    sex=request.form.get('sex'),
+                    company_code=request.form.get('company_code'),
+                    company=request.form.get('company'),
+                    position=request.form.get('position'),
+                    department=request.form.get('department'),
+                    phone=request.form.get('phone'),
+                    active=bool(request.form.get('active', True)),
+                    agreed_to_terms=bool(request.form.get('agreed_to_terms')),
+                    created_by=current_user.get_display_name()
+                )
+                
+                # Handle permissions from checkboxes
+                permissions = request.form.getlist('permissions')  # Get all checked permission values
+                if permissions:
+                    user.set_permissions(permissions)
+                
+                db.session.add(user)
+                db.session.commit()
+                
+                flash('✅ User created successfully!', 'success')
+                return redirect(url_for('users'))
+                
+            except Exception as e:
+                flash(f'❌ Error creating user: {str(e)}', 'error')
+        
+        return render_template('admin/user_form.html', user=None, action='Create')
+    
+    @app.route('/user/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def user_edit(id):
+        """Edit user"""
+        user = User.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                user.fullname = request.form.get('fullname')
+                user.email = request.form.get('email')
+                user.sex = request.form.get('sex')
+                user.company_code = request.form.get('company_code')
+                user.company = request.form.get('company')
+                user.position = request.form.get('position')
+                user.department = request.form.get('department')
+                user.phone = request.form.get('phone')
+                user.active = bool(request.form.get('active'))
+                user.agreed_to_terms = bool(request.form.get('agreed_to_terms'))
+                user.updated_by = current_user.get_display_name()
+                
+                # Handle permissions from checkboxes
+                permissions = request.form.getlist('permissions')
+                user.set_permissions(permissions)
+                
+                db.session.commit()
+                
+                flash('✅ User updated successfully!', 'success')
+                return redirect(url_for('users'))
+                
+            except Exception as e:
+                flash(f'❌ Error updating user: {str(e)}', 'error')
+        
+        return render_template('admin/user_form.html', user=user, action='Edit')
+    
+    @app.route('/user/<int:id>/delete', methods=['POST'])
+    @login_required
+    def user_delete(id):
+        """Delete user"""
+        user = User.query.get_or_404(id)
+        try:
+            db.session.delete(user)
+            db.session.commit()
+            flash('✅ User deleted successfully!', 'success')
+        except Exception as e:
+            flash(f'❌ Error deleting user: {str(e)}', 'error')
+        return redirect(url_for('users'))
+    
+    # RFPOs routes
+    @app.route('/rfpos')
+    @login_required
+    def rfpos():
+        """List all RFPOs"""
+        rfpos = RFPO.query.all()
+        return render_template('admin/rfpos.html', rfpos=rfpos)
+    
+    @app.route('/rfpo/new', methods=['GET', 'POST'])
+    @login_required
+    def rfpo_new():
+        """Create new RFPO"""
+        if request.method == 'POST':
+            try:
+                # Auto-generate RFPO ID
+                rfpo_count = RFPO.query.count() + 1
+                rfpo_id = f"RFPO-{datetime.now().strftime('%Y')}-{rfpo_count:03d}"
+                
+                rfpo = RFPO(
+                    rfpo_id=rfpo_id,
+                    title=request.form.get('title'),
+                    description=request.form.get('description'),
+                    vendor=request.form.get('vendor'),
+                    due_date=datetime.strptime(request.form.get('due_date'), '%Y-%m-%d').date() if request.form.get('due_date') else None,
+                    status=request.form.get('status', 'Draft'),
+                    team_id=int(request.form.get('team_id')),
+                    created_by=current_user.get_display_name()
+                )
+                
+                db.session.add(rfpo)
+                db.session.commit()
+                
+                flash('✅ RFPO created successfully!', 'success')
+                return redirect(url_for('rfpos'))
+                
+            except Exception as e:
+                flash(f'❌ Error creating RFPO: {str(e)}', 'error')
+        
+        teams = Team.query.filter_by(active=True).all()
+        return render_template('admin/rfpo_form.html', rfpo=None, action='Create', teams=teams)
+    
+    @app.route('/rfpo/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def rfpo_edit(id):
+        """Edit RFPO"""
+        rfpo = RFPO.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                rfpo.title = request.form.get('title')
+                rfpo.description = request.form.get('description')
+                rfpo.vendor = request.form.get('vendor')
+                rfpo.due_date = datetime.strptime(request.form.get('due_date'), '%Y-%m-%d').date() if request.form.get('due_date') else None
+                rfpo.status = request.form.get('status', 'Draft')
+                rfpo.team_id = int(request.form.get('team_id'))
+                rfpo.updated_by = current_user.get_display_name()
+                
+                db.session.commit()
+                
+                flash('✅ RFPO updated successfully!', 'success')
+                return redirect(url_for('rfpos'))
+                
+            except Exception as e:
+                flash(f'❌ Error updating RFPO: {str(e)}', 'error')
+        
+        teams = Team.query.filter_by(active=True).all()
+        return render_template('admin/rfpo_form.html', rfpo=rfpo, action='Edit', teams=teams)
+    
+    @app.route('/rfpo/<int:id>/delete', methods=['POST'])
+    @login_required
+    def rfpo_delete(id):
+        """Delete RFPO"""
+        rfpo = RFPO.query.get_or_404(id)
+        try:
+            db.session.delete(rfpo)
+            db.session.commit()
+            flash('✅ RFPO deleted successfully!', 'success')
+        except Exception as e:
+            flash(f'❌ Error deleting RFPO: {str(e)}', 'error')
+        return redirect(url_for('rfpos'))
+    
+    # Projects routes
+    @app.route('/projects')
+    @login_required
+    def projects():
+        """List all projects with consortium and team info"""
+        projects = Project.query.all()
+        
+        # Populate consortium and team info for each project
+        for project in projects:
+            # Get consortium information for badges
+            project.consortium_info = []
+            consortium_ids = project.get_consortium_ids()
+            for consortium_id in consortium_ids:
+                consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
+                if consortium:
+                    project.consortium_info.append({
+                        'id': consortium.consort_id,
+                        'name': consortium.name,
+                        'abbrev': consortium.abbrev
+                    })
+            
+            # Get team information for badge
+            if project.team_record_id:
+                team = Team.query.filter_by(record_id=project.team_record_id).first()
+                if team:
+                    project.team_info = {
+                        'id': team.record_id,
+                        'name': team.name,
+                        'abbrev': team.abbrev
+                    }
+                else:
+                    project.team_info = None
+            else:
+                project.team_info = None
+        
+        return render_template('admin/projects.html', projects=projects, format_json=format_json_field)
+    
+    @app.route('/project/new', methods=['GET', 'POST'])
+    @login_required
+    def project_new():
+        """Create new project"""
+        if request.method == 'POST':
+            try:
+                # Auto-generate project ID
+                project_id = generate_next_id(Project, 'project_id', '', 8)
+                
+                project = Project(
+                    project_id=project_id,
+                    ref=request.form.get('ref'),
+                    name=request.form.get('name'),
+                    description=request.form.get('description'),
+                    team_record_id=request.form.get('team_record_id') or None,
+                    gov_funded=bool(request.form.get('gov_funded')),
+                    uni_project=bool(request.form.get('uni_project')),
+                    active=bool(request.form.get('active', True)),
+                    created_by=current_user.get_display_name()
+                )
+                
+                # Handle JSON fields
+                consortium_ids = parse_comma_list(request.form.get('consortium_ids'))
+                viewer_users = parse_comma_list(request.form.get('rfpo_viewer_user_ids'))
+                
+                if consortium_ids:
+                    project.set_consortium_ids(consortium_ids)
+                if viewer_users:
+                    project.set_rfpo_viewer_users(viewer_users)
+                
+                db.session.add(project)
+                db.session.commit()
+                
+                flash('✅ Project created successfully!', 'success')
+                return redirect(url_for('projects'))
+                
+            except Exception as e:
+                flash(f'❌ Error creating project: {str(e)}', 'error')
+        
+        teams = Team.query.filter_by(active=True).all()
+        return render_template('admin/project_form.html', project=None, action='Create', teams=teams)
+    
+    @app.route('/project/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def project_edit(id):
+        """Edit project"""
+        project = Project.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                project.ref = request.form.get('ref')
+                project.name = request.form.get('name')
+                project.description = request.form.get('description')
+                project.team_record_id = request.form.get('team_record_id') or None
+                project.gov_funded = bool(request.form.get('gov_funded'))
+                project.uni_project = bool(request.form.get('uni_project'))
+                project.active = bool(request.form.get('active'))
+                project.updated_by = current_user.get_display_name()
+                
+                # Handle JSON fields
+                consortium_ids = parse_comma_list(request.form.get('consortium_ids'))
+                viewer_users = parse_comma_list(request.form.get('rfpo_viewer_user_ids'))
+                
+                project.set_consortium_ids(consortium_ids)
+                project.set_rfpo_viewer_users(viewer_users)
+                
+                db.session.commit()
+                
+                flash('✅ Project updated successfully!', 'success')
+                return redirect(url_for('projects'))
+                
+            except Exception as e:
+                flash(f'❌ Error updating project: {str(e)}', 'error')
+        
+        # Pre-populate JSON fields for editing
+        project.consortium_ids_display = ', '.join(project.get_consortium_ids())
+        project.rfpo_viewer_user_ids_display = ', '.join(project.get_rfpo_viewer_users())
+        
+        teams = Team.query.filter_by(active=True).all()
+        return render_template('admin/project_form.html', project=project, action='Edit', teams=teams)
+    
+    @app.route('/project/<int:id>/delete', methods=['POST'])
+    @login_required
+    def project_delete(id):
+        """Delete project"""
+        project = Project.query.get_or_404(id)
+        try:
+            db.session.delete(project)
+            db.session.commit()
+            flash('✅ Project deleted successfully!', 'success')
+        except Exception as e:
+            flash(f'❌ Error deleting project: {str(e)}', 'error')
+        return redirect(url_for('projects'))
+    
+    # Vendors routes
+    @app.route('/vendors')
+    @login_required
+    def vendors():
+        """List all vendors with consortium info"""
+        vendors = Vendor.query.all()
+        
+        # Populate consortium info for each vendor
+        for vendor in vendors:
+            # Get consortium information for badges
+            vendor.consortium_info = []
+            approved_consortiums = vendor.get_approved_consortiums()
+            for consortium_abbrev in approved_consortiums:
+                consortium = Consortium.query.filter_by(abbrev=consortium_abbrev).first()
+                if consortium:
+                    vendor.consortium_info.append({
+                        'abbrev': consortium.abbrev,
+                        'name': consortium.name,
+                        'id': consortium.consort_id
+                    })
+                else:
+                    # If consortium not found, still show the abbreviation
+                    vendor.consortium_info.append({
+                        'abbrev': consortium_abbrev,
+                        'name': consortium_abbrev,
+                        'id': consortium_abbrev
+                    })
+        
+        return render_template('admin/vendors.html', vendors=vendors, format_json=format_json_field)
+    
+    @app.route('/vendor/new', methods=['GET', 'POST'])
+    @login_required
+    def vendor_new():
+        """Create new vendor"""
+        if request.method == 'POST':
+            try:
+                # Auto-generate vendor ID
+                vendor_id = generate_next_id(Vendor, 'vendor_id', '', 8)
+                
+                vendor = Vendor(
+                    vendor_id=vendor_id,
+                    company_name=request.form.get('company_name'),
+                    status=request.form.get('status', 'live'),
+                    vendor_type=int(request.form.get('vendor_type', 0)),
+                    certs_reps=bool(request.form.get('certs_reps')),
+                    cert_date=datetime.strptime(request.form.get('cert_date'), '%Y-%m-%d').date() if request.form.get('cert_date') else None,
+                    cert_expire_date=datetime.strptime(request.form.get('cert_expire_date'), '%Y-%m-%d').date() if request.form.get('cert_expire_date') else None,
+                    is_university=bool(request.form.get('is_university')),
+                    onetime_project_id=request.form.get('onetime_project_id') or None,
+                    contact_name=request.form.get('contact_name'),
+                    contact_dept=request.form.get('contact_dept'),
+                    contact_tel=request.form.get('contact_tel'),
+                    contact_fax=request.form.get('contact_fax'),
+                    contact_address=request.form.get('contact_address'),
+                    contact_city=request.form.get('contact_city'),
+                    contact_state=request.form.get('contact_state'),
+                    contact_zip=request.form.get('contact_zip'),
+                    contact_country=request.form.get('contact_country'),
+                    active=bool(request.form.get('active', True)),
+                    created_by=current_user.get_display_name()
+                )
+                
+                # Handle approved consortiums from selection interface
+                approved_consortiums = parse_comma_list(request.form.get('approved_consortiums'))
+                if approved_consortiums:
+                    vendor.set_approved_consortiums(approved_consortiums)
+                
+                db.session.add(vendor)
+                db.session.commit()
+                
+                flash('✅ Vendor created successfully!', 'success')
+                return redirect(url_for('vendors'))
+                
+            except Exception as e:
+                flash(f'❌ Error creating vendor: {str(e)}', 'error')
+        
+        return render_template('admin/vendor_form.html', vendor=None, action='Create')
+    
+    @app.route('/vendor/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def vendor_edit(id):
+        """Edit vendor"""
+        vendor = Vendor.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                vendor.company_name = request.form.get('company_name')
+                vendor.status = request.form.get('status', 'live')
+                vendor.vendor_type = int(request.form.get('vendor_type', 0))
+                vendor.certs_reps = bool(request.form.get('certs_reps'))
+                vendor.cert_date = datetime.strptime(request.form.get('cert_date'), '%Y-%m-%d').date() if request.form.get('cert_date') else None
+                vendor.cert_expire_date = datetime.strptime(request.form.get('cert_expire_date'), '%Y-%m-%d').date() if request.form.get('cert_expire_date') else None
+                vendor.onetime_project_id = request.form.get('onetime_project_id') or None
+                vendor.contact_name = request.form.get('contact_name')
+                vendor.contact_dept = request.form.get('contact_dept')
+                vendor.contact_tel = request.form.get('contact_tel')
+                vendor.contact_fax = request.form.get('contact_fax')
+                vendor.contact_address = request.form.get('contact_address')
+                vendor.contact_city = request.form.get('contact_city')
+                vendor.contact_state = request.form.get('contact_state')
+                vendor.contact_zip = request.form.get('contact_zip')
+                vendor.contact_country = request.form.get('contact_country')
+                vendor.active = bool(request.form.get('active'))
+                vendor.updated_by = current_user.get_display_name()
+                
+                # Handle approved consortiums
+                approved_consortiums = parse_comma_list(request.form.get('approved_consortiums'))
+                vendor.set_approved_consortiums(approved_consortiums)
+                
+                db.session.commit()
+                
+                flash('✅ Vendor updated successfully!', 'success')
+                return redirect(url_for('vendors'))
+                
+            except Exception as e:
+                flash(f'❌ Error updating vendor: {str(e)}', 'error')
+        
+        # Pre-populate JSON fields for editing
+        vendor.approved_consortiums_display = ', '.join(vendor.get_approved_consortiums())
+        
+        return render_template('admin/vendor_form.html', vendor=vendor, action='Edit')
+    
+    @app.route('/vendor/<int:id>/delete', methods=['POST'])
+    @login_required
+    def vendor_delete(id):
+        """Delete vendor"""
+        vendor = Vendor.query.get_or_404(id)
+        try:
+            db.session.delete(vendor)
+            db.session.commit()
+            flash('✅ Vendor deleted successfully!', 'success')
+        except Exception as e:
+            flash(f'❌ Error deleting vendor: {str(e)}', 'error')
+        return redirect(url_for('vendors'))
+    
+    # Vendor Sites (Contacts) routes
+    @app.route('/vendor-site/new', methods=['GET', 'POST'])
+    @login_required
+    def vendor_site_new():
+        """Create new vendor site/contact"""
+        vendor_id = request.args.get('vendor_id')
+        vendor = Vendor.query.get_or_404(vendor_id) if vendor_id else None
+        
+        if request.method == 'POST':
+            try:
+                # Auto-generate vendor site ID
+                vendor_site_id = generate_next_id(VendorSite, 'vendor_site_id', '', 8)
+                
+                vendor_site = VendorSite(
+                    vendor_site_id=vendor_site_id,
+                    vendor_id=int(request.form.get('vendor_id')),
+                    contact_name=request.form.get('contact_name'),
+                    contact_dept=request.form.get('contact_dept'),
+                    contact_tel=request.form.get('contact_tel'),
+                    contact_fax=request.form.get('contact_fax'),
+                    contact_address=request.form.get('contact_address'),
+                    contact_city=request.form.get('contact_city'),
+                    contact_state=request.form.get('contact_state'),
+                    contact_zip=request.form.get('contact_zip'),
+                    contact_country=request.form.get('contact_country'),
+                    active=bool(request.form.get('active', True)),
+                    created_by=current_user.get_display_name()
+                )
+                
+                db.session.add(vendor_site)
+                db.session.commit()
+                
+                flash('✅ Vendor contact created successfully!', 'success')
+                return redirect(url_for('vendor_edit', id=vendor_site.vendor_id))
+                
+            except Exception as e:
+                flash(f'❌ Error creating vendor contact: {str(e)}', 'error')
+        
+        vendors = Vendor.query.filter_by(active=True).all()
+        return render_template('admin/vendor_site_form.html', vendor_site=None, action='Create', 
+                             vendors=vendors, selected_vendor=vendor)
+    
+    @app.route('/vendor-site/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def vendor_site_edit(id):
+        """Edit vendor site/contact"""
+        vendor_site = VendorSite.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                vendor_site.contact_name = request.form.get('contact_name')
+                vendor_site.contact_dept = request.form.get('contact_dept')
+                vendor_site.contact_tel = request.form.get('contact_tel')
+                vendor_site.contact_fax = request.form.get('contact_fax')
+                vendor_site.contact_address = request.form.get('contact_address')
+                vendor_site.contact_city = request.form.get('contact_city')
+                vendor_site.contact_state = request.form.get('contact_state')
+                vendor_site.contact_zip = request.form.get('contact_zip')
+                vendor_site.contact_country = request.form.get('contact_country')
+                vendor_site.active = bool(request.form.get('active'))
+                vendor_site.updated_by = current_user.get_display_name()
+                
+                db.session.commit()
+                
+                flash('✅ Vendor contact updated successfully!', 'success')
+                return redirect(url_for('vendor_edit', id=vendor_site.vendor_id))
+                
+            except Exception as e:
+                flash(f'❌ Error updating vendor contact: {str(e)}', 'error')
+        
+        vendors = Vendor.query.filter_by(active=True).all()
+        return render_template('admin/vendor_site_form.html', vendor_site=vendor_site, action='Edit', 
+                             vendors=vendors, selected_vendor=vendor_site.vendor)
+    
+    @app.route('/vendor-site/<int:id>/delete', methods=['POST'])
+    @login_required
+    def vendor_site_delete(id):
+        """Delete vendor site/contact"""
+        vendor_site = VendorSite.query.get_or_404(id)
+        vendor_id = vendor_site.vendor_id
+        try:
+            db.session.delete(vendor_site)
+            db.session.commit()
+            flash('✅ Vendor contact deleted successfully!', 'success')
+        except Exception as e:
+            flash(f'❌ Error deleting vendor contact: {str(e)}', 'error')
+        return redirect(url_for('vendor_edit', id=vendor_id))
+    
+    # Lists routes (Configuration Management)
+    @app.route('/lists')
+    @login_required
+    def lists():
+        """List all configuration lists grouped by type"""
+        # Group lists by type
+        list_types = db.session.query(List.type).distinct().all()
+        grouped_lists = {}
+        
+        for (list_type,) in list_types:
+            grouped_lists[list_type] = List.query.filter_by(type=list_type, active=True).order_by(List.key).all()
+        
+        return render_template('admin/lists.html', grouped_lists=grouped_lists)
+    
+    @app.route('/list/new', methods=['GET', 'POST'])
+    @login_required
+    def list_new():
+        """Create new list item"""
+        if request.method == 'POST':
+            try:
+                # Auto-generate list ID
+                list_id = generate_next_id(List, 'list_id', '', 10)
+                
+                list_item = List(
+                    list_id=list_id,
+                    type=request.form.get('type'),
+                    key=request.form.get('key'),
+                    value=request.form.get('value'),
+                    active=bool(request.form.get('active', True)),
+                    created_by=current_user.get_display_name()
+                )
+                
+                db.session.add(list_item)
+                db.session.commit()
+                
+                flash('✅ List item created successfully!', 'success')
+                return redirect(url_for('lists'))
+                
+            except Exception as e:
+                flash(f'❌ Error creating list item: {str(e)}', 'error')
+        
+        # Get existing types for dropdown
+        existing_types = [t[0] for t in db.session.query(List.type).distinct().all()]
+        return render_template('admin/list_form.html', list_item=None, action='Create', existing_types=existing_types)
+    
+    @app.route('/list/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def list_edit(id):
+        """Edit list item"""
+        list_item = List.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                list_item.type = request.form.get('type')
+                list_item.key = request.form.get('key')
+                list_item.value = request.form.get('value')
+                list_item.active = bool(request.form.get('active'))
+                list_item.updated_by = current_user.get_display_name()
+                
+                db.session.commit()
+                
+                flash('✅ List item updated successfully!', 'success')
+                return redirect(url_for('lists'))
+                
+            except Exception as e:
+                flash(f'❌ Error updating list item: {str(e)}', 'error')
+        
+        existing_types = [t[0] for t in db.session.query(List.type).distinct().all()]
+        return render_template('admin/list_form.html', list_item=list_item, action='Edit', existing_types=existing_types)
+    
+    @app.route('/list/<int:id>/delete', methods=['POST'])
+    @login_required
+    def list_delete(id):
+        """Delete list item"""
+        list_item = List.query.get_or_404(id)
+        try:
+            db.session.delete(list_item)
+            db.session.commit()
+            flash('✅ List item deleted successfully!', 'success')
+        except Exception as e:
+            flash(f'❌ Error deleting list item: {str(e)}', 'error')
+        return redirect(url_for('lists'))
+    
+    @app.route('/seed-lists', methods=['POST'])
+    @login_required
+    def seed_lists():
+        """Seed the database with required list configurations"""
+        try:
+            # Configuration data as specified
+            config_data = [
+                # Admin levels
+                ('adminlevel', 'CAL_MEET_USER', 'Meeting Calendar User'),
+                ('adminlevel', 'GOD', 'Super Admin'),
+                ('adminlevel', 'RFPO_ADMIN', 'RFPO Full Admin'),
+                ('adminlevel', 'RFPO_USER', 'RFPO User'),
+                ('adminlevel', 'VROOM_ADMIN', 'VROOM Full Admin'),
+                ('adminlevel', 'VROOM_USER', 'VROOM User'),
+                
+                # Meeting IT
+                ('meeting_it', 'AV', 'Projector/VCR/TV'),
+                ('meeting_it', 'PC', 'PC/Laptop'),
+                ('meeting_it', 'ROOM', 'Meeting Room'),
+                ('meeting_it', 'TEL', 'Video/Tele Conference'),
+                ('meeting_it', 'XXX', 'Misc'),
+                
+                # RFPO Approval levels
+                ('rfpo_appro', '5', 'Vendor Review'),
+                ('rfpo_appro', '8', 'Management Review'),
+                ('rfpo_appro', '10', 'Technical Approval'),
+                ('rfpo_appro', '12', 'Project Manager Approval'),
+                ('rfpo_appro', '20', 'Board Approval'),
+                ('rfpo_appro', '21', 'Executive Director Approval'),
+                ('rfpo_appro', '22', 'Management Committee Approval'),
+                ('rfpo_appro', '23', 'Technical Leadership Council'),
+                ('rfpo_appro', '25', 'Steering Approval'),
+                ('rfpo_appro', '26', 'Finance Approval'),
+                ('rfpo_appro', '28', 'USCAR Leadership Group Approval'),
+                ('rfpo_appro', '29', 'USCAR Internal Approval'),
+                ('rfpo_appro', '30', 'Treasurer\'s Review'),
+                ('rfpo_appro', '35', 'Partnership Chair'),
+                ('rfpo_appro', '36', 'TLC Oversight'),
+                ('rfpo_appro', '40', 'Vice President Approval'),
+                ('rfpo_appro', '99', 'PO Release Approval'),
+                
+                # RFPO Brackets
+                ('rfpo_brack', '10', '5000'),
+                ('rfpo_brack', '20', '15000'),
+                ('rfpo_brack', '30', '100000'),
+                ('rfpo_brack', '40', '150000'),
+                ('rfpo_brack', '50', '999999999'),
+                
+                # RFPO Status
+                ('rfpo_statu', '10', 'draft'),
+                ('rfpo_statu', '15', 'waiting'),
+                ('rfpo_statu', '20', 'conditional'),
+                ('rfpo_statu', '30', 'approved'),
+                ('rfpo_statu', '40', 'refused'),
+            ]
+            
+            created_count = 0
+            for list_type, key, value in config_data:
+                # Check if already exists
+                existing = List.query.filter_by(type=list_type, key=key).first()
+                if not existing:
+                    list_id = generate_next_id(List, 'list_id', '', 10)
+                    list_item = List(
+                        list_id=list_id,
+                        type=list_type,
+                        key=key,
+                        value=value,
+                        active=True,
+                        created_by=current_user.get_display_name()
+                    )
+                    db.session.add(list_item)
+                    created_count += 1
+            
+            db.session.commit()
+            flash(f'✅ Seeded {created_count} list configuration items!', 'success')
+            
+        except Exception as e:
+            flash(f'❌ Error seeding lists: {str(e)}', 'error')
+        
+        return redirect(url_for('lists'))
+    
+    @app.route('/seed-consortiums', methods=['POST'])
+    @login_required
+    def seed_consortiums():
+        """Seed the database with standard consortium data"""
+        try:
+            # Standard consortium data as specified
+            consortium_data = [
+                ('APT', 'Advanced Powertrain'),
+                ('EETLC', 'EETLC'),
+                ('MAT', 'Materials TLC'),
+                ('Non-USCAR', 'Non-USCAR'),
+                ('OSRP', 'Occupant Safety Research Partnership'),
+                ('USABC', 'United States Advanced Battery Consortium'),
+                ('USAMP', 'United States Automotive Materials Partnership'),
+                ('USCAR', 'United States Council for Automotive Research LLC'),
+                ('HFC', 'USCAR Hydrogen & Fuel Cell TLC'),
+                ('MFG', 'USCAR LLC Manufacturing Technical Leadership Council'),
+            ]
+            
+            created_count = 0
+            for abbrev, name in consortium_data:
+                # Check if already exists by abbreviation
+                existing = Consortium.query.filter_by(abbrev=abbrev).first()
+                if not existing:
+                    # Auto-generate consortium ID
+                    consort_id = generate_next_id(Consortium, 'consort_id', '', 8)
+                    
+                    consortium = Consortium(
+                        consort_id=consort_id,
+                        name=name,
+                        abbrev=abbrev,
+                        require_approved_vendors=True,  # Default to requiring approved vendors
+                        active=True,
+                        created_by=current_user.get_display_name()
+                    )
+                    db.session.add(consortium)
+                    created_count += 1
+                else:
+                    # Update existing consortium to ensure it's active and has correct name
+                    existing.name = name
+                    existing.active = True
+                    existing.updated_by = current_user.get_display_name()
+            
+            db.session.commit()
+            
+            if created_count > 0:
+                flash(f'✅ Seeded {created_count} new consortiums!', 'success')
+            else:
+                flash('ℹ️  All standard consortiums already exist and have been updated.', 'info')
+            
+        except Exception as e:
+            flash(f'❌ Error seeding consortiums: {str(e)}', 'error')
+        
+        return redirect(url_for('consortiums'))
+    
+    # API endpoints for quick data
+    @app.route('/api/stats')
+    @login_required
+    def api_stats():
+        """Get dashboard statistics"""
+        stats = {
+            'consortiums': Consortium.query.filter_by(active=True).count(),
+            'teams': Team.query.filter_by(active=True).count(),
+            'rfpos': RFPO.query.count(),
+            'users': User.query.filter_by(active=True).count(),
+            'vendors': Vendor.query.filter_by(active=True).count(),
+            'projects': Project.query.filter_by(active=True).count(),
+            'uploaded_files': UploadedFile.query.count(),
+        }
+        return jsonify(stats)
+    
+    @app.route('/api/users')
+    @login_required
+    def api_users():
+        """Get all active users for dropdowns and selection"""
+        users = User.query.filter_by(active=True).all()
+        user_data = []
+        for user in users:
+            user_data.append({
+                'id': user.record_id,
+                'name': user.get_display_name(),
+                'email': user.email,
+                'company': user.company or 'N/A'
+            })
+        return jsonify(user_data)
+    
+    @app.route('/api/consortiums')
+    @login_required
+    def api_consortiums():
+        """Get all active consortiums for dropdowns"""
+        consortiums = Consortium.query.filter_by(active=True).all()
+        consortium_data = []
+        for consortium in consortiums:
+            consortium_data.append({
+                'id': consortium.consort_id,
+                'name': consortium.name,
+                'abbrev': consortium.abbrev
+            })
+        return jsonify(consortium_data)
+    
+    return app
+
+if __name__ == '__main__':
+    app = create_app()
+    
+    with app.app_context():
+        # Create tables if they don't exist
+        db.create_all()
+    
+    print("🚀 Custom RFPO Admin Panel Starting...")
+    print("=" * 60)
+    print("📧 Default Login: admin@rfpo.com")
+    print("🔑 Default Password: admin123")
+    print("🌐 Admin Panel: http://localhost:5111/")
+    print("=" * 60)
+    print("✨ NO Flask-Admin - Custom built from scratch!")
+    print("🎯 Direct database operations - no compatibility issues!")
+    print("📝 JSON fields handled properly with transformations")
+    print("⚠️  Running on port 5111 (main app uses 5000)")
+    print("")
+    
+    app.run(debug=True, host='0.0.0.0', port=5111)

@@ -1,0 +1,145 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Vendors - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">🏪 Vendors</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('vendor_new') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> New Vendor
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if vendors %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Vendor ID</th>
+                            <th>Company Name</th>
+                            <th>Status</th>
+                            <th>Type</th>
+                            <th>Approved Consortiums</th>
+                            <th>Contact</th>
+                            <th>Certs & Reps</th>
+                            <th>Active</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vendor in vendors %}
+                        <tr>
+                            <td><strong>{{ vendor.vendor_id }}</strong></td>
+                            <td>{{ vendor.company_name }}</td>
+                            <td>
+                                {% if vendor.status == 'live' %}
+                                    <span class="badge bg-success">Live</span>
+                                {% else %}
+                                    <span class="badge bg-warning">{{ vendor.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ vendor.get_vendor_type_display() }}</td>
+                            <td>
+                                {% if vendor.consortium_info %}
+                                    {% for consortium in vendor.consortium_info %}
+                                    <span class="badge bg-primary me-1 consortium-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          title="{{ consortium.name }}">
+                                        {{ consortium.abbrev }}
+                                    </span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-muted">None</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ vendor.contact_name or 'N/A' }}</td>
+                            <td>
+                                {% if vendor.certs_reps %}
+                                    <span class="badge bg-success">✓</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">✗</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if vendor.active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ vendor.created_at.strftime('%Y-%m-%d') if vendor.created_at else '' }}</small></td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('vendor_edit', id=vendor.id) }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteVendor({{ vendor.id }}, '{{ vendor.company_name }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-store fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Vendors Found</h5>
+                <p class="text-muted">Get started by creating your first vendor.</p>
+                <a href="{{ url_for('vendor_new') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create First Vendor
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete vendor <strong id="vendorName"></strong>?</p>
+                <p class="text-muted">This action cannot be undone and will also delete all associated contacts.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize tooltips for consortium badges
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+function deleteVendor(id, name) {
+    document.getElementById('vendorName').textContent = name;
+    document.getElementById('deleteForm').action = '/vendor/' + id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

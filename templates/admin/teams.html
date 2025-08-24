@@ -1,0 +1,133 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Teams - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">👥 Teams</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('team_new') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> New Team
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if teams %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Team ID</th>
+                            <th>Name</th>
+                            <th>Abbreviation</th>
+                            <th>Consortium</th>
+                            <th>Description</th>
+                            <th>Projects</th>
+                            <th>Viewers</th>
+                            <th>Admins</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in teams %}
+                        <tr>
+                            <td><strong>{{ team.record_id }}</strong></td>
+                            <td>{{ team.name }}</td>
+                            <td><span class="badge bg-info">{{ team.abbrev }}</span></td>
+                            <td>
+                                {% if team.consortium_consort_id %}
+                                    <span class="badge bg-secondary consortium-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          title="{{ team.consortium_name }}">
+                                        {{ team.consortium_abbrev }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">None</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ team.description[:50] if team.description else 'No description' }}{% if team.description and team.description|length > 50 %}...{% endif %}</small></td>
+                            <td>{{ team.project_count }}</td>
+                            <td>{{ team.viewer_count }}</td>
+                            <td>{{ team.admin_count }}</td>
+                            <td>
+                                {% if team.active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ team.created_at.strftime('%Y-%m-%d') if team.created_at else '' }}</small></td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('team_edit', id=team.id) }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteTeam({{ team.id }}, '{{ team.name }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Teams Found</h5>
+                <p class="text-muted">Get started by creating your first team.</p>
+                <a href="{{ url_for('team_new') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create First Team
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete team <strong id="teamName"></strong>?</p>
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize tooltips for consortium badges
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+function deleteTeam(id, name) {
+    document.getElementById('teamName').textContent = name;
+    document.getElementById('deleteForm').action = '/team/' + id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

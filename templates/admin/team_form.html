@@ -1,0 +1,314 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action }} Team - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">👥 {{ action }} Team</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('teams') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row">
+                <!-- Basic Information -->
+                <div class="col-md-6">
+                    <h5 class="mb-3">📋 Basic Information</h5>
+                    
+                    {% if team %}
+                    <div class="mb-3">
+                        <label for="record_id" class="form-label">Team ID</label>
+                        <input type="text" class="form-control" id="record_id" name="record_id" 
+                               value="{{ team.record_id }}" readonly>
+                        <div class="form-text">Auto-generated unique identifier</div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Team ID</strong> will be auto-generated when you save
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Team Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               value="{{ team.name if team else '' }}" required
+                               placeholder="e.g., Research & Development Team">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="abbrev" class="form-label">Abbreviation <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="abbrev" name="abbrev" 
+                               value="{{ team.abbrev if team else '' }}" required
+                               placeholder="e.g., R&D" maxlength="32">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" 
+                                  rows="4" placeholder="Team description and responsibilities">{{ team.description if team else '' }}</textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="consortium_consort_id" class="form-label">Consortium</label>
+                        <select class="form-control" id="consortium_consort_id" name="consortium_consort_id">
+                            <option value="">None (Independent Team)</option>
+                            {% for consortium in consortiums %}
+                            <option value="{{ consortium.consort_id }}" 
+                                    {{ 'selected' if team and team.consortium_consort_id == consortium.consort_id else '' }}>
+                                [{{ consortium.abbrev }}] {{ consortium.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select the consortium this team belongs to, or leave as "None"</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="active" 
+                                   name="active" value="1"
+                                   {{ 'checked' if not team or team.active else '' }}>
+                            <label class="form-check-label" for="active">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- User Permissions -->
+                <div class="col-md-6">
+                    <h5 class="mb-3">👥 User Permissions</h5>
+                    
+                    <!-- RFPO Viewer Users -->
+                    <div class="mb-4">
+                        <label class="form-label">RFPO Viewer Users</label>
+                        <input type="text" class="form-control mb-2" id="viewerSearch" placeholder="🔍 Search users by name..." onkeyup="filterUsers('viewer')">
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-muted">👥 Available Users</h6>
+                                <div class="border rounded p-2" style="height: 200px; overflow-y: auto;" id="availableViewerUsers">
+                                    <div class="text-muted p-2">Loading users...</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted">✅ Selected Viewers</h6>
+                                <div class="border rounded p-2 bg-light" style="height: 200px; overflow-y: auto;" id="selectedViewerUsers">
+                                    <div class="text-muted p-2">No users selected</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="rfpo_viewer_user_ids" name="rfpo_viewer_user_ids" value="{{ team.rfpo_viewer_user_ids_display if team else '' }}">
+                        <div class="form-text mt-2">Select users who can view RFPOs for this team</div>
+                    </div>
+                    
+                    <!-- RFPO Admin Users -->
+                    <div class="mb-4">
+                        <label class="form-label">RFPO Admin Users</label>
+                        <input type="text" class="form-control mb-2" id="adminSearch" placeholder="🔍 Search users by name..." onkeyup="filterUsers('admin')">
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-muted">👥 Available Users</h6>
+                                <div class="border rounded p-2" style="height: 200px; overflow-y: auto;" id="availableAdminUsers">
+                                    <div class="text-muted p-2">Loading users...</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted">🔧 Selected Admins</h6>
+                                <div class="border rounded p-2 bg-light" style="height: 200px; overflow-y: auto;" id="selectedAdminUsers">
+                                    <div class="text-muted p-2">No users selected</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="rfpo_admin_user_ids" name="rfpo_admin_user_ids" value="{{ team.rfpo_admin_user_ids_display if team else '' }}">
+                        <div class="form-text mt-2">Select users who can administer RFPOs for this team</div>
+                    </div>
+                    
+                    {% if team %}
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">📊 Team Statistics</h6>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Created:</strong> {{ team.created_at.strftime('%Y-%m-%d %H:%M:%S') if team.created_at else 'Unknown' }}</p>
+                            <p><strong>Created By:</strong> {{ team.created_by or 'Unknown' }}</p>
+                            {% if team.updated_at %}
+                            <p><strong>Updated:</strong> {{ team.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                            <p><strong>Updated By:</strong> {{ team.updated_by or 'Unknown' }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('teams') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Team
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allUsers = [];
+let selectedViewers = [];
+let selectedAdmins = [];
+
+// Load all users when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadUsers();
+    
+    // Parse existing selections if editing
+    const existingViewers = document.getElementById('rfpo_viewer_user_ids').value;
+    const existingAdmins = document.getElementById('rfpo_admin_user_ids').value;
+    
+    if (existingViewers) {
+        selectedViewers = existingViewers.split(',').map(s => s.trim()).filter(s => s);
+    }
+    if (existingAdmins) {
+        selectedAdmins = existingAdmins.split(',').map(s => s.trim()).filter(s => s);
+    }
+});
+
+function loadUsers() {
+    fetch('/api/users')
+        .then(response => response.json())
+        .then(users => {
+            allUsers = users;
+            displayAvailableUsers('viewer');
+            displayAvailableUsers('admin');
+            displaySelectedUsers('viewer');
+            displaySelectedUsers('admin');
+        })
+        .catch(error => {
+            console.error('Error loading users:', error);
+            document.getElementById('availableViewerUsers').innerHTML = '<div class="text-danger p-2">Error loading users</div>';
+            document.getElementById('availableAdminUsers').innerHTML = '<div class="text-danger p-2">Error loading users</div>';
+        });
+}
+
+function filterUsers(type) {
+    displayAvailableUsers(type);
+}
+
+function displayAvailableUsers(type) {
+    const searchInput = type === 'viewer' ? 'viewerSearch' : 'adminSearch';
+    const searchTerm = document.getElementById(searchInput).value.toLowerCase();
+    const selectedList = type === 'viewer' ? selectedViewers : selectedAdmins;
+    const listId = type === 'viewer' ? 'availableViewerUsers' : 'availableAdminUsers';
+    
+    // Filter users: not selected and matching search term
+    const availableUsers = allUsers.filter(user => 
+        !selectedList.includes(user.id) &&
+        (user.name.toLowerCase().includes(searchTerm) || 
+         user.email.toLowerCase().includes(searchTerm) ||
+         user.id.toLowerCase().includes(searchTerm))
+    );
+    
+    if (availableUsers.length === 0) {
+        document.getElementById(listId).innerHTML = '<div class="text-muted p-2">No available users</div>';
+        return;
+    }
+    
+    let html = '';
+    availableUsers.forEach(user => {
+        html += `
+            <div class="d-flex align-items-center p-2 border-bottom user-item" style="cursor: pointer;" onclick="addUser('${type}', '${user.id}')">
+                <div class="me-2">
+                    <i class="fas fa-plus-circle text-success"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div><strong>${user.name}</strong> <small class="text-muted">(${user.id})</small></div>
+                    <small class="text-muted">${user.email}</small>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById(listId).innerHTML = html;
+}
+
+function displaySelectedUsers(type) {
+    const selectedList = type === 'viewer' ? selectedViewers : selectedAdmins;
+    const listId = type === 'viewer' ? 'selectedViewerUsers' : 'selectedAdminUsers';
+    
+    if (selectedList.length === 0) {
+        document.getElementById(listId).innerHTML = '<div class="text-muted p-2">No users selected</div>';
+        return;
+    }
+    
+    let html = '';
+    selectedList.forEach(userId => {
+        const user = allUsers.find(u => u.id === userId);
+        if (user) {
+            html += `
+                <div class="d-flex align-items-center p-2 border-bottom user-item" style="cursor: pointer;" onclick="removeUser('${type}', '${userId}')">
+                    <div class="me-2">
+                        <i class="fas fa-minus-circle text-danger"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div><strong>${user.name}</strong> <small class="text-muted">(${user.id})</small></div>
+                        <small class="text-muted">${user.email}</small>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById(listId).innerHTML = html;
+}
+
+function addUser(type, userId) {
+    const selectedList = type === 'viewer' ? selectedViewers : selectedAdmins;
+    const hiddenInputId = type === 'viewer' ? 'rfpo_viewer_user_ids' : 'rfpo_admin_user_ids';
+    
+    if (!selectedList.includes(userId)) {
+        selectedList.push(userId);
+        document.getElementById(hiddenInputId).value = selectedList.join(', ');
+        
+        // Refresh both lists
+        displayAvailableUsers(type);
+        displaySelectedUsers(type);
+    }
+}
+
+function removeUser(type, userId) {
+    const selectedList = type === 'viewer' ? selectedViewers : selectedAdmins;
+    const hiddenInputId = type === 'viewer' ? 'rfpo_viewer_user_ids' : 'rfpo_admin_user_ids';
+    
+    const index = selectedList.indexOf(userId);
+    if (index > -1) {
+        selectedList.splice(index, 1);
+        document.getElementById(hiddenInputId).value = selectedList.join(', ');
+        
+        // Refresh both lists
+        displayAvailableUsers(type);
+        displaySelectedUsers(type);
+    }
+}
+</script>
+
+<style>
+.user-item:hover {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}

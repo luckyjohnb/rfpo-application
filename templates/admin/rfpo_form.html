@@ -1,0 +1,107 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action }} RFPO - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📄 {{ action }} RFPO</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('rfpos') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="mb-3">📋 Basic Information</h5>
+                    
+                    {% if rfpo %}
+                    <div class="mb-3">
+                        <label for="rfpo_id" class="form-label">RFPO ID</label>
+                        <input type="text" class="form-control" id="rfpo_id" name="rfpo_id" 
+                               value="{{ rfpo.rfpo_id }}" readonly>
+                        <div class="form-text">Auto-generated unique identifier</div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>RFPO ID</strong> will be auto-generated (e.g., RFPO-2024-001)
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="title" name="title" 
+                               value="{{ rfpo.title if rfpo else '' }}" required
+                               placeholder="RFPO title">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" 
+                                  rows="4" placeholder="Detailed description of the RFPO">{{ rfpo.description if rfpo else '' }}</textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="vendor" class="form-label">Vendor</label>
+                        <input type="text" class="form-control" id="vendor" name="vendor" 
+                               value="{{ rfpo.vendor if rfpo else '' }}"
+                               placeholder="Vendor name">
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h5 class="mb-3">📅 Details</h5>
+                    
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-control" id="status" name="status">
+                            <option value="Draft" {{ 'selected' if rfpo and rfpo.status == 'Draft' else '' }}>Draft</option>
+                            <option value="In Progress" {{ 'selected' if rfpo and rfpo.status == 'In Progress' else '' }}>In Progress</option>
+                            <option value="Under Review" {{ 'selected' if rfpo and rfpo.status == 'Under Review' else '' }}>Under Review</option>
+                            <option value="Approved" {{ 'selected' if rfpo and rfpo.status == 'Approved' else '' }}>Approved</option>
+                            <option value="Completed" {{ 'selected' if rfpo and rfpo.status == 'Completed' else '' }}>Completed</option>
+                            <option value="Cancelled" {{ 'selected' if rfpo and rfpo.status == 'Cancelled' else '' }}>Cancelled</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="due_date" class="form-label">Due Date</label>
+                        <input type="date" class="form-control" id="due_date" name="due_date" 
+                               value="{{ rfpo.due_date.strftime('%Y-%m-%d') if rfpo and rfpo.due_date else '' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="team_id" class="form-label">Team <span class="text-danger">*</span></label>
+                        <select class="form-control" id="team_id" name="team_id" required>
+                            <option value="">Select a team...</option>
+                            {% for team in teams %}
+                            <option value="{{ team.id }}" {{ 'selected' if rfpo and rfpo.team_id == team.id else '' }}>
+                                {{ team.name }} ({{ team.abbrev }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('rfpos') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} RFPO
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

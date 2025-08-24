@@ -1,0 +1,166 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action }} Vendor Contact - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📇 {{ action }} Vendor Contact</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('vendors') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Vendors
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="mb-3">🏢 Vendor & Contact Info</h5>
+                    
+                    {% if vendor_site %}
+                    <div class="mb-3">
+                        <label for="vendor_site_id" class="form-label">Contact ID</label>
+                        <input type="text" class="form-control" id="vendor_site_id" name="vendor_site_id" 
+                               value="{{ vendor_site.vendor_site_id }}" readonly>
+                        <div class="form-text">Auto-generated unique identifier</div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Contact ID</strong> will be auto-generated when you save
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="vendor_id" class="form-label">Vendor <span class="text-danger">*</span></label>
+                        <select class="form-control" id="vendor_id" name="vendor_id" required>
+                            <option value="">Select vendor...</option>
+                            {% for vendor in vendors %}
+                            <option value="{{ vendor.id }}" 
+                                    {{ 'selected' if (vendor_site and vendor_site.vendor_id == vendor.id) or (selected_vendor and selected_vendor.id == vendor.id) else '' }}>
+                                {{ vendor.company_name }} ({{ vendor.vendor_id }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_name" class="form-label">Contact Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="contact_name" name="contact_name" 
+                               value="{{ vendor_site.contact_name if vendor_site else '' }}" required
+                               placeholder="Contact person name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_dept" class="form-label">Department</label>
+                        <input type="text" class="form-control" id="contact_dept" name="contact_dept" 
+                               value="{{ vendor_site.contact_dept if vendor_site else '' }}"
+                               placeholder="e.g., Sales, Engineering, Finance">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_tel" class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="contact_tel" name="contact_tel" 
+                               value="{{ vendor_site.contact_tel if vendor_site else '' }}"
+                               placeholder="Phone number">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_fax" class="form-label">Fax</label>
+                        <input type="text" class="form-control" id="contact_fax" name="contact_fax" 
+                               value="{{ vendor_site.contact_fax if vendor_site else '' }}"
+                               placeholder="Fax number">
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h5 class="mb-3">📍 Address Information</h5>
+                    
+                    <div class="mb-3">
+                        <label for="contact_address" class="form-label">Street Address</label>
+                        <textarea class="form-control" id="contact_address" name="contact_address" 
+                                  rows="3" placeholder="Street address">{{ vendor_site.contact_address if vendor_site else '' }}</textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="contact_city" class="form-label">City</label>
+                                <input type="text" class="form-control" id="contact_city" name="contact_city" 
+                                       value="{{ vendor_site.contact_city if vendor_site else '' }}"
+                                       placeholder="City name">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="contact_state" class="form-label">State</label>
+                                <input type="text" class="form-control" id="contact_state" name="contact_state" 
+                                       value="{{ vendor_site.contact_state if vendor_site else '' }}" maxlength="2"
+                                       placeholder="CA">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="contact_zip" class="form-label">ZIP</label>
+                                <input type="text" class="form-control" id="contact_zip" name="contact_zip" 
+                                       value="{{ vendor_site.contact_zip if vendor_site else '' }}"
+                                       placeholder="12345">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_country" class="form-label">Country</label>
+                        <input type="text" class="form-control" id="contact_country" name="contact_country" 
+                               value="{{ vendor_site.contact_country if vendor_site else '' }}"
+                               placeholder="United States">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="active" 
+                                   name="active" value="1"
+                                   {{ 'checked' if not vendor_site or vendor_site.active else '' }}>
+                            <label class="form-check-label" for="active">
+                                Active Contact
+                            </label>
+                        </div>
+                    </div>
+                    
+                    {% if vendor_site %}
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">📊 Contact Information</h6>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Created:</strong> {{ vendor_site.created_at.strftime('%Y-%m-%d %H:%M:%S') if vendor_site.created_at else 'Unknown' }}</p>
+                            <p><strong>Created By:</strong> {{ vendor_site.created_by or 'Unknown' }}</p>
+                            {% if vendor_site.updated_at %}
+                            <p><strong>Updated:</strong> {{ vendor_site.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                            <p><strong>Updated By:</strong> {{ vendor_site.updated_by or 'Unknown' }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('vendors') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Contact
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

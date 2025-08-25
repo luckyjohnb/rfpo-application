@@ -4,7 +4,7 @@ Custom RFPO Admin Panel - NO Flask-Admin Dependencies
 Built from scratch to avoid WTForms compatibility issues.
 """
 
-from flask import Flask, request, redirect, url_for, flash, render_template, jsonify
+from flask import Flask, request, redirect, url_for, flash, render_template, jsonify, send_file, Response
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
@@ -14,7 +14,8 @@ import os
 from datetime import datetime
 
 # Import your models
-from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam
+from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam, PDFPositioning
+from pdf_generator import RFPOPDFGenerator
 
 def create_app():
     """Create Flask application with custom admin panel"""
@@ -113,6 +114,22 @@ def create_app():
                 print(f"File upload error: {e}")
                 return None
         return None
+    
+    def _process_vendor_site_id(vendor_site_id_str):
+        """Process vendor_site_id which could be a regular ID or special 'vendor_X' format"""
+        if not vendor_site_id_str:
+            return None
+        
+        # If it's the special vendor primary contact format (vendor_123), 
+        # we'll store None since the vendor's primary contact info is already in the vendor record
+        if vendor_site_id_str.startswith('vendor_'):
+            return None
+        
+        # Otherwise, convert to integer for regular vendor site IDs
+        try:
+            return int(vendor_site_id_str)
+        except (ValueError, TypeError):
+            return None
     
     # Authentication routes
     @app.route('/login', methods=['GET', 'POST'])
@@ -706,7 +723,7 @@ Southfield, MI  48075""",
                     delivery_routing=request.form.get('delivery_routing'),
                     payment_terms=request.form.get('payment_terms', 'Net 30'),
                     vendor_id=int(request.form.get('vendor_id')) if request.form.get('vendor_id') else None,
-                    vendor_site_id=int(request.form.get('vendor_site_id')) if request.form.get('vendor_site_id') else None,
+                    vendor_site_id=_process_vendor_site_id(request.form.get('vendor_site_id')),
                     created_by=current_user.get_display_name()
                 )
                 
@@ -750,35 +767,64 @@ Southfield, MI  48075""",
         
         if request.method == 'POST':
             try:
-                # Update basic RFPO information
-                rfpo.title = request.form.get('title')
-                rfpo.description = request.form.get('description')
-                rfpo.government_agreement_number = request.form.get('government_agreement_number')
-                rfpo.requestor_tel = request.form.get('requestor_tel')
-                rfpo.requestor_location = request.form.get('requestor_location')
-                rfpo.shipto_name = request.form.get('shipto_name')
-                rfpo.shipto_tel = request.form.get('shipto_tel')
-                rfpo.shipto_address = request.form.get('shipto_address')
-                rfpo.delivery_date = datetime.strptime(request.form.get('delivery_date'), '%Y-%m-%d').date() if request.form.get('delivery_date') else None
-                rfpo.delivery_type = request.form.get('delivery_type')
-                rfpo.delivery_payment = request.form.get('delivery_payment')
-                rfpo.delivery_routing = request.form.get('delivery_routing')
-                rfpo.payment_terms = request.form.get('payment_terms', 'Net 30')
-                rfpo.vendor_id = int(request.form.get('vendor_id')) if request.form.get('vendor_id') else None
-                rfpo.vendor_site_id = int(request.form.get('vendor_site_id')) if request.form.get('vendor_site_id') else None
-                rfpo.status = request.form.get('status', 'Draft')
-                rfpo.comments = request.form.get('comments')
+                # Update RFPO information - only update fields that are provided
+                # This allows partial updates from different tabs
+                
+                # Basic Information fields (only update if provided)
+                if 'title' in request.form and request.form.get('title') is not None:
+                    rfpo.title = request.form.get('title')
+                if 'description' in request.form:
+                    rfpo.description = request.form.get('description')
+                if 'government_agreement_number' in request.form:
+                    rfpo.government_agreement_number = request.form.get('government_agreement_number')
+                if 'requestor_tel' in request.form:
+                    rfpo.requestor_tel = request.form.get('requestor_tel')
+                if 'requestor_location' in request.form:
+                    rfpo.requestor_location = request.form.get('requestor_location')
+                if 'status' in request.form:
+                    rfpo.status = request.form.get('status', 'Draft')
+                if 'comments' in request.form:
+                    rfpo.comments = request.form.get('comments')
+                
+                # Shipping Information fields
+                if 'shipto_name' in request.form:
+                    rfpo.shipto_name = request.form.get('shipto_name')
+                if 'shipto_tel' in request.form:
+                    rfpo.shipto_tel = request.form.get('shipto_tel')
+                if 'shipto_address' in request.form:
+                    rfpo.shipto_address = request.form.get('shipto_address')
+                if 'delivery_date' in request.form:
+                    rfpo.delivery_date = datetime.strptime(request.form.get('delivery_date'), '%Y-%m-%d').date() if request.form.get('delivery_date') else None
+                if 'delivery_type' in request.form:
+                    rfpo.delivery_type = request.form.get('delivery_type')
+                if 'delivery_payment' in request.form:
+                    rfpo.delivery_payment = request.form.get('delivery_payment')
+                if 'delivery_routing' in request.form:
+                    rfpo.delivery_routing = request.form.get('delivery_routing')
+                if 'payment_terms' in request.form:
+                    rfpo.payment_terms = request.form.get('payment_terms', 'Net 30')
+                
+                # Vendor Information fields
+                if 'vendor_id' in request.form:
+                    rfpo.vendor_id = int(request.form.get('vendor_id')) if request.form.get('vendor_id') else None
+                if 'vendor_site_id' in request.form:
+                    rfpo.vendor_site_id = _process_vendor_site_id(request.form.get('vendor_site_id'))
+                
+                # Always update audit fields
                 rfpo.updated_by = current_user.get_display_name()
                 
-                # Handle cost sharing
-                rfpo.cost_share_description = request.form.get('cost_share_description')
-                rfpo.cost_share_type = request.form.get('cost_share_type', 'total')
-                cost_share_amount = request.form.get('cost_share_amount')
-                if cost_share_amount:
-                    try:
-                        rfpo.cost_share_amount = float(cost_share_amount)
-                    except ValueError:
-                        rfpo.cost_share_amount = 0.00
+                # Handle cost sharing (only update if provided)
+                if 'cost_share_description' in request.form:
+                    rfpo.cost_share_description = request.form.get('cost_share_description')
+                if 'cost_share_type' in request.form:
+                    rfpo.cost_share_type = request.form.get('cost_share_type', 'total')
+                if 'cost_share_amount' in request.form:
+                    cost_share_amount = request.form.get('cost_share_amount')
+                    if cost_share_amount:
+                        try:
+                            rfpo.cost_share_amount = float(cost_share_amount)
+                        except ValueError:
+                            rfpo.cost_share_amount = 0.00
                 
                 # Recalculate totals
                 subtotal = sum(float(item.total_price) for item in rfpo.line_items)
@@ -852,9 +898,10 @@ Southfield, MI  48075""",
             line_item.calculate_total()
             
             db.session.add(line_item)
+            db.session.flush()  # Flush to get the line item in the session
             
-            # Update RFPO totals
-            subtotal = sum(float(item.total_price) for item in rfpo.line_items) + float(line_item.total_price)
+            # Update RFPO totals (recalculate from all line items)
+            subtotal = sum(float(item.total_price) for item in rfpo.line_items)
             rfpo.subtotal = subtotal
             rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
             
@@ -896,6 +943,59 @@ Southfield, MI  48075""",
             flash(f'❌ Error deleting line item: {str(e)}', 'error')
         
         return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
+    @app.route('/rfpo/<int:rfpo_id>/generate-po')
+    @login_required
+    def rfpo_generate_po(rfpo_id):
+        """Generate PO PDF for RFPO"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        try:
+            # Get related data
+            project = Project.query.filter_by(project_id=rfpo.project_id).first()
+            consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+            vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+            
+            # Handle vendor_site_id - regular VendorSite ID or None (uses vendor primary contact)
+            vendor_site = None
+            if rfpo.vendor_site_id:
+                try:
+                    vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+                except (ValueError, TypeError):
+                    vendor_site = None
+                
+            if not project or not consortium:
+                flash('❌ Missing project or consortium information for PDF generation.', 'error')
+                return redirect(url_for('rfpo_edit', id=rfpo_id))
+            
+            # Get positioning configuration for this consortium
+            positioning_config = PDFPositioning.query.filter_by(
+                consortium_id=consortium.consort_id,
+                template_name='po_template',
+                active=True
+            ).first()
+            
+            # Generate PDF with positioning configuration
+            pdf_generator = RFPOPDFGenerator(positioning_config=positioning_config)
+            pdf_buffer = pdf_generator.generate_po_pdf(rfpo, consortium, project, vendor, vendor_site)
+            
+            # Prepare filename
+            filename = f"PO_{rfpo.rfpo_id}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            
+            # Return PDF as response
+            return Response(
+                pdf_buffer.getvalue(),
+                mimetype='application/pdf',
+                headers={
+                    'Content-Disposition': f'inline; filename="{filename}"',
+                    'Content-Type': 'application/pdf'
+                }
+            )
+            
+        except Exception as e:
+            print(f"PDF generation error: {e}")
+            flash(f'❌ Error generating PDF: {str(e)}', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
     
     @app.route('/rfpo/<int:id>/delete', methods=['POST'])
     @login_required
@@ -1552,9 +1652,24 @@ Southfield, MI  48075""",
     @app.route('/api/vendor-sites/<int:vendor_id>')
     @login_required
     def api_vendor_sites(vendor_id):
-        """Get sites for a specific vendor"""
+        """Get sites for a specific vendor, including vendor's primary contact"""
         vendor = Vendor.query.get_or_404(vendor_id)
         site_data = []
+        
+        # Add vendor's primary contact as first option if it has contact info
+        if vendor.contact_name:
+            site_data.append({
+                'id': f'vendor_{vendor.id}',  # Special ID to indicate this is the vendor's primary contact
+                'contact_name': vendor.contact_name,
+                'contact_dept': vendor.contact_dept,
+                'contact_tel': vendor.contact_tel,
+                'contact_city': vendor.contact_city,
+                'contact_state': vendor.contact_state,
+                'full_address': vendor.get_full_contact_address(),
+                'is_primary': True
+            })
+        
+        # Add additional vendor sites
         for site in vendor.sites:
             site_data.append({
                 'id': site.id,
@@ -1563,9 +1678,346 @@ Southfield, MI  48075""",
                 'contact_tel': site.contact_tel,
                 'contact_city': site.contact_city,
                 'contact_state': site.contact_state,
-                'full_address': site.get_full_contact_address()
+                'full_address': site.get_full_contact_address(),
+                'is_primary': False
             })
         return jsonify(site_data)
+    
+    # PDF to Image conversion for positioning editor background
+    @app.route('/api/pdf-template-image/<template_name>')
+    def pdf_template_image(template_name):
+        """Convert PDF template to image for background display"""
+        print(f"🖼️ PDF Template Image Route Called:")
+        print(f"  - template_name: {template_name}")
+        
+        try:
+            import os
+            import io
+            from flask import Response, current_app
+            
+            # Try to import pdf2image, fall back to placeholder if not available
+            try:
+                from pdf2image import convert_from_path
+                
+                # Map template names to PDF files
+                template_files = {
+                    'po_template': 'po.pdf',
+                    'po_page2': 'po_page2.pdf'
+                }
+                
+                print(f"  - Available templates: {list(template_files.keys())}")
+                
+                if template_name not in template_files:
+                    print(f"❌ Template '{template_name}' not found in available templates")
+                    return Response("Template not found", status=404)
+                
+                pdf_path = os.path.join(app.root_path, 'static', 'po_files', template_files[template_name])
+                print(f"  - PDF path: {pdf_path}")
+                print(f"  - PDF exists: {os.path.exists(pdf_path)}")
+                
+                if not os.path.exists(pdf_path):
+                    return Response("PDF file not found", status=404)
+                
+                # Convert first page to image
+                images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=150)
+                
+                if not images:
+                    return Response("Failed to convert PDF", status=500)
+                
+                # Convert PIL Image to PNG bytes
+                img_buffer = io.BytesIO()
+                images[0].save(img_buffer, format='PNG')
+                img_buffer.seek(0)
+                
+                return Response(
+                    img_buffer.getvalue(),
+                    mimetype='image/png',
+                    headers={'Cache-Control': 'public, max-age=3600'}  # Cache for 1 hour
+                )
+                
+            except ImportError:
+                # pdf2image not available, create a placeholder image
+                from PIL import Image, ImageDraw, ImageFont
+                
+                # Create a white background with guidelines
+                width, height = 612, 792  # Standard letter size in points
+                img = Image.new('RGB', (width, height), 'white')
+                draw = ImageDraw.Draw(img)
+                
+                # Draw border
+                draw.rectangle([0, 0, width-1, height-1], outline='#cccccc', width=2)
+                
+                # Draw grid lines every 50 points
+                for x in range(0, width, 50):
+                    draw.line([x, 0, x, height], fill='#eeeeee', width=1)
+                for y in range(0, height, 50):
+                    draw.line([0, y, width, y], fill='#eeeeee', width=1)
+                
+                # Add title
+                try:
+                    font = ImageFont.load_default()
+                    draw.text((width//2, height//2), f"PDF Template: {template_name}", 
+                             fill='#999999', anchor='mm', font=font)
+                    draw.text((width//2, height//2 + 20), "Install poppler-utils for PDF preview", 
+                             fill='#666666', anchor='mm', font=font)
+                except:
+                    pass
+                
+                # Convert to PNG bytes
+                img_buffer = io.BytesIO()
+                img.save(img_buffer, format='PNG')
+                img_buffer.seek(0)
+                
+                return Response(
+                    img_buffer.getvalue(),
+                    mimetype='image/png',
+                    headers={
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                )
+            
+        except Exception as e:
+            print(f"Error generating template image: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(f"Error generating template image: {str(e)}", status=500)
+    
+    # PDF Positioning Editor routes
+    @app.route('/pdf-positioning')
+    @login_required
+    def pdf_positioning_list():
+        """List PDF positioning configurations"""
+        configs = PDFPositioning.query.order_by(PDFPositioning.consortium_id, PDFPositioning.template_name).all()
+        consortiums = Consortium.query.filter_by(active=True).all()
+        
+        # Add consortium info to each config
+        for config in configs:
+            config.consortium = Consortium.query.filter_by(consort_id=config.consortium_id).first()
+        
+        return render_template('admin/pdf_positioning_list.html', configs=configs, consortiums=consortiums)
+    
+    @app.route('/pdf-positioning/editor/<consortium_id>/<template_name>')
+    @login_required
+    def pdf_positioning_editor(consortium_id, template_name):
+        """Visual PDF positioning editor"""
+        print(f"🔍 PDF Editor Route Called:")
+        print(f"  - consortium_id: {consortium_id}")
+        print(f"  - template_name: {template_name}")
+        
+        # Debug: List all consortiums
+        all_consortiums = Consortium.query.all()
+        print(f"  - Available consortiums:")
+        for c in all_consortiums:
+            print(f"    * ID: {c.id}, consort_id: {c.consort_id}, name: {c.name}")
+        
+        consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
+        if not consortium:
+            print(f"❌ No consortium found with consort_id='{consortium_id}'")
+            return f"No consortium found with consort_id='{consortium_id}'. Available: {[c.consort_id for c in all_consortiums]}", 404
+        
+        print(f"✅ Found consortium: {consortium.name}")
+        
+        # Get existing positioning config or create default
+        config = PDFPositioning.query.filter_by(
+            consortium_id=consortium_id,
+            template_name=template_name,
+            active=True
+        ).first()
+        
+        if not config:
+            # Create default configuration with standard PDF fields
+            config = PDFPositioning(
+                consortium_id=consortium_id,
+                template_name=template_name,
+                created_by=current_user.get_display_name()
+            )
+            
+            # Set default positions for common PDF fields
+            default_fields = {
+                'consortium_logo': {'x': 50, 'y': 750, 'width': 80, 'height': 40, 'visible': True},
+                'po_number': {'x': 470, 'y': 710, 'font_size': 10, 'font_weight': 'bold', 'visible': True},
+                'po_date': {'x': 470, 'y': 695, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'vendor_company': {'x': 60, 'y': 600, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'vendor_contact': {'x': 60, 'y': 585, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'vendor_address': {'x': 60, 'y': 570, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'vendor_phone': {'x': 60, 'y': 555, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'ship_to_name': {'x': 240, 'y': 600, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'ship_to_address': {'x': 240, 'y': 585, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'delivery_type': {'x': 410, 'y': 570, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'delivery_payment': {'x': 410, 'y': 545, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'delivery_routing': {'x': 410, 'y': 520, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'payment_terms': {'x': 60, 'y': 470, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'project_info': {'x': 240, 'y': 470, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'delivery_date': {'x': 410, 'y': 470, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'government_agreement': {'x': 240, 'y': 455, 'font_size': 8, 'font_weight': 'normal', 'visible': True},
+                'requestor_info': {'x': 60, 'y': 380, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'invoice_address': {'x': 410, 'y': 380, 'font_size': 9, 'font_weight': 'normal', 'visible': True},
+                'line_items_header': {'x': 60, 'y': 320, 'font_size': 8, 'font_weight': 'bold', 'visible': True},
+                'subtotal': {'x': 400, 'y': 200, 'font_size': 9, 'font_weight': 'bold', 'visible': True},
+                'total': {'x': 400, 'y': 180, 'font_size': 11, 'font_weight': 'bold', 'visible': True}
+            }
+            config.set_positioning_data(default_fields)
+            db.session.add(config)
+            db.session.commit()
+        
+        return render_template('admin/pdf_positioning_editor.html', 
+                             config=config, 
+                             consortium=consortium,
+                             template_name=template_name)
+    
+    @app.route('/api/pdf-positioning/<int:config_id>', methods=['GET', 'POST', 'DELETE'])
+    @login_required
+    def api_pdf_positioning(config_id):
+        """API for saving/loading/deleting PDF positioning data"""
+        config = PDFPositioning.query.get_or_404(config_id)
+        
+        if request.method == 'GET':
+            return jsonify(config.to_dict())
+        
+        elif request.method == 'POST':
+            try:
+                data = request.get_json()
+                if 'positioning_data' in data:
+                    config.set_positioning_data(data['positioning_data'])
+                    config.updated_by = current_user.get_display_name()
+                    db.session.commit()
+                    return jsonify({'success': True, 'message': 'Positioning saved successfully'})
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 400
+        
+        elif request.method == 'DELETE':
+            try:
+                db.session.delete(config)
+                db.session.commit()
+                return jsonify({'success': True, 'message': 'Configuration deleted successfully'})
+            except Exception as e:
+                db.session.rollback()
+                return jsonify({'success': False, 'error': str(e)}), 400
+        
+        return jsonify({'success': False, 'error': 'Invalid request'}), 400
+    
+    @app.route('/api/pdf-positioning/preview/<int:config_id>')
+    @login_required
+    def api_pdf_positioning_preview(config_id):
+        """Generate preview PDF with current positioning"""
+        config = PDFPositioning.query.get_or_404(config_id)
+        
+        # Create a sample RFPO for preview
+        try:
+            # Get a sample RFPO or create dummy data
+            sample_rfpo = RFPO.query.first()
+            project = None
+            consortium = None
+            vendor = None
+            vendor_site = None
+            
+            if sample_rfpo:
+                # Get related data for real RFPO
+                project = Project.query.filter_by(project_id=sample_rfpo.project_id).first()
+                consortium = Consortium.query.filter_by(consort_id=sample_rfpo.consortium_id).first()
+                vendor = Vendor.query.get(sample_rfpo.vendor_id) if sample_rfpo.vendor_id else None
+                vendor_site = VendorSite.query.get(sample_rfpo.vendor_site_id) if sample_rfpo.vendor_site_id else None
+            
+            # Create dummy data if needed
+            if not sample_rfpo or not project or not consortium:
+                # Create dummy RFPO for preview
+                from types import SimpleNamespace
+                
+                sample_rfpo = SimpleNamespace()
+                sample_rfpo.rfpo_id = "PREVIEW-001"
+                sample_rfpo.po_number = "PO-PREVIEW-001"
+                sample_rfpo.po_date = datetime.now().strftime('%Y-%m-%d')
+                sample_rfpo.vendor_id = 1
+                sample_rfpo.vendor_site_id = None
+                sample_rfpo.project_id = "PROJ-001"
+                sample_rfpo.consortium_id = "CONSORT-001"
+                sample_rfpo.ship_to_address = "123 Preview Street\nPreview City, ST 12345"
+                sample_rfpo.bill_to_address = "456 Billing Ave\nBilling City, ST 54321"
+                sample_rfpo.total_amount = 15000.00
+                sample_rfpo.status = "Draft"
+                sample_rfpo.created_at = datetime.now()
+                sample_rfpo.shipto_name = "Preview Shipping Contact"
+                sample_rfpo.shipto_address = "123 Shipping Street\nShipping City, ST 12345"
+                sample_rfpo.delivery_type = "Standard Delivery"
+                sample_rfpo.delivery_payment = "Prepaid"
+                sample_rfpo.delivery_routing = "Direct"
+                sample_rfpo.payment_terms = "Net 30"
+                sample_rfpo.delivery_date = datetime.now()
+                sample_rfpo.government_agreement_number = "USA-GOV-2024-001"
+                sample_rfpo.line_items = []
+                sample_rfpo.subtotal = 14000.00
+                sample_rfpo.cost_share_amount = 1000.00
+                sample_rfpo.requestor_id = "REQ001"
+                sample_rfpo.requestor_tel = "(555) 987-6543"
+                sample_rfpo.requestor_location = "Building A, Room 101"
+                sample_rfpo.invoice_address = "456 Invoice Ave\nInvoice City, ST 54321"
+                
+                # Create dummy project
+                project = SimpleNamespace()
+                project.project_id = "PROJ-001"
+                project.project_name = "Sample Preview Project"
+                project.project_description = "This is a preview project for PDF positioning testing"
+                project.ref = "PROJ-REF-001"
+                project.name = "Sample Preview Project"
+                
+                # Create dummy consortium
+                consortium = SimpleNamespace()
+                consortium.consort_id = "CONSORT-001"
+                consortium.consort_name = "Preview Consortium"
+                consortium.consort_description = "Sample consortium for preview"
+                consortium.abbrev = "PREVIEW"
+                # Try to use an actual consortium logo for preview if available
+                real_consortium = Consortium.query.filter_by(consort_id=config.consortium_id).first()
+                consortium.logo = real_consortium.logo if real_consortium and real_consortium.logo else None
+                
+                # Create dummy vendor
+                vendor = SimpleNamespace()
+                vendor.vendor_id = 1
+                vendor.vendor_name = "Preview Vendor Inc."
+                vendor.company_name = "Preview Vendor Inc."
+                vendor.vendor_address = "789 Vendor Blvd\nVendor City, ST 98765"
+                vendor.contact_email = "contact@previewvendor.com"
+                vendor.contact_phone = "(555) 123-4567"
+                vendor.contact_name = "John Smith"
+                vendor.contact_dept = "Sales Department"  
+                vendor.contact_tel = "(555) 123-4567"
+                vendor.contact_fax = "(555) 123-4568"
+                vendor.contact_address = "789 Vendor Blvd\nVendor City, ST 98765"
+                vendor.contact_city = "Vendor City"
+                vendor.contact_state = "ST"
+                vendor.contact_zip = "98765"
+                vendor.contact_country = "USA"
+                
+                # Create dummy vendor_site
+                vendor_site = SimpleNamespace()
+                vendor_site.vendor_site_id = 1
+                vendor_site.vendor_id = 1
+                vendor_site.site_name = "Main Office"
+                vendor_site.site_address = "789 Vendor Blvd\nVendor City, ST 98765"
+                vendor_site.contact_name = "Jane Doe"
+                vendor_site.contact_dept = "Operations Department"
+                vendor_site.contact_tel = "(555) 123-4569"
+                vendor_site.contact_fax = "(555) 123-4570"
+                vendor_site.contact_address = "789 Vendor Blvd\nVendor City, ST 98765"
+                vendor_site.contact_city = "Vendor City"
+                vendor_site.contact_state = "ST"
+                vendor_site.contact_zip = "98765"
+                vendor_site.contact_country = "USA"
+            
+            # Generate PDF with custom positioning
+            pdf_generator = RFPOPDFGenerator(positioning_config=config)
+            pdf_buffer = pdf_generator.generate_po_pdf(sample_rfpo, consortium, project, vendor, vendor_site)
+            
+            return Response(
+                pdf_buffer.getvalue(),
+                mimetype='application/pdf',
+                headers={'Content-Disposition': 'inline; filename="preview.pdf"'}
+            )
+            
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
     
     return app
 

@@ -6,9 +6,18 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">📄 Edit RFPO: {{ rfpo.rfpo_id }}</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <a href="{{ url_for('rfpos') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Back to List
-        </a>
+        <div class="btn-group me-2">
+            <a href="{{ url_for('rfpo_generate_po', rfpo_id=rfpo.id) }}" 
+               class="btn btn-success" target="_blank"
+               title="Generate Purchase Order PDF">
+                <i class="fas fa-file-pdf"></i> Generate PO
+            </a>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('rfpos') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+        </div>
     </div>
 </div>
 
@@ -552,7 +561,20 @@ function loadVendorSites() {
             sites.forEach(site => {
                 const option = document.createElement('option');
                 option.value = site.id;
-                option.textContent = `${site.contact_name} - ${site.contact_city}, ${site.contact_state}`;
+                
+                // Show primary contact indicator
+                const primaryIndicator = site.is_primary ? ' [PRIMARY]' : '';
+                const location = site.contact_city && site.contact_state ? 
+                    `${site.contact_city}, ${site.contact_state}` : 
+                    (site.contact_city || site.contact_state || 'No location');
+                
+                option.textContent = `${site.contact_name || 'No name'} - ${location}${primaryIndicator}`;
+                
+                // Add some styling for primary contact
+                if (site.is_primary) {
+                    option.style.fontWeight = 'bold';
+                }
+                
                 siteSelect.appendChild(option);
             });
             

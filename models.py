@@ -1000,6 +1000,80 @@ class VendorSite(db.Model):
         vendor_name = self.vendor.company_name if self.vendor else "Unknown Vendor"
         return f'<VendorSite {self.vendor_site_id}: {self.contact_name} @ {vendor_name}>'
 
+class PDFPositioning(db.Model):
+    """PDF Positioning configuration for consortium-specific templates"""
+    __tablename__ = 'pdf_positioning'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    consortium_id = db.Column(db.String(32), nullable=False)  # e.g., "00000014" for USCAR
+    template_name = db.Column(db.String(100), nullable=False)  # e.g., "po_template"
+    
+    # Field positioning data stored as JSON
+    # Each field has: {"x": 123, "y": 456, "font_size": 9, "font_weight": "normal", "visible": true}
+    positioning_data = db.Column(db.Text)  # JSON string with all field positions
+    
+    # Template metadata
+    template_width = db.Column(db.Integer, default=612)  # PDF width in points
+    template_height = db.Column(db.Integer, default=792)  # PDF height in points
+    
+    # Status and audit fields
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    updated_by = db.Column(db.String(64))
+    
+    def get_positioning_data(self):
+        """Get positioning data as Python dict"""
+        if self.positioning_data:
+            try:
+                return json.loads(self.positioning_data)
+            except:
+                return {}
+        return {}
+    
+    def set_positioning_data(self, data_dict):
+        """Set positioning data from Python dict"""
+        if data_dict:
+            self.positioning_data = json.dumps(data_dict)
+        else:
+            self.positioning_data = None
+    
+    def get_field_position(self, field_name):
+        """Get position for a specific field"""
+        data = self.get_positioning_data()
+        return data.get(field_name, {})
+    
+    def set_field_position(self, field_name, x, y, font_size=9, font_weight="normal", visible=True):
+        """Set position for a specific field"""
+        data = self.get_positioning_data()
+        data[field_name] = {
+            "x": x,
+            "y": y, 
+            "font_size": font_size,
+            "font_weight": font_weight,
+            "visible": visible
+        }
+        self.set_positioning_data(data)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'consortium_id': self.consortium_id,
+            'template_name': self.template_name,
+            'positioning_data': self.get_positioning_data(),
+            'template_width': self.template_width,
+            'template_height': self.template_height,
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'updated_by': self.updated_by
+        }
+    
+    def __repr__(self):
+        return f'<PDFPositioning {self.consortium_id}:{self.template_name}>'
+
 class List(db.Model):
     """List model for key-value configuration and lookup data"""
     __tablename__ = 'lists'

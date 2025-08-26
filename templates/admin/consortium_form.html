@@ -62,6 +62,26 @@
                         <div class="form-text">Upload PNG, JPG, or GIF logo (max 2MB)</div>
                     </div>
                     
+                    <!-- Terms PDF Upload -->
+                    <div class="mb-3">
+                        <label for="terms_pdf_file" class="form-label">Terms & Conditions PDF</label>
+                        {% if consortium and consortium.terms_pdf %}
+                        <div class="mb-2">
+                            <div class="alert alert-info">
+                                <i class="fas fa-file-pdf text-danger"></i> 
+                                <strong>Current terms:</strong> {{ consortium.terms_pdf }}
+                                <br>
+                                <a href="/uploads/terms/{{ consortium.terms_pdf }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                                    <i class="fas fa-external-link-alt"></i> View Current Terms
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <input type="file" class="form-control" id="terms_pdf_file" name="terms_pdf_file" 
+                               accept="application/pdf,.pdf">
+                        <div class="form-text">Upload PDF file with Terms & Conditions (max 10MB). This will be appended to all POs for this consortium.</div>
+                    </div>
+                    
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="require_approved_vendors" 

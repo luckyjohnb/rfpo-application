@@ -225,6 +225,19 @@ def create_app():
                         if logo_filename:
                             flash(f'📷 Logo uploaded: {logo_filename}', 'info')
                 
+                # Handle terms PDF upload
+                terms_pdf_filename = None
+                if 'terms_pdf_file' in request.files:
+                    terms_pdf_file = request.files['terms_pdf_file']
+                    if terms_pdf_file.filename and terms_pdf_file.filename != '':
+                        # Validate it's a PDF file
+                        if terms_pdf_file.filename.lower().endswith('.pdf'):
+                            terms_pdf_filename = handle_file_upload(terms_pdf_file, 'uploads/terms')
+                            if terms_pdf_filename:
+                                flash(f'📄 Terms PDF uploaded: {terms_pdf_filename}', 'info')
+                        else:
+                            flash('❌ Terms file must be a PDF', 'error')
+                
                 # Build invoicing address from structured inputs
                 invoicing_parts = []
                 if request.form.get('invoicing_street'):
@@ -250,6 +263,7 @@ def create_app():
                     name=request.form.get('name'),
                     abbrev=request.form.get('abbrev'),
                     logo=logo_filename,
+                    terms_pdf=terms_pdf_filename,
                     require_approved_vendors=bool(request.form.get('require_approved_vendors')),
                     non_government_project_id=request.form.get('non_government_project_id') or None,
                     invoicing_address=invoicing_address,
@@ -307,6 +321,25 @@ def create_app():
                         
                         # Upload new logo
                         consortium.logo = handle_file_upload(logo_file, 'uploads/logos')
+                
+                # Handle terms PDF upload
+                if 'terms_pdf_file' in request.files:
+                    terms_pdf_file = request.files['terms_pdf_file']
+                    if terms_pdf_file.filename:
+                        # Validate it's a PDF file
+                        if terms_pdf_file.filename.lower().endswith('.pdf'):
+                            # Delete old terms PDF if exists
+                            if consortium.terms_pdf:
+                                old_terms_path = os.path.join('uploads/terms', consortium.terms_pdf)
+                                if os.path.exists(old_terms_path):
+                                    os.remove(old_terms_path)
+                            
+                            # Upload new terms PDF
+                            consortium.terms_pdf = handle_file_upload(terms_pdf_file, 'uploads/terms')
+                            if consortium.terms_pdf:
+                                flash(f'📄 Terms PDF updated: {consortium.terms_pdf}', 'info')
+                        else:
+                            flash('❌ Terms file must be a PDF', 'error')
                 
                 # Build invoicing address from structured inputs
                 invoicing_parts = []
@@ -397,6 +430,12 @@ def create_app():
         """Serve uploaded logo files"""
         from flask import send_from_directory
         return send_from_directory('uploads/logos', filename)
+    
+    @app.route('/uploads/terms/<filename>')
+    def uploaded_terms(filename):
+        """Serve uploaded terms PDF files"""
+        from flask import send_from_directory
+        return send_from_directory('uploads/terms', filename)
     
     # Teams routes
     @app.route('/teams')

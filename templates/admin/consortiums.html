@@ -31,6 +31,7 @@
                             <th>Consortium ID</th>
                             <th>Name</th>
                             <th>Abbreviation</th>
+                            <th>Terms PDF</th>
                             <th>Approved Vendors</th>
                             <th>Projects</th>
                             <th>RFPOs</th>
@@ -47,6 +48,15 @@
                             <td><strong>{{ consortium.consort_id }}</strong></td>
                             <td>{{ consortium.name }}</td>
                             <td><span class="badge bg-secondary">{{ consortium.abbrev }}</span></td>
+                            <td>
+                                {% if consortium.terms_pdf %}
+                                    <a href="/uploads/terms/{{ consortium.terms_pdf }}" target="_blank" class="badge bg-success text-decoration-none">
+                                        <i class="fas fa-file-pdf"></i> View Terms
+                                    </a>
+                                {% else %}
+                                    <span class="badge bg-warning">No Terms</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if consortium.require_approved_vendors %}
                                     <span class="badge bg-success">✓ Required</span>

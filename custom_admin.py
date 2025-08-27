@@ -1036,6 +1036,43 @@ Southfield, MI  48075""",
             flash(f'❌ Error generating PDF: {str(e)}', 'error')
             return redirect(url_for('rfpo_edit', id=rfpo_id))
     
+    @app.route('/rfpo/<int:rfpo_id>/generate-rfpo')
+    @login_required
+    def rfpo_generate_rfpo(rfpo_id):
+        """Generate RFPO HTML preview for viewing and printing"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        try:
+            # Get related data
+            project = Project.query.filter_by(project_id=rfpo.project_id).first()
+            consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+            vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+            vendor_site = None
+            
+            # Handle vendor_site_id - regular VendorSite ID or None (uses vendor primary contact)
+            if rfpo.vendor_site_id:
+                try:
+                    vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+                except (ValueError, TypeError):
+                    vendor_site = None
+            
+            # Get requestor user information
+            requestor = User.query.filter_by(record_id=rfpo.requestor_id).first() if rfpo.requestor_id else None
+            
+            # Render the RFPO HTML template
+            return render_template('admin/rfpo_preview.html',
+                                 rfpo=rfpo,
+                                 project=project,
+                                 consortium=consortium,
+                                 vendor=vendor,
+                                 vendor_site=vendor_site,
+                                 requestor=requestor)
+            
+        except Exception as e:
+            print(f"RFPO generation error: {e}")
+            flash(f'❌ Error generating RFPO: {str(e)}', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
     @app.route('/rfpo/<int:id>/delete', methods=['POST'])
     @login_required
     def rfpo_delete(id):

@@ -7,6 +7,11 @@
     <h1 class="h2">📄 Edit RFPO: {{ rfpo.rfpo_id }}</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
+            <a href="{{ url_for('rfpo_generate_rfpo', rfpo_id=rfpo.id) }}" 
+               class="btn btn-primary" target="_blank"
+               title="Generate Request for Purchase Order HTML">
+                <i class="fas fa-file-alt"></i> Generate RFPO
+            </a>
             <a href="{{ url_for('rfpo_generate_po', rfpo_id=rfpo.id) }}" 
                class="btn btn-success" target="_blank"
                title="Generate Purchase Order PDF">

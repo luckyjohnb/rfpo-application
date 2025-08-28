@@ -541,6 +541,7 @@ def create_app():
                 return redirect(url_for('teams'))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error updating team: {str(e)}', 'error')
         
         # Pre-populate JSON fields for editing
@@ -560,6 +561,7 @@ def create_app():
             db.session.commit()
             flash('✅ Team deleted successfully!', 'success')
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error deleting team: {str(e)}', 'error')
         return redirect(url_for('teams'))
     
@@ -610,6 +612,7 @@ def create_app():
                 return redirect(url_for('users'))
                 
             except Exception as e:
+                db.session.rollback()  # Important: rollback the failed transaction
                 flash(f'❌ Error creating user: {str(e)}', 'error')
         
         return render_template('admin/user_form.html', user=None, action='Create')
@@ -622,8 +625,16 @@ def create_app():
         
         if request.method == 'POST':
             try:
+                # Check for email conflicts before making changes
+                new_email = request.form.get('email')
+                if new_email and new_email != user.email:
+                    existing_user = User.query.filter_by(email=new_email).first()
+                    if existing_user:
+                        flash(f'❌ Email address "{new_email}" is already in use by another user.', 'error')
+                        return render_template('admin/user_form.html', user=user, action='Edit')
+                
                 user.fullname = request.form.get('fullname')
-                user.email = request.form.get('email')
+                user.email = new_email
                 user.sex = request.form.get('sex')
                 user.company_code = request.form.get('company_code')
                 user.company = request.form.get('company')
@@ -644,6 +655,7 @@ def create_app():
                 return redirect(url_for('users'))
                 
             except Exception as e:
+                db.session.rollback()  # Important: rollback the failed transaction
                 flash(f'❌ Error updating user: {str(e)}', 'error')
         
         return render_template('admin/user_form.html', user=user, action='Edit')
@@ -658,6 +670,7 @@ def create_app():
             db.session.commit()
             flash('✅ User deleted successfully!', 'success')
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error deleting user: {str(e)}', 'error')
         return redirect(url_for('users'))
     
@@ -1141,6 +1154,7 @@ Southfield, MI  48075""",
             db.session.commit()
             flash('✅ RFPO deleted successfully!', 'success')
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error deleting RFPO: {str(e)}', 'error')
         return redirect(url_for('rfpos'))
     
@@ -1218,6 +1232,7 @@ Southfield, MI  48075""",
                 return redirect(url_for('projects'))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error creating project: {str(e)}', 'error')
         
         teams = Team.query.filter_by(active=True).all()
@@ -1253,6 +1268,7 @@ Southfield, MI  48075""",
                 return redirect(url_for('projects'))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error updating project: {str(e)}', 'error')
         
         # Pre-populate JSON fields for editing
@@ -1272,6 +1288,7 @@ Southfield, MI  48075""",
             db.session.commit()
             flash('✅ Project deleted successfully!', 'success')
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error deleting project: {str(e)}', 'error')
         return redirect(url_for('projects'))
     
@@ -1349,6 +1366,7 @@ Southfield, MI  48075""",
                 return redirect(url_for('vendors'))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error creating vendor: {str(e)}', 'error')
         
         return render_template('admin/vendor_form.html', vendor=None, action='Create')
@@ -1390,6 +1408,7 @@ Southfield, MI  48075""",
                 return redirect(url_for('vendors'))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error updating vendor: {str(e)}', 'error')
         
         # Pre-populate JSON fields for editing
@@ -1407,6 +1426,7 @@ Southfield, MI  48075""",
             db.session.commit()
             flash('✅ Vendor deleted successfully!', 'success')
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error deleting vendor: {str(e)}', 'error')
         return redirect(url_for('vendors'))
     
@@ -1446,6 +1466,7 @@ Southfield, MI  48075""",
                 return redirect(url_for('vendor_edit', id=vendor_site.vendor_id))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error creating vendor contact: {str(e)}', 'error')
         
         vendors = Vendor.query.filter_by(active=True).all()
@@ -1478,6 +1499,7 @@ Southfield, MI  48075""",
                 return redirect(url_for('vendor_edit', id=vendor_site.vendor_id))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error updating vendor contact: {str(e)}', 'error')
         
         vendors = Vendor.query.filter_by(active=True).all()
@@ -1495,6 +1517,7 @@ Southfield, MI  48075""",
             db.session.commit()
             flash('✅ Vendor contact deleted successfully!', 'success')
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error deleting vendor contact: {str(e)}', 'error')
         return redirect(url_for('vendor_edit', id=vendor_id))
     
@@ -1537,6 +1560,7 @@ Southfield, MI  48075""",
                 return redirect(url_for('lists'))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error creating list item: {str(e)}', 'error')
         
         # Get existing types for dropdown
@@ -1563,6 +1587,7 @@ Southfield, MI  48075""",
                 return redirect(url_for('lists'))
                 
             except Exception as e:
+                db.session.rollback()
                 flash(f'❌ Error updating list item: {str(e)}', 'error')
         
         existing_types = [t[0] for t in db.session.query(List.type).distinct().all()]
@@ -1578,6 +1603,7 @@ Southfield, MI  48075""",
             db.session.commit()
             flash('✅ List item deleted successfully!', 'success')
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error deleting list item: {str(e)}', 'error')
         return redirect(url_for('lists'))
     
@@ -1658,6 +1684,7 @@ Southfield, MI  48075""",
             flash(f'✅ Seeded {created_count} list configuration items!', 'success')
             
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error seeding lists: {str(e)}', 'error')
         
         return redirect(url_for('lists'))
@@ -1713,6 +1740,7 @@ Southfield, MI  48075""",
                 flash('ℹ️  All standard consortiums already exist and have been updated.', 'info')
             
         except Exception as e:
+            db.session.rollback()
             flash(f'❌ Error seeding consortiums: {str(e)}', 'error')
         
         return redirect(url_for('consortiums'))

@@ -1873,36 +1873,163 @@
                 <!-- File Upload Section -->
                 <div id="upload" class="content-section" style="display: none;">
                     <div class="mb-4">
-                        <h2 class="mb-1"><i class="fas fa-file-upload me-2" style="color: var(--primary-color);"></i>File Upload Demo</h2>
-                        <p class="text-muted mb-0">Upload and process CSV/Excel files with automatic data validation</p>
+                        <h2 class="mb-1"><i class="fas fa-file-upload me-2" style="color: var(--primary-color);"></i>Enhanced File Upload</h2>
+                        <p class="text-muted mb-0">Upload and process multiple file types with RAG processing for AI assistant integration</p>
                     </div>
+                    
+                    <!-- RFPO Selection -->
+                    <div class="feature-box mb-4">
+                        <h5><i class="fas fa-clipboard-list me-2"></i>Select RFPO</h5>
+                        <div class="row">
+                            <div class="col-lg-8">
+                                <select class="form-select" id="rfpoSelect" onchange="updateUploadUI()">
+                                    <option value="">Select an RFPO to associate files with...</option>
+                                </select>
+                                <div class="form-text">Files will be associated with the selected RFPO for RAG processing</div>
+                            </div>
+                            <div class="col-lg-4">
+                                <button class="btn btn-outline-primary" onclick="refreshRFPOList()">
+                                    <i class="fas fa-refresh me-1"></i>Refresh RFPOs
+                                </button>
+                                <button class="btn btn-outline-success ms-2" onclick="showCreateRFPOModal()">
+                                    <i class="fas fa-plus me-1"></i>New RFPO
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="feature-box">
                         <div class="row">
-                            <div class="col-lg-6 col-md-12 mb-3">
-                                <h5>Upload CSV/Excel File</h5>
+                            <div class="col-lg-8 col-md-12 mb-3">
+                                <h5><i class="fas fa-upload me-2"></i>Upload Files</h5>
+                                
+                                <!-- Enhanced Upload Form -->
                                 <form id="uploadForm" enctype="multipart/form-data">
                                     <div class="mb-3">
-                                        <input type="file" class="form-control" id="fileInput" accept=".csv,.xlsx,.xls">
+                                        <label for="fileInput" class="form-label">Select Files</label>
+                                        <input type="file" class="form-control" id="fileInput" 
+                                               accept=".txt,.pdf,.doc,.docx,.csv,.json,.md,.xlsx,.xls,.pptx,.ppt,.rtf,.xml" 
+                                               multiple>
+                                        <div class="form-text">You can select multiple files. See supported formats on the right.</div>
                                     </div>
-                                    <button type="submit" class="btn btn-success">
+                                    
+                                    <!-- Upload Mode Selection -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Upload Mode</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="uploadMode" id="ragMode" value="rag" checked>
+                                            <label class="form-check-label" for="ragMode">
+                                                <strong>RAG Processing</strong> - Full document processing with AI integration
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="uploadMode" id="legacyMode" value="legacy">
+                                            <label class="form-check-label" for="legacyMode">
+                                                <strong>Legacy Mode</strong> - Basic processing (CSV/Excel only)
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-success" id="uploadButton" disabled>
                                         <i class="fas fa-upload me-1"></i>
-                                        Upload File
+                                        <span id="uploadButtonText">Select RFPO First</span>
                                     </button>
                                 </form>
+                                
+                                <!-- Upload Progress -->
+                                <div id="uploadProgress" class="mt-3" style="display: none;">
+                                    <div class="progress">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                             role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                    <small class="text-muted mt-1 d-block" id="progressText">Preparing upload...</small>
+                                </div>
+                                
+                                <!-- Upload Results -->
                                 <div id="uploadResult" class="mt-3"></div>
+                                
+                                <!-- Processing Status -->
+                                <div id="processingStatus" class="mt-3" style="display: none;">
+                                    <h6><i class="fas fa-cogs me-2"></i>Processing Status</h6>
+                                    <div id="processingList"></div>
                             </div>
-                            <div class="col-lg-6 col-md-12">
-                                <h6>Supported Formats:</h6>
-                                <ul>
-                                    <li>CSV files (.csv)</li>
-                                    <li>Excel files (.xlsx, .xls)</li>
+                            </div>
+                            
+                            <div class="col-lg-4 col-md-12">
+                                <div class="sticky-top">
+                                    <h6><i class="fas fa-info-circle me-2"></i>Supported Formats:</h6>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <ul class="list-unstyled small">
+                                                <li><i class="fas fa-file-alt text-primary"></i> Text files (.txt)</li>
+                                                <li><i class="fas fa-file-pdf text-danger"></i> PDF files (.pdf)</li>
+                                                <li><i class="fas fa-file-word text-primary"></i> Word docs (.doc, .docx)</li>
+                                                <li><i class="fas fa-file-excel text-success"></i> Excel files (.xls, .xlsx)</li>
                                 </ul>
-                                <h6>Features:</h6>
-                                <ul>
-                                    <li>Automatic data processing</li>
-                                    <li>Data validation and cleaning</li>
-                                    <li>Export capabilities</li>
+                                        </div>
+                                        <div class="col-6">
+                                            <ul class="list-unstyled small">
+                                                <li><i class="fas fa-file-csv text-info"></i> CSV files (.csv)</li>
+                                                <li><i class="fas fa-file-code text-warning"></i> JSON files (.json)</li>
+                                                <li><i class="fab fa-markdown text-dark"></i> Markdown (.md)</li>
+                                                <li><i class="fas fa-file-powerpoint text-danger"></i> PowerPoint (.ppt, .pptx)</li>
                                 </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <h6 class="mt-3"><i class="fas fa-magic me-2"></i>RAG Features:</h6>
+                                    <ul class="list-unstyled small">
+                                        <li><i class="fas fa-check text-success"></i> Intelligent text extraction</li>
+                                        <li><i class="fas fa-check text-success"></i> Document chunking & embeddings</li>
+                                        <li><i class="fas fa-check text-success"></i> AI assistant integration</li>
+                                        <li><i class="fas fa-check text-success"></i> Semantic search capabilities</li>
+                                        <li><i class="fas fa-check text-success"></i> Processing status tracking</li>
+                                    </ul>
+                                    
+                                    <div class="alert alert-info small mt-3">
+                                        <i class="fas fa-lightbulb me-2"></i>
+                                        <strong>Tip:</strong> Files uploaded with RAG processing will be available 
+                                        for intelligent search and AI assistant queries within the selected RFPO context.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create RFPO Modal -->
+                <div class="modal fade" id="createRFPOModal" tabindex="-1" aria-labelledby="createRFPOModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="createRFPOModalLabel">Create New RFPO</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="createRFPOForm">
+                                    <div class="mb-3">
+                                        <label for="rfpoTitle" class="form-label">Title *</label>
+                                        <input type="text" class="form-control" id="rfpoTitle" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="rfpoDescription" class="form-label">Description</label>
+                                        <textarea class="form-control" id="rfpoDescription" rows="3"></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="rfpoVendor" class="form-label">Vendor</label>
+                                        <input type="text" class="form-control" id="rfpoVendor">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="rfpoTeam" class="form-label">Team</label>
+                                        <select class="form-select" id="rfpoTeam" required>
+                                            <option value="">Select team...</option>
+                                        </select>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-primary" onclick="createRFPO()">Create RFPO</button>
                             </div>
                         </div>
                     </div>
@@ -2015,7 +2142,9 @@
                                         </div>
                                     </div>
                                     <div class="d-flex align-items-center">
-                                        <span class="badge bg-success me-2" id="modelBadge">GPT-3.5</span>
+                                        <span class="badge bg-success me-2" id="modelBadge">
+                                            <span id="ragIndicator" style="display: none;">🧠 </span>GPT-3.5
+                                        </span>
                                         <button class="btn btn-outline-info btn-sm me-1" onclick="showDebugInfo()" title="Debug Connection">
                                             <i class="fas fa-info-circle"></i>
                                         </button>
@@ -2023,6 +2152,81 @@
                                             <i class="fas fa-cog"></i>
                                         </button>
                                     </div>
+                                </div>
+
+                                <!-- Context Selection Section -->
+                                <div class="context-selection-section mb-3">
+                                    <div class="row">
+                                        <!-- Team Selection -->
+                                        <div class="col-md-6">
+                                            <label for="aiTeamSelect" class="form-label small">Team Context</label>
+                                            <select class="form-select form-select-sm" id="aiTeamSelect" onchange="updateTeamContext()">
+                                                <option value="">Select Team...</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- RFPO Selection -->
+                                        <div class="col-md-6">
+                                            <label for="aiRfpoSelect" class="form-label small">RFPO Context</label>
+                                            <select class="form-select form-select-sm" id="aiRfpoSelect" onchange="updateRFPOContext()" disabled>
+                                                <option value="">Select Team first...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- RAG Context Section -->
+                                <div class="rag-context-section" id="ragContextSection" style="display: none;">
+                                    <div class="alert alert-success small mb-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <i class="fas fa-brain me-2"></i>
+                                                <strong>🧠 RAG Context Active</strong> - AI has access to documents from 
+                                                <span id="ragTeamContext">Team</span> → <span id="ragRfpoContext">RFPO</span>
+                                            </div>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="clearAllContext()">
+                                                <i class="fas fa-times"></i> Clear
+                                            </button>
+                                        </div>
+                                        <div class="mt-2">
+                                            <small>
+                                                <span id="ragContextDetails">Context details will appear here</span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Thread Management -->
+                                <div class="thread-management mb-3" id="threadManagement" style="display: none;">
+                                    <div class="row align-items-center mb-2">
+                                        <div class="col-md-8">
+                                            <label for="threadSelect" class="form-label small">Conversation Thread</label>
+                                            <select class="form-select form-select-sm" id="threadSelect" onchange="switchThread()">
+                                                <option value="">Select or create a thread...</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4 text-end">
+                                            <button class="btn btn-sm btn-outline-success me-1" onclick="startNewThread()" title="Start New Thread">
+                                                <i class="fas fa-plus"></i> New
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="loadSuggestedQuestions()" id="suggestQuestionsBtn" disabled>
+                                                <i class="fas fa-lightbulb"></i> Suggestions
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="thread-info">
+                                        <small class="text-muted">
+                                            <i class="fas fa-comments me-1"></i>
+                                            Current: <span id="currentThreadId">None</span>
+                                            <span id="threadMessageCount" class="ms-2"></span>
+                                        </small>
+                                    </div>
+                                </div>
+
+                                <!-- Suggested Questions -->
+                                <div id="suggestedQuestions" class="mb-3" style="display: none;">
+                                    <h6><i class="fas fa-lightbulb me-2"></i>Suggested Questions:</h6>
+                                    <div id="questionsList"></div>
                                 </div>
 
                                 <!-- Chat Messages -->
@@ -2855,60 +3059,11 @@
                                         </thead>
                                         <tbody id="rfpo-table-body">
                                             <tr>
-                                                <td><span class="badge bg-primary">RFPO-001</span></td>
-                                                <td>IT Infrastructure Modernization</td>
-                                                <td>ACME Corporation</td>
-                                                <td>2025-09-15</td>
-                                                <td><span class="badge bg-warning">In Progress</span></td>
-                                                <td>John Smith</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editRFPO('RFPO-001')">
-                                                        <i class="fas fa-edit"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-outline-success me-1" onclick="viewRFPO('RFPO-001')">
-                                                        <i class="fas fa-eye"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteRFPO('RFPO-001')">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td><span class="badge bg-primary">RFPO-002</span></td>
-                                                <td>Cloud Migration Services</td>
-                                                <td>Tech Solutions Inc</td>
-                                                <td>2025-08-30</td>
-                                                <td><span class="badge bg-danger">Overdue</span></td>
-                                                <td>Sarah Johnson</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editRFPO('RFPO-002')">
-                                                        <i class="fas fa-edit"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-outline-success me-1" onclick="viewRFPO('RFPO-002')">
-                                                        <i class="fas fa-eye"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteRFPO('RFPO-002')">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td><span class="badge bg-primary">RFPO-003</span></td>
-                                                <td>Security Assessment & Consulting</td>
-                                                <td>SecureNet Ltd</td>
-                                                <td>2025-10-01</td>
-                                                <td><span class="badge bg-success">Completed</span></td>
-                                                <td>Mike Davis</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editRFPO('RFPO-003')">
-                                                        <i class="fas fa-edit"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-outline-success me-1" onclick="viewRFPO('RFPO-003')">
-                                                        <i class="fas fa-eye"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-outline-info" onclick="downloadRFPO('RFPO-003')">
-                                                        <i class="fas fa-download"></i>
-                                                    </button>
+                                                <td colspan="7" class="text-center">
+                                                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    Loading RFPOs...
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -3620,15 +3775,64 @@
                     }
                 }
 
+                // Special handling for RFPO section
+                if (sectionId === 'rfpo-app') {
+                    console.log('RFPO section opened, loading RFPOs...');
+                    if (isAuthenticated && typeof loadRFPOs === 'function') {
+                        loadRFPOs();
+                    } else if (!isAuthenticated) {
+                        console.log('⚠️ RFPO section requires authentication');
+                        checkAuthenticationStatus().then(authStatus => {
+                            if (authStatus && typeof loadRFPOs === 'function') {
+                                loadRFPOs();
+                            }
+                        });
+                    }
+                }
+
+                // Special handling for upload section
+                if (sectionId === 'upload') {
+                    console.log('Upload section opened, checking authentication...');
+                    if (isAuthenticated) {
+                        console.log('✅ Upload section ready for authenticated user');
+                        // Refresh RFPO list for upload section
+                        if (typeof refreshRFPOList === 'function') {
+                            refreshRFPOList();
+                        }
+                    } else {
+                        console.log('⚠️ Upload section requires authentication');
+                        checkAuthenticationStatus().then(authStatus => {
+                            if (authStatus && typeof refreshRFPOList === 'function') {
+                                refreshRFPOList();
+                            }
+                        });
+                    }
+                }
+
                 // Special handling for chat section
                 if (sectionId === 'chat') {
                     console.log('Chat section opened, initializing...');
-                    // Initialize chat if needed
-                    if (typeof updateWelcomeTime === 'function') {
-                        updateWelcomeTime();
-                    }
-                    if (typeof updateModelBadge === 'function') {
-                        updateModelBadge();
+                    // Check authentication first
+                    if (isAuthenticated) {
+                        // Initialize chat if needed
+                        if (typeof updateWelcomeTime === 'function') {
+                            updateWelcomeTime();
+                        }
+                        if (typeof updateModelBadge === 'function') {
+                            updateModelBadge();
+                        }
+                        // Load teams for AI Assistant
+                        if (typeof loadTeamsForAI === 'function') {
+                            loadTeamsForAI();
+                        }
+                    } else {
+                        console.log('⚠️ Chat section requires authentication');
+                        // Recheck authentication
+                        checkAuthenticationStatus().then(authStatus => {
+                            if (authStatus && typeof loadTeamsForAI === 'function') {
+                                loadTeamsForAI();
+                            }
+                        });
                     }
                 }
 
@@ -5511,9 +5715,17 @@
                         </div>
                     `;
                     localStorage.setItem('token', data.token);
+                    
+                    // Update global authentication state
+                    isAuthenticated = true;
+                    currentUser = data.user;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
 
                     // Update user dropdown with authenticated user info
                     updateUserDropdown(data.user);
+                    
+                    // Initialize app data now that user is authenticated
+                    initializeApp();
 
                     // Debug: Log user roles
                     console.log('User logged in with roles:', data.user.roles);
@@ -5728,20 +5940,367 @@
             }
         }
 
+        // Enhanced file upload functionality
+        let currentRFPOs = [];
+        let uploadedFiles = [];
+
+        // Global authentication state
+        let isAuthenticated = false;
+        let currentUser = null;
+
+        // Check authentication status globally
+        async function checkAuthenticationStatus() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                isAuthenticated = false;
+                currentUser = null;
+                return false;
+            }
+
+            try {
+                const response = await fetch('/api/auth/validate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    isAuthenticated = true;
+                    currentUser = data.user || data;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    return true;
+                } else {
+                    // Token is invalid
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('currentUser');
+                    isAuthenticated = false;
+                    currentUser = null;
+                    return false;
+                }
+            } catch (error) {
+                console.error('Authentication check failed:', error);
+                isAuthenticated = false;
+                currentUser = null;
+                return false;
+            }
+        }
+
+        // Initialize authentication and load data
+        async function initializeApp() {
+            console.log('🔄 Initializing application...');
+            
+            // Check authentication first
+            const authStatus = await checkAuthenticationStatus();
+            console.log('🔐 Authentication status:', authStatus);
+
+            if (authStatus) {
+                console.log('✅ User authenticated:', currentUser?.display_name || currentUser?.username);
+                
+                // Load all data that requires authentication
+                await Promise.all([
+                    refreshRFPOList(),
+                    loadTeamsForRFPO(),
+                    loadTeamsForAI()
+                ]);
+                
+                console.log('✅ Application initialized successfully');
+            } else {
+                console.log('⚠️ User not authenticated - some features may be limited');
+            }
+        }
+
+        // Load RFPOs on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+        });
+
+        // Load available RFPOs
+        async function refreshRFPOList() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    document.getElementById('rfpoSelect').innerHTML = '<option value="">Please login first...</option>';
+                    return;
+                }
+
+                const response = await fetch('/api/v1/rag/rfpos', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentRFPOs = data.rfpos || [];
+                    
+                    const select = document.getElementById('rfpoSelect');
+                    select.innerHTML = '<option value="">Select an RFPO to associate files with...</option>';
+                    
+                    currentRFPOs.forEach(rfpo => {
+                        const option = document.createElement('option');
+                        option.value = rfpo.id;
+                        option.textContent = `${rfpo.rfpo_id} - ${rfpo.title}`;
+                        select.appendChild(option);
+                    });
+
+                    if (currentRFPOs.length === 0) {
+                        select.innerHTML += '<option value="" disabled>No RFPOs available - create one first</option>';
+                    }
+                } else {
+                    console.error('Failed to load RFPOs:', response.status);
+                    document.getElementById('rfpoSelect').innerHTML = '<option value="">Error loading RFPOs...</option>';
+                }
+            } catch (error) {
+                console.error('Error loading RFPOs:', error);
+                document.getElementById('rfpoSelect').innerHTML = '<option value="">Error loading RFPOs...</option>';
+            }
+        }
+
+        // Load teams for RFPO creation
+        async function loadTeamsForRFPO() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const response = await fetch('/api/teams', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const select = document.getElementById('rfpoTeam');
+                    select.innerHTML = '<option value="">Select team...</option>';
+                    
+                    if (data.teams) {
+                        data.teams.forEach(team => {
+                            const option = document.createElement('option');
+                            option.value = team.id;
+                            option.textContent = `${team.name} (${team.abbrev})`;
+                            select.appendChild(option);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading teams:', error);
+            }
+        }
+
+        // Update upload UI based on RFPO selection
+        function updateUploadUI() {
+            const rfpoSelect = document.getElementById('rfpoSelect');
+            const uploadButton = document.getElementById('uploadButton');
+            const uploadButtonText = document.getElementById('uploadButtonText');
+
+            if (rfpoSelect.value) {
+                uploadButton.disabled = false;
+                uploadButtonText.textContent = 'Upload Files';
+                uploadButton.className = 'btn btn-success';
+            } else {
+                uploadButton.disabled = true;
+                uploadButtonText.textContent = 'Select RFPO First';
+                uploadButton.className = 'btn btn-secondary';
+            }
+        }
+
+        // Show create RFPO modal
+        function showCreateRFPOModal() {
+            const modal = new bootstrap.Modal(document.getElementById('createRFPOModal'));
+            modal.show();
+        }
+
+        // Create new RFPO
+        async function createRFPO() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    alert('Please login first');
+                    return;
+                }
+
+                const title = document.getElementById('rfpoTitle').value.trim();
+                const description = document.getElementById('rfpoDescription').value.trim();
+                const vendor = document.getElementById('rfpoVendor').value.trim();
+                const teamId = document.getElementById('rfpoTeam').value;
+
+                if (!title || !teamId) {
+                    alert('Title and Team are required');
+                    return;
+                }
+
+                const response = await fetch('/api/v1/rag/rfpos', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title: title,
+                        description: description,
+                        vendor: vendor,
+                        team_id: parseInt(teamId),
+                        status: 'Draft'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('createRFPOModal'));
+                    modal.hide();
+                    
+                    // Clear form
+                    document.getElementById('createRFPOForm').reset();
+                    
+                    // Refresh RFPO list
+                    await refreshRFPOList();
+                    
+                    // Also refresh the main RFPO section if it's visible
+                    if (typeof loadRFPOs === 'function') {
+                        loadRFPOs();
+                    }
+                    
+                    // Select the new RFPO
+                    document.getElementById('rfpoSelect').value = data.rfpo.id;
+                    updateUploadUI();
+                    
+                    alert(`RFPO "${data.rfpo.rfpo_id}" created successfully!`);
+                } else {
+                    const error = await response.json();
+                    alert('Error creating RFPO: ' + (error.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error creating RFPO:', error);
+                alert('Error creating RFPO: ' + error.message);
+            }
+        }
+
         // Handle file upload
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
             const fileInput = document.getElementById('fileInput');
             const resultDiv = document.getElementById('uploadResult');
+            const rfpoSelect = document.getElementById('rfpoSelect');
+            const uploadMode = document.querySelector('input[name="uploadMode"]:checked').value;
 
-            if (!fileInput.files[0]) {
+            // Validation
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.innerHTML = '<div class="alert alert-warning">Please select at least one file.</div>';
+                return;
+            }
+
+            if (!rfpoSelect.value && uploadMode === 'rag') {
+                resultDiv.innerHTML = '<div class="alert alert-warning">Please select an RFPO for RAG processing.</div>';
+                return;
+            }
+
+            const token = localStorage.getItem('token');
+            if (!token && uploadMode === 'rag') {
+                resultDiv.innerHTML = '<div class="alert alert-warning">Please login first for RAG processing.</div>';
+                return;
+            }
+
+            if (uploadMode === 'rag') {
+                handleRAGUpload(fileInput.files, rfpoSelect.value, token);
+            } else {
+                handleLegacyUpload(fileInput.files[0]); // Legacy mode only supports single file
+            }
+        });
+
+        // Handle RAG upload
+        async function handleRAGUpload(files, rfpoId, token) {
+            const resultDiv = document.getElementById('uploadResult');
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressBar = progressDiv.querySelector('.progress-bar');
+            const progressText = document.getElementById('progressText');
+            const statusDiv = document.getElementById('processingStatus');
+            const statusList = document.getElementById('processingList');
+
+            // Show progress
+            progressDiv.style.display = 'block';
+            statusDiv.style.display = 'block';
+            progressBar.style.width = '10%';
+            progressText.textContent = 'Preparing upload...';
+
+            try {
+                const formData = new FormData();
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('files', files[i]);
+                }
+
+                progressBar.style.width = '30%';
+                progressText.textContent = 'Uploading files...';
+
+                const response = await fetch(`/api/v1/rag/rfpos/${rfpoId}/files`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: formData
+                });
+
+                progressBar.style.width = '60%';
+                progressText.textContent = 'Processing response...';
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    progressBar.style.width = '100%';
+                    progressText.textContent = 'Upload completed!';
+
+                    uploadedFiles = data.files || [];
+
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>Upload Successful!</strong><br>
+                            ${uploadedFiles.length} file(s) uploaded and processing started.<br>
+                            <small>Files are being processed in the background for RAG functionality.</small>
+                        </div>
+                    `;
+
+                    // Show processing status
+                    displayProcessingStatus(uploadedFiles);
+
+                    // Start monitoring processing status
+                    monitorProcessingStatus(uploadedFiles);
+
+                    // Clear file input
+                    document.getElementById('fileInput').value = '';
+
+                } else {
+                    throw new Error(data.error || 'Upload failed');
+                }
+
+            } catch (error) {
+                progressBar.style.width = '100%';
+                progressBar.className = 'progress-bar bg-danger';
+                progressText.textContent = 'Upload failed';
+
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>Upload Failed:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Handle legacy upload
+        function handleLegacyUpload(file) {
+            const resultDiv = document.getElementById('uploadResult');
+            
+            if (!file) {
                 resultDiv.innerHTML = '<div class="alert alert-warning">Please select a file first.</div>';
                 return;
             }
 
             const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+            formData.append('file', file);
 
             resultDiv.innerHTML = '<div class="alert alert-info">Uploading file...</div>';
 
@@ -5754,16 +6313,18 @@
                 if (data.success) {
                     resultDiv.innerHTML = `
                         <div class="alert alert-success">
-                            <strong>Upload Successful!</strong><br>
+                            <strong>Legacy Upload Successful!</strong><br>
                             File: ${data.filename}<br>
                             Rows: ${data.rows}<br>
-                            Columns: ${data.columns.join(', ')}
+                            Columns: ${data.columns.join(', ')}<br>
+                            <small class="text-muted">${data.note || ''}</small>
                         </div>
                     `;
                 } else {
                     resultDiv.innerHTML = `
                         <div class="alert alert-danger">
-                            <strong>Upload Failed:</strong> ${data.error}
+                            <strong>Upload Failed:</strong> ${data.error}<br>
+                            <small>${data.suggestion || ''}</small>
                         </div>
                     `;
                 }
@@ -5775,7 +6336,692 @@
                     </div>
                 `;
             });
-        });
+        }
+
+        // Display processing status
+        function displayProcessingStatus(files) {
+            const statusList = document.getElementById('processingList');
+            let statusHtml = '';
+
+            files.forEach(file => {
+                const statusIcon = getStatusIcon(file.processing_status);
+                const statusText = getStatusText(file.processing_status);
+                
+                statusHtml += `
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded" id="status-${file.file_id}">
+                        <div>
+                            <i class="fas fa-file me-2"></i>
+                            <strong>${file.original_filename}</strong>
+                            <span class="badge ms-2" id="badge-${file.file_id}">${statusIcon} ${statusText}</span>
+                        </div>
+                        <small class="text-muted">${formatFileSize(file.file_size)}</small>
+                    </div>
+                `;
+            });
+
+            statusList.innerHTML = statusHtml;
+        }
+
+        // Monitor processing status
+        async function monitorProcessingStatus(files) {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const checkStatus = async () => {
+                let allCompleted = true;
+
+                for (const file of files) {
+                    try {
+                        const response = await fetch(`/api/v1/rag/files/${file.file_id}/status`, {
+                            headers: {
+                                'Authorization': 'Bearer ' + token
+                            }
+                        });
+
+                        if (response.ok) {
+                            const statusData = await response.json();
+                            const status = statusData.status;
+                            
+                            updateFileStatus(file.file_id, status);
+
+                            if (status.processing_status !== 'completed' && status.processing_status !== 'failed') {
+                                allCompleted = false;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error checking status for', file.original_filename, error);
+                    }
+                }
+
+                if (!allCompleted) {
+                    setTimeout(checkStatus, 3000); // Check again in 3 seconds
+                }
+            };
+
+            // Start checking after 2 seconds
+            setTimeout(checkStatus, 2000);
+        }
+
+        // Update file status in UI
+        function updateFileStatus(fileId, status) {
+            const badge = document.getElementById(`badge-${fileId}`);
+            if (badge) {
+                const statusIcon = getStatusIcon(status.processing_status);
+                const statusText = getStatusText(status.processing_status);
+                badge.innerHTML = `${statusIcon} ${statusText}`;
+                badge.className = `badge ms-2 ${getStatusBadgeClass(status.processing_status)}`;
+
+                if (status.processing_error) {
+                    badge.title = `Error: ${status.processing_error}`;
+                } else if (status.chunk_count) {
+                    badge.title = `${status.chunk_count} chunks created`;
+                }
+            }
+        }
+
+        // Helper functions
+        function getStatusIcon(status) {
+            switch (status) {
+                case 'pending': return '<i class="fas fa-clock"></i>';
+                case 'processing': return '<i class="fas fa-spinner fa-spin"></i>';
+                case 'completed': return '<i class="fas fa-check"></i>';
+                case 'failed': return '<i class="fas fa-times"></i>';
+                default: return '<i class="fas fa-question"></i>';
+            }
+        }
+
+        function getStatusText(status) {
+            switch (status) {
+                case 'pending': return 'Pending';
+                case 'processing': return 'Processing';
+                case 'completed': return 'Completed';
+                case 'failed': return 'Failed';
+                default: return 'Unknown';
+            }
+        }
+
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'pending': return 'bg-warning';
+                case 'processing': return 'bg-info';
+                case 'completed': return 'bg-success';
+                case 'failed': return 'bg-danger';
+                default: return 'bg-secondary';
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Enhanced AI Assistant with Team/RFPO Context and OpenAI Integration
+        let currentAITeam = null;
+        let currentAIRfpo = null;
+        let currentThreadId = null;
+        let conversationHistory = [];
+        let allThreads = {}; // Store all conversation threads
+
+        // Load Teams for AI Assistant
+        async function loadTeamsForAI() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    document.getElementById('aiTeamSelect').innerHTML = '<option value="">Login required...</option>';
+                    return;
+                }
+
+                const response = await fetch('/api/teams', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const teams = data.teams || [];
+                    
+                    const select = document.getElementById('aiTeamSelect');
+                    select.innerHTML = '<option value="">Select Team...</option>';
+                    
+                    teams.forEach(team => {
+                        const option = document.createElement('option');
+                        option.value = team.id;
+                        option.textContent = `${team.name} (${team.abbrev})`;
+                        select.appendChild(option);
+                    });
+                } else {
+                    console.error('Failed to load teams for AI');
+                }
+            } catch (error) {
+                console.error('Error loading teams for AI:', error);
+            }
+        }
+
+        // Update team context and load RFPOs for selected team
+        async function updateTeamContext() {
+            const teamSelect = document.getElementById('aiTeamSelect');
+            const rfpoSelect = document.getElementById('aiRfpoSelect');
+            const teamId = teamSelect.value;
+
+            if (teamId) {
+                currentAITeam = parseInt(teamId);
+                rfpoSelect.disabled = false;
+                
+                // Load RFPOs for this team
+                await loadRFPOsForTeam(teamId);
+            } else {
+                currentAITeam = null;
+                currentAIRfpo = null;
+                rfpoSelect.disabled = true;
+                rfpoSelect.innerHTML = '<option value="">Select Team first...</option>';
+                clearRAGContext();
+            }
+        }
+
+        // Load RFPOs for selected team
+        async function loadRFPOsForTeam(teamId) {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const response = await fetch('/api/v1/rag/rfpos', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const allRfpos = data.rfpos || [];
+                    
+                    // Filter RFPOs by team (assuming team_id field exists)
+                    const teamRfpos = allRfpos.filter(rfpo => rfpo.team_id == teamId);
+                    
+                    const select = document.getElementById('aiRfpoSelect');
+                    select.innerHTML = '<option value="">Select RFPO...</option>';
+                    
+                    if (teamRfpos.length === 0) {
+                        select.innerHTML += '<option value="" disabled>No RFPOs in this team</option>';
+                    } else {
+                        teamRfpos.forEach(rfpo => {
+                            const option = document.createElement('option');
+                            option.value = rfpo.id;
+                            option.textContent = `${rfpo.rfpo_id} - ${rfpo.title}`;
+                            select.appendChild(option);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading RFPOs for team:', error);
+            }
+        }
+
+        // Update RFPO context and activate RAG
+        async function updateRFPOContext() {
+            const rfpoSelect = document.getElementById('aiRfpoSelect');
+            const teamSelect = document.getElementById('aiTeamSelect');
+            const rfpoId = rfpoSelect.value;
+            const suggestBtn = document.getElementById('suggestQuestionsBtn');
+            const contextSection = document.getElementById('ragContextSection');
+            const threadSection = document.getElementById('threadManagement');
+            const ragIndicator = document.getElementById('ragIndicator');
+
+            if (rfpoId && currentAITeam) {
+                currentAIRfpo = parseInt(rfpoId);
+                
+                // Show RAG is active
+                ragIndicator.style.display = 'inline';
+                
+                // Enable suggestions and show sections
+                suggestBtn.disabled = false;
+                contextSection.style.display = 'block';
+                threadSection.style.display = 'block';
+                
+                // Update context info
+                const teamOption = teamSelect.options[teamSelect.selectedIndex];
+                const rfpoOption = rfpoSelect.options[rfpoSelect.selectedIndex];
+                
+                document.getElementById('ragTeamContext').textContent = teamOption.textContent;
+                document.getElementById('ragRfpoContext').textContent = rfpoOption.textContent;
+                
+                // Load RFPO summary
+                await loadRFPOSummary(rfpoId);
+                
+                // Load existing threads for this context
+                loadThreadsForContext();
+                
+                // Start new conversation thread for this context
+                startNewThread();
+                
+            } else {
+                currentAIRfpo = null;
+                clearRAGContext();
+            }
+        }
+
+        // Clear RAG context and indicators
+        function clearRAGContext() {
+            const suggestBtn = document.getElementById('suggestQuestionsBtn');
+            const contextSection = document.getElementById('ragContextSection');
+            const threadSection = document.getElementById('threadManagement');
+            const suggestedQuestions = document.getElementById('suggestedQuestions');
+            const ragIndicator = document.getElementById('ragIndicator');
+
+            suggestBtn.disabled = true;
+            contextSection.style.display = 'none';
+            threadSection.style.display = 'none';
+            suggestedQuestions.style.display = 'none';
+            ragIndicator.style.display = 'none';
+            
+            currentThreadId = null;
+            document.getElementById('currentThreadId').textContent = 'None';
+        }
+
+        // Clear all context (team and RFPO)
+        function clearAllContext() {
+            document.getElementById('aiTeamSelect').value = '';
+            document.getElementById('aiRfpoSelect').value = '';
+            document.getElementById('aiRfpoSelect').disabled = true;
+            document.getElementById('aiRfpoSelect').innerHTML = '<option value="">Select Team first...</option>';
+            
+            currentAITeam = null;
+            currentAIRfpo = null;
+            clearRAGContext();
+        }
+
+        // Load threads for current context
+        function loadThreadsForContext() {
+            if (!currentAITeam || !currentAIRfpo) return;
+            
+            const contextKey = `T${currentAITeam}_R${currentAIRfpo}`;
+            const savedThreads = JSON.parse(localStorage.getItem('chatThreads') || '{}');
+            const contextThreads = savedThreads[contextKey] || {};
+            
+            const threadSelect = document.getElementById('threadSelect');
+            threadSelect.innerHTML = '<option value="">Select or create a thread...</option>';
+            
+            // Add existing threads for this context
+            Object.keys(contextThreads).forEach(threadId => {
+                const thread = contextThreads[threadId];
+                const option = document.createElement('option');
+                option.value = threadId;
+                option.textContent = `${thread.title || 'Untitled'} (${thread.messageCount} messages)`;
+                threadSelect.appendChild(option);
+            });
+            
+            // Add "Create New Thread" option
+            const newOption = document.createElement('option');
+            newOption.value = 'NEW_THREAD';
+            newOption.textContent = '+ Create New Thread';
+            newOption.style.fontWeight = 'bold';
+            threadSelect.appendChild(newOption);
+        }
+
+        // Switch to a different thread
+        function switchThread() {
+            const threadSelect = document.getElementById('threadSelect');
+            const selectedValue = threadSelect.value;
+            
+            if (selectedValue === 'NEW_THREAD') {
+                startNewThread();
+                return;
+            }
+            
+            if (selectedValue && selectedValue !== currentThreadId) {
+                // Save current thread before switching
+                if (currentThreadId && conversationHistory.length > 0) {
+                    saveCurrentThread();
+                }
+                
+                // Load selected thread
+                loadThread(selectedValue);
+            }
+        }
+
+        // Start new conversation thread
+        function startNewThread() {
+            if (currentAITeam && currentAIRfpo) {
+                // Save current thread before creating new one
+                if (currentThreadId && conversationHistory.length > 0) {
+                    saveCurrentThread();
+                }
+                
+                // Generate thread ID based on user + team + RFPO + timestamp
+                const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                const userId = user.id || 'anonymous';
+                const timestamp = Date.now();
+                
+                currentThreadId = `${userId}_T${currentAITeam}_R${currentAIRfpo}_${timestamp}`;
+                
+                // Clear conversation history for new thread
+                conversationHistory = [];
+                
+                // Clear chat UI
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.innerHTML = `
+                    <div class="message bot">
+                        <div class="message-bubble">
+                            <div class="message-content">
+                                👋 Hello! I'm your AI assistant. I'm here to help you with any questions or tasks you might have. What can I do for you today?
+                            </div>
+                            <div class="message-time">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                        </div>
+                    </div>
+                `;
+                
+                // Update UI
+                updateThreadUI();
+                
+                // Add to thread selector
+                loadThreadsForContext();
+                document.getElementById('threadSelect').value = currentThreadId;
+                
+                console.log('Started new thread:', currentThreadId);
+            }
+        }
+
+        // Save current thread to localStorage
+        function saveCurrentThread() {
+            if (!currentThreadId || !currentAITeam || !currentAIRfpo) return;
+            
+            const contextKey = `T${currentAITeam}_R${currentAIRfpo}`;
+            const savedThreads = JSON.parse(localStorage.getItem('chatThreads') || '{}');
+            
+            if (!savedThreads[contextKey]) {
+                savedThreads[contextKey] = {};
+            }
+            
+            // Generate thread title from first user message
+            const firstUserMessage = conversationHistory.find(msg => msg.role === 'user');
+            const title = firstUserMessage ? 
+                firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '') :
+                'New Conversation';
+            
+            savedThreads[contextKey][currentThreadId] = {
+                id: currentThreadId,
+                title: title,
+                history: conversationHistory,
+                messageCount: conversationHistory.length,
+                lastUpdated: new Date().toISOString(),
+                teamId: currentAITeam,
+                rfpoId: currentAIRfpo
+            };
+            
+            localStorage.setItem('chatThreads', JSON.stringify(savedThreads));
+            console.log('Thread saved:', currentThreadId);
+        }
+
+        // Load an existing thread
+        function loadThread(threadId) {
+            const contextKey = `T${currentAITeam}_R${currentAIRfpo}`;
+            const savedThreads = JSON.parse(localStorage.getItem('chatThreads') || '{}');
+            const thread = savedThreads[contextKey]?.[threadId];
+            
+            if (thread) {
+                currentThreadId = threadId;
+                conversationHistory = thread.history || [];
+                
+                // Rebuild chat UI from conversation history
+                rebuildChatFromHistory();
+                
+                // Update UI
+                updateThreadUI();
+                
+                console.log('Loaded thread:', threadId, 'with', conversationHistory.length, 'messages');
+            }
+        }
+
+        // Rebuild chat UI from conversation history
+        function rebuildChatFromHistory() {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+            
+            // Add welcome message if no history
+            if (conversationHistory.length === 0) {
+                chatMessages.innerHTML = `
+                    <div class="message bot">
+                        <div class="message-bubble">
+                            <div class="message-content">
+                                👋 Hello! I'm your AI assistant. I'm here to help you with any questions or tasks you might have. What can I do for you today?
+                            </div>
+                            <div class="message-time">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Rebuild from history
+            conversationHistory.forEach(msg => {
+                if (msg.role === 'user') {
+                    addMessageToChat('user', msg.content, false); // false = don't save to history again
+                } else if (msg.role === 'assistant') {
+                    addMessageToChat('bot', msg.content, false);
+                } else if (msg.role === 'system') {
+                    addMessageToChat('system', msg.content, false);
+                }
+            });
+        }
+
+        // Update thread UI elements
+        function updateThreadUI() {
+            const threadIdDisplay = document.getElementById('currentThreadId');
+            const messageCountDisplay = document.getElementById('threadMessageCount');
+            
+            if (currentThreadId) {
+                threadIdDisplay.textContent = currentThreadId.substring(currentThreadId.lastIndexOf('_') + 1);
+                messageCountDisplay.textContent = `(${conversationHistory.length} messages)`;
+            } else {
+                threadIdDisplay.textContent = 'None';
+                messageCountDisplay.textContent = '';
+            }
+        }
+
+        // Load RFPO summary for context
+        async function loadRFPOSummary(rfpoId) {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const response = await fetch(`/api/v1/ai/rfpo-summary/${rfpoId}`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const summary = data.summary;
+                    
+                    const detailsText = `${summary.file_count || 0} files, ${summary.ready_for_rag || 0} ready for RAG, ${summary.total_chunks || 0} chunks`;
+                    document.getElementById('ragContextDetails').textContent = detailsText;
+                }
+            } catch (error) {
+                console.error('Error loading RFPO summary:', error);
+            }
+        }
+
+        // Load suggested questions
+        async function loadSuggestedQuestions() {
+            if (!currentAIRfpo) return;
+
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const response = await fetch(`/api/v1/ai/suggest-questions/${currentAIRfpo}?limit=5`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const suggestions = data.suggestions || [];
+                    
+                    const questionsList = document.getElementById('questionsList');
+                    const suggestedQuestions = document.getElementById('suggestedQuestions');
+                    
+                    if (suggestions.length > 0) {
+                        let questionsHtml = '';
+                        suggestions.forEach((question, index) => {
+                            questionsHtml += `
+                                <button class="btn btn-outline-primary btn-sm me-2 mb-2" onclick="askSuggestedQuestion('${question.replace(/'/g, '\\\'')}')" title="Click to ask this question">
+                                    ${question}
+                                </button>
+                            `;
+                        });
+                        
+                        questionsList.innerHTML = questionsHtml;
+                        suggestedQuestions.style.display = 'block';
+                    } else {
+                        questionsList.innerHTML = '<small class="text-muted">No suggestions available yet. Upload some documents first!</small>';
+                        suggestedQuestions.style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading suggested questions:', error);
+            }
+        }
+
+        // Ask a suggested question
+        function askSuggestedQuestion(question) {
+            const chatInput = document.getElementById('chatInput');
+            chatInput.value = question;
+            chatInput.focus();
+            
+            // Auto-send the question
+            sendMessage();
+        }
+
+        // Clear RAG context
+        function clearRAGContext() {
+            document.getElementById('aiRfpoSelect').value = '';
+            updateAIContext();
+        }
+
+        // Main sendMessage function - routes to OpenAI with RAG
+        async function sendMessage() {
+            console.log('🚀 sendMessage called - using OpenAI + RAG integration');
+            return await sendMessageOpenAI();
+        }
+
+        // Enhanced sendMessage function with OpenAI and RAG integration
+        async function sendMessageOpenAI() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+
+            if ((!message && attachedFiles.length === 0) || isWaitingForResponse) return;
+
+            // Add user message to chat and conversation history
+            addMessageToChat('user', message, true);
+            
+            // Clear input and update state
+            input.value = '';
+            input.style.height = 'auto';
+            isWaitingForResponse = true;
+            document.getElementById('sendButton').disabled = true;
+            showTypingIndicator();
+
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    throw new Error('Authentication required');
+                }
+
+                // Prepare request data with conversation history
+                const requestData = {
+                    message: message,
+                    thread_id: currentThreadId,
+                    rfpo_id: currentAIRfpo,
+                    conversation_history: conversationHistory // Include full conversation history
+                };
+
+                // Call the new OpenAI chat endpoint
+                const response = await fetch('/api/v1/ai/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Show RAG context info if available
+                    if (data.rag_context) {
+                        const contextInfo = data.rag_context;
+                        addMessageToChat('system', `🧠 Using context from ${contextInfo.chunks_found} document chunks (${contextInfo.sources.join(', ')}) - Avg relevance: ${contextInfo.avg_similarity.toFixed(3)}`, true);
+                    }
+                    
+                    // Add AI response to chat and conversation history
+                    addMessageToChat('bot', data.response, true);
+                    
+                    // Update thread info
+                    if (data.thread_id) {
+                        currentThreadId = data.thread_id;
+                    }
+                    
+                    // Save thread after each exchange
+                    saveCurrentThread();
+                    updateThreadUI();
+                    
+                    // Show usage info if available
+                    if (data.usage) {
+                        console.log('OpenAI Usage:', data.usage);
+                    }
+                    
+                } else {
+                    // Handle errors
+                    let errorMessage = data.error || 'Unknown error occurred';
+                    
+                    if (data.fallback_message) {
+                        // If OpenAI is not available, fall back to Langflow
+                        console.log('Falling back to Langflow...');
+                        await sendToLangflowFallback(data.fallback_message);
+                        return;
+                    } else {
+                        addMessageToChat('bot', `❌ Error: ${errorMessage}`);
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error in AI chat:', error);
+                addMessageToChat('bot', `❌ Connection error: ${error.message}`);
+            } finally {
+                hideTypingIndicator();
+                isWaitingForResponse = false;
+                document.getElementById('sendButton').disabled = false;
+            }
+        }
+
+        // Fallback to Langflow if OpenAI is not available
+        async function sendToLangflowFallback(message) {
+            try {
+                console.log('OpenAI fallback requested for message:', message);
+                
+                addMessageToChat('bot', `⚠️ **OpenAI API Unavailable**
+                
+I tried to process your message: "${message}"
+
+**Possible solutions:**
+1. Check if your OpenAI API key is configured correctly
+2. Verify your internet connection
+3. Try again in a few moments
+
+*Note: Langflow integration is available but currently disabled. Contact your administrator to enable Langflow as a fallback.*`);
+                
+            } catch (error) {
+                console.error('Fallback error:', error);
+                addMessageToChat('bot', '❌ Unable to process your message. Please check your configuration and try again.');
+            }
+        }
 
         // Chat functionality
         let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
@@ -6119,7 +7365,12 @@
             textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
         }
 
-        function sendMessage() {
+        function sendMessageLangflow() {
+            // LEGACY LANGFLOW FUNCTION - DISABLED FOR NOW
+            console.log('⚠️ Legacy Langflow function called - redirecting to OpenAI');
+            sendMessageOpenAI();
+            return;
+            
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
 
@@ -6725,7 +7976,7 @@ This usually indicates a server configuration issue. Please check:
             }
         }
 
-        function addMessageToChat(type, content, timestamp = null) {
+        function addMessageToChat(type, content, saveToHistory = true, timestamp = null) {
             const messagesContainer = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
@@ -6770,6 +8021,30 @@ This usually indicates a server configuration issue. Please check:
 
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            // Save to conversation history for OpenAI thread continuity
+            if (saveToHistory && currentThreadId) {
+                let role = 'user';
+                if (type === 'bot') role = 'assistant';
+                else if (type === 'system') role = 'system';
+                
+                // Only save user and assistant messages to OpenAI history (not system messages)
+                if (role === 'user' || role === 'assistant') {
+                    conversationHistory.push({
+                        role: role,
+                        content: content,
+                        timestamp: time.toISOString()
+                    });
+                    
+                    // Keep conversation history reasonable (last 20 exchanges = 40 messages)
+                    if (conversationHistory.length > 40) {
+                        conversationHistory = conversationHistory.slice(-40);
+                    }
+                }
+                
+                // Update thread UI
+                updateThreadUI();
+            }
         }
 
         function showTypingIndicator() {
@@ -7194,46 +8469,206 @@ Need help? Check the AI Configuration section to update settings.
         }
 
         // RFPO Application Functions
-        function createNewRFPO() {
-            // Simulate creating a new RFPO
-            const rfpoId = 'RFPO-' + String(Date.now()).slice(-3);
-            const title = prompt('Enter RFPO Title:');
-            if (title) {
-                alert(`New RFPO created: ${rfpoId} - ${title}`);
-                // In a real application, this would make an API call to create the RFPO
-                console.log('Creating new RFPO:', { id: rfpoId, title: title });
+        // Real RFPO Management Functions
+        let rfpoList = [];
+
+        // Load RFPOs when the RFPO section is shown
+        function loadRFPOs() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('rfpo-table-body').innerHTML = 
+                    '<tr><td colspan="7" class="text-center">Please login to view RFPOs</td></tr>';
+                return;
             }
+
+            fetch('/api/v1/rag/rfpos', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    rfpoList = data.rfpos || [];
+                    displayRFPOs(rfpoList);
+                } else {
+                    console.error('Error loading RFPOs:', data.error);
+                    document.getElementById('rfpo-table-body').innerHTML = 
+                        '<tr><td colspan="7" class="text-center text-danger">Error loading RFPOs</td></tr>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading RFPOs:', error);
+                document.getElementById('rfpo-table-body').innerHTML = 
+                    '<tr><td colspan="7" class="text-center text-danger">Connection error</td></tr>';
+            });
+        }
+
+        function displayRFPOs(rfpos) {
+            const tbody = document.getElementById('rfpo-table-body');
+            
+            if (!rfpos || rfpos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">No RFPOs found. Create one to get started!</td></tr>';
+                return;
+            }
+
+            let html = '';
+            rfpos.forEach(rfpo => {
+                const statusBadge = getStatusBadge(rfpo.status);
+                const dueDateFormatted = rfpo.due_date ? new Date(rfpo.due_date).toLocaleDateString() : 'Not set';
+                
+                html += `
+                    <tr>
+                        <td><span class="badge bg-primary">${rfpo.rfpo_id}</span></td>
+                        <td>${rfpo.title}</td>
+                        <td>${rfpo.vendor || 'Not specified'}</td>
+                        <td>${dueDateFormatted}</td>
+                        <td>${statusBadge}</td>
+                        <td>${rfpo.created_by}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editRFPO('${rfpo.rfpo_id}')" title="Edit RFPO">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-success me-1" onclick="viewRFPO(${rfpo.id})" title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-info me-1" onclick="manageFiles(${rfpo.id})" title="Manage Files">
+                                <i class="fas fa-file"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteRFPO(${rfpo.id})" title="Delete RFPO">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tbody.innerHTML = html;
+        }
+
+        function getStatusBadge(status) {
+            const statusMap = {
+                'Draft': 'bg-secondary',
+                'In Progress': 'bg-warning',
+                'Completed': 'bg-success',
+                'Overdue': 'bg-danger',
+                'On Hold': 'bg-info'
+            };
+            
+            const badgeClass = statusMap[status] || 'bg-secondary';
+            return `<span class="badge ${badgeClass}">${status}</span>`;
+        }
+
+        function createNewRFPO() {
+            // Show the create RFPO modal from the file upload section
+            showCreateRFPOModal();
         }
 
         function editRFPO(rfpoId) {
-            alert(`Opening RFPO editor for: ${rfpoId}`);
-            // In a real application, this would open an RFPO editing interface
+            alert(`RFPO editing feature coming soon for: ${rfpoId}`);
+            // TODO: Implement RFPO editing
             console.log('Editing RFPO:', rfpoId);
         }
 
-        function viewRFPO(rfpoId) {
-            alert(`Viewing RFPO details for: ${rfpoId}`);
-            // In a real application, this would show RFPO details
-            console.log('Viewing RFPO:', rfpoId);
+        async function viewRFPO(rfpoId) {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    alert('Please login first');
+                    return;
+                }
+
+                const response = await fetch(`/api/v1/rag/rfpos/${rfpoId}`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const rfpo = data.rfpo;
+                    
+                    let details = `RFPO Details:\n\n`;
+                    details += `ID: ${rfpo.rfpo_id}\n`;
+                    details += `Title: ${rfpo.title}\n`;
+                    details += `Description: ${rfpo.description || 'None'}\n`;
+                    details += `Vendor: ${rfpo.vendor || 'Not specified'}\n`;
+                    details += `Status: ${rfpo.status}\n`;
+                    details += `Created: ${new Date(rfpo.created_at).toLocaleString()}\n`;
+                    details += `Files: ${rfpo.files ? rfpo.files.length : 0} attached\n`;
+                    
+                    alert(details);
+                } else {
+                    alert('Error loading RFPO details');
+                }
+            } catch (error) {
+                console.error('Error viewing RFPO:', error);
+                alert('Error loading RFPO details');
+            }
         }
 
-        function deleteRFPO(rfpoId) {
-            if (confirm(`Are you sure you want to delete ${rfpoId}?`)) {
-                alert(`RFPO ${rfpoId} has been deleted`);
-                // In a real application, this would make an API call to delete the RFPO
-                console.log('Deleting RFPO:', rfpoId);
+        function manageFiles(rfpoId) {
+            // Switch to file upload section with this RFPO selected
+            showSection('upload');
+            
+            // Set the RFPO in the upload section
+            setTimeout(() => {
+                const rfpoSelect = document.getElementById('rfpoSelect');
+                if (rfpoSelect) {
+                    rfpoSelect.value = rfpoId;
+                    updateUploadUI();
+                }
+            }, 500);
+        }
+
+        async function deleteRFPO(rfpoId) {
+            const rfpo = rfpoList.find(r => r.id === rfpoId);
+            if (!rfpo) return;
+            
+            if (!confirm(`Are you sure you want to delete RFPO "${rfpo.rfpo_id} - ${rfpo.title}"?\n\nThis will also delete all associated files and cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    alert('Please login first');
+                    return;
+                }
+
+                // Note: Delete endpoint not implemented yet, so just show message
+                alert('RFPO deletion feature coming soon. For now, RFPOs can only be created.');
+                
+                // TODO: Implement delete endpoint
+                // const response = await fetch(`/api/v1/rag/rfpos/${rfpoId}`, {
+                //     method: 'DELETE',
+                //     headers: {
+                //         'Authorization': 'Bearer ' + token
+                //     }
+                // });
+                
+                // if (response.ok) {
+                //     loadRFPOs(); // Refresh the list
+                //     alert('RFPO deleted successfully');
+                // } else {
+                //     alert('Error deleting RFPO');
+                // }
+                
+            } catch (error) {
+                console.error('Error deleting RFPO:', error);
+                alert('Error deleting RFPO');
             }
         }
 
         function downloadRFPO(rfpoId) {
-            alert(`Downloading RFPO: ${rfpoId}`);
-            // In a real application, this would trigger a file download
+            alert(`RFPO export feature coming soon for: ${rfpoId}`);
+            // TODO: Implement RFPO export
             console.log('Downloading RFPO:', rfpoId);
         }
 
         function importRFPOTemplate() {
-            alert('Opening template import dialog...');
-            // In a real application, this would open a file import dialog
+            alert('RFPO template import feature coming soon');
+            // TODO: Implement template import
             console.log('Importing RFPO template');
         }
 

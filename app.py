@@ -42,12 +42,292 @@ from functools import wraps
 import jwt
 from sqlalchemy.exc import IntegrityError
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ Environment variables loaded from .env file")
+except ImportError:
+    print("⚠️ python-dotenv not available, using system environment variables")
+
 # Import user management
 from user_management import UserManager
 from app_settings import app_settings
 
-from models import db, Team
+from models import db, Team, RFPO, UploadedFile, DocumentChunk
 from flask_migrate import Migrate
+
+# Import RAG functionality with fallback
+RAG_AVAILABLE = False
+rag_bp = None
+rag_assistant = None
+
+# For now, let's create a basic RFPO API without the full RAG functionality
+# This allows RFPO creation to work while we fix the dependency issues
+
+def create_basic_rfpo_api():
+    """Create basic RFPO endpoints without RAG functionality"""
+    from flask import Blueprint, request, jsonify
+    from sqlalchemy.exc import IntegrityError
+    
+    basic_rag_bp = Blueprint('basic_rag', __name__, url_prefix='/api/v1/rag')
+    
+    @basic_rag_bp.route('/rfpos', methods=['GET'])
+    def list_rfpos():
+        """List all RFPOs"""
+        try:
+            token = request.headers.get('Authorization')
+            if not token or not token.startswith('Bearer '):
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            # Validate token using the same method as the main app
+            auth_token = token[7:]  # Remove 'Bearer ' prefix
+            payload = jwt.decode(auth_token, JWT_SECRET_KEY, algorithms=['HS256'])
+            user = user_manager.get_user_by_id(payload['user_id'])
+            
+            if not user or user.get('status') != 'active':
+                return jsonify({'error': 'Invalid or inactive user'}), 401
+            
+            rfpos = RFPO.query.all()
+            return jsonify({
+                'success': True,
+                'rfpos': [rfpo.to_dict() for rfpo in rfpos]
+            })
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @basic_rag_bp.route('/rfpos', methods=['POST'])
+    def create_rfpo():
+        """Create a new RFPO"""
+        try:
+            token = request.headers.get('Authorization')
+            if not token or not token.startswith('Bearer '):
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            # Validate token using the same method as the main app
+            auth_token = token[7:]  # Remove 'Bearer ' prefix
+            payload = jwt.decode(auth_token, JWT_SECRET_KEY, algorithms=['HS256'])
+            user = user_manager.get_user_by_id(payload['user_id'])
+            
+            if not user or user.get('status') != 'active':
+                return jsonify({'error': 'Invalid or inactive user'}), 401
+            
+            data = request.get_json()
+            if not data.get('title') or not data.get('team_id'):
+                return jsonify({'error': 'Title and team_id are required'}), 400
+            
+            # Generate RFPO ID
+            rfpo_count = RFPO.query.count()
+            rfpo_id = f"RFPO-{rfpo_count + 1:03d}"
+            
+            # Create RFPO
+            rfpo = RFPO(
+                rfpo_id=rfpo_id,
+                title=data['title'],
+                description=data.get('description', ''),
+                vendor=data.get('vendor', ''),
+                due_date=None,  # TODO: Handle date parsing
+                status=data.get('status', 'Draft'),
+                team_id=data['team_id'],
+                created_by=user['username']
+            )
+            
+            db.session.add(rfpo)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'rfpo': rfpo.to_dict()
+            }), 201
+            
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({'error': 'RFPO ID already exists'}), 400
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    
+    @basic_rag_bp.route('/rfpos/<int:rfpo_id>', methods=['GET'])
+    def get_rfpo(rfpo_id):
+        """Get RFPO details"""
+        try:
+            token = request.headers.get('Authorization')
+            if not token or not token.startswith('Bearer '):
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            # Validate token using the same method as the main app
+            auth_token = token[7:]  # Remove 'Bearer ' prefix
+            payload = jwt.decode(auth_token, JWT_SECRET_KEY, algorithms=['HS256'])
+            user = user_manager.get_user_by_id(payload['user_id'])
+            
+            if not user or user.get('status') != 'active':
+                return jsonify({'error': 'Invalid or inactive user'}), 401
+            
+            rfpo = RFPO.query.get_or_404(rfpo_id)
+            rfpo_data = rfpo.to_dict()
+            # Add empty files list since RAG is not available
+            rfpo_data['files'] = []
+            
+            return jsonify({
+                'success': True,
+                'rfpo': rfpo_data
+            })
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @basic_rag_bp.route('/rfpos/<int:rfpo_id>/files', methods=['POST'])
+    def upload_files_basic(rfpo_id):
+        """Basic file upload without RAG processing"""
+        try:
+            token = request.headers.get('Authorization')
+            if not token or not token.startswith('Bearer '):
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            # Validate token
+            auth_token = token[7:]  # Remove 'Bearer ' prefix
+            payload = jwt.decode(auth_token, JWT_SECRET_KEY, algorithms=['HS256'])
+            user = user_manager.get_user_by_id(payload['user_id'])
+            
+            if not user or user.get('status') != 'active':
+                return jsonify({'error': 'Invalid or inactive user'}), 401
+            
+            # Verify RFPO exists
+            rfpo = RFPO.query.get_or_404(rfpo_id)
+            
+            if 'files' not in request.files:
+                return jsonify({'error': 'No files provided'}), 400
+            
+            files = request.files.getlist('files')
+            if not files or all(f.filename == '' for f in files):
+                return jsonify({'error': 'No files selected'}), 400
+            
+            # For now, just save the files without RAG processing
+            uploaded_files = []
+            upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
+            os.makedirs(upload_folder, exist_ok=True)
+            
+            for file in files:
+                if file.filename == '':
+                    continue
+                
+                # Simple file validation
+                if file.content_length and file.content_length > 16 * 1024 * 1024:  # 16MB limit
+                    return jsonify({'error': f'File {file.filename} is too large (max 16MB)'}), 400
+                
+                # Secure filename and save
+                from werkzeug.utils import secure_filename
+                original_filename = secure_filename(file.filename)
+                file_id = str(uuid.uuid4())
+                stored_filename = f"{file_id}_{original_filename}"
+                file_path = os.path.join(upload_folder, stored_filename)
+                
+                file.save(file_path)
+                
+                # Get file info
+                file_size = os.path.getsize(file_path)
+                import mimetypes
+                mime_type, _ = mimetypes.guess_type(original_filename)
+                
+                # Create basic file record (without RAG processing)
+                uploaded_file = {
+                    'file_id': file_id,
+                    'original_filename': original_filename,
+                    'stored_filename': stored_filename,
+                    'file_path': file_path,
+                    'file_size': file_size,
+                    'mime_type': mime_type or 'application/octet-stream',
+                    'file_extension': original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else '',
+                    'rfpo_id': rfpo_id,
+                    'uploaded_by': user['username'],
+                    'processing_status': 'basic_upload',  # Indicate this is not RAG processed
+                    'text_extracted': False,
+                    'embeddings_created': False,
+                    'chunk_count': 0,
+                    'uploaded_at': datetime.utcnow().isoformat()
+                }
+                
+                uploaded_files.append(uploaded_file)
+            
+            return jsonify({
+                'success': True,
+                'message': f'Successfully uploaded {len(uploaded_files)} files (basic mode - no RAG processing)',
+                'files': uploaded_files,
+                'note': 'Files uploaded in basic mode. RAG processing is currently disabled due to dependency issues.'
+            }), 201
+            
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @basic_rag_bp.route('/files/<file_id>/status', methods=['GET'])
+    def get_file_status_basic(file_id):
+        """Get basic file status (no RAG processing status)"""
+        try:
+            token = request.headers.get('Authorization')
+            if not token or not token.startswith('Bearer '):
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            # For basic mode, we just return a simple status since files aren't in database
+            return jsonify({
+                'success': True,
+                'status': {
+                    'processing_status': 'basic_upload',
+                    'text_extracted': False,
+                    'embeddings_created': False,
+                    'chunk_count': 0,
+                    'processing_error': None,
+                    'processed_at': None,
+                    'note': 'File uploaded in basic mode. RAG processing is currently disabled.'
+                }
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @basic_rag_bp.route('/health', methods=['GET'])
+    def health_check():
+        """Health check endpoint"""
+        return jsonify({
+            'status': 'healthy',
+            'service': 'Basic RFPO API (RAG disabled)',
+            'timestamp': datetime.utcnow().isoformat(),
+            'version': '1.0.0',
+            'rag_available': False
+        })
+    
+    return basic_rag_bp
+
+# Try to enable full RAG functionality now that dependencies are working
+try:
+    from document_processor import SENTENCE_TRANSFORMERS_AVAILABLE
+    if SENTENCE_TRANSFORMERS_AVAILABLE:
+        from rag_api import rag_bp
+        from ai_assistant_integration import rag_assistant
+        RAG_AVAILABLE = True
+        print("✅ RAG functionality available - Enhanced file processing enabled")
+    else:
+        print("⚠️ Warning: RAG functionality not available - using basic RFPO functionality")
+        rag_bp = create_basic_rfpo_api()
+        RAG_AVAILABLE = False
+except ImportError as e:
+    print(f"⚠️ Warning: RAG functionality not available: {e}")
+    print("🔄 Using basic RFPO API as fallback...")
+    rag_bp = create_basic_rfpo_api()
+    RAG_AVAILABLE = False
 
 # Optional feature flags for pandas and reportlab
 try:
@@ -128,6 +408,16 @@ def verify_auth():
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs('config', exist_ok=True)
 os.makedirs('logs', exist_ok=True)
+
+# Register RAG Blueprint (either full RAG or basic fallback)
+if rag_bp is not None:
+    app.register_blueprint(rag_bp)
+    if RAG_AVAILABLE:
+        print("✅ Full RAG API endpoints registered")
+    else:
+        print("✅ Basic RFPO API endpoints registered (RAG functionality disabled)")
+else:
+    print("⚠️ No RFPO API endpoints available")
 
 
 # Initialize User Manager
@@ -806,10 +1096,10 @@ def update_user_status(user_id):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
-# File Upload Route
+# File Upload Route (Legacy - for backward compatibility)
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Handle file upload"""
+    """Handle file upload - Legacy endpoint for CSV/Excel files"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No file selected'}), 400
@@ -818,51 +1108,278 @@ def upload_file():
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
 
-        if not PANDAS_AVAILABLE:
-            return jsonify({'error': 'File processing unavailable - pandas not installed'}), 500
-
         # Secure filename
         filename = secure_filename(file.filename)
-        if not filename.lower().endswith(('.csv', '.xlsx', '.xls')):
-            return jsonify({'error': 'Only CSV and Excel files are supported'}), 400
+        
+        # Check if this is a supported legacy format
+        if filename.lower().endswith(('.csv', '.xlsx', '.xls')):
+            # Use legacy pandas processing for CSV/Excel
+            if not PANDAS_AVAILABLE:
+                return jsonify({'error': 'File processing unavailable - pandas not installed'}), 500
+            
+            return _process_legacy_file(file, filename)
+        else:
+            # For other file types, suggest using the new RAG API
+            return jsonify({
+                'error': f'File type not supported by legacy upload. '
+                        f'For {filename.split(".")[-1].upper()} files, please use the new RAG API at /api/v1/rag/rfpos/{{rfpo_id}}/files',
+                'supported_types': ['csv', 'xlsx', 'xls'],
+                'suggestion': 'Use the enhanced file upload API for better support of all file types'
+            }), 400
 
+    except Exception as e:
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
+
+def _process_legacy_file(file, filename):
+    """Process legacy CSV/Excel files with pandas"""
+    try:
         # Generate unique file ID
         file_id = str(uuid.uuid4())
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{file_id}_{filename}")
         file.save(file_path)
 
         # Process file
-        try:
-            if filename.lower().endswith('.csv'):
-                df = pd.read_csv(file_path)
-            else:
-                df = pd.read_excel(file_path)
+        if filename.lower().endswith('.csv'):
+            df = pd.read_csv(file_path)
+        else:
+            df = pd.read_excel(file_path)
 
-            # Clean data
-            df = df.fillna('')
-            data_dict = df.to_dict('records')
+        # Clean data
+        df = df.fillna('')
+        data_dict = df.to_dict('records')
 
-            # Store data
-            uploaded_data[file_id] = {
-                'filename': filename,
-                'data': data_dict,
-                'columns': list(df.columns),
-                'rows': len(df)
-            }
+        # Store data in legacy format
+        uploaded_data[file_id] = {
+            'filename': filename,
+            'data': data_dict,
+            'columns': list(df.columns),
+            'rows': len(df)
+        }
 
-            return jsonify({
-                'success': True,
-                'file_id': file_id,
-                'filename': filename,
-                'rows': len(df),
-                'columns': list(df.columns)
-            })
-
-        except Exception as e:
-            return jsonify({'error': f'Error processing file: {str(e)}'}), 500
+        return jsonify({
+            'success': True,
+            'file_id': file_id,
+            'filename': filename,
+            'rows': len(df),
+            'columns': list(df.columns),
+            'note': 'Legacy upload successful. Consider using the new RAG API for enhanced features.'
+        })
 
     except Exception as e:
-        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
+        return jsonify({'error': f'Error processing file: {str(e)}'}), 500
+
+# Enhanced File Upload Route (New RAG-enabled endpoint)
+@app.route('/api/v2/files/', methods=['POST'])
+@require_auth
+def upload_file_v2():
+    """Enhanced file upload with RAG processing support"""
+    if not RAG_AVAILABLE:
+        return jsonify({
+            'error': 'Enhanced file processing not available. Missing RAG dependencies.',
+            'fallback': 'Use /upload for basic CSV/Excel support'
+        }), 503
+    
+    # This endpoint redirects to the RAG API
+    # Frontend should call /api/v1/rag/rfpos/{rfpo_id}/files directly
+    return jsonify({
+        'message': 'Please use the RAG API endpoints for enhanced file upload',
+        'endpoints': {
+            'upload_to_rfpo': '/api/v1/rag/rfpos/{rfpo_id}/files',
+            'list_rfpos': '/api/v1/rag/rfpos',
+            'create_rfpo': '/api/v1/rag/rfpos'
+        }
+    }), 302
+
+# RAG-Enhanced AI Assistant Endpoints
+@app.route('/api/v1/ai/enhance-message', methods=['POST'])
+@require_auth
+def enhance_message_with_rag():
+    """Enhance AI assistant message with RAG context"""
+    if not RAG_AVAILABLE:
+        return jsonify({'error': 'RAG functionality not available'}), 503
+    
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        # Get user context
+        user_context = {
+            'current_rfpo_id': data.get('rfpo_id'),
+            'recent_rfpo_id': data.get('recent_rfpo_id'),
+            'user_id': request.current_user['id']
+        }
+        
+        # Enhance message with RAG
+        enhanced_data = rag_assistant.enhance_message_with_rag(message, user_context)
+        
+        return jsonify({
+            'success': True,
+            **enhanced_data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/v1/ai/rfpo-summary/<int:rfpo_id>', methods=['GET'])
+@require_auth
+def get_rfpo_ai_summary(rfpo_id):
+    """Get RFPO summary for AI assistant"""
+    if not RAG_AVAILABLE:
+        return jsonify({'error': 'RAG functionality not available'}), 503
+    
+    try:
+        summary = rag_assistant.get_rfpo_summary(rfpo_id)
+        return jsonify({
+            'success': True,
+            'summary': summary
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/v1/ai/suggest-questions/<int:rfpo_id>', methods=['GET'])
+@require_auth
+def suggest_questions_for_rfpo(rfpo_id):
+    """Get suggested questions for an RFPO"""
+    if not RAG_AVAILABLE:
+        return jsonify({'error': 'RAG functionality not available'}), 503
+    
+    try:
+        limit = int(request.args.get('limit', 5))
+        suggestions = rag_assistant.suggest_questions(rfpo_id, limit)
+        
+        return jsonify({
+            'success': True,
+            'suggestions': suggestions,
+            'rfpo_id': rfpo_id
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/teams', methods=['GET'])
+@require_auth
+def get_teams():
+    """Get all teams for the current user"""
+    try:
+        teams = Team.query.all()
+        teams_data = []
+        
+        for team in teams:
+            teams_data.append({
+                'id': team.id,
+                'name': team.name,
+                'abbrev': team.abbrev,
+                'description': team.description
+            })
+        
+        return jsonify({
+            'success': True,
+            'teams': teams_data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/v1/ai/chat', methods=['POST'])
+@require_auth
+def ai_chat_with_openai():
+    """Enhanced AI chat with OpenAI integration and RAG context"""
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        thread_id = data.get('thread_id')
+        rfpo_id = data.get('rfpo_id')
+        conversation_history = data.get('conversation_history', [])
+        
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        # Get RAG context if RFPO is specified
+        rag_context = None
+        enhanced_message = message
+        if RAG_AVAILABLE and rfpo_id:
+            user_context = {
+                'current_rfpo_id': rfpo_id,
+                'user_id': request.current_user['id']
+            }
+            enhanced_data = rag_assistant.enhance_message_with_rag(message, user_context)
+            if enhanced_data.get('context_source') == 'rag_documents':
+                rag_context = enhanced_data.get('rag_context')
+                enhanced_message = enhanced_data.get('enhanced_message')
+        
+        # Prepare OpenAI request
+        openai_api_key = os.environ.get('OPENAI_API_KEY')
+        if not openai_api_key:
+            return jsonify({
+                'error': 'OpenAI API key not configured',
+                'fallback_message': message,
+                'rag_context': rag_context
+            }), 503
+        
+        # Build conversation with full history
+        messages = [
+            {
+                "role": "system", 
+                "content": "You are a helpful AI assistant working with RFPO (Request for Purchase Order) documents. When provided with document context, base your responses primarily on that context and cite your sources. Maintain conversation continuity and refer back to previous messages when relevant."
+            }
+        ]
+        
+        # Add conversation history (last 10 exchanges to stay within token limits)
+        recent_history = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
+        for hist_msg in recent_history:
+            if hist_msg.get('role') in ['user', 'assistant']:
+                messages.append({
+                    "role": hist_msg['role'],
+                    "content": hist_msg['content']
+                })
+        
+        # Add current message (use enhanced version if RAG context available)
+        messages.append({
+            "role": "user",
+            "content": enhanced_message
+        })
+        
+        # Make OpenAI API call
+        import requests
+        openai_response = requests.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {openai_api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'gpt-3.5-turbo',
+                'messages': messages,
+                'max_tokens': 1000,
+                'temperature': 0.7
+            },
+            timeout=30
+        )
+        
+        if openai_response.status_code == 200:
+            openai_data = openai_response.json()
+            ai_response = openai_data['choices'][0]['message']['content']
+            
+            return jsonify({
+                'success': True,
+                'response': ai_response,
+                'thread_id': thread_id,
+                'rag_context': rag_context,
+                'model': 'gpt-3.5-turbo',
+                'usage': openai_data.get('usage', {})
+            })
+        else:
+            return jsonify({
+                'error': f'OpenAI API error: {openai_response.status_code}',
+                'fallback_message': message
+            }), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Data Routes
 @app.route('/data/<file_id>')

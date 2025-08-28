@@ -1,0 +1,219 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action }} User - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">👤 {{ action }} User</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('users') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="mb-3">📋 Basic Information</h5>
+                    
+                    {% if user %}
+                    <div class="mb-3">
+                        <label for="record_id" class="form-label">User ID</label>
+                        <input type="text" class="form-control" id="record_id" name="record_id" 
+                               value="{{ user.record_id }}" readonly>
+                        <div class="form-text">Auto-generated unique identifier</div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>User ID</strong> will be auto-generated when you save
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="fullname" class="form-label">Full Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="fullname" name="fullname" 
+                               value="{{ user.fullname if user else '' }}" required
+                               placeholder="Full name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="email" name="email" 
+                               value="{{ user.email if user else '' }}" required
+                               placeholder="user@company.com">
+                    </div>
+                    
+                    {% if not user %}
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="password" name="password" 
+                               placeholder="Enter password" required>
+                        <div class="form-text">Minimum 8 characters recommended</div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="sex" class="form-label">Gender</label>
+                        <select class="form-control" id="sex" name="sex">
+                            <option value="">Select...</option>
+                            <option value="m" {{ 'selected' if user and user.sex == 'm' else '' }}>Male</option>
+                            <option value="f" {{ 'selected' if user and user.sex == 'f' else '' }}>Female</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h5 class="mb-3">🏢 Company Information</h5>
+                    
+                    <div class="mb-3">
+                        <label for="company_code" class="form-label">Company Code</label>
+                        <select class="form-control" id="company_code" name="company_code">
+                            <option value="">Select...</option>
+                            <option value="BP" {{ 'selected' if user and user.company_code == 'BP' else '' }}>[BP] BP</option>
+                            <option value="CHEV" {{ 'selected' if user and user.company_code == 'CHEV' else '' }}>[CHEV] Chevron</option>
+                            <option value="DOE" {{ 'selected' if user and user.company_code == 'DOE' else '' }}>[DOE] DOE</option>
+                            <option value="EM" {{ 'selected' if user and user.company_code == 'EM' else '' }}>[EM] ExxonMobil</option>
+                            <option value="FCA" {{ 'selected' if user and user.company_code == 'FCA' else '' }}>[FCA] FCA US LLC</option>
+                            <option value="FRD" {{ 'selected' if user and user.company_code == 'FRD' else '' }}>[FRD] Ford</option>
+                            <option value="GM" {{ 'selected' if user and user.company_code == 'GM' else '' }}>[GM] General Motors</option>
+                            <option value="Lab" {{ 'selected' if user and user.company_code == 'Lab' else '' }}>[Lab] National Lab</option>
+                            <option value="P66" {{ 'selected' if user and user.company_code == 'P66' else '' }}>[P66] Phillips 66</option>
+                            <option value="SHL" {{ 'selected' if user and user.company_code == 'SHL' else '' }}>[SHL] Shell</option>
+                            <option value="USC" {{ 'selected' if user and user.company_code == 'USC' else '' }}>[USC] USCAR</option>
+                            <option value="xxx" {{ 'selected' if user and user.company_code == 'xxx' else '' }}>[xxx] Unknown</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="company" class="form-label">Company Name</label>
+                        <input type="text" class="form-control" id="company" name="company" 
+                               value="{{ user.company if user else '' }}"
+                               placeholder="Full company name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="position" class="form-label">Position</label>
+                        <input type="text" class="form-control" id="position" name="position" 
+                               value="{{ user.position if user else '' }}"
+                               placeholder="Job title">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="department" class="form-label">Department</label>
+                        <input type="text" class="form-control" id="department" name="department" 
+                               value="{{ user.department if user else '' }}"
+                               placeholder="Department">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="phone" name="phone" 
+                               value="{{ user.phone if user else '' }}"
+                               placeholder="Phone number">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <h5 class="mb-3">🔐 System Permissions</h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select User Permissions</label>
+                        <div class="border rounded p-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_GOD" 
+                                       name="permissions" value="GOD"
+                                       {{ 'checked' if user and 'GOD' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_GOD">
+                                    <strong>Super Admin</strong> - Full system access
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_RFPO_ADMIN" 
+                                       name="permissions" value="RFPO_ADMIN"
+                                       {{ 'checked' if user and 'RFPO_ADMIN' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_RFPO_ADMIN">
+                                    <strong>RFPO Full Admin</strong> - Full RFPO management
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_RFPO_USER" 
+                                       name="permissions" value="RFPO_USER"
+                                       {{ 'checked' if user and 'RFPO_USER' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_RFPO_USER">
+                                    <strong>RFPO User</strong> - Basic RFPO access
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_CAL_MEET_USER" 
+                                       name="permissions" value="CAL_MEET_USER"
+                                       {{ 'checked' if user and 'CAL_MEET_USER' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_CAL_MEET_USER">
+                                    <strong>Meeting Calendar User</strong> - Calendar access
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_VROOM_ADMIN" 
+                                       name="permissions" value="VROOM_ADMIN"
+                                       {{ 'checked' if user and 'VROOM_ADMIN' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_VROOM_ADMIN">
+                                    <strong>VROOM Full Admin</strong> - Virtual room management
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_VROOM_USER" 
+                                       name="permissions" value="VROOM_USER"
+                                       {{ 'checked' if user and 'VROOM_USER' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_VROOM_USER">
+                                    <strong>VROOM User</strong> - Virtual room access
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-text">Select all permissions that apply to this user</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="agreed_to_terms" 
+                                   name="agreed_to_terms" value="1"
+                                   {{ 'checked' if user and user.agreed_to_terms else '' }}>
+                            <label class="form-check-label" for="agreed_to_terms">
+                                Agreed to Terms & Conditions
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="active" 
+                                   name="active" value="1"
+                                   {{ 'checked' if not user or user.active else '' }}>
+                            <label class="form-check-label" for="active">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('users') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} User
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

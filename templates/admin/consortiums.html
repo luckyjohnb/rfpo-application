@@ -1,0 +1,130 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Consortiums - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">🏢 Consortiums</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('consortium_new') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> New Consortium
+            </a>
+        </div>
+        <div class="btn-group">
+            <form method="POST" action="{{ url_for('seed_consortiums') }}" style="display: inline;">
+                <button type="submit" class="btn btn-success" onclick="return confirm('Seed standard consortium data? This will add all standard USCAR consortiums.')">
+                    <i class="fas fa-seedling"></i> Seed Standard Consortiums
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if consortiums %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Consortium ID</th>
+                            <th>Name</th>
+                            <th>Abbreviation</th>
+                            <th>Approved Vendors</th>
+                            <th>Projects</th>
+                            <th>RFPOs</th>
+                            <th>Viewers</th>
+                            <th>Admins</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for consortium in consortiums %}
+                        <tr>
+                            <td><strong>{{ consortium.consort_id }}</strong></td>
+                            <td>{{ consortium.name }}</td>
+                            <td><span class="badge bg-secondary">{{ consortium.abbrev }}</span></td>
+                            <td>
+                                {% if consortium.require_approved_vendors %}
+                                    <span class="badge bg-success">✓ Required</span>
+                                {% else %}
+                                    <span class="badge bg-warning">✗ Not Required</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ consortium.project_count }}</td>
+                            <td>{{ consortium.rfpo_count }}</td>
+                            <td>{{ consortium.viewer_count }}</td>
+                            <td>{{ consortium.admin_count }}</td>
+                            <td>
+                                {% if consortium.active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ consortium.created_at.strftime('%Y-%m-%d') if consortium.created_at else '' }}</small></td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('consortium_edit', id=consortium.id) }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteConsortium({{ consortium.id }}, '{{ consortium.name }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-building fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Consortiums Found</h5>
+                <p class="text-muted">Get started by creating your first consortium.</p>
+                <a href="{{ url_for('consortium_new') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create First Consortium
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete consortium <strong id="consortiumName"></strong>?</p>
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteConsortium(id, name) {
+    document.getElementById('consortiumName').textContent = name;
+    document.getElementById('deleteForm').action = '/consortium/' + id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,1448 @@
+{% extends "admin/base.html" %}
+
+{% block title %}PDF Positioning Editor - {{ consortium.abbrev }} {{ template_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+#pdf-canvas-container {
+    position: relative;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    overflow: hidden;
+    margin: 20px 0;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+        #pdf-canvas {
+            background-color: #f8f9fa;
+            /* background image will be set via JavaScript */
+            background-repeat: no-repeat;
+            background-position: 0 0;
+            background-size: 612px 792px; /* Exact PDF dimensions, no scaling */
+            width: 612px !important; /* Exact PDF width */
+            height: 792px !important; /* Exact PDF height */
+            min-height: 792px; /* Exact PDF height */
+            position: relative;
+            margin: 0 auto;
+            cursor: crosshair;
+            border: 1px solid #007bff;
+            overflow: visible;
+            display: block;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+.pdf-field {
+    position: absolute;
+    min-width: 80px;
+    min-height: 20px;
+    background: rgba(255, 255, 0, 0.95) !important; /* BRIGHT YELLOW for maximum visibility */
+    border: 4px solid #FF0000 !important; /* RED BORDER for maximum contrast */
+    border-radius: 6px;
+    cursor: move;
+    user-select: none;
+    padding: 6px 8px;
+    font-family: Arial, sans-serif;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    z-index: 200 !important;
+    transition: none; /* Disable transition to prevent jumping */
+    box-sizing: border-box;
+    visibility: visible !important;
+    opacity: 1 !important;
+    box-shadow: 0 6px 20px rgba(255, 0, 0, 0.7) !important; /* RED shadow for maximum visibility */
+    font-weight: bold !important;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.8) !important;
+}
+
+.pdf-field:hover {
+    background: rgba(255, 165, 0, 0.9) !important; /* Orange on hover */
+    border-color: #ff6b35 !important;
+    box-shadow: 0 4px 12px rgba(255, 165, 0, 0.6) !important;
+}
+
+.pdf-field.selected {
+    background: rgba(40, 167, 69, 0.9) !important; /* Green when selected */
+    border-color: #28a745 !important;
+    box-shadow: 0 0 20px rgba(40, 167, 69, 0.8) !important;
+}
+
+.pdf-field .resize-handle {
+    position: absolute;
+    background: #28a745 !important;
+    border: 2px solid #fff !important;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    z-index: 101;
+    display: none;
+}
+
+.pdf-field.selected .resize-handle {
+    display: block !important;
+}
+
+.pdf-field .resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
+.pdf-field .resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
+.pdf-field .resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+.pdf-field .resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+.pdf-field .resize-handle.n { top: -5px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
+.pdf-field .resize-handle.s { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+.pdf-field .resize-handle.w { top: 50%; left: -5px; transform: translateY(-50%); cursor: w-resize; }
+.pdf-field .resize-handle.e { top: 50%; right: -5px; transform: translateY(-50%); cursor: e-resize; }
+
+.pdf-field .field-label {
+    font-size: 10px;
+    font-weight: bold;
+    color: #007bff;
+    background: white;
+    padding: 1px 4px;
+    border-radius: 2px;
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
+.pdf-field .field-content {
+    font-size: 9px;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.field-properties {
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+
+.zoom-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 100;
+}
+
+.coordinates {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 100;
+}
+
+.save-indicator {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    z-index: 9999 !important;
+    pointer-events: none !important;
+    background: rgba(40, 167, 69, 0.9) !important;
+    color: white !important;
+    padding: 8px 12px !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3) !important;
+    transform: translateZ(0) !important; /* Force hardware acceleration */
+    will-change: opacity !important; /* Optimize for opacity changes */
+    transition: opacity 0.3s ease !important;
+}
+
+.list-group-item[draggable="true"] {
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+.list-group-item[draggable="true"]:hover {
+    transform: translateX(5px);
+    border-left: 3px solid #007bff;
+}
+
+.list-group-item[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+#pdf-canvas.drag-over {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+    border: 2px dashed #007bff !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">🎨 PDF Positioning Editor</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-success" id="save-config">
+                <i class="fas fa-save"></i> Save Configuration
+            </button>
+            <button type="button" class="btn btn-info" id="preview-pdf">
+                <i class="fas fa-eye"></i> Preview PDF
+            </button>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('pdf_positioning_list') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info" role="alert">
+    <i class="fas fa-info-circle"></i>
+    <strong>{{ consortium.abbrev }} - {{ template_name.replace('_', ' ').title() }}</strong><br>
+    Drag fields from the "Available Fields" list onto the PDF template. Click a field to select it and modify its properties. Use the Clear All button to remove all fields.
+</div>
+
+<div class="save-indicator" id="save-indicator" style="opacity: 0;">
+    <i class="fas fa-check"></i> Configuration saved!
+</div>
+
+<div class="row">
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-pdf"></i> PDF Template Canvas
+                </h5>
+                <div class="zoom-controls">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" id="zoom-out" title="Zoom Out">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary" id="zoom-reset" title="Reset Zoom">
+                            100%
+                        </button>
+                        <button class="btn btn-outline-secondary" id="zoom-in" title="Zoom In">
+                            <i class="fas fa-search-plus"></i>
+                        </button>
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm ms-2" id="clear-canvas" title="Clear All Fields">
+                        <i class="fas fa-trash"></i> Clear All
+                    </button>
+                    <button class="btn btn-outline-info btn-sm ms-2" onclick="refreshBackground()" title="Refresh PDF Background">
+                        <i class="fas fa-refresh"></i> Refresh PDF
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="pdf-canvas-container">
+                    <div id="pdf-canvas">
+                        <!-- Fields will be dynamically added here -->
+                    </div>
+                    <div class="coordinates" id="coordinates">x: 0, y: 0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3">
+        <div class="field-properties">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-cog"></i> Field Properties
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="no-selection" class="text-muted text-center py-4">
+                        <i class="fas fa-mouse-pointer fa-2x mb-2"></i>
+                        <p class="small mb-1">Select a field to edit its properties</p>
+                        <p class="small mb-0 text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Use <kbd>Delete</kbd> key or Remove button to delete selected fields
+                        </p>
+                    </div>
+                    
+                    <div id="field-properties" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label small">Field Name</label>
+                            <input type="text" class="form-control form-control-sm" id="field-name" readonly>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <label class="form-label small">X Position</label>
+                                <input type="number" class="form-control form-control-sm" id="field-x" min="0" max="612">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Y Position</label>
+                                <input type="number" class="form-control form-control-sm" id="field-y" min="0" max="792">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small">Font Size</label>
+                            <input type="number" class="form-control form-control-sm" id="field-font-size" min="6" max="24" value="9">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small">Font Weight</label>
+                            <select class="form-select form-select-sm" id="field-font-weight">
+                                <option value="normal">Normal</option>
+                                <option value="bold">Bold</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Logo-specific controls (shown only for consortium_logo) -->
+                        <div id="logo-controls" style="display: none;">
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="form-label small">Width (px)</label>
+                                    <input type="number" class="form-control form-control-sm" id="field-width" min="20" max="200" value="80">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">Height (px)</label>
+                                    <input type="number" class="form-control form-control-sm" id="field-height" min="20" max="200" value="40">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="field-visible" checked>
+                            <label class="form-check-label small" for="field-visible">
+                                Visible in PDF
+                            </label>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeSelectedField()">
+                                <i class="fas fa-trash"></i> Remove from Canvas
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list"></i> Available Fields
+                    </h6>
+                    <small class="text-muted">Drag fields to the canvas</small>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush" id="fields-list">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Configuration data
+const CONFIG_ID = {{ config.id if config else 'null' }};
+const POSITIONING_DATA = {{ config.get_positioning_data() | tojson if config else '{}' }};
+const FIELD_DESCRIPTIONS = {
+    'consortium_logo': 'Consortium Logo',
+    'po_number': 'Purchase Order Number',
+    'po_date': 'Purchase Order Date',
+    'vendor_company': 'Vendor Company Name',
+    'vendor_contact': 'Vendor Contact Person',
+    'vendor_address': 'Vendor Address',
+    'vendor_phone': 'Vendor Phone Number',
+    'ship_to_name': 'Ship To Name',
+    'ship_to_address': 'Ship To Address',
+    'delivery_type': 'Delivery Type & Place',
+    'delivery_payment': 'Payment for Transportation',
+    'delivery_routing': 'Delivery Routing',
+    'payment_terms': 'Payment Terms',
+    'project_info': 'Project Information',
+    'delivery_date': 'Delivery Date',
+    'government_agreement': 'Government Agreement Number',
+    'requestor_info': 'Requestor Information',
+    'invoice_address': 'Invoice To Address',
+    'line_items_header': 'Line Items Table Header',
+    'subtotal': 'Subtotal Amount',
+    'total': 'Total Amount'
+};
+
+const SAMPLE_DATA = {
+    'consortium_logo': '[LOGO]',
+    'po_number': 'RFPO-PROJ-2025-08-24-N01',
+    'po_date': '08/24/2025',
+    'vendor_company': 'Sample Vendor Inc.',
+    'vendor_contact': 'John Smith',
+    'vendor_address': '123 Main St, City, ST 12345',
+    'vendor_phone': 'Phone: (555) 123-4567',
+    'ship_to_name': 'USCAR Research',
+    'ship_to_address': '3000 Town Center, Suite 35\nSouthfield, MI 48075',
+    'delivery_type': 'FOB Destination',
+    'delivery_payment': 'Prepaid',
+    'delivery_routing': 'Buyer\'s traffic',
+    'payment_terms': 'Net 30',
+    'project_info': '[PROJ-2025] Battery Research',
+    'delivery_date': '09/15/2025',
+    'government_agreement': 'U.S. Government Funding under Agreement Number: ABC123',
+    'requestor_info': 'ADMIN001\nTel: (555) 123-4567\nUSCAR, MI',
+    'invoice_address': 'United States Council for Automotive\nResearch LLC\nAttn: Accounts Payable\n3000 Town Center Building, Suite 35\nSouthfield, MI 48075',
+    'line_items_header': 'QTY  DESCRIPTION OF SUPPLIES OR SERVICES  UNIT PRICE  TOTAL PRICE',
+    'subtotal': '$15,000.00',
+    'total': '$15,000.00'
+};
+
+let selectedField = null;
+let isDragging = false;
+let dragOffset = { x: 0, y: 0 };
+let zoomLevel = 1.0;
+
+// Initialize the editor
+document.addEventListener('DOMContentLoaded', function() {
+    // Set background image with cache busting
+        const canvas = document.getElementById('pdf-canvas');
+    const imageUrl = `/api/pdf-template-image/po_template?v=${Date.now()}`;
+
+    console.log('🔧 Canvas element found:', canvas);
+    console.log('🔧 Initial canvas dimensions:', canvas.offsetWidth, 'x', canvas.offsetHeight);
+    console.log('🔧 Setting background image to:', imageUrl);
+    
+    // Force dimensions via JavaScript as backup
+    canvas.style.width = '612px';
+    canvas.style.height = '792px';
+    canvas.style.minWidth = '612px';
+    canvas.style.minHeight = '792px';
+    console.log('🔧 Forced canvas dimensions to 612x792');
+    
+    // Check the dimensions after setting them
+    setTimeout(() => {
+        console.log('🔧 Canvas dimensions after force:', canvas.offsetWidth, 'x', canvas.offsetHeight);
+        console.log('🔧 Canvas computed styles:', window.getComputedStyle(canvas).width, 'x', window.getComputedStyle(canvas).height);
+    }, 100);
+    
+    // Apply background image with explicit CSS properties
+    canvas.style.backgroundImage = `url('${imageUrl}')`;
+    canvas.style.backgroundRepeat = 'no-repeat';
+    canvas.style.backgroundPosition = '0 0';
+    canvas.style.backgroundSize = '612px 792px';
+    canvas.style.backgroundColor = '#f8f9fa';
+    
+    // Add border for visibility debugging
+    canvas.style.border = '3px solid #28a745';
+    canvas.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+    
+    console.log('🔧 Background styles applied');
+    
+    // Add a temporary test div to see if the canvas is working
+    const testDiv = document.createElement('div');
+    testDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; background: yellow; padding: 10px; z-index: 1000; font-size: 12px;';
+    testDiv.textContent = 'Canvas Test - Loading PDF...';
+    canvas.appendChild(testDiv);
+    
+    // Test if image loads
+    const testImg = new Image();
+    testImg.onload = function() {
+        console.log('✅ PDF template image loaded successfully!');
+        console.log('Image dimensions:', this.width, 'x', this.height);
+        
+        // Remove test div
+        testDiv.remove();
+        
+        // Force background refresh
+        canvas.style.backgroundImage = `url('${imageUrl}')`;
+        
+        // Verify the background image is set correctly
+        const computedStyle = window.getComputedStyle(canvas);
+        console.log('Canvas computed background-image:', computedStyle.backgroundImage);
+        console.log('Canvas computed background-size:', computedStyle.backgroundSize);
+        console.log('Canvas computed background-position:', computedStyle.backgroundPosition);
+        
+        // Test if the image URL is accessible
+        console.log('Testing image URL accessibility...');
+        
+                        // Add a visible indicator that the PDF loaded
+                canvas.style.border = '3px solid green';
+                
+                // Add a persistent indicator that PDF is loaded
+                const loadedIndicator = document.createElement('div');
+                loadedIndicator.style.cssText = 'position: absolute; top: 10px; right: 10px; background: green; color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; z-index: 1000;';
+                loadedIndicator.textContent = '✅ PDF Background Loaded';
+                canvas.appendChild(loadedIndicator);
+                
+                setTimeout(() => {
+                    canvas.style.border = '2px solid #007bff';
+                }, 3000);
+    };
+    testImg.onerror = function() {
+        console.error('❌ Failed to load PDF template image:', imageUrl);
+        
+        // Update test div to show error
+        testDiv.style.background = 'red';
+        testDiv.style.color = 'white';
+        testDiv.textContent = '❌ PDF Failed to Load - Check console';
+        
+        // Set a visible fallback background for debugging
+        canvas.style.backgroundColor = '#ffeeee';
+        canvas.style.border = '3px solid red';
+    };
+    testImg.src = imageUrl;
+    
+    // Initialize fields from database and set up UI
+    initializeEventListeners();
+    populateFieldsList();
+    initializeFields();
+});
+
+function initializeFields() {
+    const canvas = document.getElementById('pdf-canvas');
+    console.log('Initializing fields with data:', POSITIONING_DATA);
+    
+    Object.keys(POSITIONING_DATA).forEach(fieldName => {
+        const fieldData = POSITIONING_DATA[fieldName];
+        console.log(`Creating field: ${fieldName}`, fieldData);
+        if (fieldData.visible !== false) {  // Show fields unless explicitly hidden
+            createFieldElement(fieldName, fieldData);
+        }
+    });
+    
+    console.log('Fields created, canvas children:', canvas.children.length);
+    
+    // Update the fields list to reflect what's on canvas
+    updateFieldsList();
+}
+
+function addResizeHandles(fieldElement) {
+    const handles = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'];
+    
+    handles.forEach(direction => {
+        const handle = document.createElement('div');
+        handle.className = `resize-handle ${direction}`;
+        
+        handle.addEventListener('mousedown', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startRect = fieldElement.getBoundingClientRect();
+            const canvas = document.getElementById('pdf-canvas');
+            const canvasRect = canvas.getBoundingClientRect();
+            
+            function resize(e) {
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                
+                let newWidth = startRect.width;
+                let newHeight = startRect.height;
+                let newLeft = startRect.left - canvasRect.left;
+                let newTop = startRect.top - canvasRect.top;
+                
+                if (direction.includes('w')) {
+                    newWidth -= deltaX;
+                    newLeft += deltaX;
+                }
+                if (direction.includes('e')) {
+                    newWidth += deltaX;
+                }
+                if (direction.includes('n')) {
+                    newHeight -= deltaY;
+                    newTop += deltaY;
+                }
+                if (direction.includes('s')) {
+                    newHeight += deltaY;
+                }
+                
+                // Apply minimum constraints
+                newWidth = Math.max(60, newWidth);
+                newHeight = Math.max(20, newHeight);
+                
+                fieldElement.style.width = newWidth + 'px';
+                fieldElement.style.height = newHeight + 'px';
+                fieldElement.style.left = newLeft + 'px';
+                fieldElement.style.top = newTop + 'px';
+                
+                // Update positioning data
+                const fieldName = fieldElement.dataset.fieldName;
+                
+                // Convert screen coordinates back to PDF coordinates
+                const borderWidth = 1; // Canvas has 1px border
+                const pdfX = Math.max(0, newLeft - borderWidth);
+                const pdfY = Math.max(0, 792 - (newTop - borderWidth));
+                
+                POSITIONING_DATA[fieldName].x = pdfX;
+                POSITIONING_DATA[fieldName].y = pdfY;
+                POSITIONING_DATA[fieldName].width = newWidth;
+                POSITIONING_DATA[fieldName].height = newHeight;
+                
+                // Only update property panel values, don't trigger visual updates
+                updatePropertyPanelValues();
+            }
+            
+            function stopResize() {
+                document.removeEventListener('mousemove', resize);
+                document.removeEventListener('mouseup', stopResize);
+                saveConfiguration();
+            }
+            
+            document.addEventListener('mousemove', resize);
+            document.addEventListener('mouseup', stopResize);
+        });
+        
+        fieldElement.appendChild(handle);
+    });
+}
+
+// Resize handles now shown/hidden via CSS when .selected class is applied
+
+function createFieldElement(fieldName, fieldData) {
+    const canvas = document.getElementById('pdf-canvas');
+    
+    // Remove any existing field with the same name
+    const existingField = canvas.querySelector(`[data-field-name="${fieldName}"]`);
+    if (existingField) {
+        existingField.remove();
+    }
+    
+    const fieldElement = document.createElement('div');
+    fieldElement.className = 'pdf-field';
+    fieldElement.dataset.fieldName = fieldName;
+    
+    // Calculate scale factors for responsive canvas
+    const canvasRect = canvas.getBoundingClientRect();
+    // Canvas is now exactly 612x792, so no scaling needed
+    const scaleX = 1.0;  // No scaling needed
+    const scaleY = 1.0;  // No scaling needed
+    
+    // Convert PDF coordinates back to screen coordinates for visual positioning
+    const pdfX = fieldData.x || 50;
+    const pdfY = fieldData.y || 50;
+    // Add border offset only for designer visual positioning
+    const borderWidth = 1; // Canvas has 1px border
+    const pixelX = Math.max(0, pdfX + borderWidth);               // X coordinate + border offset
+    const pixelY = Math.max(0, 792 - pdfY + borderWidth);         // Convert PDF Y back to screen Y + border offset only
+    
+    console.log('Field data for', fieldName, ':', fieldData);
+    
+    console.log('Creating field', fieldName, 'at pixel coords:', { pixelX, pixelY }, 'scale:', { scaleX, scaleY });
+    
+    // Apply positioning and styling - force position with !important
+    fieldElement.style.setProperty('position', 'absolute', 'important');
+    fieldElement.style.setProperty('left', pixelX + 'px', 'important');
+    fieldElement.style.setProperty('top', pixelY + 'px', 'important');
+    fieldElement.style.setProperty('width', (fieldData.width || 100) + 'px', 'important');
+    fieldElement.style.setProperty('height', (fieldData.height || 20) + 'px', 'important');
+    
+    console.log(`Creating field ${fieldName} at pixel x:${pixelX}, y:${pixelY}`);
+    
+    const label = document.createElement('div');
+    label.className = 'field-label';
+    
+    // Special handling for consortium logo
+    if (fieldName === 'consortium_logo') {
+        label.innerHTML = '🏢 LOGO';
+        label.style.fontSize = '14px';
+        label.style.fontWeight = 'bold';
+        label.style.color = '#000000';
+        label.style.textAlign = 'center';
+        label.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        label.style.border = '2px dashed #666';
+        label.style.borderRadius = '4px';
+        label.style.padding = '5px';
+        
+        // Logo styling - size is already set above using fieldData.width/height
+    } else {
+        label.textContent = fieldName.replace(/_/g, ' ').toUpperCase();
+        label.style.fontSize = '12px';
+        label.style.fontWeight = 'bold';
+        label.style.color = '#000000'; /* Black text for contrast on yellow background */
+        label.style.textAlign = 'center';
+        label.style.textShadow = '1px 1px 2px rgba(255,255,255,0.8)'; /* White shadow for contrast */
+    }
+    
+    // Don't add content span, just show the field name for better visibility
+    fieldElement.appendChild(label);
+    
+    // Add resize handles (hidden by default, shown when selected)
+    addResizeHandles(fieldElement);
+    
+    // Add event listeners
+    fieldElement.addEventListener('mousedown', handleFieldMouseDown);
+    fieldElement.addEventListener('click', handleFieldClick);
+    
+    canvas.appendChild(fieldElement);
+    console.log('=== FIELD PLACED ON CANVAS ===');
+    console.log('Field Name:', fieldName);
+    console.log('Initial Position Data:', fieldData);
+    console.log('Applied Style Position:', {
+        left: fieldElement.style.left,
+        top: fieldElement.style.top,
+        width: fieldElement.style.width,
+        height: fieldElement.style.height
+    });
+    console.log('Field Element Rect (after placement):', fieldElement.getBoundingClientRect());
+    console.log('Canvas Element Rect:', document.getElementById('pdf-canvas').getBoundingClientRect());
+    console.log('============================');
+    
+    return fieldElement;
+}
+
+function handleFieldMouseDown(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const fieldElement = e.target.closest('.pdf-field');
+    const canvas = document.getElementById('pdf-canvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    const fieldRect = fieldElement.getBoundingClientRect();
+    
+    console.log('=== FIELD MOUSEDOWN EVENT ===');
+    console.log('Field Name:', fieldElement.dataset.fieldName);
+    console.log('Mouse Position - Client:', e.clientX, e.clientY);
+    console.log('Mouse Position - Page:', e.pageX, e.pageY);
+    console.log('Canvas Rect:', canvasRect);
+    console.log('Field Rect:', fieldRect);
+    
+    selectField(fieldElement);
+    
+    isDragging = true;
+    
+    // FIXED: Calculate offset relative to where mouse clicked within the field
+    // This is the distance from the field's top-left corner to where the mouse clicked
+    dragOffset.x = e.clientX - fieldRect.left;
+    dragOffset.y = e.clientY - fieldRect.top;
+    
+    console.log('Calculated Drag Offset (mouse position within field):', dragOffset);
+    console.log('========================');
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+}
+
+function handleMouseMove(e) {
+    if (!isDragging || !selectedField) return;
+    
+    const canvas = document.getElementById('pdf-canvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    
+    // Canvas is now exactly 612x792, so no scaling needed
+    const scaleX = 1.0;  // No scaling - 1:1 mapping
+    const scaleY = 1.0;  // No scaling - 1:1 mapping
+    
+    console.log('=== FIELD MOUSEMOVE EVENT ===');
+    console.log('Field Name:', selectedField.dataset.fieldName);
+    console.log('Mouse Position - Client:', e.clientX, e.clientY);
+    console.log('Canvas Scale Factors:', { scaleX, scaleY });
+    console.log('Canvas Dimensions:', canvasRect);
+    
+    // Calculate new position relative to canvas, accounting for drag offset and border
+    // Only subtract border width for designer positioning (no container offset here)
+    const borderWidth = 1; // Canvas has 1px border
+    const newX = e.clientX - canvasRect.left - dragOffset.x - borderWidth;
+    const newY = e.clientY - canvasRect.top - dragOffset.y - borderWidth;
+    
+    console.log('Calculated New Position (before constraints):', { x: newX, y: newY });
+    
+    // Constrain to canvas bounds (responsive)
+    const constrainedX = Math.max(0, Math.min(newX, canvasRect.width - selectedField.offsetWidth));
+    const constrainedY = Math.max(0, Math.min(newY, canvasRect.height - selectedField.offsetHeight));
+    
+    console.log('Constrained Position:', { x: constrainedX, y: constrainedY });
+    
+    selectedField.style.left = constrainedX + 'px';
+    selectedField.style.top = constrainedY + 'px';
+    
+    console.log('Applied Field Style Position:', {
+        left: selectedField.style.left,
+        top: selectedField.style.top
+    });
+    console.log('========================');
+    
+    // Convert screen coordinates to PDF coordinates
+    // Screen: (0,0) at top-left, Y increases downward
+    // PDF: (0,0) at bottom-left, Y increases upward
+    const pdfX = constrainedX;
+    const pdfY = 792 - constrainedY; // Convert Y axis from screen to PDF coordinates
+    
+    // Update coordinates display with user-friendly coordinates (screen-like)
+    // Show coordinates as "distance from top" to match user intuition
+    const displayY = 792 - pdfY; // Convert back to screen-like coordinates for display
+    document.getElementById('coordinates').textContent = `x: ${Math.round(pdfX)}, y: ${Math.round(displayY)} (from top)`;
+    
+    // Store PDF coordinates in hidden fields, show user-friendly coordinates in UI
+    document.getElementById('field-x').value = Math.round(pdfX);
+    document.getElementById('field-y').value = Math.round(displayY); // Show distance from top
+}
+
+function handleMouseUp(e) {
+    console.log('=== FIELD MOUSEUP EVENT ===');
+    console.log('Mouse Position - Client:', e.clientX, e.clientY);
+    console.log('Mouse Position - Page:', e.pageX, e.pageY);
+    
+    if (isDragging && selectedField) {
+        const fieldName = selectedField.dataset.fieldName;
+        const canvas = document.getElementById('pdf-canvas');
+        const canvasRect = canvas.getBoundingClientRect();
+        const fieldRect = selectedField.getBoundingClientRect();
+        
+        console.log('Field Name:', fieldName);
+        console.log('Final Canvas Rect:', {
+            left: canvasRect.left,
+            top: canvasRect.top,
+            width: canvasRect.width,
+            height: canvasRect.height
+        });
+        console.log('Final Field Rect:', {
+            left: fieldRect.left,
+            top: fieldRect.top,
+            width: fieldRect.width,
+            height: fieldRect.height
+        });
+        
+        // Get actual pixel coordinates from the field's current position
+        const pixelX = parseInt(selectedField.style.left) || 0;
+        const pixelY = parseInt(selectedField.style.top) || 0;
+        
+        console.log('Raw pixel coordinates from style:', { pixelX, pixelY });
+        
+        // Convert screen coordinates to PDF coordinates
+        console.log('Canvas is fixed 612x792 - converting Y axis for PDF');
+        
+        // Convert Y axis from screen to PDF coordinates
+        const pdfX = pixelX;
+        const pdfY = 792 - pixelY; // Convert Y axis: screen (top-left) to PDF (bottom-left)
+        
+        console.log('Converted to PDF coordinates:', { pdfX, pdfY });
+        
+        console.log('Final Position Saved:', {
+            pixelX: pixelX,
+            pixelY: pixelY,
+            pdfX: pdfX,
+            pdfY: pdfY
+        });
+        
+        POSITIONING_DATA[fieldName].x = pdfX;
+        POSITIONING_DATA[fieldName].y = pdfY;
+        
+        saveConfiguration();
+    }
+    
+    console.log('Drag operation ended, isDragging set to false');
+    console.log('========================');
+    
+    isDragging = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+}
+
+function handleFieldClick(e) {
+    e.stopPropagation();
+    
+    const fieldElement = e.target.closest('.pdf-field');
+    const canvas = document.getElementById('pdf-canvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    const fieldRect = fieldElement.getBoundingClientRect();
+    
+    console.log('=== FIELD CLICK EVENT ===');
+    console.log('Field Name:', fieldElement.dataset.fieldName);
+    console.log('Mouse Position - Client:', e.clientX, e.clientY);
+    console.log('Mouse Position - Page:', e.pageX, e.pageY);
+    console.log('Canvas Rect:', {
+        left: canvasRect.left,
+        top: canvasRect.top,
+        width: canvasRect.width,
+        height: canvasRect.height
+    });
+    console.log('Field Rect:', {
+        left: fieldRect.left,
+        top: fieldRect.top,
+        width: fieldRect.width,
+        height: fieldRect.height
+    });
+    console.log('Field Current Style Position:', {
+        left: fieldElement.style.left,
+        top: fieldElement.style.top
+    });
+    console.log('Mouse relative to canvas:', {
+        x: e.clientX - canvasRect.left,
+        y: e.clientY - canvasRect.top
+    });
+    console.log('Mouse relative to field:', {
+        x: e.clientX - fieldRect.left,
+        y: e.clientY - fieldRect.top
+    });
+    console.log('======================');
+    
+    selectField(fieldElement);
+}
+
+function selectField(fieldElement) {
+    // Remove previous selection
+    document.querySelectorAll('.pdf-field').forEach(f => {
+        f.classList.remove('selected');
+    });
+    
+    selectedField = fieldElement;
+    fieldElement.classList.add('selected');
+    
+    // Update properties panel
+    const fieldName = fieldElement.dataset.fieldName;
+    const fieldData = POSITIONING_DATA[fieldName];
+    
+    document.getElementById('no-selection').style.display = 'none';
+    document.getElementById('field-properties').style.display = 'block';
+    
+    document.getElementById('field-name').value = fieldName.replace(/_/g, ' ').toUpperCase();
+    document.getElementById('field-x').value = Math.round(fieldData.x || 0);
+    // Convert PDF Y coordinate to user-friendly "distance from top" display
+    const displayY = 792 - (fieldData.y || 0);
+    document.getElementById('field-y').value = Math.round(displayY);
+    document.getElementById('field-font-size').value = fieldData.font_size;
+    document.getElementById('field-font-weight').value = fieldData.font_weight;
+    document.getElementById('field-visible').checked = fieldData.visible;
+    
+    // Update coordinates display with user-friendly format
+    const displayX = Math.round(fieldData.x || 0);
+    document.getElementById('coordinates').textContent = `x: ${displayX}, y: ${Math.round(displayY)} (from top)`;
+    
+    // Update property panel (without forcing visual position change during selection)
+    updatePropertyPanelValues();
+}
+
+function initializeEventListeners() {
+    const canvas = document.getElementById('pdf-canvas');
+    
+    // Canvas click to deselect
+    canvas.addEventListener('click', function(e) {
+        if (e.target === this) {
+            deselectField();
+        }
+    });
+    
+    // Canvas drop functionality - ensure entire canvas is droppable
+    canvas.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+        this.style.backgroundColor = 'rgba(0, 123, 255, 0.1)';
+    });
+    
+    canvas.addEventListener('dragleave', function(e) {
+        // Only remove highlight if actually leaving the canvas
+        if (!this.contains(e.relatedTarget)) {
+            this.style.backgroundColor = '';
+        }
+    });
+    
+    canvas.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.style.backgroundColor = '';
+        
+        const fieldName = e.dataTransfer.getData('text/plain');
+        console.log('Dropped field on canvas:', fieldName);
+        
+        // Check if field already exists
+        const existingField = document.querySelector(`#pdf-canvas [data-field-name="${fieldName}"]`);
+        if (existingField) {
+            console.log('Field already exists, selecting it');
+            selectField(existingField);
+            return;
+        }
+        
+        // Get drop position relative to canvas, accounting for border only
+        const rect = this.getBoundingClientRect();
+        const borderWidth = 1; // Canvas has 1px border
+        const x = Math.max(0, Math.min(e.clientX - rect.left - borderWidth - 40, 572)); // Account for field width and border
+        const y = Math.max(0, Math.min(e.clientY - rect.top - borderWidth - 10, 782)); // Account for field height and border only
+        const pdfY = 792 - y; // Convert to PDF coordinates
+        
+        console.log(`Creating field at x:${x}, y:${pdfY}`);
+        
+        // Create field data if it doesn't exist
+        if (!POSITIONING_DATA[fieldName]) {
+            if (fieldName === 'consortium_logo') {
+                // Logo field properties
+                POSITIONING_DATA[fieldName] = {
+                    x: x,
+                    y: pdfY,
+                    width: 80,
+                    height: 40,
+                    visible: true
+                };
+            } else {
+                // Text field properties
+                POSITIONING_DATA[fieldName] = {
+                    x: x,
+                    y: pdfY,
+                    font_size: 9,
+                    font_weight: 'normal',
+                    visible: true
+                };
+            }
+        } else {
+            // Update position
+            POSITIONING_DATA[fieldName].x = x;
+            POSITIONING_DATA[fieldName].y = pdfY;
+            POSITIONING_DATA[fieldName].visible = true;
+        }
+        
+        // Create the field element
+        createFieldElement(fieldName, POSITIONING_DATA[fieldName]);
+        
+        // Select the new field
+        const newField = document.querySelector(`#pdf-canvas [data-field-name="${fieldName}"]`);
+        if (newField) {
+            selectField(newField);
+        }
+        
+        // Update the fields list to show the field is now on canvas
+        updateFieldsList();
+        
+        // Save configuration
+        saveConfiguration();
+    });
+    
+    // Mouse tracking for coordinates
+    document.getElementById('pdf-canvas').addEventListener('mousemove', function(e) {
+        if (!isDragging) {
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = 792 - (e.clientY - rect.top); // Convert to PDF coordinates
+            document.getElementById('coordinates').textContent = `x: ${Math.round(x)}, y: ${Math.round(y)}`;
+        }
+    });
+    
+    // Property change handlers
+    document.getElementById('field-x').addEventListener('change', updateFieldPosition);
+    document.getElementById('field-y').addEventListener('change', updateFieldPosition);
+    document.getElementById('field-font-size').addEventListener('change', updateFieldProperties);
+    document.getElementById('field-font-weight').addEventListener('change', updateFieldProperties);
+    document.getElementById('field-width').addEventListener('change', updateFieldProperties);
+    document.getElementById('field-height').addEventListener('change', updateFieldProperties);
+    document.getElementById('field-visible').addEventListener('change', updateFieldProperties);
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Delete key removes selected field
+        if (e.key === 'Delete' && selectedField) {
+            e.preventDefault();
+            removeSelectedField();
+        }
+    });
+    
+    // Save button
+    document.getElementById('save-config').addEventListener('click', saveConfiguration);
+    
+    // Preview button
+    document.getElementById('preview-pdf').addEventListener('click', function() {
+        console.log('📄 Preview button clicked - saving configuration first...');
+        
+        const previewBtn = this;
+        const originalText = previewBtn.innerHTML;
+        previewBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving & Previewing...';
+        previewBtn.disabled = true;
+        
+        // Save configuration first, then open preview
+        fetch(`/api/pdf-positioning/${CONFIG_ID}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                positioning_data: POSITIONING_DATA
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('✅ Configuration saved, opening preview...');
+                window.open(`/api/pdf-positioning/preview/${CONFIG_ID}`, '_blank');
+            } else {
+                console.error('❌ Failed to save configuration:', data.error);
+                alert('Failed to save configuration before preview. Please try again.');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error saving configuration:', error);
+            alert('Error saving configuration before preview. Please try again.');
+        })
+        .finally(() => {
+            // Restore button state
+            previewBtn.innerHTML = originalText;
+            previewBtn.disabled = false;
+        });
+    });
+    
+    // Clear canvas button
+    document.getElementById('clear-canvas').addEventListener('click', function() {
+        if (confirm('Are you sure you want to remove all fields from the canvas?')) {
+            clearCanvas();
+        }
+    });
+    
+    // Add click handler to canvas for deselecting fields
+    const canvasElement = document.getElementById('pdf-canvas');
+    canvasElement.addEventListener('click', function(e) {
+        // Only deselect if clicking directly on canvas (not on a field)
+        if (e.target === canvasElement) {
+            console.log('Canvas clicked - deselecting field');
+            deselectField();
+        }
+    });
+    
+    // Add escape key to deselect fields
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            console.log('Escape pressed - deselecting field');
+            deselectField();
+        }
+    });
+}
+
+function updateFieldPosition() {
+    if (!selectedField) return;
+    
+    const inputX = parseInt(document.getElementById('field-x').value);
+    const inputY = parseInt(document.getElementById('field-y').value);
+    
+    // Input Y is now "distance from top", convert to PDF coordinates
+    const pdfX = inputX;
+    const pdfY = 792 - inputY; // Convert display Y (from top) to PDF Y (from bottom)
+    
+    // Convert PDF coordinates to screen coordinates for styling
+    const screenX = pdfX;
+    const screenY = inputY; // Screen Y = distance from top = input Y
+    
+    selectedField.style.setProperty('left', screenX + 'px', 'important');
+    selectedField.style.setProperty('top', screenY + 'px', 'important');
+    
+    const fieldName = selectedField.dataset.fieldName;
+    POSITIONING_DATA[fieldName].x = pdfX; // Store PDF coordinates
+    POSITIONING_DATA[fieldName].y = pdfY; // Store PDF coordinates
+    
+    saveConfiguration();
+}
+
+function updateFieldProperties() {
+    if (!selectedField) return;
+    
+    const fieldName = selectedField.dataset.fieldName;
+    const visible = document.getElementById('field-visible').checked;
+    
+    if (fieldName === 'consortium_logo') {
+        // Handle logo-specific properties
+        const width = parseInt(document.getElementById('field-width').value);
+        const height = parseInt(document.getElementById('field-height').value);
+        
+        selectedField.style.width = width + 'px';
+        selectedField.style.height = height + 'px';
+        
+        POSITIONING_DATA[fieldName].width = width;
+        POSITIONING_DATA[fieldName].height = height;
+    } else {
+        // Handle text field properties
+        const fontSize = parseInt(document.getElementById('field-font-size').value);
+        const fontWeight = document.getElementById('field-font-weight').value;
+        
+        selectedField.style.fontSize = fontSize + 'px';
+        selectedField.style.fontWeight = fontWeight;
+        
+        POSITIONING_DATA[fieldName].font_size = fontSize;
+        POSITIONING_DATA[fieldName].font_weight = fontWeight;
+    }
+    
+    POSITIONING_DATA[fieldName].visible = visible;
+    
+    if (!visible) {
+        selectedField.style.display = 'none';
+        deselectField();
+    }
+    
+    saveConfiguration();
+}
+
+function deselectField() {
+    selectedField = null;
+    document.querySelectorAll('.pdf-field').forEach(f => {
+        f.classList.remove('selected');
+    });
+    document.getElementById('no-selection').style.display = 'block';
+    document.getElementById('field-properties').style.display = 'none';
+}
+
+function updatePropertyPanelValues() {
+    // Only update input values, don't change visual position
+    if (!selectedField) return;
+    
+    const fieldName = selectedField.dataset.fieldName;
+    const fieldData = POSITIONING_DATA[fieldName];
+    
+    document.getElementById('field-x').value = Math.round(fieldData.x || 0);
+    // Convert PDF Y coordinate to user-friendly "distance from top" display
+    const displayY = 792 - (fieldData.y || 0);
+    document.getElementById('field-y').value = Math.round(displayY);
+    
+    // Show/hide logo-specific controls
+    const logoControls = document.getElementById('logo-controls');
+    const fontControls = document.querySelectorAll('#field-font-size, #field-font-weight');
+    
+    if (fieldName === 'consortium_logo') {
+        // Show logo controls, hide font controls
+        logoControls.style.display = 'block';
+        fontControls.forEach(ctrl => ctrl.closest('.mb-3').style.display = 'none');
+        
+        // Update logo-specific fields
+        document.getElementById('field-width').value = fieldData.width || 80;
+        document.getElementById('field-height').value = fieldData.height || 40;
+    } else {
+        // Hide logo controls, show font controls
+        logoControls.style.display = 'none';
+        fontControls.forEach(ctrl => ctrl.closest('.mb-3').style.display = 'block');
+        
+        // Update font fields
+        document.getElementById('field-font-size').value = fieldData.font_size || 9;
+        document.getElementById('field-font-weight').value = fieldData.font_weight || 'normal';
+    }
+    
+    document.getElementById('field-visible').checked = fieldData.visible !== false;
+}
+
+function updatePropertyPanel() {
+    // Update both input values AND visual position (used only when needed)
+    if (!selectedField) return;
+    
+    const fieldName = selectedField.dataset.fieldName;
+    const fieldData = POSITIONING_DATA[fieldName];
+    
+    updatePropertyPanelValues();
+    
+    // Only update visual position if explicitly requested (not during normal selection)
+    if (fieldData.x !== undefined && fieldData.y !== undefined) {
+        const borderWidth = 1; // Canvas has 1px border
+        const containerOffset = -32; // Additional Y offset from container styling (trying -32px for better alignment)
+        const pixelX = Math.max(0, fieldData.x + borderWidth);
+        const pixelY = Math.max(0, 792 - fieldData.y + borderWidth - containerOffset); // Convert PDF Y to screen Y + border - container offset
+        
+        console.log(`🔧 SYNCING VISUAL POSITION: ${fieldName} to (${pixelX}, ${pixelY})`);
+        console.log(`   Stored PDF coords: (${fieldData.x}, ${fieldData.y})`);
+        console.log(`   Converted screen coords: (${pixelX}, ${pixelY})`);
+        
+        selectedField.style.setProperty('left', pixelX + 'px', 'important');
+        selectedField.style.setProperty('top', pixelY + 'px', 'important');
+    }
+}
+
+function refreshAllFieldPositions() {
+    // CRITICAL FIX: Synchronize all field visual positions with stored POSITIONING_DATA
+    console.log('🔄 Refreshing all field positions to match stored data...');
+    
+    document.querySelectorAll('.pdf-field').forEach(fieldElement => {
+        const fieldName = fieldElement.dataset.fieldName;
+        const fieldData = POSITIONING_DATA[fieldName];
+        
+        if (fieldData && fieldData.x !== undefined && fieldData.y !== undefined) {
+            const borderWidth = 1; // Canvas has 1px border
+            const containerOffset = -32; // Additional Y offset from container styling (trying -32px for better alignment)
+            const pixelX = Math.max(0, fieldData.x + borderWidth);
+            const pixelY = Math.max(0, 792 - fieldData.y + borderWidth - containerOffset); // Convert PDF Y to screen Y + border - container offset
+            
+            console.log(`🔧 Refreshing ${fieldName}: PDF(${fieldData.x}, ${fieldData.y}) -> Screen(${pixelX}, ${pixelY})`);
+            
+            fieldElement.style.setProperty('left', pixelX + 'px', 'important');
+            fieldElement.style.setProperty('top', pixelY + 'px', 'important');
+        }
+    });
+    
+    console.log('✅ All field positions refreshed');
+}
+
+function populateFieldsList() {
+    const fieldsList = document.getElementById('fields-list');
+    
+    Object.keys(FIELD_DESCRIPTIONS).forEach(fieldName => {
+        const item = document.createElement('div');
+        
+        // Check if field is already on canvas
+        const existingField = document.querySelector(`#pdf-canvas [data-field-name="${fieldName}"]`);
+        const isOnCanvas = existingField && existingField.style.display !== 'none';
+        
+        // Set class and draggable based on availability
+        if (isOnCanvas) {
+            item.className = 'list-group-item';  // Remove 'list-group-item-action' to disable hover effect
+            item.draggable = false;
+            item.style.opacity = '0.5';  // Make it look disabled
+            item.style.cursor = 'not-allowed';
+            item.style.backgroundColor = '#f8f9fa';  // Light gray background
+            item.style.color = '#6c757d';  // Gray text
+            item.style.pointerEvents = 'none';  // Completely disable interactions
+        } else {
+            item.className = 'list-group-item list-group-item-action';
+            item.draggable = true;
+            item.style.opacity = '';  // Reset opacity
+            item.style.cursor = '';   // Reset cursor
+            item.style.backgroundColor = '';  // Reset background
+            item.style.color = '';    // Reset color
+            item.style.pointerEvents = '';  // Reset pointer events
+        }
+        
+        item.dataset.fieldName = fieldName;
+        
+        item.innerHTML = `
+            <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-1">${FIELD_DESCRIPTIONS[fieldName]}</h6>
+                <small class="text-muted">${isOnCanvas ? '✅ On Canvas' : '📋 Available'}</small>
+            </div>
+            <p class="mb-1 small text-muted">${fieldName}</p>
+            <small class="text-muted"><i class="fas fa-${isOnCanvas ? 'check' : 'arrows-alt'}"></i> ${isOnCanvas ? 'Already placed' : 'Drag to canvas'}</small>
+        `;
+        
+        // Only make draggable if not on canvas
+        if (!isOnCanvas) {
+            item.addEventListener('dragstart', function(e) {
+                e.dataTransfer.setData('text/plain', fieldName);
+                e.dataTransfer.effectAllowed = 'copy';
+                console.log('Started dragging field:', fieldName);
+            });
+        }
+        
+        // Click to focus existing field
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const fieldElement = document.querySelector(`#pdf-canvas [data-field-name="${fieldName}"]`);
+            if (fieldElement && fieldElement.style.display !== 'none') {
+                selectField(fieldElement);
+                fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+        
+        fieldsList.appendChild(item);
+    });
+}
+
+function updateFieldsList() {
+    // Clear and repopulate the fields list to update status indicators
+    document.getElementById('fields-list').innerHTML = '';
+    populateFieldsList();
+}
+
+function clearCanvas() {
+    // Remove all field elements from canvas
+    document.querySelectorAll('#pdf-canvas .pdf-field').forEach(field => {
+        field.remove();
+    });
+    
+    // Remove all fields from positioning data (cleared fields should not exist)
+    Object.keys(POSITIONING_DATA).forEach(key => delete POSITIONING_DATA[key]);
+    
+    // Deselect any selected field
+    deselectField();
+    
+    // Update the fields list
+    updateFieldsList();
+    
+    // Save configuration
+    saveConfiguration();
+}
+
+function removeSelectedField() {
+    if (!selectedField) {
+        alert('Please select a field to remove.');
+        return;
+    }
+    
+    const fieldName = selectedField.dataset.fieldName;
+    const fieldDescription = FIELD_DESCRIPTIONS[fieldName] || fieldName;
+    
+    if (confirm(`Are you sure you want to remove "${fieldDescription}" from the canvas?`)) {
+        // Remove the field element from canvas
+        selectedField.remove();
+        
+        // Remove from positioning data
+        delete POSITIONING_DATA[fieldName];
+        
+        // Deselect field
+        deselectField();
+        
+        // Update the fields list to show field is now available
+        updateFieldsList();
+        
+        // Save configuration
+        saveConfiguration();
+        
+        console.log(`✅ Removed field: ${fieldName}`);
+    }
+}
+
+function refreshBackground() {
+    const canvas = document.getElementById('pdf-canvas');
+    const imageUrl = `/api/pdf-template-image/po_template?v=${Date.now()}`;
+    
+    console.log('🔄 Refreshing background image:', imageUrl);
+    
+    // Apply background image with cache busting
+    canvas.style.backgroundImage = `url('${imageUrl}')`;
+    canvas.style.border = '3px solid orange';
+    
+    // Test image loading
+    const testImg = new Image();
+    testImg.onload = function() {
+        console.log('✅ Background refreshed successfully!');
+        console.log('Image dimensions:', this.width, 'x', this.height);
+        canvas.style.border = '3px solid green';
+        setTimeout(() => {
+            canvas.style.border = '2px solid #007bff';
+        }, 2000);
+    };
+    testImg.onerror = function() {
+        console.error('❌ Failed to refresh background');
+        canvas.style.border = '3px solid red';
+    };
+    testImg.src = imageUrl;
+}
+
+function saveConfiguration() {
+    console.log('🔄 Saving configuration...');
+    console.log('CONFIG_ID:', CONFIG_ID);
+    console.log('POSITIONING_DATA:', JSON.stringify(POSITIONING_DATA, null, 2));
+    
+    const url = `/api/pdf-positioning/${CONFIG_ID}`;
+    const payload = {
+        positioning_data: POSITIONING_DATA
+    };
+    
+    console.log('Save URL:', url);
+    console.log('Save payload:', JSON.stringify(payload, null, 2));
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => {
+        console.log('Save response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Save response data:', data);
+        if (data.success) {
+            console.log('✅ Configuration saved successfully');
+            showSaveIndicator();
+            // Don't auto-refresh positions - this was causing snap-back
+        } else {
+            console.error('❌ Save failed:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('❌ Save error:', error);
+    });
+}
+
+function showSaveIndicator() {
+    const indicator = document.getElementById('save-indicator');
+    indicator.style.opacity = '1';
+    setTimeout(() => {
+        indicator.style.opacity = '0';
+    }, 2000);
+}
+</script>
+{% endblock %}

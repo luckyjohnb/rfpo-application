@@ -1,0 +1,570 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action }} Vendor - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">🏪 {{ action }} Vendor</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('vendors') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="mb-3">📋 Basic Information</h5>
+                    
+                    {% if vendor %}
+                    <div class="mb-3">
+                        <label for="vendor_id" class="form-label">Vendor ID</label>
+                        <input type="text" class="form-control" id="vendor_id" name="vendor_id" 
+                               value="{{ vendor.vendor_id }}" readonly>
+                        <div class="form-text">Auto-generated unique identifier</div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Vendor ID</strong> will be auto-generated when you save
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="company_name" class="form-label">Company Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="company_name" name="company_name" 
+                               value="{{ vendor.company_name if vendor else '' }}" required
+                               placeholder="Company name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-control" id="status" name="status">
+                            <option value="live" {{ 'selected' if vendor and vendor.status == 'live' else '' }}>Live</option>
+                            <option value="withheld" {{ 'selected' if vendor and vendor.status == 'withheld' else '' }}>Withheld</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="vendor_type" class="form-label">Vendor Type</label>
+                        <select class="form-control" id="vendor_type" name="vendor_type">
+                            <option value="0" {{ 'selected' if vendor and vendor.vendor_type == 0 else '' }}>None</option>
+                            <option value="1" {{ 'selected' if vendor and vendor.vendor_type == 1 else '' }}>University</option>
+                            <option value="2" {{ 'selected' if vendor and vendor.vendor_type == 2 else '' }}>Small Business</option>
+                            <option value="3" {{ 'selected' if vendor and vendor.vendor_type == 3 else '' }}>Non Profit</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="certs_reps" 
+                                   name="certs_reps" value="1"
+                                   {{ 'checked' if vendor and vendor.certs_reps else '' }}>
+                            <label class="form-check-label" for="certs_reps">
+                                Certifications & Representations
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="active" 
+                                   name="active" value="1"
+                                   {{ 'checked' if not vendor or vendor.active else '' }}>
+                            <label class="form-check-label" for="active">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Approved Consortiums Selection -->
+                    <div class="mb-4">
+                        <label class="form-label">Approved Consortiums</label>
+                        <input type="text" class="form-control mb-2" id="consortiumSearch" placeholder="🔍 Search consortiums..." onkeyup="filterConsortiums()">
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-muted">🏢 Available Consortiums</h6>
+                                <div class="border rounded p-2" style="height: 200px; overflow-y: auto;" id="availableConsortiums">
+                                    <div class="text-muted p-2">Loading consortiums...</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted">✅ Approved Consortiums</h6>
+                                <div class="border rounded p-2 bg-light" style="height: 200px; overflow-y: auto;" id="selectedConsortiums">
+                                    <div class="text-muted p-2">No consortiums selected</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="approved_consortiums" name="approved_consortiums" value="{{ vendor.approved_consortiums_display if vendor else '' }}">
+                        <div class="form-text mt-2">Select which consortiums this vendor is approved for</div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h5 class="mb-3">📞 Primary Contact Information</h5>
+                    
+                    <div class="mb-3">
+                        <label for="contact_name" class="form-label">Contact Name</label>
+                        <input type="text" class="form-control" id="contact_name" name="contact_name" 
+                               value="{{ vendor.contact_name if vendor else '' }}"
+                               placeholder="Primary contact person">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_dept" class="form-label">Department</label>
+                        <input type="text" class="form-control" id="contact_dept" name="contact_dept" 
+                               value="{{ vendor.contact_dept if vendor else '' }}"
+                               placeholder="e.g., Sales, Procurement">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_tel" class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="contact_tel" name="contact_tel" 
+                               value="{{ vendor.contact_tel if vendor else '' }}"
+                               placeholder="Primary phone number">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_fax" class="form-label">Fax</label>
+                        <input type="text" class="form-control" id="contact_fax" name="contact_fax" 
+                               value="{{ vendor.contact_fax if vendor else '' }}"
+                               placeholder="Fax number">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_address" class="form-label">Address</label>
+                        <textarea class="form-control" id="contact_address" name="contact_address" 
+                                  rows="3" placeholder="Street address">{{ vendor.contact_address if vendor else '' }}</textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="contact_city" class="form-label">City</label>
+                                <input type="text" class="form-control" id="contact_city" name="contact_city" 
+                                       value="{{ vendor.contact_city if vendor else '' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="contact_state" class="form-label">State</label>
+                                <input type="text" class="form-control" id="contact_state" name="contact_state" 
+                                       value="{{ vendor.contact_state if vendor else '' }}" maxlength="2"
+                                       placeholder="CA">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="contact_zip" class="form-label">ZIP</label>
+                                <input type="text" class="form-control" id="contact_zip" name="contact_zip" 
+                                       value="{{ vendor.contact_zip if vendor else '' }}"
+                                       placeholder="12345">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_country" class="form-label">Country</label>
+                        <input type="text" class="form-control" id="contact_country" name="contact_country" 
+                               value="{{ vendor.contact_country if vendor else '' }}"
+                               placeholder="United States">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Vendor Contacts Section -->
+            {% if vendor %}
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">📇 Vendor Contacts</h5>
+                            <button type="button" class="btn btn-sm btn-success" onclick="showAddContactModal()">
+                                <i class="fas fa-plus"></i> Add Contact
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Contact Name</th>
+                                            <th>Department</th>
+                                            <th>Phone</th>
+                                            <th>City, State</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Primary Contact (from vendor table) -->
+                                        {% if vendor.contact_name or vendor.contact_tel or vendor.contact_address %}
+                                        <tr class="table-primary">
+                                            <td><span class="badge bg-primary">Primary</span></td>
+                                            <td><strong>{{ vendor.contact_name or 'N/A' }}</strong></td>
+                                            <td>{{ vendor.contact_dept or 'N/A' }}</td>
+                                            <td>{{ vendor.contact_tel or 'N/A' }}</td>
+                                            <td>{{ vendor.contact_city or 'N/A' }}{% if vendor.contact_state %}, {{ vendor.contact_state }}{% endif %}</td>
+                                            <td>
+                                                <small class="text-muted">Edit via vendor form</small>
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                        
+                                        <!-- Additional Contacts (from vendor_sites table) -->
+                                        {% for site in vendor.sites %}
+                                        <tr>
+                                            <td><span class="badge bg-secondary">Additional</span></td>
+                                            <td><strong>{{ site.contact_name or 'N/A' }}</strong></td>
+                                            <td>{{ site.contact_dept or 'N/A' }}</td>
+                                            <td>{{ site.contact_tel or 'N/A' }}</td>
+                                            <td>{{ site.contact_city or 'N/A' }}{% if site.contact_state %}, {{ site.contact_state }}{% endif %}</td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                            onclick="editContact({{ site.id }}, '{{ site.contact_name }}', '{{ site.contact_dept }}', '{{ site.contact_tel }}', '{{ site.contact_fax }}', '{{ site.contact_address }}', '{{ site.contact_city }}', '{{ site.contact_state }}', '{{ site.contact_zip }}', '{{ site.contact_country }}')">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                            onclick="deleteContact({{ site.id }}, '{{ site.contact_name or 'Contact' }}')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                        
+                                        {% if not vendor.contact_name and not vendor.sites %}
+                                        <tr>
+                                            <td colspan="6" class="text-center py-3">
+                                                <i class="fas fa-address-book fa-2x text-muted mb-2"></i>
+                                                <p class="text-muted">No contacts for this vendor.</p>
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Vendor Contacts:</strong> You can add additional contacts after creating the vendor.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('vendors') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Vendor
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add/Edit Contact Modal -->
+<div class="modal fade" id="contactModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="contactModalTitle">Add Vendor Contact</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="contactForm" method="POST">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="modal_contact_name" class="form-label">Contact Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="modal_contact_name" name="contact_name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="modal_contact_dept" class="form-label">Department</label>
+                                <input type="text" class="form-control" id="modal_contact_dept" name="contact_dept" 
+                                       placeholder="e.g., Sales, Engineering, Finance">
+                            </div>
+                            <div class="mb-3">
+                                <label for="modal_contact_tel" class="form-label">Phone</label>
+                                <input type="text" class="form-control" id="modal_contact_tel" name="contact_tel">
+                            </div>
+                            <div class="mb-3">
+                                <label for="modal_contact_fax" class="form-label">Fax</label>
+                                <input type="text" class="form-control" id="modal_contact_fax" name="contact_fax">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="modal_contact_address" class="form-label">Address</label>
+                                <textarea class="form-control" id="modal_contact_address" name="contact_address" rows="3"></textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="modal_contact_city" class="form-label">City</label>
+                                        <input type="text" class="form-control" id="modal_contact_city" name="contact_city">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="modal_contact_state" class="form-label">State</label>
+                                        <input type="text" class="form-control" id="modal_contact_state" name="contact_state" maxlength="2">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="modal_contact_zip" class="form-label">ZIP</label>
+                                        <input type="text" class="form-control" id="modal_contact_zip" name="contact_zip">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="modal_contact_country" class="form-label">Country</label>
+                                <input type="text" class="form-control" id="modal_contact_country" name="contact_country" value="United States">
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="modal_vendor_id" name="vendor_id" value="{{ vendor.id if vendor else '' }}">
+                    <input type="hidden" id="modal_contact_id" name="contact_id" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="contactSubmitBtn">
+                        <i class="fas fa-save"></i> Save Contact
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Contact Modal -->
+<div class="modal fade" id="deleteContactModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete Contact</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete contact <strong id="deleteContactName"></strong>?</p>
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteContactForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete Contact</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allConsortiums = [];
+let selectedConsortiums = [];
+
+// Load all consortiums when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadConsortiums();
+    
+    // Parse existing selections if editing
+    const existingConsortiums = document.getElementById('approved_consortiums').value;
+    
+    if (existingConsortiums) {
+        selectedConsortiums = existingConsortiums.split(',').map(s => s.trim()).filter(s => s);
+    }
+});
+
+function loadConsortiums() {
+    fetch('/api/consortiums')
+        .then(response => response.json())
+        .then(consortiums => {
+            allConsortiums = consortiums;
+            displayAvailableConsortiums();
+            displaySelectedConsortiums();
+        })
+        .catch(error => {
+            console.error('Error loading consortiums:', error);
+            document.getElementById('availableConsortiums').innerHTML = '<div class="text-danger p-2">Error loading consortiums</div>';
+        });
+}
+
+function filterConsortiums() {
+    displayAvailableConsortiums();
+}
+
+function displayAvailableConsortiums() {
+    const searchTerm = document.getElementById('consortiumSearch').value.toLowerCase();
+    
+    // Filter consortiums: not selected and matching search term
+    const availableConsortiums = allConsortiums.filter(consortium => 
+        !selectedConsortiums.includes(consortium.abbrev) &&
+        (consortium.name.toLowerCase().includes(searchTerm) || 
+         consortium.abbrev.toLowerCase().includes(searchTerm))
+    );
+    
+    if (availableConsortiums.length === 0) {
+        document.getElementById('availableConsortiums').innerHTML = '<div class="text-muted p-2">No available consortiums</div>';
+        return;
+    }
+    
+    let html = '';
+    availableConsortiums.forEach(consortium => {
+        html += `
+            <div class="d-flex align-items-center p-2 border-bottom consortium-item" style="cursor: pointer;" onclick="addConsortium('${consortium.abbrev}')">
+                <div class="me-2">
+                    <i class="fas fa-plus-circle text-success"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div><strong>[${consortium.abbrev}]</strong> ${consortium.name}</div>
+                    <small class="text-muted">ID: ${consortium.id}</small>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('availableConsortiums').innerHTML = html;
+}
+
+function displaySelectedConsortiums() {
+    if (selectedConsortiums.length === 0) {
+        document.getElementById('selectedConsortiums').innerHTML = '<div class="text-muted p-2">No consortiums selected</div>';
+        return;
+    }
+    
+    let html = '';
+    selectedConsortiums.forEach(abbrev => {
+        const consortium = allConsortiums.find(c => c.abbrev === abbrev);
+        if (consortium) {
+            html += `
+                <div class="d-flex align-items-center p-2 border-bottom consortium-item" style="cursor: pointer;" onclick="removeConsortium('${abbrev}')">
+                    <div class="me-2">
+                        <i class="fas fa-minus-circle text-danger"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div><strong>[${consortium.abbrev}]</strong> ${consortium.name}</div>
+                        <small class="text-muted">Approved for vendor</small>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById('selectedConsortiums').innerHTML = html;
+}
+
+function addConsortium(abbrev) {
+    if (!selectedConsortiums.includes(abbrev)) {
+        selectedConsortiums.push(abbrev);
+        document.getElementById('approved_consortiums').value = selectedConsortiums.join(', ');
+        
+        // Refresh both lists
+        displayAvailableConsortiums();
+        displaySelectedConsortiums();
+    }
+}
+
+function removeConsortium(abbrev) {
+    const index = selectedConsortiums.indexOf(abbrev);
+    if (index > -1) {
+        selectedConsortiums.splice(index, 1);
+        document.getElementById('approved_consortiums').value = selectedConsortiums.join(', ');
+        
+        // Refresh both lists
+        displayAvailableConsortiums();
+        displaySelectedConsortiums();
+    }
+}
+
+function showAddContactModal() {
+    // Reset form for new contact
+    document.getElementById('contactForm').reset();
+    document.getElementById('modal_vendor_id').value = '{{ vendor.id if vendor else '' }}';
+    document.getElementById('modal_contact_id').value = '';
+    document.getElementById('contactModalTitle').textContent = 'Add Vendor Contact';
+    document.getElementById('contactSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Save Contact';
+    document.getElementById('contactForm').action = '/vendor-site/new';
+    
+    new bootstrap.Modal(document.getElementById('contactModal')).show();
+}
+
+function editContact(id, name, dept, tel, fax, address, city, state, zip, country) {
+    // Populate form for editing
+    document.getElementById('modal_contact_name').value = name || '';
+    document.getElementById('modal_contact_dept').value = dept || '';
+    document.getElementById('modal_contact_tel').value = tel || '';
+    document.getElementById('modal_contact_fax').value = fax || '';
+    document.getElementById('modal_contact_address').value = address || '';
+    document.getElementById('modal_contact_city').value = city || '';
+    document.getElementById('modal_contact_state').value = state || '';
+    document.getElementById('modal_contact_zip').value = zip || '';
+    document.getElementById('modal_contact_country').value = country || '';
+    document.getElementById('modal_vendor_id').value = '{{ vendor.id if vendor else '' }}';
+    document.getElementById('modal_contact_id').value = id;
+    
+    document.getElementById('contactModalTitle').textContent = 'Edit Vendor Contact';
+    document.getElementById('contactSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Update Contact';
+    document.getElementById('contactForm').action = '/vendor-site/' + id + '/edit';
+    
+    new bootstrap.Modal(document.getElementById('contactModal')).show();
+}
+
+function deleteContact(id, name) {
+    document.getElementById('deleteContactName').textContent = name;
+    document.getElementById('deleteContactForm').action = '/vendor-site/' + id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteContactModal')).show();
+}
+
+// Handle contact form submission
+document.getElementById('contactForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const action = this.action;
+    
+    fetch(action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            // Close modal and reload page to show new contact
+            bootstrap.Modal.getInstance(document.getElementById('contactModal')).hide();
+            window.location.reload();
+        } else {
+            alert('Error saving contact. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving contact. Please try again.');
+    });
+});
+</script>
+
+<style>
+.consortium-item:hover, .user-item:hover {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}

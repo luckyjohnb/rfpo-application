@@ -1,0 +1,43 @@
+body {margin:0px}
+p,td,body {font-family: verdana,helvetica,sans-serif; font-size: 10px; color:#000000}
+.default {font-family: verdana,helvetica,sans-serif; font-size: 10px; color:#333333}
+.head {font-family:arial,helvetica,sans-serif; font-size:14px; font-weight:bold;}
+.subhead {font-family:verdana,helvetica,sans-serif; font-size:14px; font-weight:bold; color:#333333}
+.contentspan {margin-left:20px; margin-right:20px; margin-bottom:20px; font-family: verdana,helvetica,sans-serif; font-size: 10px; color:#333333}
+.footnotes {color:#999999; margin-top:5px;}
+.white {color:#FFFFFF;}
+
+.doh { 
+	color:#FF6666 ;
+}
+
+input,select,textarea {
+	font-family: verdana,helvetica,sans-serif; 
+	font-size: 10px; 
+	color:#000000
+}
+
+div.form_container {
+	border: 1px solid #555;
+	margin:0 10px 10px 0;
+	padding: 10px ;
+	color: #fff;
+	background: #777 ;
+}
+
+div.form_click {
+	border: 1px solid #c00;
+	padding: 10px ;
+	color: #fff;
+	background: #777 ;
+}
+
+div.form_container td,div.form_container p {
+	color: #fff;
+	vertical-align:top;
+}
+
+p.form_header,b.form_header {
+	font-family: arial,helvetica,sans-serif ;
+	font-size: 16px ;
+}

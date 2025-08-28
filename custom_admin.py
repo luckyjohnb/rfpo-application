@@ -225,6 +225,19 @@ def create_app():
                         if logo_filename:
                             flash(f'📷 Logo uploaded: {logo_filename}', 'info')
                 
+                # Handle terms PDF upload
+                terms_pdf_filename = None
+                if 'terms_pdf_file' in request.files:
+                    terms_pdf_file = request.files['terms_pdf_file']
+                    if terms_pdf_file.filename and terms_pdf_file.filename != '':
+                        # Validate it's a PDF file
+                        if terms_pdf_file.filename.lower().endswith('.pdf'):
+                            terms_pdf_filename = handle_file_upload(terms_pdf_file, 'uploads/terms')
+                            if terms_pdf_filename:
+                                flash(f'📄 Terms PDF uploaded: {terms_pdf_filename}', 'info')
+                        else:
+                            flash('❌ Terms file must be a PDF', 'error')
+                
                 # Build invoicing address from structured inputs
                 invoicing_parts = []
                 if request.form.get('invoicing_street'):
@@ -250,6 +263,7 @@ def create_app():
                     name=request.form.get('name'),
                     abbrev=request.form.get('abbrev'),
                     logo=logo_filename,
+                    terms_pdf=terms_pdf_filename,
                     require_approved_vendors=bool(request.form.get('require_approved_vendors')),
                     non_government_project_id=request.form.get('non_government_project_id') or None,
                     invoicing_address=invoicing_address,
@@ -307,6 +321,25 @@ def create_app():
                         
                         # Upload new logo
                         consortium.logo = handle_file_upload(logo_file, 'uploads/logos')
+                
+                # Handle terms PDF upload
+                if 'terms_pdf_file' in request.files:
+                    terms_pdf_file = request.files['terms_pdf_file']
+                    if terms_pdf_file.filename:
+                        # Validate it's a PDF file
+                        if terms_pdf_file.filename.lower().endswith('.pdf'):
+                            # Delete old terms PDF if exists
+                            if consortium.terms_pdf:
+                                old_terms_path = os.path.join('uploads/terms', consortium.terms_pdf)
+                                if os.path.exists(old_terms_path):
+                                    os.remove(old_terms_path)
+                            
+                            # Upload new terms PDF
+                            consortium.terms_pdf = handle_file_upload(terms_pdf_file, 'uploads/terms')
+                            if consortium.terms_pdf:
+                                flash(f'📄 Terms PDF updated: {consortium.terms_pdf}', 'info')
+                        else:
+                            flash('❌ Terms file must be a PDF', 'error')
                 
                 # Build invoicing address from structured inputs
                 invoicing_parts = []
@@ -397,6 +430,12 @@ def create_app():
         """Serve uploaded logo files"""
         from flask import send_from_directory
         return send_from_directory('uploads/logos', filename)
+    
+    @app.route('/uploads/terms/<filename>')
+    def uploaded_terms(filename):
+        """Serve uploaded terms PDF files"""
+        from flask import send_from_directory
+        return send_from_directory('uploads/terms', filename)
     
     # Teams routes
     @app.route('/teams')
@@ -944,6 +983,64 @@ Southfield, MI  48075""",
         
         return redirect(url_for('rfpo_edit', id=rfpo_id))
     
+    @app.route('/rfpo/<int:rfpo_id>/generate-po-proof')
+    @login_required
+    def rfpo_generate_po_proof(rfpo_id):
+        """Generate PO Proof PDF for RFPO using legacy template approach"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        try:
+            # Get related data
+            project = Project.query.filter_by(project_id=rfpo.project_id).first()
+            consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+            vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+            
+            # Handle vendor_site_id - regular VendorSite ID or None (uses vendor primary contact)
+            vendor_site = None
+            if rfpo.vendor_site_id:
+                try:
+                    vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+                except (ValueError, TypeError):
+                    vendor_site = None
+                
+            if not project or not consortium:
+                flash('❌ Missing project or consortium information for PO Proof generation.', 'error')
+                return redirect(url_for('rfpo_edit', id=rfpo_id))
+            
+            # Get positioning configuration for this consortium (if available)
+            positioning_config = PDFPositioning.query.filter_by(
+                consortium_id=consortium.consort_id,
+                template_name='po_template',
+                active=True
+            ).first()
+            
+            # Generate PO Proof PDF following legacy pattern:
+            # 1. Use po.pdf as background
+            # 2. Add consortium logo
+            # 3. Use po_page2.pdf for additional line items if needed  
+            # 4. Merge consortium terms PDF
+            pdf_generator = RFPOPDFGenerator(positioning_config=positioning_config)
+            pdf_buffer = pdf_generator.generate_po_pdf(rfpo, consortium, project, vendor, vendor_site)
+            
+            # Prepare filename following legacy naming pattern
+            date_str = datetime.now().strftime('%Y%m%d')
+            filename = f"PO_PROOF_{rfpo.rfpo_id}_{date_str}.pdf"
+            
+            # Return PDF as response
+            return Response(
+                pdf_buffer.getvalue(),
+                mimetype='application/pdf',
+                headers={
+                    'Content-Disposition': f'inline; filename="{filename}"',
+                    'Content-Type': 'application/pdf'
+                }
+            )
+            
+        except Exception as e:
+            print(f"PO Proof generation error: {e}")
+            flash(f'❌ Error generating PO Proof: {str(e)}', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
     @app.route('/rfpo/<int:rfpo_id>/generate-po')
     @login_required
     def rfpo_generate_po(rfpo_id):
@@ -995,6 +1092,43 @@ Southfield, MI  48075""",
         except Exception as e:
             print(f"PDF generation error: {e}")
             flash(f'❌ Error generating PDF: {str(e)}', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
+    @app.route('/rfpo/<int:rfpo_id>/generate-rfpo')
+    @login_required
+    def rfpo_generate_rfpo(rfpo_id):
+        """Generate RFPO HTML preview for viewing and printing"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        try:
+            # Get related data
+            project = Project.query.filter_by(project_id=rfpo.project_id).first()
+            consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+            vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+            vendor_site = None
+            
+            # Handle vendor_site_id - regular VendorSite ID or None (uses vendor primary contact)
+            if rfpo.vendor_site_id:
+                try:
+                    vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+                except (ValueError, TypeError):
+                    vendor_site = None
+            
+            # Get requestor user information
+            requestor = User.query.filter_by(record_id=rfpo.requestor_id).first() if rfpo.requestor_id else None
+            
+            # Render the RFPO HTML template
+            return render_template('admin/rfpo_preview.html',
+                                 rfpo=rfpo,
+                                 project=project,
+                                 consortium=consortium,
+                                 vendor=vendor,
+                                 vendor_site=vendor_site,
+                                 requestor=requestor)
+            
+        except Exception as e:
+            print(f"RFPO generation error: {e}")
+            flash(f'❌ Error generating RFPO: {str(e)}', 'error')
             return redirect(url_for('rfpo_edit', id=rfpo_id))
     
     @app.route('/rfpo/<int:id>/delete', methods=['POST'])

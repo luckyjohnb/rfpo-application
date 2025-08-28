@@ -1,0 +1,54 @@
+/* Print styles for RFPO preview */
+@media print {
+    body {
+        margin: 0;
+        background: white;
+    }
+    
+    div.preview {
+        border: none;
+        margin: 0;
+        padding: 0;
+        background: white;
+    }
+    
+    div.preview_info {
+        border: none;
+        margin: 0;
+        padding: 0;
+        background: white;
+    }
+    
+    div.preview_terms {
+        border: none;
+        margin: 0;
+        padding: 0;
+        background: white;
+        page-break-before: always;
+    }
+    
+    .preview_header {
+        display: none;
+    }
+    
+    /* Ensure table borders print correctly */
+    table.preview_table th {
+        border: 2px solid #000 !important;
+        -webkit-print-color-adjust: exact;
+    }
+    
+    table.preview_table td {
+        border: 1px solid #000 !important;
+        -webkit-print-color-adjust: exact;
+    }
+    
+    table.preview_table td.none {
+        border: none !important;
+    }
+    
+    table.preview_table td.bold {
+        border: 2px solid #000 !important;
+        font-weight: bold;
+        -webkit-print-color-adjust: exact;
+    }
+}

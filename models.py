@@ -16,6 +16,7 @@ class Consortium(db.Model):
     name = db.Column(db.String(255), nullable=False, unique=True)  # consort_name
     abbrev = db.Column(db.String(20), nullable=False, unique=True)  # consort_abbrev
     logo = db.Column(db.String(255))  # consort_logo_1 (logo filename for web)
+    terms_pdf = db.Column(db.String(255))  # terms_pdf (terms and conditions PDF filename)
     
     # Configuration flags
     require_approved_vendors = db.Column(db.Boolean, default=True)  # consort_rfpo_approvedvendors (1=Yes, 0=No)
@@ -89,6 +90,7 @@ class Consortium(db.Model):
             'name': self.name,
             'abbrev': self.abbrev,
             'logo': self.logo,
+            'terms_pdf': self.terms_pdf,
             'require_approved_vendors': self.require_approved_vendors,
             'non_government_project_id': self.non_government_project_id,
             'rfpo_viewer_user_ids': self.get_rfpo_viewer_users(),

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>USCAR RFPO - {{ rfpo.rfpo_id }}</title>
+    <meta name="generator" content="RFPO Admin Panel">
+    <meta http-equiv="Expires" content="0">
+    <meta http-equiv="Pragma" content="no-cache">
+    
+    <style type="text/css">
+        /* Reset all default browser styles first */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: content-box;
+        }
+        
+        /* Base styles from norm.css */
+        body {
+            margin: 0px;
+            margin-bottom: 20px;
+            background: #ccc;
+            font-family: verdana, helvetica, sans-serif;
+            font-size: 10px;
+            color: #000000;
+        }
+        
+        p, td {
+            font-family: verdana, helvetica, sans-serif;
+            font-size: 10px;
+            color: #000000;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Preview styles */
+        div.preview {
+            border: 1px solid #999;
+            padding: 0;
+            margin: 1%;
+            background: #FFF;
+            color: #333;
+        }
+        
+        div.preview .container1 {
+            margin: 2%;
+        }
+        
+        div.header1 {
+            width: 100%;
+            margin: 0;
+        }
+        
+        div.header1 div.logo1 {
+            float: right;
+        }
+        
+        div.header1 p.header1 {
+            font-weight: bold;
+            margin: 0;
+            padding: 0;
+        }
+        
+        div.header1 b.header1 {
+            font-family: arial, helvetica;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        
+        div.header1 b.header2 {
+            font-family: arial, helvetica;
+            font-weight: bold;
+            font-size: 22px;
+        }
+        
+        div.bar {
+            clear: both;
+            width: 100%;
+            margin: 10px 0;
+            border-bottom: 1px solid #000;
+            font-size: 1px;
+            line-height: 1px;
+        }
+        
+        /* Table styles */
+        table.preview {
+            width: 90%;
+            clear: both;
+            border-collapse: collapse;
+            border-spacing: 0;
+        }
+        
+        table.preview td {
+            vertical-align: top;
+            padding: 4px;
+            font-family: verdana, helvetica, sans-serif;
+            font-size: 10px;
+            margin: 0;
+        }
+        
+        table.preview_table {
+            width: 90%;
+            border-collapse: collapse;
+            border-spacing: 0;
+        }
+        
+        table.preview_table th {
+            border: 2px solid #000;
+            font-size: 10px;
+            text-align: left;
+            vertical-align: middle;
+            padding: 4px;
+            font-family: verdana, helvetica, sans-serif;
+            margin: 0;
+        }
+        
+        table.preview_table td {
+            border: 1px solid #ccc;
+            vertical-align: top;
+            padding: 4px;
+            font-family: verdana, helvetica, sans-serif;
+            font-size: 10px;
+            margin: 0;
+        }
+        
+        table.preview_table td.none {
+            border: none;
+        }
+        
+        table.preview_table td.bold {
+            border: 2px solid #000;
+            font-weight: bold;
+        }
+        
+        /* Terms section */
+        div.preview_terms {
+            border: 1px solid #999;
+            padding: 2%;
+            margin: 1%;
+            background: #FFF;
+            color: #333;
+        }
+        
+        /* Ensure links match body font */
+        a {
+            font-family: verdana, helvetica, sans-serif;
+            font-size: 10px;
+            color: #000000;
+        }
+        
+        /* Make sure all text elements use consistent sizing */
+        b, strong {
+            font-family: verdana, helvetica, sans-serif;
+            font-size: 10px;
+        }
+        
+        i, em {
+            font-family: verdana, helvetica, sans-serif;
+            font-size: 10px;
+        }
+        
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+            }
+            
+            div.preview {
+                border: none;
+                margin: 0;
+                padding: 0;
+            }
+            
+            div.preview_terms {
+                border: none;
+                margin: 0;
+                padding: 0;
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="preview">
+    <div class="container1">
+        <div class="header1">
+            <div class="logo1">
+                {% if consortium and consortium.logo %}
+                <img width="300" src="{{ url_for('uploaded_logo', filename=consortium.logo) }}" alt="{{ consortium.name }}" border="0">
+                {% else %}
+                <img width="300" src="{{ url_for('static', filename='po_files/uscar_logo.gif') }}" alt="United States Council for Automotive Research LLC" border="0">
+                {% endif %}
+            </div>
+            <p class="header1">
+                <b class="header1">REQUEST FOR PURCHASE ORDER</b><br />
+                <b class="header2">{{ rfpo.rfpo_id }}</b><br />
+                THIS IS NOT A PO NUMBER - you cannot use this with any vendor.
+            </p>
+        </div>
+        
+        <div class="bar">&#160;</div>
+
+        <!-- TOP TABLE -->
+        <table border="0" cellspacing="0" cellpadding="0" class="preview">
+            <tr class="cell">
+                <td nowrap><p><b>Government Agreement Number:</b></p></td>
+                <td colspan="3"><p>{{ rfpo.government_agreement_number or '' }}</p></td>
+            </tr>
+            
+            <tr class="cell">
+                <td nowrap><p id="project_id"><b>Project:</b></p></td>
+                <td colspan="3"><p>{{ project.name if project }} ({{ project.ref if project }})</p></td>
+            </tr>
+
+            <tr class="cell">
+                <td><p id="requestor_id"><b>Requestor:</b></p></td>
+                <td><p>
+                    {{ requestor.get_display_name() if requestor }}<br />
+                    {% if rfpo.requestor_tel %}Tel:{{ rfpo.requestor_tel }}<br />{% endif %}
+                    {% if requestor and requestor.email %}Email:<a href="mailto:{{ requestor.email }}">{{ requestor.email }}</a>{% endif %}
+                </p></td>
+                <td style="text-align:right"><p><b>Raised:</b></p></td>
+                <td><p>{{ rfpo.created_at.strftime('%B %d, %Y') if rfpo.created_at }}</p></td>
+            </tr>
+
+            <tr class="cell">
+                <td><p id="location"><b>Location:</b></p></td>
+                <td><p>{{ rfpo.requestor_location or 'United States' }}</p></td>
+                <td style="text-align:right"><p><b>Invoice to:</b></p></td>
+                <td><p>{{ rfpo.invoice_address|replace('\n', '<br />')|safe if rfpo.invoice_address else (consortium.invoicing_address|replace('\n', '<br />')|safe if consortium and consortium.invoicing_address else 'United States Council for Automotive <br />Research LLC<br />Attn: Accounts Payable<br />3000 Town Center Building, Suite 35<br />Southfield, MI 48075') }}</p></td>
+            </tr>
+
+            <tr class="cell">
+                <td><p id="shipto_name"><b>Ship to name:</b></p></td>
+                <td><p>{{ rfpo.shipto_name or '' }}</p></td>
+                <td style="text-align:right" nowrap><p><b>Delivery Date:</b></p></td>
+                <td><p>{{ rfpo.delivery_date.strftime('%B %d, %Y') if rfpo.delivery_date else '' }}</p></td>
+            </tr>
+
+            <tr class="cell">
+                <td><p id="shipto_tel"><b>Ship to tel:</b></p></td>
+                <td><p>{{ rfpo.shipto_tel or '' }}</p></td>
+                <td style="text-align:right" nowrap><p id="payment_terms"><b>Payment Terms:</b></p></td>
+                <td><p>{{ rfpo.payment_terms or 'Net 30' }}</p></td>
+            </tr>
+
+            <tr class="cell">
+                <td nowrap><p id="shipto_address"><b>Ship to address:</b></p></td>
+                <td><p>{{ rfpo.shipto_address|replace('\n', '<br />')|safe if rfpo.shipto_address else '' }}</p></td>
+                <td style="text-align:right" nowrap><p id="delivery"><b>Delivery:</b></p></td>
+                <td>
+                    <p>
+                        {% if rfpo.delivery_type %}Type &amp; Place: {{ rfpo.delivery_type }}<br />{% endif %}
+                        {% if rfpo.delivery_payment %}Payment: {{ rfpo.delivery_payment }}<br />{% endif %}
+                        {% if rfpo.delivery_routing %}Routing: {{ rfpo.delivery_routing }}{% endif %}
+                    </p>
+                </td>
+            </tr>
+
+            <tr class="cell">
+                <td rowspan="5" nowrap><p id="vendor_name"><b>Vendor:</b></p></td>
+                <td rowspan="5">
+                    <p>
+                        {% if vendor %}
+                            {{ vendor.company_name }}<br/>
+                            {% if vendor_site %}
+                                {{ vendor_site.contact_address|replace('\n', '<br />')|safe if vendor_site.contact_address else vendor.contact_address|replace('\n', '<br />')|safe if vendor.contact_address else 'XXXX' }}
+                            {% else %}
+                                {{ vendor.contact_address|replace('\n', '<br />')|safe if vendor.contact_address else 'XXXX' }}
+                            {% endif %}
+                        {% else %}
+                            XXXX<br/>
+                            XXXX<br/>
+                            XXXX, XXXX XXXX<br />
+                            XXXX
+                        {% endif %}
+                    </p>
+                </td>
+                <td style="text-align:right" nowrap><p id="delivery"><b>Contact:</b></p></td>
+                <td><p>
+                    {% if vendor_site %}
+                        {{ vendor_site.contact_name or 'XXXX' }}
+                    {% elif vendor %}
+                        {{ vendor.contact_name or 'XXXX' }}
+                    {% else %}
+                        XXXX
+                    {% endif %}
+                </p></td>
+            </tr>
+
+            <tr class="cell">
+                <td style="text-align:right" nowrap><p id="delivery"><b>Contact Dept:</b></p></td>
+                <td><p>
+                    {% if vendor_site %}
+                        {{ vendor_site.contact_dept or '' }}
+                    {% elif vendor %}
+                        {{ vendor.contact_dept or '' }}
+                    {% endif %}
+                </p></td>
+            </tr>
+
+            <tr class="cell">
+                <td style="text-align:right" nowrap><p id="delivery"><b>Contact Tel:</b></p></td>
+                <td><p>
+                    {% if vendor_site %}
+                        {{ vendor_site.contact_tel or 'XXXX' }}
+                    {% elif vendor %}
+                        {{ vendor.contact_tel or 'XXXX' }}
+                    {% else %}
+                        XXXX
+                    {% endif %}
+                </p></td>
+            </tr>
+
+            <tr class="cell">
+                <td style="text-align:right" nowrap><p id="delivery"><b>Contact Fax:</b></p></td>
+                <td><p>
+                    {% if vendor_site %}
+                        {{ vendor_site.contact_fax or '' }}
+                    {% elif vendor %}
+                        {{ vendor.contact_fax or '' }}
+                    {% endif %}
+                </p></td>
+            </tr>
+
+            <tr class="cell">
+                <td style="text-align:right" nowrap><p id="delivery"><b>Vendor Is:</b></p></td>
+                <td><p>
+                    {% if vendor %}
+                        {% if vendor.is_university %}University{% else %}Commercial{% endif %}
+                    {% endif %}
+                </p></td>
+            </tr>
+        </table>
+
+        &#160;<br />&#160;
+
+        <!-- LINES TABLE -->
+        <table border="0" cellspacing="1" cellpadding="0" class="preview_table">
+            <tr>
+                <th><b>#</b></th>
+                <th><b>Qty</b></th>
+                <th><b>Description of supplies or services</b></th>
+                <th style="text-align:right"><b>Unit Price</b></th>
+                <th style="text-align:right"><b>Total Price</b></th>
+            </tr>
+
+            {% for item in rfpo.line_items|sort(attribute='line_number') %}
+            <!-- LINE {{ loop.index0 }} -->
+            <tr class="lines">
+                <td><p>{{ item.line_number }}</p></td>
+                <td><p>{{ item.quantity }}</p></td>
+                <td><p>{{ item.description }}{% if item.is_capital_equipment %}<br /><i>Capital Equipment</i>{% endif %}</p></td>
+                <td style="text-align:right"><p>${{ "%.2f"|format(item.unit_price) }}</p></td>
+                <td class="end" style="text-align:right"><p>${{ "%.2f"|format(item.total_price) }}</p></td>
+            </tr>
+            {% endfor %}
+
+            <!-- TOTALS -->
+            <tr>
+                <td colspan="5" class="none">&#160;</td>
+            </tr>
+            
+            <tr class="totals">
+                <td colspan="4" class="none" style="text-align:right"><b>Gross purchase order:</b></td>
+                <td style="text-align:right">${{ "%.2f"|format(rfpo.subtotal or 0) }}</td>
+            </tr>
+            
+            <tr class="totals">
+                <td colspan="4" class="none" style="text-align:right">
+                    <b>Less supplier cost share:</b>
+                    {% if rfpo.cost_share_description %}<br /><i>{{ rfpo.cost_share_description }}</i>{% endif %}
+                </td>
+                <td style="text-align:right">(${{ "%.2f"|format(rfpo.cost_share_amount or 0) }})</td>
+            </tr>
+            
+            <tr class="totals">
+                <td colspan="4" class="none" style="text-align:right"><b>Net purchase not to exceed:</b></td>
+                <td class="bold" style="text-align:right"><b>${{ "%.2f"|format(rfpo.total_amount or 0) }}</b></td>
+            </tr>
+
+            <tr>
+                <td colspan="5" class="none">&#160;</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="preview_terms">
+    <div class="container1">
+        <div class="header1">
+            <p class="header1">
+                <b class="header2">{{ rfpo.rfpo_id }}</b><br>
+                Purchase Order Terms and Conditions.
+            </p>
+        </div>
+
+        <I>NOTE: These terms are generated in HTML format directly from the PDF files that are used to generate the final Purchase Order.
+        This information is included here only for your reference, and may not be completely accurate due to limitations 
+        of the conversion process, nor does the text retain its original formatting.  
+        Please refer to the 
+        {% if consortium and consortium.terms_pdf %}
+        <A href="{{ url_for('uploaded_terms', filename=consortium.terms_pdf) }}" target="_blank">PDF template files</A>
+        {% else %}
+        <A href="{{ url_for('static', filename='po_files/uscar_terms.pdf') }}" target="_blank">PDF template files</A>
+        {% endif %}
+        for the actual terms for your consortia.</I>
+        <HR>
+    </div>
+</div>
+
+</body>
+</html>

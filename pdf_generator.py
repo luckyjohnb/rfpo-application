@@ -47,7 +47,7 @@ class RFPOPDFGenerator:
             data_pdf = self._create_data_overlay(rfpo, consortium, project, vendor, vendor_site)
             
             # Combine with template PDFs
-            final_pdf = self._combine_with_templates(data_pdf, consortium.abbrev)
+            final_pdf = self._combine_with_templates(data_pdf, consortium.abbrev, consortium)
             
             return final_pdf
             
@@ -61,9 +61,16 @@ class RFPOPDFGenerator:
         c = canvas.Canvas(buffer, pagesize=letter)
         width, height = letter
         
+        # Store RFPO ID on canvas for continuation pages
+        c._rfpo_id = rfpo.rfpo_id
+        
         # Page 1: Main PO Information including line items (like legacy template)
-        self._draw_page1_data(c, rfpo, consortium, project, vendor, vendor_site, width, height)
+        line_items_overflow = self._draw_page1_data(c, rfpo, consortium, project, vendor, vendor_site, width, height)
         c.showPage()
+        
+        # Page 2+: Additional line items if they don't fit on page 1
+        if line_items_overflow:
+            self._draw_additional_line_items_pages(c, line_items_overflow, width, height)
         
         c.save()
         buffer.seek(0)
@@ -77,7 +84,15 @@ class RFPOPDFGenerator:
         positioning_data = self.positioning_config.get_positioning_data()
         field_data = positioning_data.get(field_name, {})
         
-        # If field is not in positioning data, don't draw it (field was cleared/removed)
+        # Special handling for dynamic fields - always use defaults if not configured
+        dynamic_field_prefixes = ['line_item_', 'vendor_small_business', 'vendor_university', 'vendor_nonprofit']
+        is_dynamic_field = any(field_name.startswith(prefix) or field_name == prefix for prefix in dynamic_field_prefixes)
+        
+        if is_dynamic_field and not field_data:
+            print(f"📋 Dynamic field {field_name} using defaults (not in positioning config)")
+            return default_x, default_y, 8, 'normal'  # Use default coordinates for dynamic fields
+        
+        # For other fields, if not in positioning data, don't draw it (field was cleared/removed)
         if not field_data:
             print(f"🚫 Field {field_name} not in positioning data - skipping (cleared)")
             return None, None, None, None
@@ -325,6 +340,7 @@ class RFPOPDFGenerator:
                 f"U.S. Government Funding under Agreement Number: {rfpo.government_agreement_number}", 240, 455)
         
         # === LINE ITEMS SECTION (Middle area, starts around y=400) ===
+        overflow_items = []
         if rfpo.line_items:
             # Line items table - positioned to match legacy template  
             table_start_y = 410
@@ -342,14 +358,21 @@ class RFPOPDFGenerator:
             canvas.setFont("Helvetica", 8)
             
             for i, item in enumerate(rfpo.line_items):
-                if current_y < 150:  # Stop if getting too close to bottom
+                # Calculate space needed for this item (including continuation line if needed)
+                desc_lines = self._wrap_text(item.description, 45)
+                lines_needed = 1 if len(desc_lines) <= 1 else 2
+                space_needed = line_height * lines_needed
+                
+                # Check if we have enough space (need to leave room for totals section)
+                if current_y - space_needed < 150:
+                    # This item and all remaining items go to overflow
+                    overflow_items = rfpo.line_items[i:]
                     break
                 
                 # Quantity (left-aligned in qty column)
                 self._draw_text_with_positioning(canvas, f'line_item_{i}_quantity', str(item.quantity), 60, current_y)
                 
                 # Description (wrapped to fit column width)
-                desc_lines = self._wrap_text(item.description, 45)
                 desc_text = desc_lines[0] if desc_lines else ""
                 
                 # Add capital equipment indicator to description if applicable
@@ -364,12 +387,12 @@ class RFPOPDFGenerator:
                 # Total price (right-aligned in total price column)
                 self._draw_text_with_positioning(canvas, f'line_item_{i}_total_price', f"${item.total_price:,.2f}", 530, current_y, right_align=True)
                 
-                # If description is too long, continue on next line
-                if len(desc_lines) > 1 and current_y > 160:
-                    current_y -= line_height
-                    self._draw_text_with_positioning(canvas, f'line_item_{i}_description_cont', desc_lines[1][:45] + "..." if len(desc_lines[1]) > 45 else desc_lines[1], 120, current_y)
-                
                 current_y -= line_height
+                
+                # If description is too long, continue on next line
+                if len(desc_lines) > 1:
+                    self._draw_text_with_positioning(canvas, f'line_item_{i}_description_cont', desc_lines[1][:45] + "..." if len(desc_lines[1]) > 45 else desc_lines[1], 120, current_y)
+                    current_y -= line_height
             
             # Add totals section at bottom right
             current_y -= 10
@@ -422,50 +445,247 @@ class RFPOPDFGenerator:
         if rfpo.invoice_address:
             # Keep original line breaks for proper multi-line formatting
             self._draw_text_with_positioning(canvas, 'invoice_address', rfpo.invoice_address, 410, bottom_sections_y)
+        
+        # Return any line items that didn't fit on page 1
+        return overflow_items
     
-
+    def _draw_additional_line_items_pages(self, canvas, overflow_items, width, height):
+        """Draw additional line items on page 2+ using po_page2.pdf template"""
+        items_per_page = 25  # Approximate number of items that fit on page 2
+        line_height = 12
+        page_start_y = 720  # Start near top of page for continuation
+        
+        items_remaining = list(overflow_items)
+        
+        while items_remaining:
+            # Items for this page
+            current_page_items = items_remaining[:items_per_page]
+            items_remaining = items_remaining[items_per_page:]
+            
+            # Draw items on current page
+            current_y = page_start_y
+            canvas.setFont("Helvetica", 8)
+            
+            # Add continuation header
+            canvas.setFont("Helvetica-Bold", 10)
+            canvas.drawString(60, current_y, f"Purchase Order {getattr(canvas, '_rfpo_id', '')} - Continuation")
+            current_y -= 30
+            
+            # Table headers
+            canvas.setFont("Helvetica-Bold", 8)
+            canvas.drawString(60, current_y, "QTY")
+            canvas.drawString(120, current_y, "DESCRIPTION OF SUPPLIES OR SERVICES")
+            canvas.drawString(450, current_y, "UNIT PRICE")
+            canvas.drawString(500, current_y, "TOTAL PRICE")
+            
+            # Draw line under headers
+            canvas.line(60, current_y - 3, 530, current_y - 3)
+            current_y -= 20
+            
+            canvas.setFont("Helvetica", 8)
+            
+            for item in current_page_items:
+                if current_y < 50:  # Stop if getting too close to bottom
+                    break
+                
+                # Quantity
+                canvas.drawString(60, current_y, str(item.quantity))
+                
+                # Description (wrapped to fit column width)
+                desc_lines = self._wrap_text(item.description, 45)
+                desc_text = desc_lines[0] if desc_lines else ""
+                
+                # Add capital equipment indicator if applicable
+                if item.is_capital_equipment:
+                    desc_text += " [CAPITAL EQUIP.]"
+                
+                canvas.drawString(120, current_y, desc_text)
+                
+                # Unit price (right-aligned)
+                canvas.drawRightString(490, current_y, f"${item.unit_price:,.2f}")
+                
+                # Total price (right-aligned)
+                canvas.drawRightString(530, current_y, f"${item.total_price:,.2f}")
+                
+                current_y -= line_height
+                
+                # If description is too long, continue on next line
+                if len(desc_lines) > 1 and current_y > 60:
+                    continuation_text = desc_lines[1][:45] + "..." if len(desc_lines[1]) > 45 else desc_lines[1]
+                    canvas.drawString(120, current_y, continuation_text)
+                    current_y -= line_height
+            
+            # Start new page if there are more items
+            if items_remaining:
+                canvas.showPage()
     
-    def _combine_with_templates(self, data_pdf, consortium_abbrev):
-        """Combine data overlay with template PDFs"""
+    def _combine_with_templates(self, data_pdf, consortium_abbrev, consortium=None):
+        """Combine data overlay with template PDFs following legacy pattern"""
         output = PdfWriter()
         
         # Load data PDF
         data_reader = PdfReader(data_pdf)
         
-        # Page 1: Combine with po.pdf template (all main content on one page like legacy)
+        # Page 1: Combine with po.pdf template (main PO content)
         template_path = os.path.join(self.static_path, 'po.pdf')
         if os.path.exists(template_path):
             template_reader = PdfReader(template_path)
-            if len(template_reader.pages) > 0:
-                page = template_reader.pages[0]
-                if len(data_reader.pages) > 0:
-                    page.merge_page(data_reader.pages[0])
-                output.add_page(page)
+            if len(template_reader.pages) > 0 and len(data_reader.pages) > 0:
+                # FIXED: Create a copy of the template page before merging
+                template_page = template_reader.pages[0]
+                data_page = data_reader.pages[0]
+                
+                # Merge data overlay on top of template
+                template_page.merge_page(data_page)
+                output.add_page(template_page)
+                
+                print(f"✅ Merged page 1: template + data overlay")
+            elif len(data_reader.pages) > 0:
+                # Fallback: just use data page if no template
+                output.add_page(data_reader.pages[0])
+                print(f"⚠️  Using data page only (no template)")
+            else:
+                print(f"❌ No data pages to merge")
         
-        # Add consortium-specific terms
-        terms_file = self._get_consortium_terms_file(consortium_abbrev)
-        if terms_file:
-            terms_path = os.path.join(self.static_path, terms_file)
-            if os.path.exists(terms_path):
-                terms_reader = PdfReader(terms_path)
-                for page in terms_reader.pages:
+        # Pages 2+: Combine additional data pages with po_page2.pdf template (for overflow line items)
+        page2_template_path = os.path.join(self.static_path, 'po_page2.pdf')
+        if len(data_reader.pages) > 1 and os.path.exists(page2_template_path):
+            page2_template_reader = PdfReader(page2_template_path)
+            
+            for i in range(1, len(data_reader.pages)):
+                if len(page2_template_reader.pages) > 0:
+                    # Use po_page2.pdf template for continuation pages
+                    page = page2_template_reader.pages[0]
+                    page.merge_page(data_reader.pages[i])
                     output.add_page(page)
+                else:
+                    # Fallback: just add the data page without template
+                    output.add_page(data_reader.pages[i])
+        
+        # Add consortium-specific terms at the end using byte-level concatenation
+        terms_file = self._get_consortium_terms_file(consortium_abbrev, consortium)
+        if terms_file:
+            # Handle both static and uploaded terms files
+            if terms_file.startswith('..'):
+                # This is a relative path to uploads/terms/
+                terms_path = os.path.normpath(os.path.join(self.static_path, terms_file))
+            else:
+                # This is a static file in po_files/
+                terms_path = os.path.join(self.static_path, terms_file)
+            if os.path.exists(terms_path):
+                try:
+                    # NEW APPROACH: Use byte-level PDF concatenation to avoid merge conflicts
+                    # This preserves the original PDF structure completely
+                    
+                    # First, save our current output (main pages)
+                    main_buffer = io.BytesIO()
+                    output.write(main_buffer)
+                    main_buffer.seek(0)
+                    
+                    # Create a new output writer for the final combined PDF
+                    final_output = PdfWriter()
+                    
+                    # Add all main pages first
+                    main_reader = PdfReader(main_buffer)
+                    print(f"📄 Adding {len(main_reader.pages)} main pages to final output")
+                    for i, page in enumerate(main_reader.pages):
+                        final_output.add_page(page)
+                        print(f"✅ Added main page {i+1}")
+                    
+                    # Now add terms pages using fresh reader (no prior merge conflicts)
+                    terms_reader = PdfReader(terms_path, strict=False)
+                    print(f"📄 Adding {len(terms_reader.pages)} terms pages from {terms_file}")
+                    
+                    for i, page in enumerate(terms_reader.pages):
+                        try:
+                            # Since this is a fresh reader with no prior merges, it should work
+                            final_output.add_page(page)
+                            print(f"✅ Added terms page {i+1} (fresh reader)")
+                        except Exception as add_error:
+                            print(f"❌ Failed to add terms page {i+1}: {add_error}")
+                            
+                            # Fallback: Create a text placeholder
+                            try:
+                                fallback_buffer = io.BytesIO()
+                                c = canvas.Canvas(fallback_buffer, pagesize=letter)
+                                c.setFont("Helvetica", 12)
+                                c.drawString(50, 750, f"Terms and Conditions - Page {i+1}")
+                                c.drawString(50, 720, f"[Original page from {terms_file} could not be displayed]")
+                                c.drawString(50, 700, f"Please refer to the original document for complete terms.")
+                                c.save()
+                                fallback_buffer.seek(0)
+                                
+                                fallback_reader = PdfReader(fallback_buffer)
+                                final_output.add_page(fallback_reader.pages[0])
+                                print(f"⚠️  Added fallback for terms page {i+1}")
+                                
+                            except Exception as fallback_error:
+                                print(f"❌ Fallback failed for terms page {i+1}: {fallback_error}")
+                    
+                    # Replace the original output with the final combined version
+                    output = final_output
+                    print(f"🎯 Successfully combined main pages + terms using fresh readers")
+                    
+                except Exception as e:
+                    print(f"❌ Error reading terms PDF {terms_file}: {e}")
+                    # Create a simple text page as fallback
+                    from reportlab.pdfgen import canvas
+                    from reportlab.lib.pagesizes import letter
+                    
+                    fallback_buffer = io.BytesIO()
+                    c = canvas.Canvas(fallback_buffer, pagesize=letter)
+                    c.setFont("Helvetica", 12)
+                    c.drawString(50, 750, f"Terms and Conditions - {consortium_abbrev}")
+                    c.drawString(50, 720, f"[Terms PDF could not be loaded: {terms_file}]")
+                    c.save()
+                    fallback_buffer.seek(0)
+                    
+                    fallback_reader = PdfReader(fallback_buffer)
+                    output.add_page(fallback_reader.pages[0])
+                    print(f"⚠️  Added fallback terms page")
+            else:
+                print(f"⚠️  Terms file not found: {terms_path}")
+        else:
+            print(f"⚠️  No terms mapping for consortium: {consortium_abbrev}")
         
         # Write to bytes
         output_buffer = io.BytesIO()
         output.write(output_buffer)
         output_buffer.seek(0)
         
+        # Final validation - check the complete PDF
+        try:
+            output_buffer.seek(0)
+            final_reader = PdfReader(output_buffer)
+            total_pages = len(final_reader.pages)
+            print(f"🎯 Final PDF validation: {total_pages} total pages")
+            
+            # Quick check of each page type
+            for i, page in enumerate(final_reader.pages):
+                page_type = "data" if i == 0 else "terms"
+                try:
+                    mediabox = page.mediabox
+                    resources = page.get('/Resources', {})
+                    has_content = '/XObject' in resources or '/Font' in resources
+                    print(f"   Page {i+1} ({page_type}): {mediabox.width}x{mediabox.height}, content={has_content}")
+                except:
+                    print(f"   Page {i+1} ({page_type}): validation failed")
+            
+            output_buffer.seek(0)  # Reset for return
+        except Exception as validation_error:
+            print(f"⚠️  PDF validation failed: {validation_error}")
+        
         return output_buffer
     
-    def _get_consortium_terms_file(self, consortium_abbrev):
+    def _get_consortium_terms_file(self, consortium_abbrev, consortium_obj=None):
         """Get the appropriate terms file based on consortium"""
-        terms_mapping = {
-            'USCAR': 'uscar_terms.pdf',
-            'USABC': 'usabc_terms.pdf', 
-            'USAMP': 'usamp_terms.pdf'
-        }
-        return terms_mapping.get(consortium_abbrev.upper())
+        # Only use terms if consortium object has a custom terms PDF uploaded
+        if consortium_obj and hasattr(consortium_obj, 'terms_pdf') and consortium_obj.terms_pdf:
+            # Return path relative to uploads/terms/
+            return os.path.join('..', '..', 'uploads', 'terms', consortium_obj.terms_pdf)
+        
+        # No fallback - if no terms configured, don't add any terms
+        return None
     
     def _wrap_text(self, text, max_chars):
         """Wrap text to specified character width"""

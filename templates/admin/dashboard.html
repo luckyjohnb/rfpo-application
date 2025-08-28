@@ -74,6 +74,73 @@
     </div>
 </div>
 
+<!-- Approval System Statistics -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-secondary border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-secondary text-uppercase mb-1">Active Workflows</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.approval_workflows }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-route fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-info border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-info text-uppercase mb-1">Approval Instances</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.approval_instances }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-warning border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-warning text-uppercase mb-1">Pending Approvals</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.pending_approvals }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-hourglass-half fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-danger border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-danger text-uppercase mb-1">Total Files</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.uploaded_files }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-file-upload fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Quick Actions -->
 <div class="row mb-4">
     <div class="col-12">
@@ -101,6 +168,28 @@
                     <div class="col-md-3 mb-2">
                         <a href="{{ url_for('user_new') }}" class="btn btn-warning w-100">
                             <i class="fas fa-plus"></i> New User
+                        </a>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('approval_workflow_new') }}" class="btn btn-secondary w-100">
+                            <i class="fas fa-route"></i> New Workflow
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('approval_workflows') }}" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-list"></i> View Workflows
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('approval_instances') }}" class="btn btn-outline-info w-100">
+                            <i class="fas fa-clipboard-list"></i> View Instances
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('lists') }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-cog"></i> Configuration
                         </a>
                     </div>
                 </div>

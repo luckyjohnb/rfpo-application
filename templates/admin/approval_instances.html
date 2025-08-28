@@ -1,0 +1,121 @@
+{% extends "admin/base.html" %}
+
+{% block title %}RFPO Approval Instances{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>📋 RFPO Approval Instances</h1>
+    <a href="{{ url_for('approval_workflows') }}" class="btn btn-outline-primary">
+        <i class="fas fa-cogs"></i> Manage Workflows
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Instance ID</th>
+                        <th>RFPO</th>
+                        <th>Workflow</th>
+                        <th>Current Stage</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Submitted</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for instance in instances %}
+                    <tr>
+                        <td>
+                            <strong>{{ instance.instance_id }}</strong>
+                        </td>
+                        <td>
+                            <strong>{{ instance.rfpo_title }}</strong>
+                            <br><small class="text-muted">${{ "{:,.2f}".format(instance.rfpo_total) }}</small>
+                        </td>
+                        <td>
+                            <strong>{{ instance.workflow_name }}</strong>
+                            <br><small class="text-muted">v{{ instance.workflow_version }}</small>
+                        </td>
+                        <td>
+                            <span class="badge badge-primary">Stage {{ instance.current_stage_order }}</span>
+                            <span class="badge badge-info">Step {{ instance.current_step_order }}</span>
+                        </td>
+                        <td>
+                            {% if instance.overall_status == 'approved' %}
+                                <span class="badge badge-success">Approved</span>
+                            {% elif instance.overall_status == 'refused' %}
+                                <span class="badge badge-danger">Refused</span>
+                            {% elif instance.overall_status == 'waiting' %}
+                                <span class="badge badge-warning">Waiting</span>
+                            {% elif instance.overall_status == 'draft' %}
+                                <span class="badge badge-secondary">Draft</span>
+                            {% else %}
+                                <span class="badge badge-info">{{ instance.overall_status|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <small class="mr-2">{{ instance.completed_actions_count }}/{{ instance.completed_actions_count + instance.pending_actions_count }}</small>
+                                <div class="progress flex-grow-1" style="height: 20px; width: 80px;">
+                                    {% set total_actions = instance.completed_actions_count + instance.pending_actions_count %}
+                                    {% set progress = (instance.completed_actions_count / total_actions * 100) if total_actions > 0 else 0 %}
+                                    <div class="progress-bar" style="width: {{ progress }}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if instance.submitted_at %}
+                                {{ instance.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                                <em class="text-muted">Not submitted</em>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('approval_instance_view', id=instance.id) }}" 
+                               class="btn btn-sm btn-outline-primary" title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            <i class="fas fa-info-circle"></i> No approval instances found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Status Summary -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-info-circle"></i> About Approval Instances
+            </div>
+            <div class="card-body">
+                <p>
+                    <strong>Approval instances</strong> are created when an RFPO is submitted for approval. 
+                    Each instance captures a snapshot of the active approval workflow at the time of submission,
+                    ensuring that approval processes remain consistent even if the workflow is later modified.
+                </p>
+                <ul>
+                    <li><strong>Draft</strong> - RFPO created but not yet submitted</li>
+                    <li><strong>Waiting</strong> - RFPO submitted and awaiting approvals</li>
+                    <li><strong>Conditional</strong> - Approved with conditions</li>
+                    <li><strong>Approved</strong> - All required approvals completed</li>
+                    <li><strong>Refused</strong> - RFPO was rejected</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

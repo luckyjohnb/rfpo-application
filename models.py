@@ -1133,3 +1133,484 @@ class List(db.Model):
     
     def __repr__(self):
         return f'<List {self.list_id} ({self.type}): {self.key} = {self.value}>'
+
+class RFPOApprovalWorkflow(db.Model):
+    """RFPO Approval Workflow Templates for Consortiums"""
+    __tablename__ = 'rfpo_approval_workflows'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    workflow_id = db.Column(db.String(32), unique=True, nullable=False)  # External workflow ID
+    
+    # Workflow Information
+    name = db.Column(db.String(255), nullable=False)  # Workflow name (e.g., "USCAR Standard Approval")
+    description = db.Column(db.Text)  # Workflow description
+    version = db.Column(db.String(20), default='1.0')  # Workflow version
+    
+    # Consortium Association
+    consortium_id = db.Column(db.String(32), nullable=False)  # Consortium consort_id this workflow belongs to
+    
+    # Status and Control
+    is_active = db.Column(db.Boolean, default=False)  # Only one workflow can be active per consortium
+    is_template = db.Column(db.Boolean, default=True)  # True for templates, False for instances
+    
+    # Audit fields
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    updated_by = db.Column(db.String(64))
+    
+    # Relationships
+    stages = db.relationship('RFPOApprovalStage', backref='workflow', lazy=True, cascade='all, delete-orphan', order_by='RFPOApprovalStage.stage_order')
+    instances = db.relationship('RFPOApprovalInstance', backref='template_workflow', lazy=True)
+    
+    # Unique constraint: only one active workflow per consortium
+    __table_args__ = (
+        db.Index('idx_consortium_active', 'consortium_id', 'is_active'),
+    )
+    
+    def activate(self):
+        """Activate this workflow and deactivate others for the same consortium"""
+        # Deactivate all other workflows for this consortium
+        db.session.query(RFPOApprovalWorkflow).filter_by(
+            consortium_id=self.consortium_id,
+            is_template=True
+        ).update({'is_active': False})
+        
+        # Activate this workflow
+        self.is_active = True
+        self.updated_at = datetime.utcnow()
+    
+    def get_total_stages(self):
+        """Get total number of stages in this workflow"""
+        return len(self.stages)
+    
+    def get_total_steps(self):
+        """Get total number of approval steps across all stages"""
+        return sum(len(stage.steps) for stage in self.stages)
+    
+    def get_bracket_coverage(self):
+        """Get list of budget brackets covered by this workflow"""
+        return [stage.budget_bracket_key for stage in self.stages if stage.budget_bracket_key]
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'workflow_id': self.workflow_id,
+            'name': self.name,
+            'description': self.description,
+            'version': self.version,
+            'consortium_id': self.consortium_id,
+            'is_active': self.is_active,
+            'is_template': self.is_template,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'updated_by': self.updated_by,
+            'total_stages': self.get_total_stages(),
+            'total_steps': self.get_total_steps(),
+            'bracket_coverage': self.get_bracket_coverage()
+        }
+    
+    def __repr__(self):
+        status = "ACTIVE" if self.is_active else "INACTIVE"
+        return f'<RFPOApprovalWorkflow {self.workflow_id}: {self.name} [{status}]>'
+
+class RFPOApprovalStage(db.Model):
+    """Budget Bracket Stages within RFPO Approval Workflows"""
+    __tablename__ = 'rfpo_approval_stages'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    stage_id = db.Column(db.String(32), unique=True, nullable=False)  # External stage ID
+    
+    # Stage Information
+    stage_name = db.Column(db.String(255), nullable=False)  # Stage name (e.g., "Under $5,000")
+    stage_order = db.Column(db.Integer, nullable=False)  # Order of this stage in workflow (1, 2, 3...)
+    description = db.Column(db.Text)  # Stage description
+    
+    # Budget Bracket Association
+    budget_bracket_key = db.Column(db.String(255), nullable=False)  # References RFPO_BRACK key from Lists
+    budget_bracket_amount = db.Column(db.Numeric(12, 2), nullable=False)  # Cached amount for performance
+    
+    # Workflow Association
+    workflow_id = db.Column(db.Integer, db.ForeignKey('rfpo_approval_workflows.id'), nullable=False)
+    
+    # Stage Configuration
+    requires_all_steps = db.Column(db.Boolean, default=True)  # True: all steps must approve, False: any step can approve
+    is_parallel = db.Column(db.Boolean, default=False)  # True: steps can approve in parallel, False: sequential
+    
+    # Audit fields
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    steps = db.relationship('RFPOApprovalStep', backref='stage', lazy=True, cascade='all, delete-orphan', order_by='RFPOApprovalStep.step_order')
+    
+    # Unique constraint: one stage per bracket per workflow
+    __table_args__ = (
+        db.UniqueConstraint('workflow_id', 'budget_bracket_key', name='uq_workflow_bracket'),
+        db.UniqueConstraint('workflow_id', 'stage_order', name='uq_workflow_stage_order'),
+    )
+    
+    def get_total_steps(self):
+        """Get total number of approval steps in this stage"""
+        return len(self.steps)
+    
+    def get_required_approvers(self):
+        """Get list of primary approvers for this stage"""
+        return [step.primary_approver_id for step in self.steps if step.primary_approver_id]
+    
+    def get_backup_approvers(self):
+        """Get list of backup approvers for this stage"""
+        return [step.backup_approver_id for step in self.steps if step.backup_approver_id]
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'stage_id': self.stage_id,
+            'stage_name': self.stage_name,
+            'stage_order': self.stage_order,
+            'description': self.description,
+            'budget_bracket_key': self.budget_bracket_key,
+            'budget_bracket_amount': float(self.budget_bracket_amount) if self.budget_bracket_amount else 0.00,
+            'workflow_id': self.workflow_id,
+            'requires_all_steps': self.requires_all_steps,
+            'is_parallel': self.is_parallel,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'total_steps': self.get_total_steps(),
+            'required_approvers': self.get_required_approvers(),
+            'backup_approvers': self.get_backup_approvers()
+        }
+    
+    def __repr__(self):
+        return f'<RFPOApprovalStage {self.stage_id}: {self.stage_name} (${self.budget_bracket_amount})>'
+
+class RFPOApprovalStep(db.Model):
+    """Individual Approval Steps within Budget Bracket Stages"""
+    __tablename__ = 'rfpo_approval_steps'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    step_id = db.Column(db.String(32), unique=True, nullable=False)  # External step ID
+    
+    # Step Information
+    step_name = db.Column(db.String(255), nullable=False)  # Step name (e.g., "Technical Review")
+    step_order = db.Column(db.Integer, nullable=False)  # Order of this step in stage (1, 2, 3...)
+    description = db.Column(db.Text)  # Step description
+    
+    # RFPO_APPRO Association
+    approval_type_key = db.Column(db.String(255), nullable=False)  # References RFPO_APPRO key from Lists
+    approval_type_name = db.Column(db.String(255), nullable=False)  # Cached name for performance
+    
+    # Stage Association
+    stage_id = db.Column(db.Integer, db.ForeignKey('rfpo_approval_stages.id'), nullable=False)
+    
+    # Approver Configuration
+    primary_approver_id = db.Column(db.String(32), nullable=False)  # User record_id of primary approver
+    backup_approver_id = db.Column(db.String(32), nullable=True)  # User record_id of backup approver (optional)
+    
+    # Step Configuration
+    is_required = db.Column(db.Boolean, default=True)  # True: step must be completed, False: optional
+    timeout_days = db.Column(db.Integer, default=5)  # Days before step times out
+    auto_escalate = db.Column(db.Boolean, default=False)  # Auto-escalate to backup after timeout
+    
+    # Audit fields
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Unique constraint: one step per approval type per stage
+    __table_args__ = (
+        db.UniqueConstraint('stage_id', 'approval_type_key', name='uq_stage_approval_type'),
+        db.UniqueConstraint('stage_id', 'step_order', name='uq_stage_step_order'),
+    )
+    
+    def get_primary_approver(self):
+        """Get primary approver user object"""
+        return User.query.filter_by(record_id=self.primary_approver_id, active=True).first()
+    
+    def get_backup_approver(self):
+        """Get backup approver user object"""
+        if self.backup_approver_id:
+            return User.query.filter_by(record_id=self.backup_approver_id, active=True).first()
+        return None
+    
+    def to_dict(self):
+        primary_approver = self.get_primary_approver()
+        backup_approver = self.get_backup_approver()
+        
+        return {
+            'id': self.id,
+            'step_id': self.step_id,
+            'step_name': self.step_name,
+            'step_order': self.step_order,
+            'description': self.description,
+            'approval_type_key': self.approval_type_key,
+            'approval_type_name': self.approval_type_name,
+            'stage_id': self.stage_id,
+            'primary_approver_id': self.primary_approver_id,
+            'primary_approver_name': primary_approver.get_display_name() if primary_approver else None,
+            'backup_approver_id': self.backup_approver_id,
+            'backup_approver_name': backup_approver.get_display_name() if backup_approver else None,
+            'is_required': self.is_required,
+            'timeout_days': self.timeout_days,
+            'auto_escalate': self.auto_escalate,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def __repr__(self):
+        return f'<RFPOApprovalStep {self.step_id}: {self.step_name} ({self.approval_type_name})>'
+
+class RFPOApprovalInstance(db.Model):
+    """Workflow Instance created when RFPO is submitted for approval"""
+    __tablename__ = 'rfpo_approval_instances'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    instance_id = db.Column(db.String(32), unique=True, nullable=False)  # External instance ID
+    
+    # RFPO Association
+    rfpo_id = db.Column(db.Integer, db.ForeignKey('rfpos.id'), nullable=False)
+    
+    # Workflow Template Association (snapshot at time of creation)
+    template_workflow_id = db.Column(db.Integer, db.ForeignKey('rfpo_approval_workflows.id'), nullable=False)
+    
+    # Instance Information
+    workflow_name = db.Column(db.String(255), nullable=False)  # Snapshot of workflow name
+    workflow_version = db.Column(db.String(20), nullable=False)  # Snapshot of workflow version
+    consortium_id = db.Column(db.String(32), nullable=False)  # Snapshot of consortium ID
+    
+    # Instance Status
+    current_stage_order = db.Column(db.Integer, default=1)  # Current stage being processed
+    current_step_order = db.Column(db.Integer, default=1)  # Current step being processed
+    overall_status = db.Column(db.String(32), default='draft')  # Uses RFPO_STATU values
+    
+    # Instance Configuration (snapshot from template)
+    instance_data = db.Column(db.Text)  # JSON snapshot of workflow configuration at creation time
+    
+    # Timing
+    submitted_at = db.Column(db.DateTime)  # When RFPO was submitted for approval
+    completed_at = db.Column(db.DateTime)  # When approval process completed
+    
+    # Audit fields
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(64))
+    
+    # Relationships
+    rfpo = db.relationship('RFPO', backref=db.backref('approval_instance', uselist=False))
+    actions = db.relationship('RFPOApprovalAction', backref='instance', lazy=True, cascade='all, delete-orphan', order_by='RFPOApprovalAction.created_at')
+    
+    def get_instance_data(self):
+        """Get workflow configuration snapshot as Python dict"""
+        if self.instance_data:
+            try:
+                return json.loads(self.instance_data)
+            except:
+                return {}
+        return {}
+    
+    def set_instance_data(self, data_dict):
+        """Set workflow configuration snapshot from Python dict"""
+        if data_dict:
+            self.instance_data = json.dumps(data_dict)
+        else:
+            self.instance_data = None
+    
+    def get_current_stage(self):
+        """Get current stage information from snapshot"""
+        data = self.get_instance_data()
+        stages = data.get('stages', [])
+        for stage in stages:
+            if stage.get('stage_order') == self.current_stage_order:
+                return stage
+        return None
+    
+    def get_current_step(self):
+        """Get current step information from snapshot"""
+        current_stage = self.get_current_stage()
+        if current_stage:
+            steps = current_stage.get('steps', [])
+            for step in steps:
+                if step.get('step_order') == self.current_step_order:
+                    return step
+        return None
+    
+    def get_pending_actions(self):
+        """Get list of pending approval actions"""
+        return [action for action in self.actions if action.status == 'pending']
+    
+    def get_completed_actions(self):
+        """Get list of completed approval actions"""
+        return [action for action in self.actions if action.status in ['approved', 'conditional', 'refused']]
+    
+    def is_complete(self):
+        """Check if approval workflow is complete"""
+        return self.overall_status in ['approved', 'refused']
+    
+    def advance_to_next_step(self):
+        """Advance workflow to next step or stage"""
+        current_stage = self.get_current_stage()
+        if current_stage:
+            steps = current_stage.get('steps', [])
+            if self.current_step_order < len(steps):
+                # Move to next step in current stage
+                self.current_step_order += 1
+            else:
+                # Move to next stage
+                data = self.get_instance_data()
+                stages = data.get('stages', [])
+                if self.current_stage_order < len(stages):
+                    self.current_stage_order += 1
+                    self.current_step_order = 1
+                else:
+                    # Workflow complete
+                    self.overall_status = 'approved'
+                    self.completed_at = datetime.utcnow()
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'instance_id': self.instance_id,
+            'rfpo_id': self.rfpo_id,
+            'template_workflow_id': self.template_workflow_id,
+            'workflow_name': self.workflow_name,
+            'workflow_version': self.workflow_version,
+            'consortium_id': self.consortium_id,
+            'current_stage_order': self.current_stage_order,
+            'current_step_order': self.current_step_order,
+            'overall_status': self.overall_status,
+            'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by': self.created_by,
+            'pending_actions_count': len(self.get_pending_actions()),
+            'completed_actions_count': len(self.get_completed_actions()),
+            'is_complete': self.is_complete(),
+            'current_stage': self.get_current_stage(),
+            'current_step': self.get_current_step()
+        }
+    
+    def __repr__(self):
+        return f'<RFPOApprovalInstance {self.instance_id}: RFPO-{self.rfpo_id} [{self.overall_status}]>'
+
+class RFPOApprovalAction(db.Model):
+    """Individual Approval Actions taken by approvers"""
+    __tablename__ = 'rfpo_approval_actions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    action_id = db.Column(db.String(32), unique=True, nullable=False)  # External action ID
+    
+    # Instance Association
+    instance_id = db.Column(db.Integer, db.ForeignKey('rfpo_approval_instances.id'), nullable=False)
+    
+    # Action Context (snapshot from instance at time of action)
+    stage_order = db.Column(db.Integer, nullable=False)  # Which stage this action is for
+    step_order = db.Column(db.Integer, nullable=False)  # Which step this action is for
+    stage_name = db.Column(db.String(255), nullable=False)  # Snapshot of stage name
+    step_name = db.Column(db.String(255), nullable=False)  # Snapshot of step name
+    approval_type_key = db.Column(db.String(255), nullable=False)  # Snapshot of approval type
+    
+    # Approver Information
+    approver_id = db.Column(db.String(32), nullable=False)  # User record_id who took this action
+    approver_name = db.Column(db.String(255), nullable=False)  # Snapshot of approver name
+    is_backup_approver = db.Column(db.Boolean, default=False)  # True if backup approver took action
+    
+    # Action Details
+    status = db.Column(db.String(32), nullable=False)  # Uses RFPO_STATU values: approved, conditional, refused, pending
+    comments = db.Column(db.Text)  # Approver comments
+    conditions = db.Column(db.Text)  # Conditional approval conditions (if status = conditional)
+    
+    # Timing
+    assigned_at = db.Column(db.DateTime, default=datetime.utcnow)  # When action was assigned
+    due_date = db.Column(db.DateTime)  # When action is due
+    completed_at = db.Column(db.DateTime)  # When action was completed
+    
+    # Escalation
+    is_escalated = db.Column(db.Boolean, default=False)  # True if action was escalated
+    escalated_at = db.Column(db.DateTime)  # When action was escalated
+    escalation_reason = db.Column(db.String(255))  # Reason for escalation
+    
+    # Audit fields
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def get_approver(self):
+        """Get approver user object"""
+        return User.query.filter_by(record_id=self.approver_id, active=True).first()
+    
+    def is_pending(self):
+        """Check if action is pending"""
+        return self.status == 'pending'
+    
+    def is_approved(self):
+        """Check if action is approved"""
+        return self.status == 'approved'
+    
+    def is_conditional(self):
+        """Check if action is conditionally approved"""
+        return self.status == 'conditional'
+    
+    def is_refused(self):
+        """Check if action is refused"""
+        return self.status == 'refused'
+    
+    def is_overdue(self):
+        """Check if action is overdue"""
+        if self.due_date and self.status == 'pending':
+            return datetime.utcnow() > self.due_date
+        return False
+    
+    def complete_action(self, status, comments=None, conditions=None, approver_id=None):
+        """Complete this approval action"""
+        self.status = status
+        self.comments = comments
+        self.conditions = conditions
+        self.completed_at = datetime.utcnow()
+        
+        if approver_id:
+            # Update approver info if different (backup approver scenario)
+            approver = User.query.filter_by(record_id=approver_id, active=True).first()
+            if approver:
+                self.approver_id = approver_id
+                self.approver_name = approver.get_display_name()
+                self.is_backup_approver = (approver_id != self.approver_id)
+    
+    def escalate_action(self, reason=None):
+        """Escalate this action to backup approver"""
+        self.is_escalated = True
+        self.escalated_at = datetime.utcnow()
+        self.escalation_reason = reason or 'Automatic escalation due to timeout'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'action_id': self.action_id,
+            'instance_id': self.instance_id,
+            'stage_order': self.stage_order,
+            'step_order': self.step_order,
+            'stage_name': self.stage_name,
+            'step_name': self.step_name,
+            'approval_type_key': self.approval_type_key,
+            'approver_id': self.approver_id,
+            'approver_name': self.approver_name,
+            'is_backup_approver': self.is_backup_approver,
+            'status': self.status,
+            'comments': self.comments,
+            'conditions': self.conditions,
+            'assigned_at': self.assigned_at.isoformat() if self.assigned_at else None,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'is_escalated': self.is_escalated,
+            'escalated_at': self.escalated_at.isoformat() if self.escalated_at else None,
+            'escalation_reason': self.escalation_reason,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'is_pending': self.is_pending(),
+            'is_approved': self.is_approved(),
+            'is_conditional': self.is_conditional(),
+            'is_refused': self.is_refused(),
+            'is_overdue': self.is_overdue()
+        }
+    
+    def __repr__(self):
+        return f'<RFPOApprovalAction {self.action_id}: {self.step_name} by {self.approver_name} [{self.status}]>'

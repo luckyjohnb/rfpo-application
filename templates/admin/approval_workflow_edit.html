@@ -1,0 +1,630 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Edit Approval Workflow - {{ workflow.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Fix contrast issues for better visibility */
+    .card-header.bg-light {
+        background-color: #f8f9fa !important;
+        color: #212529 !important;
+    }
+    
+    .card-header.bg-light h6 {
+        color: #212529 !important;
+    }
+    
+    .card-header.bg-light .badge {
+        margin-right: 5px;
+    }
+    
+    /* Ensure badges have proper contrast */
+    .badge-primary {
+        background-color: #0d6efd !important;
+        color: white !important;
+    }
+    
+    .badge-success {
+        background-color: #198754 !important;
+        color: white !important;
+    }
+    
+    .badge-info {
+        background-color: #0dcaf0 !important;
+        color: #212529 !important;
+    }
+    
+    .badge-secondary {
+        background-color: #6c757d !important;
+        color: white !important;
+    }
+    
+    .badge-warning {
+        background-color: #ffc107 !important;
+        color: #212529 !important;
+    }
+    
+    /* Ensure table text is visible */
+    .table td, .table th {
+        color: #212529 !important;
+    }
+    
+    .table .text-muted {
+        color: #6c757d !important;
+    }
+    
+    /* Stage name visibility */
+    .card-header h6 {
+        font-weight: 600;
+    }
+    
+    /* Step name visibility */
+    .table td strong {
+        color: #212529 !important;
+        font-weight: 600;
+    }
+    
+    /* Ensure stage titles are bold and visible */
+    .card-header h6 strong {
+        color: #212529 !important;
+        font-weight: 700;
+    }
+    
+    /* Better spacing for badges */
+    .badge + .badge {
+        margin-left: 5px;
+    }
+    
+    .badge + strong {
+        margin-left: 8px;
+    }
+    
+    strong + .badge {
+        margin-left: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>🔄 Edit Workflow: {{ workflow.name }}</h1>
+    <div>
+        <a href="{{ url_for('approval_workflows') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Workflows
+        </a>
+        {% if workflow.is_active %}
+        <span class="badge badge-success badge-lg">ACTIVE</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Workflow Basic Info -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Workflow Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="name">Workflow Name</label>
+                                <input type="text" class="form-control" id="name" name="name" 
+                                       value="{{ workflow.name }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="version">Version</label>
+                                <input type="text" class="form-control" id="version" name="version" 
+                                       value="{{ workflow.version }}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="2">{{ workflow.description or '' }}</textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="consortium_id">Consortium</label>
+                                <select class="form-control" id="consortium_id" name="consortium_id" required>
+                                    {% for consortium in consortiums %}
+                                    <option value="{{ consortium.consort_id }}" 
+                                            {% if workflow.consortium_id == consortium.consort_id %}selected{% endif %}>
+                                        {{ consortium.abbrev }} - {{ consortium.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                           value="1" {% if workflow.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_active">
+                                        Active Workflow
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update Workflow
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-chart-bar"></i> Workflow Statistics
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h3 class="text-primary">{{ workflow.get_total_stages() }}</h3>
+                        <small>Stages</small>
+                    </div>
+                    <div class="col-6">
+                        <h3 class="text-info">{{ workflow.get_total_steps() }}</h3>
+                        <small>Steps</small>
+                    </div>
+                </div>
+                <hr>
+                <small class="text-muted">
+                    <strong>Budget Coverage:</strong><br>
+                    {% for bracket in workflow.get_bracket_coverage() %}
+                        <span class="badge badge-light">{{ bracket }}</span>
+                    {% else %}
+                        <em>No budget brackets configured</em>
+                    {% endfor %}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approval Stages -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5><i class="fas fa-layer-group"></i> Approval Stages</h5>
+        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addStageModal">
+            <i class="fas fa-plus"></i> Add Stage
+        </button>
+    </div>
+    <div class="card-body">
+        {% if workflow.stages %}
+            {% for stage in workflow.stages %}
+            <div class="card mb-3 border-start-primary">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">
+                                <span class="badge badge-primary">Stage {{ stage.stage_order }}</span>
+                                <strong>{{ stage.stage_name or 'Stage ' + stage.stage_order|string }}</strong>
+                                <span class="badge badge-success">${{ "{:,.0f}".format(stage.budget_bracket_amount) }}</span>
+                            </h6>
+                            {% if stage.description %}
+                            <small class="text-muted">{{ stage.description }}</small>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-info" 
+                                    onclick="showAddStepModal({{ stage.id }}, '{{ stage.stage_name }}')">
+                                <i class="fas fa-plus"></i> Add Step
+                            </button>
+                            <form method="POST" action="{{ url_for('approval_workflow_delete_stage', workflow_id=workflow.id, stage_id=stage.id) }}" 
+                                  style="display:inline;" 
+                                  onsubmit="return confirm('Delete this stage and all its steps?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if stage.steps %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;"></th>
+                                    <th>Step</th>
+                                    <th>Approval Type</th>
+                                    <th>Primary Approver</th>
+                                    <th>Backup Approver</th>
+                                    <th>Timeout</th>
+                                    <th style="width: 120px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="sortable-steps" data-stage-id="{{ stage.id }}">
+                                {% for step in stage.steps %}
+                                <tr data-step-id="{{ step.id }}" data-step-order="{{ step.step_order }}">
+                                    <td class="drag-handle" style="cursor: move; text-align: center;">
+                                        <i class="fas fa-grip-vertical text-muted"></i>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-secondary">{{ step.step_order }}</span>
+                                        <strong>{{ step.step_name or 'Step ' + step.step_order|string }}</strong>
+                                    </td>
+                                    <td>
+                                        {% if step.approval_type_name %}
+                                            <span class="badge badge-info">{{ step.approval_type_name }}</span>
+                                        {% else %}
+                                            <span class="badge badge-secondary">{{ step.approval_type_key or 'No Type' }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% set primary = step.get_primary_approver() %}
+                                        {% if primary %}
+                                            {{ primary.get_display_name() }}
+                                            <br><small class="text-muted">{{ primary.email }}</small>
+                                        {% else %}
+                                            <em class="text-danger">User not found</em>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% set backup = step.get_backup_approver() %}
+                                        {% if backup %}
+                                            {{ backup.get_display_name() }}
+                                            <br><small class="text-muted">{{ backup.email }}</small>
+                                        {% else %}
+                                            <em class="text-muted">None</em>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if step.timeout_days and step.timeout_days > 0 %}
+                                            {{ step.timeout_days }} days
+                                        {% else %}
+                                            <span class="text-muted">No timeout</span>
+                                        {% endif %}
+                                        {% if step.auto_escalate %}
+                                        <br><span class="badge badge-warning badge-sm">Auto-escalate</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-primary me-1" 
+                                                onclick="showEditStepModal({{ stage.id }}, {{ step.id }})">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <form method="POST" action="{{ url_for('approval_workflow_delete_step', workflow_id=workflow.id, stage_id=stage.id, step_id=step.id) }}" 
+                                              style="display:inline;" 
+                                              onsubmit="return confirm('Delete this approval step?')">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p><i class="fas fa-info-circle"></i> No approval steps configured for this stage.</p>
+                        <button class="btn btn-sm btn-outline-info" 
+                                onclick="showAddStepModal({{ stage.id }}, '{{ stage.stage_name }}')">
+                            <i class="fas fa-plus"></i> Add First Step
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="text-center text-muted">
+            <p><i class="fas fa-info-circle"></i> No approval stages configured.</p>
+            <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#addStageModal">
+                <i class="fas fa-plus"></i> Add First Stage
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Stage Modal -->
+<div class="modal fade" id="addStageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('approval_workflow_add_stage', workflow_id=workflow.id) }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Approval Stage</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="budget_bracket_key">Budget Bracket *</label>
+                        <select class="form-control" id="budget_bracket_key" name="budget_bracket_key" required>
+                            <option value="">Select Budget Bracket</option>
+                            {% for bracket in budget_brackets %}
+                            <option value="{{ bracket.key }}">${{ "{:,.0f}".format(bracket.value|float) }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">
+                            The budget bracket will be used as the stage name
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description (optional)</label>
+                        <textarea class="form-control" id="description" name="description" rows="2"
+                                  placeholder="Add any additional notes about this approval stage"></textarea>
+                    </div>
+
+                    <!-- Hidden defaults -->
+                    <input type="hidden" name="requires_all_steps" value="1">
+                    <input type="hidden" name="is_parallel" value="0">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Add Stage</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Step Modal -->
+<div class="modal fade" id="addStepModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" id="addStepForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Approval Step to <span id="stepStageName"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="approval_type_key">Approval Type *</label>
+                        <select class="form-control" id="approval_type_key" name="approval_type_key" required>
+                            <option value="">Select Approval Type</option>
+                            {% for approval_type in approval_types %}
+                            <option value="{{ approval_type.key }}">{{ approval_type.value }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">
+                            The approval type will be used as the step name
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="step_description">Description (optional)</label>
+                        <textarea class="form-control" id="step_description" name="description" rows="2"
+                                  placeholder="Add any additional notes about this approval step"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="primary_approver_id">Primary Approver *</label>
+                                <select class="form-control" id="primary_approver_id" name="primary_approver_id" required>
+                                    <option value="">Select Primary Approver</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.record_id }}">{{ user.get_display_name() }} ({{ user.email }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="backup_approver_id">Backup Approver (optional)</label>
+                                <select class="form-control" id="backup_approver_id" name="backup_approver_id">
+                                    <option value="">Select Backup Approver</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.record_id }}">{{ user.get_display_name() }} ({{ user.email }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden defaults -->
+                    <input type="hidden" name="timeout_days" value="0">
+                    <input type="hidden" name="is_required" value="1">
+                    <input type="hidden" name="auto_escalate" value="0">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info">Add Step</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Step Modal -->
+<div class="modal fade" id="editStepModal" tabindex="-1" aria-labelledby="editStepModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" id="editStepForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Approval Step</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit_approval_type_key">Approval Type *</label>
+                        <select class="form-control" id="edit_approval_type_key" name="approval_type_key" required>
+                            <option value="">Select Approval Type</option>
+                            {% for approval_type in approval_types %}
+                            <option value="{{ approval_type.key }}">{{ approval_type.value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_step_description">Description (optional)</label>
+                        <textarea class="form-control" id="edit_step_description" name="description" rows="2"
+                                  placeholder="Add any additional notes about this approval step"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_primary_approver_id">Primary Approver *</label>
+                                <select class="form-control" id="edit_primary_approver_id" name="primary_approver_id" required>
+                                    <option value="">Select Primary Approver</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.record_id }}">{{ user.get_display_name() }} ({{ user.email }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_backup_approver_id">Backup Approver (optional)</label>
+                                <select class="form-control" id="edit_backup_approver_id" name="backup_approver_id">
+                                    <option value="">Select Backup Approver</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.record_id }}">{{ user.get_display_name() }} ({{ user.email }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden defaults -->
+                    <input type="hidden" name="timeout_days" value="0">
+                    <input type="hidden" name="is_required" value="1">
+                    <input type="hidden" name="auto_escalate" value="0">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Step</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddStepModal(stageId, stageName) {
+    document.getElementById('stepStageName').textContent = stageName;
+    document.getElementById('addStepForm').action = '{{ url_for("approval_workflow_add_step", workflow_id=workflow.id, stage_id=0) }}'.replace('0', stageId);
+    const modal = new bootstrap.Modal(document.getElementById('addStepModal'));
+    modal.show();
+}
+
+function showEditStepModal(stageId, stepId) {
+    // Fetch step data and populate the edit modal
+    fetch(`/api/approval-step/${stepId}`)
+        .then(response => response.json())
+        .then(step => {
+            // Populate the form fields
+            document.getElementById('edit_approval_type_key').value = step.approval_type_key || '';
+            document.getElementById('edit_step_description').value = step.description || '';
+            document.getElementById('edit_primary_approver_id').value = step.primary_approver_id || '';
+            document.getElementById('edit_backup_approver_id').value = step.backup_approver_id || '';
+            
+            // Set the form action
+            const editUrl = '/approval-workflow/{{ workflow.id }}/stage/' + stageId + '/step/' + stepId + '/edit';
+            document.getElementById('editStepForm').action = editUrl;
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('editStepModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error fetching step data:', error);
+            alert('Error loading step data for editing.');
+        });
+}
+
+// Initialize sortable functionality when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize sortable for each stage's steps
+    document.querySelectorAll('.sortable-steps').forEach(function(tbody) {
+        if (typeof Sortable !== 'undefined') {
+            new Sortable(tbody, {
+                handle: '.drag-handle',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                onEnd: function(evt) {
+                    const stageId = evt.to.dataset.stageId;
+                    const stepIds = Array.from(evt.to.children).map(row => row.dataset.stepId);
+                    
+                    // Send the new order to the server
+                    fetch(`/api/approval-workflow/{{ workflow.id }}/stage/${stageId}/reorder-steps`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            step_ids: stepIds
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Update step order badges
+                            evt.to.querySelectorAll('tr').forEach((row, index) => {
+                                const badge = row.querySelector('.badge-secondary');
+                                if (badge) {
+                                    badge.textContent = index + 1;
+                                }
+                                row.dataset.stepOrder = index + 1;
+                            });
+                        } else {
+                            console.error('Failed to reorder steps:', data.error);
+                            alert('Failed to reorder steps: ' + data.error);
+                            location.reload(); // Reload to restore original order
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error reordering steps:', error);
+                        alert('Error reordering steps. Page will reload.');
+                        location.reload();
+                    });
+                }
+            });
+        }
+    });
+});
+</script>
+
+<!-- Add SortableJS library for drag and drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<!-- Add CSS for sortable styling -->
+<style>
+.sortable-ghost {
+    opacity: 0.4;
+}
+
+.sortable-chosen {
+    background-color: #f8f9fa;
+}
+
+.sortable-drag {
+    background-color: #ffffff;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.drag-handle:hover {
+    background-color: #f8f9fa;
+}
+
+.sortable-steps tr {
+    cursor: default;
+}
+
+.sortable-steps tr:hover {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}

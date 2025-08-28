@@ -1,0 +1,187 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action }} Approval Workflow{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>🔄 {{ action }} Approval Workflow</h1>
+    <a href="{{ url_for('approval_workflows') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Workflows
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Workflow Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="workflowForm">
+                    <div class="form-group">
+                        <label for="name">Workflow Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               value="{{ workflow.name if workflow else '' }}" 
+                               placeholder="e.g., USCAR Standard Approval Process" required>
+                        <small class="form-text text-muted">
+                            A descriptive name for this approval workflow
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Describe this approval workflow and when it should be used">{{ workflow.description if workflow else '' }}</textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="consortium_id">Consortium *</label>
+                                <select class="form-control" id="consortium_id" name="consortium_id" required>
+                                    <option value="">Select Consortium</option>
+                                    {% for consortium in consortiums %}
+                                    <option value="{{ consortium.consort_id }}" 
+                                            {% if workflow and workflow.consortium_id == consortium.consort_id %}selected{% endif %}>
+                                        {{ consortium.abbrev }} - {{ consortium.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">
+                                    Which consortium this workflow applies to
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="version">Version</label>
+                                <input type="text" class="form-control" id="version" name="version" 
+                                       value="{{ workflow.version if workflow else '1.0' }}" 
+                                       placeholder="1.0">
+                                <small class="form-text text-muted">
+                                    Version number for tracking changes
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                   value="1" {% if workflow and workflow.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active">
+                                <strong>Active Workflow</strong>
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">
+                            Only one workflow can be active per consortium. Checking this will deactivate other workflows for this consortium.
+                        </small>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-between">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Workflow
+                        </button>
+                        {% if workflow %}
+                        <a href="{{ url_for('approval_workflow_edit', id=workflow.id) }}" class="btn btn-info">
+                            <i class="fas fa-cogs"></i> Configure Stages & Steps
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-lightbulb"></i> Workflow Setup Guide
+            </div>
+            <div class="card-body">
+                <h6>Step-by-Step Setup:</h6>
+                <ol>
+                    <li><strong>Create Workflow</strong> - Fill out basic information</li>
+                    <li><strong>Add Stages</strong> - Define budget bracket levels</li>
+                    <li><strong>Add Steps</strong> - Set approval actions for each stage</li>
+                    <li><strong>Assign Approvers</strong> - Choose primary and backup users</li>
+                    <li><strong>Activate</strong> - Make it the active workflow</li>
+                </ol>
+
+                <hr>
+
+                <h6>Best Practices:</h6>
+                <ul class="small">
+                    <li>Start with common budget brackets ($5K, $15K, $100K)</li>
+                    <li>Always assign backup approvers</li>
+                    <li>Test with a draft RFPO before activating</li>
+                    <li>Document any special approval requirements</li>
+                </ul>
+            </div>
+        </div>
+
+        {% if workflow and workflow.is_active %}
+        <div class="card border-success mt-3">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-check-circle"></i> Active Workflow
+            </div>
+            <div class="card-body">
+                <p class="small mb-0">
+                    This is the <strong>active workflow</strong> for {{ workflow.consortium_id }}. 
+                    All new RFPOs for this consortium will use this approval process.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('workflowForm');
+    const consortiumSelect = document.getElementById('consortium_id');
+    const isActiveCheckbox = document.getElementById('is_active');
+    
+    form.addEventListener('submit', function(e) {
+        // Only check for conflicts if creating a new workflow and it's marked as active
+        if (isActiveCheckbox.checked && consortiumSelect.value && {{ 'true' if not workflow else 'false' }}) {
+            e.preventDefault();
+            
+            // Check if there's already an active workflow for this consortium
+            fetch(`/api/check-active-workflow/${consortiumSelect.value}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.has_active_workflow) {
+                        const message = `There is already an active workflow for ${data.consortium_name}:\n\n` +
+                                      `"${data.active_workflow_name}" (${data.active_workflow_id})\n\n` +
+                                      `Creating this new active workflow will automatically deactivate the existing one.\n\n` +
+                                      `Do you want to continue?`;
+                        
+                        if (confirm(message)) {
+                            // User confirmed, submit the form
+                            form.removeEventListener('submit', arguments.callee);
+                            form.submit();
+                        }
+                    } else {
+                        // No conflict, submit the form
+                        form.removeEventListener('submit', arguments.callee);
+                        form.submit();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking for active workflows:', error);
+                    // On error, still allow form submission but warn user
+                    if (confirm('Unable to check for existing active workflows. Continue anyway?')) {
+                        form.removeEventListener('submit', arguments.callee);
+                        form.submit();
+                    }
+                });
+        }
+        // If not active or editing existing workflow, allow normal submission
+    });
+});
+</script>
+
+{% endblock %}

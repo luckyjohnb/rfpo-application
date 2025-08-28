@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 
 # Import your models
-from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam, PDFPositioning
+from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam, PDFPositioning, RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep, RFPOApprovalInstance, RFPOApprovalAction
 from pdf_generator import RFPOPDFGenerator
 
 def create_app():
@@ -171,6 +171,9 @@ def create_app():
             'vendors': Vendor.query.filter_by(active=True).count(),
             'projects': Project.query.filter_by(active=True).count(),
             'uploaded_files': UploadedFile.query.count(),
+            'approval_workflows': RFPOApprovalWorkflow.query.filter_by(is_template=True, is_active=True).count(),
+            'approval_instances': RFPOApprovalInstance.query.count(),
+            'pending_approvals': RFPOApprovalAction.query.filter_by(status='pending').count(),
         }
         
         recent_rfpos = RFPO.query.order_by(desc(RFPO.created_at)).limit(5).all()
@@ -1792,6 +1795,513 @@ Southfield, MI  48075""",
         
         return redirect(url_for('consortiums'))
     
+    # RFPO Approval Workflow routes
+    @app.route('/approval-workflows')
+    @login_required
+    def approval_workflows():
+        """List all RFPO approval workflows"""
+        workflows = RFPOApprovalWorkflow.query.filter_by(is_template=True).order_by(
+            RFPOApprovalWorkflow.consortium_id, 
+            RFPOApprovalWorkflow.is_active.desc()
+        ).all()
+        
+        # Add consortium info and statistics
+        for workflow in workflows:
+            consortium = Consortium.query.filter_by(consort_id=workflow.consortium_id).first()
+            workflow.consortium_name = consortium.name if consortium else workflow.consortium_id
+            workflow.consortium_abbrev = consortium.abbrev if consortium else workflow.consortium_id
+            
+            # Count usage statistics
+            workflow.instance_count = RFPOApprovalInstance.query.filter_by(template_workflow_id=workflow.id).count()
+        
+        return render_template('admin/approval_workflows.html', workflows=workflows)
+    
+    @app.route('/approval-workflow/new', methods=['GET', 'POST'])
+    @login_required
+    def approval_workflow_new():
+        """Create new approval workflow"""
+        if request.method == 'POST':
+            try:
+                # Auto-generate workflow ID
+                workflow_id = generate_next_id(RFPOApprovalWorkflow, 'workflow_id', 'WF-', 8)
+                
+                workflow = RFPOApprovalWorkflow(
+                    workflow_id=workflow_id,
+                    name=request.form.get('name'),
+                    description=request.form.get('description'),
+                    version=request.form.get('version', '1.0'),
+                    consortium_id=request.form.get('consortium_id'),
+                    is_active=bool(request.form.get('is_active')),
+                    created_by=current_user.get_display_name()
+                )
+                
+                # If marking as active, deactivate others for this consortium
+                if workflow.is_active:
+                    RFPOApprovalWorkflow.query.filter_by(
+                        consortium_id=workflow.consortium_id,
+                        is_template=True
+                    ).update({'is_active': False})
+                
+                db.session.add(workflow)
+                db.session.commit()
+                
+                flash('✅ Approval workflow created successfully!', 'success')
+                return redirect(url_for('approval_workflow_edit', id=workflow.id))
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'❌ Error creating approval workflow: {str(e)}', 'error')
+        
+        consortiums = Consortium.query.filter_by(active=True).all()
+        return render_template('admin/approval_workflow_form.html', workflow=None, action='Create', consortiums=consortiums)
+    
+    @app.route('/approval-workflow/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def approval_workflow_edit(id):
+        """Edit approval workflow with stages and steps"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            try:
+                workflow.name = request.form.get('name')
+                workflow.description = request.form.get('description')
+                workflow.version = request.form.get('version', '1.0')
+                workflow.consortium_id = request.form.get('consortium_id')
+                
+                # Handle activation
+                new_active_status = bool(request.form.get('is_active'))
+                if new_active_status and not workflow.is_active:
+                    workflow.activate()
+                elif not new_active_status:
+                    workflow.is_active = False
+                
+                workflow.updated_by = current_user.get_display_name()
+                
+                db.session.commit()
+                
+                flash('✅ Approval workflow updated successfully!', 'success')
+                return redirect(url_for('approval_workflow_edit', id=workflow.id))
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'❌ Error updating approval workflow: {str(e)}', 'error')
+        
+        consortiums = Consortium.query.filter_by(active=True).all()
+        budget_brackets = List.get_by_type('rfpo_brack')
+        approval_types = List.get_by_type('rfpo_appro')
+        users = User.query.filter_by(active=True).all()
+        
+        return render_template('admin/approval_workflow_edit.html', 
+                             workflow=workflow, 
+                             consortiums=consortiums,
+                             budget_brackets=budget_brackets,
+                             approval_types=approval_types,
+                             users=users)
+    
+    @app.route('/approval-workflow/<int:workflow_id>/stage/add', methods=['POST'])
+    @login_required
+    def approval_workflow_add_stage(workflow_id):
+        """Add stage to approval workflow"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        
+        try:
+            # Get next stage order
+            max_order = db.session.query(db.func.max(RFPOApprovalStage.stage_order)).filter_by(workflow_id=workflow.id).scalar()
+            next_order = (max_order or 0) + 1
+            
+            # Auto-generate stage ID
+            stage_id = generate_next_id(RFPOApprovalStage, 'stage_id', 'STG-', 8)
+            
+            # Get budget bracket info
+            bracket_key = request.form.get('budget_bracket_key')
+            bracket_item = List.query.filter_by(type='rfpo_brack', key=bracket_key).first()
+            bracket_amount = float(bracket_item.value) if bracket_item else 0.00
+            
+            # Generate stage name from budget bracket
+            stage_name = f"Up to ${bracket_amount:,.0f}" if bracket_amount > 0 else f"Budget Bracket {bracket_key}"
+            
+            stage = RFPOApprovalStage(
+                stage_id=stage_id,
+                stage_name=stage_name,
+                stage_order=next_order,
+                description=request.form.get('description'),
+                budget_bracket_key=bracket_key,
+                budget_bracket_amount=bracket_amount,
+                workflow_id=workflow.id,
+                requires_all_steps=True,  # Always require all steps
+                is_parallel=False  # Never parallel
+            )
+            
+            db.session.add(stage)
+            db.session.commit()
+            
+            flash(f'✅ Stage "{stage.stage_name}" added successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error adding stage: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_workflow_edit', id=workflow_id))
+    
+    @app.route('/approval-workflow/<int:workflow_id>/stage/<int:stage_id>/step/add', methods=['POST'])
+    @login_required
+    def approval_workflow_add_step(workflow_id, stage_id):
+        """Add step to approval stage"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        stage = RFPOApprovalStage.query.get_or_404(stage_id)
+        
+        if stage.workflow_id != workflow.id:
+            flash('❌ Stage does not belong to this workflow.', 'error')
+            return redirect(url_for('approval_workflow_edit', id=workflow_id))
+        
+        try:
+            # Get next step order
+            max_order = db.session.query(db.func.max(RFPOApprovalStep.step_order)).filter_by(stage_id=stage.id).scalar()
+            next_order = (max_order or 0) + 1
+            
+            # Auto-generate step ID
+            step_id = generate_next_id(RFPOApprovalStep, 'step_id', 'STP-', 8)
+            
+            # Get approval type info
+            approval_key = request.form.get('approval_type_key')
+            approval_item = List.query.filter_by(type='rfpo_appro', key=approval_key).first()
+            approval_name = approval_item.value if approval_item else approval_key
+            
+            # Use approval type name as step name
+            step_name = approval_name
+            
+            step = RFPOApprovalStep(
+                step_id=step_id,
+                step_name=step_name,
+                step_order=next_order,
+                description=request.form.get('description'),
+                approval_type_key=approval_key,
+                approval_type_name=approval_name,
+                stage_id=stage.id,
+                primary_approver_id=request.form.get('primary_approver_id'),
+                backup_approver_id=request.form.get('backup_approver_id') or None,
+                is_required=True,  # Always required
+                timeout_days=0,  # No timeout
+                auto_escalate=False  # Never auto-escalate
+            )
+            
+            db.session.add(step)
+            db.session.commit()
+            
+            flash(f'✅ Step "{step.step_name}" added successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error adding step: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_workflow_edit', id=workflow_id))
+    
+    @app.route('/approval-workflow/<int:workflow_id>/stage/<int:stage_id>/delete', methods=['POST'])
+    @login_required
+    def approval_workflow_delete_stage(workflow_id, stage_id):
+        """Delete stage from approval workflow"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        stage = RFPOApprovalStage.query.get_or_404(stage_id)
+        
+        if stage.workflow_id != workflow.id:
+            flash('❌ Stage does not belong to this workflow.', 'error')
+            return redirect(url_for('approval_workflow_edit', id=workflow_id))
+        
+        try:
+            stage_name = stage.stage_name
+            db.session.delete(stage)
+            db.session.commit()
+            
+            flash(f'✅ Stage "{stage_name}" deleted successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error deleting stage: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_workflow_edit', id=workflow_id))
+    
+    @app.route('/approval-workflow/<int:workflow_id>/stage/<int:stage_id>/step/<int:step_id>/delete', methods=['POST'])
+    @login_required
+    def approval_workflow_delete_step(workflow_id, stage_id, step_id):
+        """Delete step from approval stage"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        stage = RFPOApprovalStage.query.get_or_404(stage_id)
+        step = RFPOApprovalStep.query.get_or_404(step_id)
+        
+        if stage.workflow_id != workflow.id or step.stage_id != stage.id:
+            flash('❌ Step does not belong to this workflow/stage.', 'error')
+            return redirect(url_for('approval_workflow_edit', id=workflow_id))
+        
+        try:
+            step_name = step.step_name
+            db.session.delete(step)
+            db.session.commit()
+            
+            flash(f'✅ Step "{step_name}" deleted successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error deleting step: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_workflow_edit', id=workflow_id))
+    
+    @app.route('/approval-workflow/<int:id>/delete', methods=['POST'])
+    @login_required
+    def approval_workflow_delete(id):
+        """Delete approval workflow"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(id)
+        
+        # Check if workflow has been used
+        instance_count = RFPOApprovalInstance.query.filter_by(template_workflow_id=workflow.id).count()
+        if instance_count > 0:
+            flash(f'❌ Cannot delete workflow: it has been used by {instance_count} RFPOs. Deactivate instead.', 'error')
+            return redirect(url_for('approval_workflows'))
+        
+        try:
+            workflow_name = workflow.name
+            db.session.delete(workflow)
+            db.session.commit()
+            
+            flash(f'✅ Approval workflow "{workflow_name}" deleted successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error deleting workflow: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_workflows'))
+    
+    @app.route('/approval-workflow/<int:id>/activate', methods=['POST'])
+    @login_required
+    def approval_workflow_activate(id):
+        """Activate approval workflow for its consortium"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(id)
+        
+        try:
+            workflow.activate()
+            db.session.commit()
+            
+            flash(f'✅ Workflow "{workflow.name}" activated for {workflow.consortium_id}!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error activating workflow: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_workflows'))
+    
+    @app.route('/api/check-active-workflow/<consortium_id>')
+    @login_required
+    def api_check_active_workflow(consortium_id):
+        """API endpoint to check if a consortium already has an active workflow"""
+        try:
+            # Find existing active workflow for this consortium
+            active_workflow = RFPOApprovalWorkflow.query.filter_by(
+                consortium_id=consortium_id,
+                is_template=True,
+                is_active=True
+            ).first()
+            
+            # Get consortium info
+            consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
+            consortium_name = consortium.name if consortium else consortium_id
+            
+            if active_workflow:
+                return jsonify({
+                    'has_active_workflow': True,
+                    'consortium_name': consortium_name,
+                    'active_workflow_id': active_workflow.workflow_id,
+                    'active_workflow_name': active_workflow.name
+                })
+            else:
+                return jsonify({
+                    'has_active_workflow': False,
+                    'consortium_name': consortium_name
+                })
+                
+        except Exception as e:
+            return jsonify({
+                'error': str(e),
+                'has_active_workflow': False
+            }), 500
+    
+    @app.route('/api/approval-workflow/<int:workflow_id>/stage/<int:stage_id>/reorder-steps', methods=['POST'])
+    @login_required
+    def api_reorder_approval_steps(workflow_id, stage_id):
+        """API endpoint to reorder approval steps within a stage"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        stage = RFPOApprovalStage.query.get_or_404(stage_id)
+        
+        if stage.workflow_id != workflow.id:
+            return jsonify({'success': False, 'error': 'Stage does not belong to workflow'}), 400
+        
+        try:
+            data = request.get_json()
+            step_ids = data.get('step_ids', [])
+            
+            if not step_ids:
+                return jsonify({'success': False, 'error': 'No step IDs provided'}), 400
+            
+            # First, set all step orders to negative values to avoid constraint conflicts
+            # This is a common technique to handle unique constraint reordering
+            steps_to_reorder = []
+            for step_id in step_ids:
+                step = RFPOApprovalStep.query.filter_by(id=step_id, stage_id=stage.id).first()
+                if step:
+                    step.step_order = -int(step_id)  # Temporarily set to negative unique value
+                    steps_to_reorder.append(step)
+            
+            # Flush to apply the negative values
+            db.session.flush()
+            
+            # Now update with the correct positive order values
+            for new_order, step in enumerate(steps_to_reorder, 1):
+                step.step_order = new_order
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Reordered {len(step_ids)} steps successfully'
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/approval-step/<int:step_id>')
+    @login_required
+    def api_get_approval_step(step_id):
+        """API endpoint to get approval step data for editing"""
+        step = RFPOApprovalStep.query.get_or_404(step_id)
+        return jsonify(step.to_dict())
+    
+    @app.route('/approval-workflow/<int:workflow_id>/stage/<int:stage_id>/step/<int:step_id>/edit', methods=['POST'])
+    @login_required
+    def approval_workflow_edit_step(workflow_id, stage_id, step_id):
+        """Edit approval step"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        stage = RFPOApprovalStage.query.get_or_404(stage_id)
+        step = RFPOApprovalStep.query.get_or_404(step_id)
+        
+        if stage.workflow_id != workflow.id or step.stage_id != stage.id:
+            flash('❌ Step does not belong to this workflow/stage.', 'error')
+            return redirect(url_for('approval_workflow_edit', id=workflow_id))
+        
+        try:
+            # Get approval type info
+            approval_key = request.form.get('approval_type_key')
+            approval_item = List.query.filter_by(type='rfpo_appro', key=approval_key).first()
+            approval_name = approval_item.value if approval_item else approval_key
+            
+            # Update step with new values
+            step.approval_type_key = approval_key
+            step.approval_type_name = approval_name
+            step.step_name = approval_name  # Use approval type name as step name
+            step.description = request.form.get('description')
+            step.primary_approver_id = request.form.get('primary_approver_id')
+            step.backup_approver_id = request.form.get('backup_approver_id') or None
+            
+            # Keep defaults for hidden fields
+            step.is_required = True
+            step.timeout_days = 0
+            step.auto_escalate = False
+            
+            db.session.commit()
+            
+            flash(f'✅ Step "{step.step_name}" updated successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error updating step: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_workflow_edit', id=workflow_id))
+    
+    # RFPO Approval Instance Management routes
+    @app.route('/approval-instances')
+    @login_required
+    def approval_instances():
+        """List all RFPO approval instances"""
+        instances = RFPOApprovalInstance.query.order_by(desc(RFPOApprovalInstance.created_at)).all()
+        
+        # Add RFPO and consortium info
+        for instance in instances:
+            if instance.rfpo:
+                instance.rfpo_title = instance.rfpo.title
+                instance.rfpo_total = instance.rfpo.total_amount
+            else:
+                instance.rfpo_title = f"RFPO #{instance.rfpo_id}"
+                instance.rfpo_total = 0.00
+        
+        return render_template('admin/approval_instances.html', instances=instances)
+    
+    @app.route('/approval-instance/<int:id>/view')
+    @login_required
+    def approval_instance_view(id):
+        """View detailed approval instance with actions"""
+        instance = RFPOApprovalInstance.query.get_or_404(id)
+        
+        # Get RFPO and related data
+        rfpo = instance.rfpo
+        if rfpo:
+            project = Project.query.filter_by(project_id=rfpo.project_id).first()
+            consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+        else:
+            project = None
+            consortium = None
+        
+        return render_template('admin/approval_instance_view.html', 
+                             instance=instance, 
+                             rfpo=rfpo,
+                             project=project,
+                             consortium=consortium)
+    
+    @app.route('/approval-instance/<int:instance_id>/action/<int:action_id>/approve', methods=['POST'])
+    @login_required
+    def approval_action_approve(instance_id, action_id):
+        """Complete an approval action (approve/conditional/refuse)"""
+        instance = RFPOApprovalInstance.query.get_or_404(instance_id)
+        action = RFPOApprovalAction.query.get_or_404(action_id)
+        
+        if action.instance_id != instance.id:
+            flash('❌ Action does not belong to this instance.', 'error')
+            return redirect(url_for('approval_instance_view', id=instance_id))
+        
+        # Check if current user can take this action
+        if (action.approver_id != current_user.record_id and 
+            action.backup_approver_id != current_user.record_id and 
+            not current_user.is_super_admin()):
+            flash('❌ You are not authorized to take this action.', 'error')
+            return redirect(url_for('approval_instance_view', id=instance_id))
+        
+        try:
+            status = request.form.get('status')  # approved, conditional, refused
+            comments = request.form.get('comments')
+            conditions = request.form.get('conditions') if status == 'conditional' else None
+            
+            # Complete the action
+            action.complete_action(status, comments, conditions, current_user.record_id)
+            
+            # Update instance status and advance workflow if needed
+            if status == 'approved':
+                instance.advance_to_next_step()
+            elif status == 'refused':
+                instance.overall_status = 'refused'
+                instance.completed_at = datetime.utcnow()
+            elif status == 'conditional':
+                # For conditional approval, advance but note conditions
+                instance.advance_to_next_step()
+            
+            instance.updated_at = datetime.utcnow()
+            
+            db.session.commit()
+            
+            flash(f'✅ Action {status} successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error processing action: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_instance_view', id=instance_id))
+    
     # API endpoints for quick data
     @app.route('/api/stats')
     @login_required
@@ -1805,6 +2315,9 @@ Southfield, MI  48075""",
             'vendors': Vendor.query.filter_by(active=True).count(),
             'projects': Project.query.filter_by(active=True).count(),
             'uploaded_files': UploadedFile.query.count(),
+            'approval_workflows': RFPOApprovalWorkflow.query.filter_by(is_template=True, is_active=True).count(),
+            'approval_instances': RFPOApprovalInstance.query.count(),
+            'pending_approvals': RFPOApprovalAction.query.filter_by(status='pending').count(),
         }
         return jsonify(stats)
     

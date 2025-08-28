@@ -1,0 +1,159 @@
+{% extends "admin/base.html" %}
+
+{% block title %}RFPO Approval Workflows{% endblock %}
+
+{% block content %}
+
+<style>
+/* Ensure all text in inactive workflow rows is dark and visible */
+.inactive-workflow {
+    color: #212529 !important;
+}
+
+.inactive-workflow * {
+    color: #212529 !important;
+}
+
+.inactive-workflow .text-muted {
+    color: #495057 !important;
+}
+
+.inactive-workflow strong {
+    color: #212529 !important;
+    font-weight: 600;
+}
+
+.inactive-workflow small {
+    color: #495057 !important;
+}
+</style>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>🔄 RFPO Approval Workflows</h1>
+    <a href="{{ url_for('approval_workflow_new') }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> New Workflow
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Workflow ID</th>
+                        <th>Name</th>
+                        <th>Consortium</th>
+                        <th>Version</th>
+                        <th>Status</th>
+                        <th>Stages</th>
+                        <th>Steps</th>
+                        <th>Used By RFPOs</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for workflow in workflows %}
+                    <tr class="{% if workflow.is_active %}table-success{% else %}table-light inactive-workflow{% endif %}">
+                        <td>
+                            <strong>{{ workflow.workflow_id }}</strong>
+                        </td>
+                        <td>
+                            <strong>{{ workflow.name }}</strong>
+                            {% if workflow.description %}
+                            <br><small class="text-muted">{{ workflow.description[:80] }}{% if workflow.description|length > 80 %}...{% endif %}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-info">{{ workflow.consortium_abbrev }}</span>
+                            <br><small>{{ workflow.consortium_name }}</small>
+                        </td>
+                        <td>{{ workflow.version }}</td>
+                        <td>
+                            {% if workflow.is_active %}
+                                <span class="badge badge-success">Active</span>
+                            {% else %}
+                                <span class="badge badge-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-primary">{{ workflow.get_total_stages() }}</span>
+                        </td>
+                        <td>
+                            <span class="badge badge-info">{{ workflow.get_total_steps() }}</span>
+                        </td>
+                        <td>
+                            {% if workflow.instance_count > 0 %}
+                                <span class="badge badge-warning">{{ workflow.instance_count }}</span>
+                            {% else %}
+                                <span class="badge badge-light">0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('approval_workflow_edit', id=workflow.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="Edit Workflow">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                
+                                {% if not workflow.is_active %}
+                                <form method="POST" action="{{ url_for('approval_workflow_activate', id=workflow.id) }}" 
+                                      style="display:inline;" 
+                                      onsubmit="return confirm('Activate this workflow? This will deactivate the current active workflow for this consortium.')">
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Activate Workflow">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                
+                                {% if workflow.instance_count == 0 %}
+                                <form method="POST" action="{{ url_for('approval_workflow_delete', id=workflow.id) }}" 
+                                      style="display:inline;" 
+                                      onsubmit="return confirm('Are you sure you want to delete this workflow?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Workflow">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted">
+                            <i class="fas fa-info-circle"></i> No approval workflows found. 
+                            <a href="{{ url_for('approval_workflow_new') }}">Create the first one</a>.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Info Panel -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-info-circle"></i> About Approval Workflows
+            </div>
+            <div class="card-body">
+                <p>
+                    <strong>Approval workflows</strong> define the approval process for RFPOs within each consortium. 
+                    Each workflow consists of:
+                </p>
+                <ul>
+                    <li><strong>Stages</strong> - Budget bracket levels (e.g., "Under $5,000", "Up to $15,000")</li>
+                    <li><strong>Steps</strong> - Individual approval actions within each stage (e.g., "Technical Review", "Management Approval")</li>
+                    <li><strong>Approvers</strong> - Primary and backup users who can take approval actions</li>
+                </ul>
+                <p>
+                    Only <strong>one workflow can be active</strong> per consortium at a time. 
+                    When an RFPO is submitted, it uses the active workflow for its consortium.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

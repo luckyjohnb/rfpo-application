@@ -2,7 +2,7 @@
 
 This guide will help you get the RFPO application running with proper database and admin user setup.
 
-## 🚀 Quick Setup (2 Steps)
+## 🚀 Quick Setup (3 Steps)
 
 If you already have the application running but need to set up the database and admin user:
 
@@ -11,7 +11,12 @@ If you already have the application running but need to set up the database and 
 python init_db.py
 ```
 
-### Step 2: Start the Admin Panel
+### Step 2: Create Admin User
+```bash
+python create_admin_user.py
+```
+
+### Step 3: Start the Admin Panel
 ```bash
 python custom_admin.py
 ```
@@ -76,13 +81,22 @@ This will create all necessary database tables including:
 
 ### 3. Admin User Setup
 
-**Important**: The custom admin panel (`custom_admin.py`) has a built-in default admin user that is automatically available. You don't need to create it manually.
+Create the admin user for the custom admin panel:
 
-**Default Admin Credentials:**
+```bash
+python create_admin_user.py
+```
+
+This script will:
+- Create the `rfpo_admin.db` database with all necessary tables
+- Create an admin user with the credentials below
+- Verify the user can authenticate properly
+
+**Admin Credentials:**
 - **Email**: admin@rfpo.com
 - **Password**: admin123
 
-This admin user is created automatically when you first run the admin panel. The user data is stored directly in the SQLite database (`instance/rfpo_admin.db`) using SQLAlchemy models.
+The user data is stored in the SQLite database (`rfpo_admin.db`) using SQLAlchemy User models with proper password hashing.
 
 ### 4. Running the Applications
 
@@ -129,20 +143,20 @@ After setup, verify everything works:
 ## 🔧 Application Architecture
 
 ### Database Files
-- **app.db**: Main SQLAlchemy database with all models (used by app.py)
-- **rfpo_admin.db**: Admin panel database (used by custom_admin.py - same schema as app.db)
-- **rfpo.db**: Additional RFPO data storage
+- **instance/app.db**: Main SQLAlchemy database with all models (used by app.py)
+- **rfpo_admin.db**: Admin panel database (used by custom_admin.py - same schema as app.db, located in project root)
+- **instance/rfpo.db**: Additional RFPO data storage
 
 ### User Management
-The custom admin panel uses SQLAlchemy User models with Flask-Login for authentication. The admin user is created automatically in the database when the admin panel starts.
+The custom admin panel uses SQLAlchemy User models with Flask-Login for authentication. The admin user is created by running the `create_admin_user.py` script.
 
 ### Key Files
 - `app.py` - Main Flask application
 - `custom_admin.py` - Admin panel application  
 - `models.py` - Database models
-- `user_management.py` - JSON-based user system
-- `init_admin.py` - Admin user creation
-- `init_db.py` - Database initialization
+- `create_admin_user.py` - Create admin user for custom admin panel
+- `init_db.py` - Database initialization for main app
+- `user_management.py` - JSON-based user system (used by main app)
 
 ---
 
@@ -165,15 +179,19 @@ pip install -r requirements.txt
 
 #### 2. "Database doesn't exist" errors
 ```bash
-# Initialize the database
+# Initialize the main database
 python init_db.py
+
+# Create admin user and admin database
+python create_admin_user.py
 ```
 
 #### 3. "Admin user not found" errors
-The admin user should be automatically available in the custom admin panel. If you can't login:
-- Make sure you're using the correct URL: http://127.0.0.1:5111/
+If you can't login to the admin panel:
+- Make sure you've created the admin user: `python create_admin_user.py`
+- Use the correct URL: http://127.0.0.1:5111/
 - Use the correct credentials: admin@rfpo.com / admin123
-- Check that the database was initialized: `python init_db.py`
+- Check that the `rfpo_admin.db` file exists in the project root
 
 #### 4. "Permission denied" errors
 ```bash
@@ -201,9 +219,11 @@ If you need to start fresh:
 ```bash
 # Remove databases
 rm instance/*.db
+rm rfpo_admin.db
 
 # Reinitialize
 python init_db.py
+python create_admin_user.py
 
 # Restart admin panel
 python custom_admin.py
@@ -241,9 +261,10 @@ The default admin password is `admin123`. For production:
 - Consider backing up the databases regularly
 
 ### User Management
-- User data is stored in the SQLite database (`instance/rfpo_admin.db`)
+- User data is stored in the SQLite database (`rfpo_admin.db`)
 - Passwords are properly hashed using Werkzeug security
 - User management is available through the admin panel interface
+- Admin user is created using the `create_admin_user.py` script
 
 ---
 

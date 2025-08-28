@@ -406,6 +406,11 @@
                                     <option value="{{ rfpo.vendor_site.id }}" selected>
                                         {{ rfpo.vendor_site.contact_name }} - {{ rfpo.vendor_site.contact_city }}, {{ rfpo.vendor_site.contact_state }}
                                     </option>
+                                    {% elif rfpo.vendor_id and not rfpo.vendor_site_id %}
+                                    <!-- This means vendor primary contact is being used -->
+                                    <option value="vendor_{{ rfpo.vendor_id }}" selected>
+                                        {{ rfpo.vendor.contact_name or 'Primary Contact' }} - {{ rfpo.vendor.contact_city or 'No location' }}, {{ rfpo.vendor.contact_state or '' }} [PRIMARY]
+                                    </option>
                                     {% endif %}
                                 </select>
                             </div>
@@ -418,6 +423,7 @@
                                 <div class="card-body">
                                     <h6>{{ rfpo.vendor.company_name }}</h6>
                                     {% if rfpo.vendor_site %}
+                                    <!-- Display vendor site contact information -->
                                     <p class="mb-1"><strong>Contact:</strong> {{ rfpo.vendor_site.contact_name }}</p>
                                     {% if rfpo.vendor_site.contact_dept %}
                                     <p class="mb-1"><strong>Department:</strong> {{ rfpo.vendor_site.contact_dept }}</p>
@@ -425,6 +431,24 @@
                                     <p class="mb-1"><strong>Phone:</strong> {{ rfpo.vendor_site.contact_tel }}</p>
                                     <p class="mb-0"><strong>Address:</strong></p>
                                     <address class="mb-0">{{ rfpo.vendor_site.get_full_contact_address()|replace('\n', '<br>')|safe }}</address>
+                                    {% else %}
+                                    <!-- Display vendor primary contact information when no vendor site is selected -->
+                                    {% if rfpo.vendor.contact_name %}
+                                    <p class="mb-1"><strong>Contact:</strong> {{ rfpo.vendor.contact_name }} <span class="badge bg-primary">PRIMARY</span></p>
+                                    {% if rfpo.vendor.contact_dept %}
+                                    <p class="mb-1"><strong>Department:</strong> {{ rfpo.vendor.contact_dept }}</p>
+                                    {% endif %}
+                                    {% if rfpo.vendor.contact_tel %}
+                                    <p class="mb-1"><strong>Phone:</strong> {{ rfpo.vendor.contact_tel }}</p>
+                                    {% endif %}
+                                    {% if rfpo.vendor.contact_fax %}
+                                    <p class="mb-1"><strong>Fax:</strong> {{ rfpo.vendor.contact_fax }}</p>
+                                    {% endif %}
+                                    <p class="mb-0"><strong>Address:</strong></p>
+                                    <address class="mb-0">{{ rfpo.vendor.get_full_contact_address()|replace('\n', '<br>')|safe }}</address>
+                                    {% else %}
+                                    <p class="text-muted">No contact information available for this vendor.</p>
+                                    {% endif %}
                                     {% endif %}
                                 </div>
                             </div>
@@ -546,11 +570,12 @@ function toggleCapitalFields() {
     fields.style.display = checkbox.checked ? 'block' : 'none';
 }
 
-function loadVendorSites() {
+function loadVendorSites(preserveCurrentSelection = false) {
     const vendorSelect = document.getElementById('vendor_id');
     const siteSelect = document.getElementById('vendor_site_id');
     
     const vendorId = vendorSelect.value;
+    const currentSelection = siteSelect.value; // Preserve current selection
     
     if (!vendorId) {
         siteSelect.disabled = true;
@@ -585,6 +610,11 @@ function loadVendorSites() {
                     option.style.fontWeight = 'bold';
                 }
                 
+                // Restore selection if preserving
+                if (preserveCurrentSelection && site.id == currentSelection) {
+                    option.selected = true;
+                }
+                
                 siteSelect.appendChild(option);
             });
             
@@ -599,5 +629,16 @@ function loadVendorSites() {
             siteSelect.innerHTML = '<option value="">Error loading contacts</option>';
         });
 }
+
+// Initialize vendor sites when page loads if vendor is already selected
+document.addEventListener('DOMContentLoaded', function() {
+    const vendorSelect = document.getElementById('vendor_id');
+    const siteSelect = document.getElementById('vendor_site_id');
+    
+    // If a vendor is already selected and there's either a vendor site or vendor primary selected
+    if (vendorSelect.value && (siteSelect.value || {{ 'true' if rfpo.vendor_id and not rfpo.vendor_site_id else 'false' }})) {
+        loadVendorSites(true);
+    }
+});
 </script>
 {% endblock %}

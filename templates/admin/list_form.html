@@ -1,10 +1,10 @@
 {% extends "admin/base.html" %}
 
-{% block title %}{{ action }} List Item - RFPO Admin{% endblock %}
+{% block title %}{{ action }} {% if preset_type %}{{ preset_type.title() }} {% endif %}List Item - RFPO Admin{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">⚙️ {{ action }} Configuration List Item</h1>
+    <h1 class="h2">⚙️ {{ action }} {% if preset_type %}{{ preset_type.title() }} {% endif %}Configuration List Item</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <a href="{{ url_for('lists') }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Back to Lists
@@ -32,23 +32,54 @@
                     </div>
                     {% endif %}
                     
+                    {% if preset_type %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i> 
+                        <strong>Creating new item for: {{ preset_type.upper() }}</strong><br>
+                        <small>{{ list_type_description }}</small>
+                    </div>
+                    {% endif %}
+                    
                     <div class="mb-3">
                         <label for="type" class="form-label">Type <span class="text-danger">*</span></label>
+                        {% if preset_type %}
                         <input type="text" class="form-control" id="type" name="type" 
-                               value="{{ list_item.type if list_item else '' }}" required
-                               placeholder="e.g., adminlevel, rfpo_appro"
-                               list="typeOptions">
-                        <datalist id="typeOptions">
+                               value="{{ preset_type }}" readonly
+                               style="background-color: #f8f9fa;">
+                        <div class="form-text">List type is pre-selected. <a href="{{ url_for('list_new') }}">Create custom type</a> if needed.</div>
+                        {% else %}
+                        <select class="form-control" id="type" name="type" required onchange="updateListPreview()">
+                            <option value="">Select list type...</option>
+                            {% set all_types = [] %}
                             {% for existing_type in existing_types %}
-                            <option value="{{ existing_type }}">
+                                {% if existing_type not in all_types %}
+                                    {% set _ = all_types.append(existing_type) %}
+                                {% endif %}
                             {% endfor %}
-                            <option value="adminlevel">
-                            <option value="meeting_it">
-                            <option value="rfpo_appro">
-                            <option value="rfpo_brack">
-                            <option value="rfpo_statu">
-                        </datalist>
-                        <div class="form-text">Configuration category</div>
+                            {% for standard_type in ['adminlevel', 'meeting_it', 'rfpo_appro', 'rfpo_brack', 'rfpo_statu'] %}
+                                {% if standard_type not in all_types %}
+                                    {% set _ = all_types.append(standard_type) %}
+                                {% endif %}
+                            {% endfor %}
+                            {% for list_type in all_types|sort %}
+                            <option value="{{ list_type }}" {{ 'selected' if list_item and list_item.type == list_type else '' }}>
+                                {{ list_type }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select an existing configuration category or type a custom one</div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <a href="#" onclick="toggleCustomType(); return false;">Enter custom type name</a>
+                            </small>
+                        </div>
+                        <div id="customTypeInput" style="display: none;" class="mt-2">
+                            <input type="text" class="form-control form-control-sm" id="customType" 
+                                   placeholder="Enter custom type name..."
+                                   onkeyup="updateTypeFromCustom()">
+                            <small class="text-muted">Type a custom category name for new configuration types</small>
+                        </div>
+                        {% endif %}
                     </div>
                     
                     <div class="mb-3">
@@ -80,20 +111,65 @@
                 </div>
                 
                 <div class="col-md-6">
-                    <h5 class="mb-3">📖 Configuration Types</h5>
+                    {% if preset_type %}
+                    <h5 class="mb-3">📋 {{ preset_type.title() }} Configuration Help</h5>
                     
                     <div class="card">
                         <div class="card-body">
-                            <h6 class="card-title">Available Types:</h6>
-                            <ul class="list-unstyled">
-                                <li><code>adminlevel</code> - User permission levels</li>
-                                <li><code>meeting_it</code> - Meeting/IT resource types</li>
-                                <li><code>rfpo_appro</code> - RFPO approval workflow</li>
-                                <li><code>rfpo_brack</code> - RFPO budget brackets</li>
-                                <li><code>rfpo_statu</code> - RFPO status values</li>
-                            </ul>
+                            <h6 class="card-title">Examples for {{ preset_type.upper() }}:</h6>
+                            {% if preset_type == 'adminlevel' %}
+                            <p><strong>Key examples:</strong> RFPO_ADMIN, RFPO_USER, GOD, VROOM_ADMIN</p>
+                            <p><strong>Value examples:</strong> RFPO Full Admin, RFPO User, Super Admin, VROOM Full Admin</p>
+                            <p><small class="text-muted">Used to define user permission levels in the system.</small></p>
+                            {% elif preset_type == 'meeting_it' %}
+                            <p><strong>Key examples:</strong> AV, PC, ROOM, TEL, XXX</p>
+                            <p><strong>Value examples:</strong> Projector/VCR/TV, PC/Laptop, Meeting Room, Video/Tele Conference, Misc</p>
+                            <p><small class="text-muted">Used to categorize meeting and IT resources.</small></p>
+                            {% elif preset_type == 'rfpo_appro' %}
+                            <p><strong>Key examples:</strong> 5, 10, 20, 25, 99</p>
+                            <p><strong>Value examples:</strong> Vendor Review, Technical Approval, Board Approval, Steering Approval, PO Release Approval</p>
+                            <p><small class="text-muted">Defines the RFPO approval workflow levels (numeric keys for ordering).</small></p>
+                            {% elif preset_type == 'rfpo_brack' %}
+                            <p><strong>Key examples:</strong> 10, 20, 30, 40, 50</p>
+                            <p><strong>Value examples:</strong> 5000, 15000, 100000, 150000, 999999999</p>
+                            <p><small class="text-muted">Defines RFPO budget brackets (numeric keys for ordering, values are dollar amounts).</small></p>
+                            {% elif preset_type == 'rfpo_statu' %}
+                            <p><strong>Key examples:</strong> 10, 20, 30, 40</p>
+                            <p><strong>Value examples:</strong> draft, approved, conditional, refused</p>
+                            <p><small class="text-muted">Defines RFPO status values (numeric keys for ordering).</small></p>
+                            {% else %}
+                            <p><strong>Custom configuration type.</strong></p>
+                            <p><small class="text-muted">Define your own key-value pairs for {{ preset_type }}.</small></p>
+                            {% endif %}
                         </div>
                     </div>
+                    {% else %}
+                    <div id="listPreviewSection">
+                        <h5 class="mb-3">📖 Configuration Preview</h5>
+                        
+                        <div id="listPreviewContent">
+                            <div class="card">
+                                <div class="card-body text-center text-muted">
+                                    <i class="fas fa-arrow-left fa-2x mb-2"></i>
+                                    <p>Select a list type to see current items</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mt-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Available Types:</h6>
+                                <ul class="list-unstyled">
+                                    <li><code>adminlevel</code> - User permission levels</li>
+                                    <li><code>meeting_it</code> - Meeting/IT resource types</li>
+                                    <li><code>rfpo_appro</code> - RFPO approval workflow</li>
+                                    <li><code>rfpo_brack</code> - RFPO budget brackets</li>
+                                    <li><code>rfpo_statu</code> - RFPO status values</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                     
                     {% if list_item %}
                     <div class="card mt-3">
@@ -131,5 +207,203 @@
 </div>
 {% endblock %}
 
+{% block scripts %}
+<script>
+// Toggle custom type input
+function toggleCustomType() {
+    const customInput = document.getElementById('customTypeInput');
+    const dropdown = document.getElementById('type');
+    
+    if (customInput.style.display === 'none') {
+        customInput.style.display = 'block';
+        dropdown.disabled = true;
+        dropdown.value = '';
+        document.getElementById('customType').focus();
+    } else {
+        customInput.style.display = 'none';
+        dropdown.disabled = false;
+        document.getElementById('customType').value = '';
+        updateListPreview();
+    }
+}
 
+// Update type field from custom input
+function updateTypeFromCustom() {
+    const customType = document.getElementById('customType').value;
+    const typeField = document.getElementById('type');
+    typeField.value = customType;
+    
+    if (customType) {
+        updateListPreview();
+    }
+}
 
+// Update the right pane with current items for the selected list type
+async function updateListPreview() {
+    const selectedType = document.getElementById('type').value;
+    const previewContent = document.getElementById('listPreviewContent');
+    
+    if (!selectedType) {
+        previewContent.innerHTML = `
+            <div class="card">
+                <div class="card-body text-center text-muted">
+                    <i class="fas fa-arrow-left fa-2x mb-2"></i>
+                    <p>Select a list type to see current items</p>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    // Show loading state
+    previewContent.innerHTML = `
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                <span>Loading ${selectedType} items...</span>
+            </div>
+        </div>
+    `;
+    
+    try {
+        // Fetch current items for this type
+        const response = await fetch(`/api/list-items/${selectedType}`);
+        const data = await response.json();
+        
+        if (data.success && data.items.length > 0) {
+            let itemsHtml = `
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-list"></i> Current ${selectedType.toUpperCase()} Items 
+                            <span class="badge bg-secondary ms-2">${data.items.length}</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Key</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            data.items.forEach(item => {
+                itemsHtml += `
+                    <tr>
+                        <td><code>${item.key}</code></td>
+                        <td>${item.value}</td>
+                    </tr>
+                `;
+            });
+            
+            itemsHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            previewContent.innerHTML = itemsHtml;
+        } else {
+            // No items found or new type
+            const typeDescriptions = {
+                'adminlevel': 'System permission levels and user roles',
+                'meeting_it': 'Meeting and IT resource types',
+                'rfpo_appro': 'RFPO approval workflow levels',
+                'rfpo_brack': 'RFPO budget brackets and limits',
+                'rfpo_statu': 'RFPO status values'
+            };
+            
+            const description = typeDescriptions[selectedType] || `Configuration values for ${selectedType}`;
+            
+            previewContent.innerHTML = `
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-plus-circle"></i> New ${selectedType.toUpperCase()} Configuration
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-2">${description}</p>
+                        <div class="alert alert-info mb-0">
+                            <i class="fas fa-info-circle"></i> 
+                            This will be the first item in the <strong>${selectedType}</strong> configuration list.
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Add examples for known types
+        if (['adminlevel', 'meeting_it', 'rfpo_appro', 'rfpo_brack', 'rfpo_statu'].includes(selectedType)) {
+            let exampleHtml = `
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h6 class="card-title">Examples for ${selectedType.toUpperCase()}:</h6>
+            `;
+            
+            if (selectedType === 'adminlevel') {
+                exampleHtml += `
+                    <p><strong>Key examples:</strong> RFPO_ADMIN, RFPO_USER, GOD, VROOM_ADMIN</p>
+                    <p><strong>Value examples:</strong> RFPO Full Admin, RFPO User, Super Admin, VROOM Full Admin</p>
+                `;
+            } else if (selectedType === 'meeting_it') {
+                exampleHtml += `
+                    <p><strong>Key examples:</strong> AV, PC, ROOM, TEL, XXX</p>
+                    <p><strong>Value examples:</strong> Projector/VCR/TV, PC/Laptop, Meeting Room, Video/Tele Conference, Misc</p>
+                `;
+            } else if (selectedType === 'rfpo_appro') {
+                exampleHtml += `
+                    <p><strong>Key examples:</strong> 5, 10, 20, 25, 99</p>
+                    <p><strong>Value examples:</strong> Vendor Review, Technical Approval, Board Approval, Steering Approval, PO Release Approval</p>
+                    <small class="text-muted">Numeric keys for ordering workflow levels</small>
+                `;
+            } else if (selectedType === 'rfpo_brack') {
+                exampleHtml += `
+                    <p><strong>Key examples:</strong> 10, 20, 30, 40, 50</p>
+                    <p><strong>Value examples:</strong> 5000, 15000, 100000, 150000, 999999999</p>
+                    <small class="text-muted">Numeric keys for ordering, values are dollar amounts</small>
+                `;
+            } else if (selectedType === 'rfpo_statu') {
+                exampleHtml += `
+                    <p><strong>Key examples:</strong> 10, 20, 30, 40</p>
+                    <p><strong>Value examples:</strong> draft, approved, conditional, refused</p>
+                    <small class="text-muted">Numeric keys for ordering status progression</small>
+                `;
+            }
+            
+            exampleHtml += `
+                    </div>
+                </div>
+            `;
+            
+            previewContent.innerHTML += exampleHtml;
+        }
+        
+    } catch (error) {
+        previewContent.innerHTML = `
+            <div class="card">
+                <div class="card-body text-center text-danger">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Error loading preview</p>
+                    <small>${error.message}</small>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Initialize preview if editing existing item
+document.addEventListener('DOMContentLoaded', function() {
+    const typeSelect = document.getElementById('type');
+    if (typeSelect && typeSelect.value) {
+        updateListPreview();
+    }
+});
+</script>
+{% endblock %}

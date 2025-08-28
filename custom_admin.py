@@ -1567,6 +1567,53 @@ Southfield, MI  48075""",
         existing_types = [t[0] for t in db.session.query(List.type).distinct().all()]
         return render_template('admin/list_form.html', list_item=None, action='Create', existing_types=existing_types)
     
+    @app.route('/list/new/<list_type>', methods=['GET', 'POST'])
+    @login_required
+    def list_new_for_type(list_type):
+        """Create new list item for a specific list type"""
+        if request.method == 'POST':
+            try:
+                # Auto-generate list ID
+                list_id = generate_next_id(List, 'list_id', '', 10)
+                
+                list_item = List(
+                    list_id=list_id,
+                    type=list_type,  # Pre-filled with the specified type
+                    key=request.form.get('key'),
+                    value=request.form.get('value'),
+                    active=bool(request.form.get('active', True)),
+                    created_by=current_user.get_display_name()
+                )
+                
+                db.session.add(list_item)
+                db.session.commit()
+                
+                flash(f'✅ {list_type.title()} item created successfully!', 'success')
+                return redirect(url_for('lists'))
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'❌ Error creating {list_type} item: {str(e)}', 'error')
+        
+        # Get existing types for dropdown (in case user wants to change)
+        existing_types = [t[0] for t in db.session.query(List.type).distinct().all()]
+        
+        # Get description for this list type
+        list_type_descriptions = {
+            'adminlevel': 'System permission levels and user roles',
+            'meeting_it': 'Meeting and IT resource types',
+            'rfpo_appro': 'RFPO approval workflow levels',
+            'rfpo_brack': 'RFPO budget brackets and limits',
+            'rfpo_statu': 'RFPO status values'
+        }
+        
+        return render_template('admin/list_form.html', 
+                             list_item=None, 
+                             action='Create', 
+                             existing_types=existing_types,
+                             preset_type=list_type,
+                             list_type_description=list_type_descriptions.get(list_type, f'Configuration values for {list_type}'))
+    
     @app.route('/list/<int:id>/edit', methods=['GET', 'POST'])
     @login_required
     def list_edit(id):
@@ -1844,6 +1891,36 @@ Southfield, MI  48075""",
                 'is_primary': False
             })
         return jsonify(site_data)
+    
+    @app.route('/api/list-items/<list_type>')
+    @login_required
+    def api_list_items_by_type(list_type):
+        """Get all items for a specific list type"""
+        try:
+            items = List.query.filter_by(type=list_type, active=True).order_by(List.key).all()
+            item_data = []
+            for item in items:
+                item_data.append({
+                    'id': item.id,
+                    'list_id': item.list_id,
+                    'key': item.key,
+                    'value': item.value,
+                    'created_at': item.created_at.isoformat() if item.created_at else None
+                })
+            return jsonify({
+                'success': True,
+                'items': item_data,
+                'count': len(item_data),
+                'type': list_type
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'items': [],
+                'count': 0,
+                'type': list_type
+            }), 400
     
     # PDF to Image conversion for positioning editor background
     @app.route('/api/pdf-template-image/<template_name>')

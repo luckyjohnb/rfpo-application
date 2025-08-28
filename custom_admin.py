@@ -983,6 +983,64 @@ Southfield, MI  48075""",
         
         return redirect(url_for('rfpo_edit', id=rfpo_id))
     
+    @app.route('/rfpo/<int:rfpo_id>/generate-po-proof')
+    @login_required
+    def rfpo_generate_po_proof(rfpo_id):
+        """Generate PO Proof PDF for RFPO using legacy template approach"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        try:
+            # Get related data
+            project = Project.query.filter_by(project_id=rfpo.project_id).first()
+            consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+            vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+            
+            # Handle vendor_site_id - regular VendorSite ID or None (uses vendor primary contact)
+            vendor_site = None
+            if rfpo.vendor_site_id:
+                try:
+                    vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+                except (ValueError, TypeError):
+                    vendor_site = None
+                
+            if not project or not consortium:
+                flash('❌ Missing project or consortium information for PO Proof generation.', 'error')
+                return redirect(url_for('rfpo_edit', id=rfpo_id))
+            
+            # Get positioning configuration for this consortium (if available)
+            positioning_config = PDFPositioning.query.filter_by(
+                consortium_id=consortium.consort_id,
+                template_name='po_template',
+                active=True
+            ).first()
+            
+            # Generate PO Proof PDF following legacy pattern:
+            # 1. Use po.pdf as background
+            # 2. Add consortium logo
+            # 3. Use po_page2.pdf for additional line items if needed  
+            # 4. Merge consortium terms PDF
+            pdf_generator = RFPOPDFGenerator(positioning_config=positioning_config)
+            pdf_buffer = pdf_generator.generate_po_pdf(rfpo, consortium, project, vendor, vendor_site)
+            
+            # Prepare filename following legacy naming pattern
+            date_str = datetime.now().strftime('%Y%m%d')
+            filename = f"PO_PROOF_{rfpo.rfpo_id}_{date_str}.pdf"
+            
+            # Return PDF as response
+            return Response(
+                pdf_buffer.getvalue(),
+                mimetype='application/pdf',
+                headers={
+                    'Content-Disposition': f'inline; filename="{filename}"',
+                    'Content-Type': 'application/pdf'
+                }
+            )
+            
+        except Exception as e:
+            print(f"PO Proof generation error: {e}")
+            flash(f'❌ Error generating PO Proof: {str(e)}', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
     @app.route('/rfpo/<int:rfpo_id>/generate-po')
     @login_required
     def rfpo_generate_po(rfpo_id):

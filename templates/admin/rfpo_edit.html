@@ -12,6 +12,11 @@
                title="Generate Request for Purchase Order HTML">
                 <i class="fas fa-file-alt"></i> Generate RFPO
             </a>
+            <a href="{{ url_for('rfpo_generate_po_proof', rfpo_id=rfpo.id) }}" 
+               class="btn btn-warning" target="_blank"
+               title="Generate Purchase Order Proof PDF">
+                <i class="fas fa-file-pdf"></i> Generate PO Proof
+            </a>
             <a href="{{ url_for('rfpo_generate_po', rfpo_id=rfpo.id) }}" 
                class="btn btn-success" target="_blank"
                title="Generate Purchase Order PDF">

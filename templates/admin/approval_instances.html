@@ -41,25 +41,29 @@
                             <br><small class="text-muted">v{{ instance.workflow_version }}</small>
                         </td>
                         <td>
-                            <span class="badge badge-primary">Stage {{ instance.current_stage_order }}</span>
-                            <span class="badge badge-info">Step {{ instance.current_step_order }}</span>
+                            {% if instance.current_stage_order %}
+                                <span class="badge bg-primary">Stage {{ instance.current_stage_order }}</span>
+                                <span class="badge bg-info">Step {{ instance.current_step_order }}</span>
+                            {% else %}
+                                <span class="text-muted">Not started</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if instance.overall_status == 'approved' %}
-                                <span class="badge badge-success">Approved</span>
+                                <span class="badge bg-success">Approved</span>
                             {% elif instance.overall_status == 'refused' %}
-                                <span class="badge badge-danger">Refused</span>
+                                <span class="badge bg-danger">Refused</span>
                             {% elif instance.overall_status == 'waiting' %}
-                                <span class="badge badge-warning">Waiting</span>
+                                <span class="badge bg-warning text-dark">Waiting</span>
                             {% elif instance.overall_status == 'draft' %}
-                                <span class="badge badge-secondary">Draft</span>
+                                <span class="badge bg-secondary">Draft</span>
                             {% else %}
-                                <span class="badge badge-info">{{ instance.overall_status|title }}</span>
+                                <span class="badge bg-info">{{ instance.overall_status|title }}</span>
                             {% endif %}
                         </td>
                         <td>
                             <div class="d-flex align-items-center">
-                                <small class="mr-2">{{ instance.completed_actions_count }}/{{ instance.completed_actions_count + instance.pending_actions_count }}</small>
+                                <small class="me-2">{{ instance.completed_actions_count }}/{{ instance.completed_actions_count + instance.pending_actions_count }}</small>
                                 <div class="progress flex-grow-1" style="height: 20px; width: 80px;">
                                     {% set total_actions = instance.completed_actions_count + instance.pending_actions_count %}
                                     {% set progress = (instance.completed_actions_count / total_actions * 100) if total_actions > 0 else 0 %}
@@ -75,10 +79,32 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('approval_instance_view', id=instance.id) }}" 
-                               class="btn btn-sm btn-outline-primary" title="View Details">
-                                <i class="fas fa-eye"></i>
-                            </a>
+                            {% if instance.is_virtual %}
+                                <!-- Draft RFPO Actions -->
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-info" 
+                                            onclick="testApproval({{ instance.rfpo.id }})"
+                                            title="Test Approval Requirements">
+                                        <i class="fas fa-check-circle"></i> Test
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-success" 
+                                            onclick="submitForApproval({{ instance.rfpo.id }})"
+                                            title="Submit for Approval">
+                                        <i class="fas fa-paper-plane"></i> Submit
+                                    </button>
+                                    <a href="{{ url_for('rfpo_edit', id=instance.rfpo.id) }}" 
+                                       class="btn btn-sm btn-outline-primary" 
+                                       title="Edit RFPO">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </div>
+                            {% else %}
+                                <!-- Real Instance Actions -->
+                                <a href="{{ url_for('approval_instance_view', id=instance.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}
@@ -118,4 +144,524 @@
         </div>
     </div>
 </div>
+
+<!-- Test Approval Results Modal -->
+<div class="modal fade" id="testApprovalModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">📋 Approval Test Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="testApprovalResults">
+                <!-- Results will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Submit for Approval Confirmation Modal -->
+<div class="modal fade" id="submitApprovalModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🚀 Submit for Approval</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to submit this RFPO for approval?</p>
+                <p class="text-muted">This will start the approval workflow process and change the RFPO status to "Submitted".</p>
+                <div id="submitValidationResults" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmSubmitBtn">
+                    <i class="fas fa-paper-plane"></i> Submit for Approval
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* Fix accordion arrow visibility on colored backgrounds */
+.accordion-button.bg-success::after {
+    filter: invert(1) brightness(100%); /* White arrows on green background */
+}
+
+.accordion-button.bg-warning::after {
+    filter: invert(0) brightness(50%); /* Dark arrows on yellow background */
+}
+
+.accordion-button.bg-info::after {
+    filter: invert(1) brightness(100%); /* White arrows on blue background */
+}
+
+.accordion-button.bg-light::after {
+    filter: invert(0) brightness(25%); /* Dark gray arrows on light background */
+}
+
+/* Ensure proper contrast for accordion button text and arrows */
+.accordion-button:not(.collapsed).bg-success::after,
+.accordion-button:not(.collapsed).bg-info::after {
+    filter: invert(1) brightness(100%);
+}
+
+.accordion-button:not(.collapsed).bg-warning::after {
+    filter: invert(0) brightness(50%);
+}
+
+.accordion-button:not(.collapsed).bg-light::after {
+    filter: invert(0) brightness(25%);
+}
+</style>
+
+<script>
+let currentRfpoId = null;
+
+function testApproval(rfpoId) {
+    // Show loading
+    document.getElementById('testApprovalResults').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Testing approval requirements...</p>
+        </div>
+    `;
+    
+    // Show modal
+    new bootstrap.Modal(document.getElementById('testApprovalModal')).show();
+    
+    // Make API call
+    fetch(`/api/rfpo/${rfpoId}/test-approval`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayTestResults(data.validation);
+            } else {
+                document.getElementById('testApprovalResults').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Error: ${data.error}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            document.getElementById('testApprovalResults').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Error: ${error.message}
+                </div>
+            `;
+        });
+}
+
+function displayTestResults(validation) {
+    let html = '';
+    
+    // Overall status
+    if (validation.is_valid) {
+        html += `<div class="alert alert-success"><i class="fas fa-check-circle"></i> <strong>RFPO is ready for approval!</strong></div>`;
+    } else {
+        html += `<div class="alert alert-danger"><i class="fas fa-times-circle"></i> <strong>RFPO has validation issues that must be resolved.</strong></div>`;
+    }
+    
+    // Errors
+    if (validation.errors && validation.errors.length > 0) {
+        html += `<div class="card border-danger mb-3">
+            <div class="card-header bg-danger text-white">
+                <i class="fas fa-times-circle"></i> Errors (Must Fix)
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">`;
+        validation.errors.forEach(error => {
+            html += `<li class="text-danger">${error}</li>`;
+        });
+        html += `</ul></div></div>`;
+    }
+    
+    // Warnings
+    if (validation.warnings && validation.warnings.length > 0) {
+        html += `<div class="card border-warning mb-3">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-exclamation-triangle"></i> Warnings
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">`;
+        validation.warnings.forEach(warning => {
+            html += `<li style="color: #b8860b; font-weight: 500;">${warning}</li>`;
+        });
+        html += `</ul></div></div>`;
+    }
+    
+    // Basic Validation Summary
+    if (validation.basic_validation) {
+        const basic = validation.basic_validation;
+        html += `<div class="card border-info mb-3">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-info-circle"></i> RFPO Summary
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Amount:</strong> $${basic.rfpo_amount.toLocaleString()}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Line Items:</strong> ${basic.line_items_count}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Files:</strong> ${basic.files_count}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+    
+    // Enhanced Workflow Phases Accordion (Sequential Approval Process)
+    if (validation.workflow_phases && validation.workflow_phases.length > 0) {
+        const totalPhases = validation.total_phases || validation.workflow_phases.filter(p => p.has_workflow).length;
+        
+        html += `<div class="card border-primary mb-3">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-route"></i> Sequential Approval Process
+                <br><small class="opacity-75">All ${totalPhases} phases must be completed in order: Project → Team → Consortium</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="accordion" id="workflowAccordion">`;
+        
+        validation.workflow_phases.forEach((phase, index) => {
+            const collapseId = `collapse${index}`;
+            const hasWorkflow = phase.has_workflow;
+            const phaseNumber = phase.phase_number;
+            
+            // Determine header color and icon based on sequential phase logic
+            let headerClass = 'bg-light text-muted';
+            let icon = 'fas fa-minus-circle';
+            let badgeClass = 'bg-secondary';
+            let badgeText = 'Not Configured';
+            
+            if (hasWorkflow) {
+                if (phaseNumber > 0) {
+                    // Check if this phase has validation issues
+                    const hasIssues = phase.stage_info && 
+                                    phase.stage_info.document_validation && 
+                                    phase.stage_info.document_validation.missing_documents && 
+                                    phase.stage_info.document_validation.missing_documents.length > 0;
+                    
+                    if (hasIssues) {
+                        // Phase has validation issues - use yellow/warning colors
+                        headerClass = 'bg-warning text-dark';
+                        icon = 'fas fa-exclamation-triangle';
+                        badgeClass = 'bg-warning text-dark';
+                        badgeText = `Phase ${phaseNumber}`;
+                    } else {
+                        // Phase is valid - use green/success colors
+                        headerClass = 'bg-success text-white';
+                        icon = 'fas fa-check-circle';
+                        badgeClass = 'bg-success';
+                        badgeText = `Phase ${phaseNumber}`;
+                    }
+                } else {
+                    // This shouldn't happen with our new logic, but just in case
+                    headerClass = 'bg-info text-white';
+                    icon = 'fas fa-check-circle';
+                    badgeClass = 'bg-info';
+                    badgeText = 'Configured';
+                }
+            }
+            
+            html += `<div class="accordion-item">
+                <h2 class="accordion-header" id="heading${index}">
+                    <button class="accordion-button ${index === 0 ? '' : 'collapsed'} ${headerClass}" type="button" 
+                            data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                        <i class="${icon} me-2"></i>
+                        <strong>${phase.display_name}</strong>
+                        <span class="badge ${badgeClass} ms-2">${badgeText}</span>
+                        ${hasWorkflow && phase.stage_info ? `<span class="ms-auto me-3"><small>${phase.stage_info.stage_name}</small></span>` : ''}
+                    </button>
+                </h2>
+                <div id="${collapseId}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}" 
+                     data-bs-parent="#workflowAccordion">
+                    <div class="accordion-body">`;
+            
+            if (!hasWorkflow) {
+                html += `<div class="alert alert-light border">
+                    <i class="fas fa-info-circle text-muted"></i> <strong>No Workflow Configured</strong><br>
+                    <small class="text-muted">No active approval workflow is configured for this ${phase.workflow_type}. 
+                    This phase will be skipped in the approval process.</small>
+                </div>`;
+            } else {
+                // Phase explanation
+                html += `<div class="alert alert-success border-success mb-3">
+                    <i class="fas fa-route"></i> <strong>Approval Phase ${phaseNumber}</strong><br>
+                    <small>This workflow will be executed as Phase ${phaseNumber} in the sequential approval process. 
+                    ${phaseNumber === 1 ? 'This is the first phase and will start when the RFPO is submitted.' : 
+                      `This phase will begin after Phase ${phaseNumber - 1} is completed.`}</small>
+                </div>`;
+                
+                // Workflow info
+                html += `<div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Workflow:</strong> ${phase.name}<br>
+                        <small class="text-muted">Version: ${phase.version} | ID: ${phase.workflow_id}</small>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Entity:</strong> ${phase.entity_name}<br>
+                        <small class="text-muted">${phase.workflow_type.charAt(0).toUpperCase() + phase.workflow_type.slice(1)} workflow</small>
+                    </div>
+                </div>`;
+                
+                if (phase.stage_info) {
+                    const stageInfo = phase.stage_info;
+                    
+                    // Stage details
+                    html += `<div class="card border-secondary mb-3">
+                        <div class="card-header">
+                            <i class="fas fa-layer-group"></i> Budget Stage: ${stageInfo.stage_name}
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>RFPO Amount:</strong> $${stageInfo.rfpo_amount.toLocaleString()}
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Stage Limit:</strong> $${stageInfo.budget_bracket_amount.toLocaleString()}
+                                </div>
+                            </div>
+                            ${stageInfo.description ? `<p class="mt-2 mb-0">${stageInfo.description}</p>` : ''}
+                        </div>
+                    </div>`;
+                    
+                    // Document validation
+                    if (stageInfo.document_validation) {
+                        const docVal = stageInfo.document_validation;
+                        const hasMissingDocs = docVal.missing_documents.length > 0;
+                        const headerClass = hasMissingDocs ? 'bg-danger text-white' : 'bg-success text-white';
+                        const borderClass = hasMissingDocs ? 'border-danger' : 'border-success';
+                        
+                        html += `<div class="card ${borderClass} mb-3">
+                            <div class="card-header ${headerClass}">
+                                <i class="fas fa-file-alt"></i> Required Documents 
+                                ${docVal.missing_documents.length === 0 ? 
+                                    '<span class="badge bg-light text-dark ms-2">Complete</span>' : 
+                                    `<span class="badge bg-light text-dark ms-2">${docVal.missing_documents.length} Missing</span>`
+                                }
+                            </div>
+                            <div class="card-body">`;
+                        
+                        if (docVal.document_status && docVal.document_status.length > 0) {
+                            docVal.document_status.forEach(doc => {
+                                const iconClass = doc.is_uploaded ? 'fas fa-check text-success' : 'fas fa-times text-danger';
+                                const textClass = doc.is_uploaded ? 'text-success' : 'text-danger';
+                                html += `<div class="${textClass} mb-1">
+                                    <i class="${iconClass}"></i> ${doc.name}
+                                    ${doc.is_required ? '<span class="badge bg-primary text-white badge-sm ms-1">Required</span>' : ''}
+                                </div>`;
+                            });
+                        } else {
+                            html += `<div class="text-success"><i class="fas fa-check"></i> No specific documents required for this stage</div>`;
+                        }
+                        
+                        // Show uploaded documents
+                        if (docVal.uploaded_documents && docVal.uploaded_documents.length > 0) {
+                            html += `<hr><strong>Uploaded Files:</strong><br>`;
+                            docVal.uploaded_documents.forEach(uploaded => {
+                                html += `<small class="text-muted">• ${uploaded.filename} (${uploaded.type})</small><br>`;
+                            });
+                        }
+                        
+                        html += `</div></div>`;
+                    }
+                    
+                    // Approval steps
+                    if (stageInfo.approval_steps && stageInfo.approval_steps.length > 0) {
+                        html += `<div class="card border-secondary mb-3">
+                            <div class="card-header">
+                                <i class="fas fa-users"></i> Approval Steps (${stageInfo.approval_steps.length})
+                            </div>
+                            <div class="card-body">`;
+                        
+                        stageInfo.approval_steps.forEach((step, stepIndex) => {
+                            const approverValid = step.approver_valid;
+                            const stepClass = approverValid ? 'text-success' : 'text-danger';
+                            const stepIcon = approverValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle';
+                            
+                            html += `<div class="mb-3 p-2 border rounded ${approverValid ? 'border-success' : 'border-danger'}">
+                                <div class="${stepClass}">
+                                    <i class="${stepIcon}"></i> <strong>Step ${step.step_order}: ${step.step_name}</strong>
+                                </div>
+                                <small class="text-muted">
+                                    Type: ${step.approval_type}<br>
+                                    Primary: ${step.primary_approver}
+                                    ${step.backup_approver ? `<br>Backup: ${step.backup_approver}` : ''}
+                                </small>
+                                ${step.description ? `<br><small class="text-info">${step.description}</small>` : ''}
+                            </div>`;
+                        });
+                        
+                        html += `</div></div>`;
+                    }
+                } else {
+                    html += `<div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> No appropriate budget stage found for this RFPO amount in this workflow.
+                    </div>`;
+                }
+            }
+            
+            html += `</div></div></div>`;
+        });
+        
+        html += `</div></div></div>`;
+    }
+    
+    document.getElementById('testApprovalResults').innerHTML = html;
+}
+
+function submitForApproval(rfpoId) {
+    currentRfpoId = rfpoId;
+    
+    // First test the approval to show validation results
+    document.getElementById('submitValidationResults').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Validating...</span>
+            </div>
+            <span class="ms-2">Validating RFPO...</span>
+        </div>
+    `;
+    
+    // Show modal
+    new bootstrap.Modal(document.getElementById('submitApprovalModal')).show();
+    
+    // Test approval first
+    fetch(`/api/rfpo/${rfpoId}/test-approval`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displaySubmitValidation(data.validation);
+            } else {
+                document.getElementById('submitValidationResults').innerHTML = `
+                    <div class="alert alert-danger alert-sm">
+                        <i class="fas fa-exclamation-triangle"></i> Validation Error: ${data.error}
+                    </div>
+                `;
+                document.getElementById('confirmSubmitBtn').disabled = true;
+            }
+        })
+        .catch(error => {
+            document.getElementById('submitValidationResults').innerHTML = `
+                <div class="alert alert-danger alert-sm">
+                    <i class="fas fa-exclamation-triangle"></i> Error: ${error.message}
+                </div>
+            `;
+            document.getElementById('confirmSubmitBtn').disabled = true;
+        });
+}
+
+function displaySubmitValidation(validation) {
+    let html = '';
+    
+    if (validation.is_valid) {
+        html += `<div class="alert alert-success alert-sm">
+            <i class="fas fa-check-circle"></i> RFPO passed validation and is ready for submission!
+        </div>`;
+        
+        // Show sequential workflow phases
+        const activePhases = validation.workflow_phases && validation.workflow_phases.filter(phase => phase.has_workflow);
+        if (activePhases && activePhases.length > 0) {
+            html += `<p><strong>Sequential Approval Process:</strong> ${activePhases.length} phases</p>`;
+            activePhases.forEach(phase => {
+                html += `<p class="mb-1"><strong>Phase ${phase.phase_number}:</strong> ${phase.display_name} - ${phase.name}</p>`;
+                if (phase.stage_info) {
+                    html += `<small class="text-muted ms-3">Stage: ${phase.stage_info.stage_name} | Steps: ${phase.stage_info.approval_steps ? phase.stage_info.approval_steps.length : 0}</small><br>`;
+                }
+            });
+        }
+        
+        document.getElementById('confirmSubmitBtn').disabled = false;
+    } else {
+        html += `<div class="alert alert-danger alert-sm">
+            <i class="fas fa-times-circle"></i> RFPO has validation issues that must be resolved before submission.
+        </div>`;
+        
+        if (validation.errors && validation.errors.length > 0) {
+            html += `<ul class="text-danger mb-0">`;
+            validation.errors.forEach(error => {
+                html += `<li>${error}</li>`;
+            });
+            html += `</ul>`;
+        }
+        
+        document.getElementById('confirmSubmitBtn').disabled = true;
+    }
+    
+    document.getElementById('submitValidationResults').innerHTML = html;
+}
+
+// Handle confirm submit button
+document.getElementById('confirmSubmitBtn').addEventListener('click', function() {
+    if (!currentRfpoId) return;
+    
+    // Disable button and show loading
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Submitting...';
+    
+    // Submit for approval
+    fetch(`/api/rfpo/${currentRfpoId}/submit-approval`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal and refresh page
+            bootstrap.Modal.getInstance(document.getElementById('submitApprovalModal')).hide();
+            
+            // Show success message
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <i class="fas fa-check-circle"></i> <strong>Success!</strong> ${data.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.d-flex'));
+            
+            // Refresh page after a short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            // Show error
+            document.getElementById('submitValidationResults').innerHTML = `
+                <div class="alert alert-danger alert-sm">
+                    <i class="fas fa-exclamation-triangle"></i> Error: ${data.error}
+                </div>
+            `;
+            
+            // Re-enable button
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-paper-plane"></i> Submit for Approval';
+        }
+    })
+    .catch(error => {
+        // Show error
+        document.getElementById('submitValidationResults').innerHTML = `
+            <div class="alert alert-danger alert-sm">
+                <i class="fas fa-exclamation-triangle"></i> Error: ${error.message}
+            </div>
+        `;
+        
+        // Re-enable button
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-paper-plane"></i> Submit for Approval';
+    });
+});
+</script>
 {% endblock %}

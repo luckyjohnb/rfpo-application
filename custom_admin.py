@@ -133,6 +133,287 @@ def create_app():
         except (ValueError, TypeError):
             return None
     
+    def get_applicable_workflows(rfpo):
+        """Get ALL applicable approval workflows for an RFPO in sequential order: Project -> Team -> Consortium"""
+        applicable_workflows = []
+        
+        # 1. Check for project-specific workflow (Phase 1)
+        if rfpo.project_id:
+            project_workflow = RFPOApprovalWorkflow.query.filter_by(
+                project_id=rfpo.project_id,
+                workflow_type='project',
+                is_template=True,
+                is_active=True
+            ).first()
+            if project_workflow:
+                applicable_workflows.append(('project', project_workflow, 1))
+        
+        # 2. Check for team-specific workflow (Phase 2)
+        if rfpo.team_id:
+            team_workflow = RFPOApprovalWorkflow.query.filter_by(
+                team_id=rfpo.team_id,
+                workflow_type='team',
+                is_template=True,
+                is_active=True
+            ).first()
+            if team_workflow:
+                phase = len(applicable_workflows) + 1
+                applicable_workflows.append(('team', team_workflow, phase))
+        
+        # 3. Check for consortium workflow (Phase 3)
+        if rfpo.consortium_id:
+            consortium_workflow = RFPOApprovalWorkflow.query.filter_by(
+                consortium_id=rfpo.consortium_id,
+                workflow_type='consortium',
+                is_template=True,
+                is_active=True
+            ).first()
+            if consortium_workflow:
+                phase = len(applicable_workflows) + 1
+                applicable_workflows.append(('consortium', consortium_workflow, phase))
+        
+        return applicable_workflows
+    
+    def get_applicable_workflow(rfpo):
+        """Get the first applicable workflow (for backward compatibility)"""
+        workflows = get_applicable_workflows(rfpo)
+        return workflows[0][1] if workflows else None
+    
+    def determine_rfpo_stage(rfpo, workflow):
+        """Determine which approval stage an RFPO falls into based on its total amount"""
+        if not rfpo.total_amount or not workflow:
+            return None
+        
+        # Get all stages for this workflow, sorted by budget bracket amount
+        stages = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount))
+        
+        # Find the appropriate stage based on RFPO total amount
+        for stage in stages:
+            if float(rfpo.total_amount) <= float(stage.budget_bracket_amount):
+                return stage
+        
+        # If RFPO amount exceeds all brackets, use the highest bracket stage
+        return stages[-1] if stages else None
+    
+    def validate_rfpo_for_approval(rfpo):
+        """Validate an RFPO against all applicable sequential workflow phases"""
+        validation_result = {
+            'is_valid': True,
+            'errors': [],
+            'warnings': [],
+            'workflow_phases': [],  # Sequential phases: Project -> Team -> Consortium
+            'basic_validation': {},
+            'total_phases': 0
+        }
+        
+        try:
+            # Basic RFPO validation first
+            basic_issues = []
+            if not rfpo.title or not rfpo.title.strip():
+                basic_issues.append('RFPO title is required')
+                validation_result['is_valid'] = False
+            
+            if not rfpo.vendor_id:
+                basic_issues.append('No vendor selected')
+            
+            if not rfpo.line_items or len(rfpo.line_items) == 0:
+                basic_issues.append('RFPO must have at least one line item')
+                validation_result['is_valid'] = False
+            
+            if not rfpo.total_amount or float(rfpo.total_amount) <= 0:
+                basic_issues.append('RFPO total amount must be greater than zero')
+                validation_result['is_valid'] = False
+            
+            validation_result['basic_validation'] = {
+                'issues': basic_issues,
+                'rfpo_amount': float(rfpo.total_amount or 0),
+                'line_items_count': len(rfpo.line_items) if rfpo.line_items else 0,
+                'files_count': len(rfpo.files) if rfpo.files else 0
+            }
+            
+            # Get all applicable workflows in sequential order
+            applicable_workflows = get_applicable_workflows(rfpo)
+            validation_result['total_phases'] = len(applicable_workflows)
+            
+            if not applicable_workflows:
+                validation_result['is_valid'] = False
+                validation_result['errors'].append('No active approval workflows found for this RFPO')
+                
+                # Still show what workflows would be checked
+                workflow_types_to_check = [
+                    ('project', rfpo.project_id, 'Project-specific'),
+                    ('team', rfpo.team_id, 'Team-specific'),
+                    ('consortium', rfpo.consortium_id, 'Consortium-wide')
+                ]
+                
+                for workflow_type, entity_id, display_name in workflow_types_to_check:
+                    workflow_phase = {
+                        'workflow_type': workflow_type,
+                        'display_name': display_name,
+                        'entity_id': str(entity_id) if entity_id else None,
+                        'has_workflow': False,
+                        'phase_number': 0,
+                        'is_required': entity_id is not None
+                    }
+                    validation_result['workflow_phases'].append(workflow_phase)
+            else:
+                # Process each applicable workflow phase
+                for workflow_type, workflow, phase_number in applicable_workflows:
+                    display_name = f"Phase {phase_number}: {workflow_type.title()}-specific"
+                    
+                    # Determine stage for this workflow
+                    stage = determine_rfpo_stage(rfpo, workflow)
+                    stage_info = None
+                    
+                    if stage:
+                        # Validate documents for this stage
+                        document_validation = validate_stage_documents(rfpo, stage)
+                        
+                        # Get approval steps
+                        approval_steps = []
+                        for step in stage.steps:
+                            primary_approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
+                            backup_approver = User.query.filter_by(record_id=step.backup_approver_id, active=True).first() if step.backup_approver_id else None
+                            
+                            step_info = {
+                                'step_id': step.step_id,
+                                'step_name': step.step_name,
+                                'step_order': step.step_order,
+                                'approval_type': step.approval_type_name,
+                                'primary_approver': primary_approver.get_display_name() if primary_approver else 'Unknown User',
+                                'backup_approver': backup_approver.get_display_name() if backup_approver else None,
+                                'is_required': step.is_required,
+                                'description': step.description,
+                                'approver_valid': primary_approver is not None
+                            }
+                            approval_steps.append(step_info)
+                            
+                            # Check for missing approvers
+                            if not primary_approver:
+                                validation_result['errors'].append(f"Phase {phase_number} - Primary approver not found for step: {step.step_name}")
+                                validation_result['is_valid'] = False
+                        
+                        stage_info = {
+                            'stage_id': stage.stage_id,
+                            'stage_name': stage.stage_name,
+                            'stage_order': stage.stage_order,
+                            'budget_bracket_amount': float(stage.budget_bracket_amount),
+                            'rfpo_amount': float(rfpo.total_amount or 0),
+                            'description': stage.description,
+                            'document_validation': document_validation,
+                            'approval_steps': approval_steps
+                        }
+                        
+                        # Add summary warnings for document issues
+                        if document_validation['missing_documents']:
+                            # Missing required documents should be an error, not a warning
+                            validation_result['errors'].append(
+                                f"{workflow_type.title()}: Missing {len(document_validation['missing_documents'])} required documents"
+                            )
+                            validation_result['is_valid'] = False
+                    
+                    # Create workflow phase info
+                    workflow_phase = {
+                        'workflow_type': workflow_type,
+                        'display_name': display_name,
+                        'entity_id': workflow.get_entity_identifier(),
+                        'has_workflow': True,
+                        'phase_number': phase_number,
+                        'workflow_id': workflow.workflow_id,
+                        'name': workflow.name,
+                        'version': workflow.version,
+                        'entity_name': workflow.get_entity_name(),
+                        'stage_info': stage_info,
+                        'is_required': True
+                    }
+                    
+                    validation_result['workflow_phases'].append(workflow_phase)
+                
+                # Also add any missing workflow types for completeness
+                all_workflow_types = ['project', 'team', 'consortium']
+                existing_types = [wf[0] for wf in applicable_workflows]
+                
+                for workflow_type in all_workflow_types:
+                    if workflow_type not in existing_types:
+                        entity_id = None
+                        if workflow_type == 'project':
+                            entity_id = rfpo.project_id
+                        elif workflow_type == 'team':
+                            entity_id = rfpo.team_id
+                        elif workflow_type == 'consortium':
+                            entity_id = rfpo.consortium_id
+                        
+                        if entity_id:  # Only show if RFPO is associated with this entity
+                            workflow_phase = {
+                                'workflow_type': workflow_type,
+                                'display_name': f"{workflow_type.title()}-specific",
+                                'entity_id': str(entity_id),
+                                'has_workflow': False,
+                                'phase_number': 0,
+                                'is_required': True
+                            }
+                            validation_result['workflow_phases'].append(workflow_phase)
+                
+        except Exception as e:
+            validation_result['is_valid'] = False
+            validation_result['errors'].append(f'Validation error: {str(e)}')
+        
+        return validation_result
+    
+    def validate_stage_documents(rfpo, stage):
+        """Validate documents for a specific stage"""
+        required_doc_type_keys = stage.get_required_document_types()
+        required_doc_names = stage.get_required_document_names()
+        
+        document_validation = {
+            'required_documents': [],
+            'uploaded_documents': [],
+            'missing_documents': [],
+            'document_status': []
+        }
+        
+        if not required_doc_type_keys:
+            return document_validation
+        
+        # Get uploaded document types for this RFPO (both keys and values)
+        uploaded_doc_types = [f.document_type for f in rfpo.files if f.document_type]
+        
+        # Create mapping of doc_type keys to values for comparison
+        doc_type_mapping = {}
+        for key in required_doc_type_keys:
+            doc_item = List.query.filter_by(type='doc_types', key=key, active=True).first()
+            if doc_item and doc_item.value.strip():
+                doc_type_mapping[key] = doc_item.value
+        
+        # Check each required document
+        for key in required_doc_type_keys:
+            doc_name = doc_type_mapping.get(key, key)
+            
+            # Check if document is uploaded (compare both key and value)
+            is_uploaded = (key in uploaded_doc_types or doc_name in uploaded_doc_types)
+            
+            document_status = {
+                'key': key,
+                'name': doc_name,
+                'is_uploaded': is_uploaded,
+                'is_required': True
+            }
+            
+            document_validation['document_status'].append(document_status)
+            document_validation['required_documents'].append(doc_name)
+            
+            if not is_uploaded:
+                document_validation['missing_documents'].append(doc_name)
+        
+        # Add uploaded documents info
+        document_validation['uploaded_documents'] = [
+            {'type': f.document_type, 'filename': f.original_filename}
+            for f in rfpo.files
+            if f.document_type
+        ]
+        
+        return document_validation
+    
     # Authentication routes
     @app.route('/login', methods=['GET', 'POST'])
     def login():
@@ -2665,10 +2946,49 @@ Southfield, MI  48075""",
     @app.route('/approval-instances')
     @login_required
     def approval_instances():
-        """List all RFPO approval instances"""
+        """List all RFPO approval instances and draft RFPOs ready for approval"""
+        # Get existing approval instances
         instances = RFPOApprovalInstance.query.order_by(desc(RFPOApprovalInstance.created_at)).all()
         
-        # Add RFPO and consortium info
+        # Get draft RFPOs that don't have approval instances yet
+        draft_rfpos = RFPO.query.filter(
+            RFPO.status == 'Draft',
+            ~RFPO.id.in_(db.session.query(RFPOApprovalInstance.rfpo_id))
+        ).order_by(desc(RFPO.created_at)).all()
+        
+        # Create virtual instances for draft RFPOs
+        virtual_instances = []
+        for rfpo in draft_rfpos:
+            # Find applicable workflow (hierarchy: Project -> Team -> Consortium)
+            applicable_workflow = get_applicable_workflow(rfpo)
+            
+            if applicable_workflow:
+                # Get all applicable workflows for comprehensive display
+                all_workflows = get_applicable_workflows(rfpo)
+                workflow_summary = f"Multi-Phase ({len(all_workflows)} phases)" if len(all_workflows) > 1 else applicable_workflow.name
+                
+                virtual_instance = type('VirtualInstance', (), {
+                    'id': f'draft_{rfpo.id}',
+                    'instance_id': f'DRAFT-{rfpo.id}',
+                    'rfpo': rfpo,
+                    'rfpo_title': rfpo.title,
+                    'rfpo_total': rfpo.total_amount or 0.00,
+                    'workflow_name': workflow_summary,
+                    'workflow_version': applicable_workflow.version,
+                    'current_stage_order': None,
+                    'current_step_order': None,
+                    'overall_status': 'draft',
+                    'submitted_at': None,
+                    'completed_at': None,
+                    'created_at': rfpo.created_at,
+                    'is_virtual': True,
+                    'applicable_workflow': applicable_workflow,
+                    'pending_actions_count': 0,
+                    'completed_actions_count': 0
+                })()
+                virtual_instances.append(virtual_instance)
+        
+        # Add RFPO info to real instances
         for instance in instances:
             if instance.rfpo:
                 instance.rfpo_title = instance.rfpo.title
@@ -2676,8 +2996,13 @@ Southfield, MI  48075""",
             else:
                 instance.rfpo_title = f"RFPO #{instance.rfpo_id}"
                 instance.rfpo_total = 0.00
+            instance.is_virtual = False
         
-        return render_template('admin/approval_instances.html', instances=instances)
+        # Combine and sort all instances
+        all_instances = list(instances) + virtual_instances
+        all_instances.sort(key=lambda x: x.created_at, reverse=True)
+        
+        return render_template('admin/approval_instances.html', instances=all_instances)
     
     @app.route('/approval-instance/<int:id>/view')
     @login_required
@@ -2747,6 +3072,185 @@ Southfield, MI  48075""",
             flash(f'❌ Error processing action: {str(e)}', 'error')
         
         return redirect(url_for('approval_instance_view', id=instance_id))
+    
+    @app.route('/api/rfpo/<int:rfpo_id>/test-approval')
+    @login_required
+    def api_test_approval(rfpo_id):
+        """Test RFPO against approval workflow requirements"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        try:
+            validation_result = validate_rfpo_for_approval(rfpo)
+            return jsonify({
+                'success': True,
+                'validation': validation_result
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+    
+    @app.route('/api/rfpo/<int:rfpo_id>/submit-approval', methods=['POST'])
+    @login_required
+    def api_submit_approval(rfpo_id):
+        """Submit RFPO for approval workflow"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        try:
+            # Validate RFPO first
+            validation_result = validate_rfpo_for_approval(rfpo)
+            if not validation_result['is_valid']:
+                return jsonify({
+                    'success': False,
+                    'error': 'RFPO validation failed',
+                    'validation': validation_result
+                }), 400
+            
+            # Check if RFPO already has an approval instance
+            existing_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+            if existing_instance:
+                return jsonify({
+                    'success': False,
+                    'error': 'RFPO already has an active approval workflow'
+                }), 400
+            
+            # Find all applicable workflows (sequential phases)
+            applicable_workflows = get_applicable_workflows(rfpo)
+            if not applicable_workflows:
+                return jsonify({
+                    'success': False,
+                    'error': 'No active approval workflows found for this RFPO'
+                }), 400
+            
+            # Create approval instance for multi-phase workflow
+            instance_id = generate_next_id(RFPOApprovalInstance, 'instance_id', 'INST-', 8)
+            
+            # Create comprehensive workflow snapshot for all phases
+            workflow_snapshot = {
+                'total_phases': len(applicable_workflows),
+                'current_phase': 1,
+                'phases': []
+            }
+            
+            # Process each workflow phase
+            first_workflow = None
+            first_stage = None
+            all_actions = []
+            
+            for workflow_type, workflow, phase_number in applicable_workflows:
+                if phase_number == 1:
+                    first_workflow = workflow
+                
+                # Determine stage for this workflow
+                stage = determine_rfpo_stage(rfpo, workflow)
+                if not stage:
+                    return jsonify({
+                        'success': False,
+                        'error': f'No appropriate approval stage found for Phase {phase_number} ({workflow_type}) workflow'
+                    }), 400
+                
+                if phase_number == 1:
+                    first_stage = stage
+                
+                # Create phase snapshot
+                phase_snapshot = {
+                    'phase_number': phase_number,
+                    'workflow_type': workflow_type,
+                    'workflow_id': workflow.workflow_id,
+                    'workflow_name': workflow.name,
+                    'workflow_version': workflow.version,
+                    'entity_name': workflow.get_entity_name(),
+                    'stage': {
+                        'stage_id': stage.stage_id,
+                        'stage_name': stage.stage_name,
+                        'stage_order': stage.stage_order,
+                        'budget_bracket_amount': float(stage.budget_bracket_amount),
+                        'required_document_types': stage.get_required_document_types(),
+                        'steps': []
+                    }
+                }
+                
+                # Add steps for this phase
+                for step in stage.steps:
+                    step_snapshot = {
+                        'step_id': step.step_id,
+                        'step_name': step.step_name,
+                        'step_order': step.step_order,
+                        'approval_type_key': step.approval_type_key,
+                        'approval_type_name': step.approval_type_name,
+                        'primary_approver_id': step.primary_approver_id,
+                        'backup_approver_id': step.backup_approver_id,
+                        'is_required': step.is_required
+                    }
+                    phase_snapshot['stage']['steps'].append(step_snapshot)
+                    
+                    # Create actions for Phase 1 only (others will be created when phases advance)
+                    if phase_number == 1:
+                        action_id = generate_next_id(RFPOApprovalAction, 'action_id', 'ACT-', 8)
+                        primary_approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
+                        
+                        action = RFPOApprovalAction(
+                            action_id=action_id,
+                            stage_order=stage.stage_order,
+                            step_order=step.step_order,
+                            stage_name=stage.stage_name,
+                            step_name=step.step_name,
+                            approval_type_key=step.approval_type_key,
+                            approver_id=step.primary_approver_id,
+                            approver_name=primary_approver.get_display_name() if primary_approver else 'Unknown User',
+                            status='pending'
+                        )
+                        all_actions.append(action)
+                
+                workflow_snapshot['phases'].append(phase_snapshot)
+            
+            # Create approval instance starting with Phase 1
+            approval_instance = RFPOApprovalInstance(
+                instance_id=instance_id,
+                rfpo_id=rfpo.id,
+                template_workflow_id=first_workflow.id,
+                workflow_name=f"Multi-Phase Approval ({len(applicable_workflows)} phases)",
+                workflow_version=first_workflow.version,
+                consortium_id=rfpo.consortium_id,
+                current_stage_order=first_stage.stage_order,
+                current_step_order=1,
+                overall_status='waiting',
+                submitted_at=datetime.utcnow(),
+                created_by=current_user.get_display_name()
+            )
+            
+            approval_instance.set_instance_data(workflow_snapshot)
+            
+            # Save everything
+            db.session.add(approval_instance)
+            db.session.flush()  # Get the instance ID
+            
+            for action in all_actions:
+                action.instance_id = approval_instance.id
+                db.session.add(action)
+            
+            # Update RFPO status
+            rfpo.status = 'Submitted'
+            rfpo.updated_by = current_user.get_display_name()
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'RFPO submitted for {len(applicable_workflows)}-phase approval process',
+                'instance_id': approval_instance.instance_id,
+                'total_phases': len(applicable_workflows),
+                'first_stage_name': first_stage.stage_name,
+                'first_phase_steps': len(all_actions)
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'error': f'Error submitting RFPO for approval: {str(e)}'
+            }), 500
     
     # API endpoints for quick data
     @app.route('/api/stats')

@@ -172,6 +172,9 @@ def create_app():
             'projects': Project.query.filter_by(active=True).count(),
             'uploaded_files': UploadedFile.query.count(),
             'approval_workflows': RFPOApprovalWorkflow.query.filter_by(is_template=True, is_active=True).count(),
+            'consortium_workflows': RFPOApprovalWorkflow.query.filter_by(workflow_type='consortium', is_template=True, is_active=True).count(),
+            'team_workflows': RFPOApprovalWorkflow.query.filter_by(workflow_type='team', is_template=True, is_active=True).count(),
+            'project_workflows': RFPOApprovalWorkflow.query.filter_by(workflow_type='project', is_template=True, is_active=True).count(),
             'approval_instances': RFPOApprovalInstance.query.count(),
             'pending_approvals': RFPOApprovalAction.query.filter_by(status='pending').count(),
         }
@@ -1811,63 +1814,139 @@ Southfield, MI  48075""",
     
     # RFPO Approval Workflow routes
     @app.route('/approval-workflows')
+    @app.route('/approval-workflows/<workflow_type>')
     @login_required
-    def approval_workflows():
-        """List all RFPO approval workflows"""
-        workflows = RFPOApprovalWorkflow.query.filter_by(is_template=True).order_by(
-            RFPOApprovalWorkflow.consortium_id, 
-            RFPOApprovalWorkflow.is_active.desc()
+    def approval_workflows(workflow_type='consortium'):
+        """List RFPO approval workflows by type (consortium, team, project)"""
+        # Validate workflow type
+        if workflow_type not in ['consortium', 'team', 'project']:
+            workflow_type = 'consortium'
+        
+        workflows = RFPOApprovalWorkflow.query.filter_by(
+            workflow_type=workflow_type,
+            is_template=True
+        ).order_by(
+            RFPOApprovalWorkflow.is_active.desc(),
+            RFPOApprovalWorkflow.name
         ).all()
         
-        # Add consortium info and statistics
+        # Add entity info and statistics
         for workflow in workflows:
-            consortium = Consortium.query.filter_by(consort_id=workflow.consortium_id).first()
-            workflow.consortium_name = consortium.name if consortium else workflow.consortium_id
-            workflow.consortium_abbrev = consortium.abbrev if consortium else workflow.consortium_id
+            if workflow_type == 'consortium':
+                consortium = Consortium.query.filter_by(consort_id=workflow.consortium_id).first()
+                workflow.entity_name = consortium.name if consortium else workflow.consortium_id
+                workflow.entity_abbrev = consortium.abbrev if consortium else workflow.consortium_id
+            elif workflow_type == 'team':
+                team = Team.query.get(workflow.team_id) if workflow.team_id else None
+                workflow.entity_name = team.name if team else f"Team {workflow.team_id}"
+                workflow.entity_abbrev = team.abbrev if team else f"T{workflow.team_id}"
+                # Add consortium info for teams
+                if team and team.consortium_consort_id:
+                    consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                    workflow.consortium_name = consortium.name if consortium else team.consortium_consort_id
+            elif workflow_type == 'project':
+                project = Project.query.filter_by(project_id=workflow.project_id).first()
+                workflow.entity_name = project.name if project else workflow.project_id
+                workflow.entity_abbrev = project.ref if project else workflow.project_id
+                # Add consortium info for projects
+                if project:
+                    consortium_ids = project.get_consortium_ids()
+                    if consortium_ids:
+                        consortium = Consortium.query.filter_by(consort_id=consortium_ids[0]).first()
+                        workflow.consortium_name = consortium.name if consortium else consortium_ids[0]
             
             # Count usage statistics
             workflow.instance_count = RFPOApprovalInstance.query.filter_by(template_workflow_id=workflow.id).count()
         
-        return render_template('admin/approval_workflows.html', workflows=workflows)
+        # Get counts for each workflow type for tabs
+        workflow_counts = {
+            'consortium': RFPOApprovalWorkflow.query.filter_by(workflow_type='consortium', is_template=True).count(),
+            'team': RFPOApprovalWorkflow.query.filter_by(workflow_type='team', is_template=True).count(),
+            'project': RFPOApprovalWorkflow.query.filter_by(workflow_type='project', is_template=True).count(),
+        }
+        
+        return render_template('admin/approval_workflows.html', 
+                             workflows=workflows, 
+                             current_workflow_type=workflow_type,
+                             workflow_counts=workflow_counts)
     
-    @app.route('/approval-workflow/new', methods=['GET', 'POST'])
+    @app.route('/approval-workflow/new')
+    @app.route('/approval-workflow/new/<workflow_type>')
+    @login_required
+    def approval_workflow_new_form(workflow_type='consortium'):
+        """Show form for creating new approval workflow"""
+        # Validate workflow type
+        if workflow_type not in ['consortium', 'team', 'project']:
+            workflow_type = 'consortium'
+        
+        # Get entities based on workflow type
+        if workflow_type == 'consortium':
+            entities = Consortium.query.filter_by(active=True).all()
+        elif workflow_type == 'team':
+            entities = Team.query.filter_by(active=True).all()
+        elif workflow_type == 'project':
+            entities = Project.query.filter_by(active=True).all()
+        
+        return render_template('admin/approval_workflow_form.html', 
+                             workflow=None, 
+                             action='Create', 
+                             workflow_type=workflow_type,
+                             entities=entities)
+    
+    # Backward compatibility route
+    @app.route('/approval-workflow-new')
     @login_required
     def approval_workflow_new():
+        """Backward compatibility route"""
+        return approval_workflow_new_form('consortium')
+    
+    @app.route('/approval-workflow/create', methods=['POST'])
+    @login_required
+    def approval_workflow_create():
         """Create new approval workflow"""
-        if request.method == 'POST':
-            try:
-                # Auto-generate workflow ID
-                workflow_id = generate_next_id(RFPOApprovalWorkflow, 'workflow_id', 'WF-', 8)
-                
-                workflow = RFPOApprovalWorkflow(
-                    workflow_id=workflow_id,
-                    name=request.form.get('name'),
-                    description=request.form.get('description'),
-                    version=request.form.get('version', '1.0'),
-                    consortium_id=request.form.get('consortium_id'),
-                    is_active=bool(request.form.get('is_active')),
-                    created_by=current_user.get_display_name()
-                )
-                
-                # If marking as active, deactivate others for this consortium
-                if workflow.is_active:
-                    RFPOApprovalWorkflow.query.filter_by(
-                        consortium_id=workflow.consortium_id,
-                        is_template=True
-                    ).update({'is_active': False})
-                
-                db.session.add(workflow)
-                db.session.commit()
-                
-                flash('✅ Approval workflow created successfully!', 'success')
-                return redirect(url_for('approval_workflow_edit', id=workflow.id))
-                
-            except Exception as e:
-                db.session.rollback()
-                flash(f'❌ Error creating approval workflow: {str(e)}', 'error')
-        
-        consortiums = Consortium.query.filter_by(active=True).all()
-        return render_template('admin/approval_workflow_form.html', workflow=None, action='Create', consortiums=consortiums)
+        try:
+            workflow_type = request.form.get('workflow_type', 'consortium')
+            
+            # Validate workflow type
+            if workflow_type not in ['consortium', 'team', 'project']:
+                flash('❌ Invalid workflow type.', 'error')
+                return redirect(url_for('approval_workflows'))
+            
+            # Auto-generate workflow ID
+            workflow_id = generate_next_id(RFPOApprovalWorkflow, 'workflow_id', 'WF-', 8)
+            
+            workflow = RFPOApprovalWorkflow(
+                workflow_id=workflow_id,
+                name=request.form.get('name'),
+                description=request.form.get('description'),
+                version=request.form.get('version', '1.0'),
+                workflow_type=workflow_type,
+                is_active=bool(request.form.get('is_active')),
+                created_by=current_user.get_display_name()
+            )
+            
+            # Set the appropriate entity association
+            if workflow_type == 'consortium':
+                workflow.consortium_id = request.form.get('entity_id')
+            elif workflow_type == 'team':
+                workflow.team_id = int(request.form.get('entity_id'))
+            elif workflow_type == 'project':
+                workflow.project_id = request.form.get('entity_id')
+            
+            # If marking as active, deactivate others for this entity
+            if workflow.is_active:
+                workflow.activate()
+            
+            db.session.add(workflow)
+            db.session.commit()
+            
+            flash('✅ Approval workflow created successfully!', 'success')
+            return redirect(url_for('approval_workflow_edit', id=workflow.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error creating approval workflow: {str(e)}', 'error')
+            return redirect(url_for('approval_workflows', workflow_type=workflow_type))
     
     @app.route('/approval-workflow/<int:id>/edit', methods=['GET', 'POST'])
     @login_required
@@ -2115,33 +2194,60 @@ Southfield, MI  48075""",
         
         return redirect(url_for('approval_workflows'))
     
-    @app.route('/api/check-active-workflow/<consortium_id>')
+    @app.route('/api/check-active-workflow/<workflow_type>/<entity_id>')
     @login_required
-    def api_check_active_workflow(consortium_id):
-        """API endpoint to check if a consortium already has an active workflow"""
+    def api_check_active_workflow(workflow_type, entity_id):
+        """API endpoint to check if an entity already has an active workflow"""
         try:
-            # Find existing active workflow for this consortium
-            active_workflow = RFPOApprovalWorkflow.query.filter_by(
-                consortium_id=consortium_id,
-                is_template=True,
-                is_active=True
-            ).first()
+            # Validate workflow type
+            if workflow_type not in ['consortium', 'team', 'project']:
+                return jsonify({'error': 'Invalid workflow type'}), 400
             
-            # Get consortium info
-            consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
-            consortium_name = consortium.name if consortium else consortium_id
+            # Find existing active workflow for this entity
+            if workflow_type == 'consortium':
+                active_workflow = RFPOApprovalWorkflow.query.filter_by(
+                    consortium_id=entity_id,
+                    workflow_type='consortium',
+                    is_template=True,
+                    is_active=True
+                ).first()
+                # Get entity info
+                entity = Consortium.query.filter_by(consort_id=entity_id).first()
+                entity_name = entity.name if entity else entity_id
+            elif workflow_type == 'team':
+                active_workflow = RFPOApprovalWorkflow.query.filter_by(
+                    team_id=int(entity_id),
+                    workflow_type='team',
+                    is_template=True,
+                    is_active=True
+                ).first()
+                # Get entity info
+                entity = Team.query.get(int(entity_id))
+                entity_name = entity.name if entity else f"Team {entity_id}"
+            elif workflow_type == 'project':
+                active_workflow = RFPOApprovalWorkflow.query.filter_by(
+                    project_id=entity_id,
+                    workflow_type='project',
+                    is_template=True,
+                    is_active=True
+                ).first()
+                # Get entity info
+                entity = Project.query.filter_by(project_id=entity_id).first()
+                entity_name = entity.name if entity else entity_id
             
             if active_workflow:
                 return jsonify({
                     'has_active_workflow': True,
-                    'consortium_name': consortium_name,
+                    'entity_name': entity_name,
+                    'workflow_type': workflow_type,
                     'active_workflow_id': active_workflow.workflow_id,
                     'active_workflow_name': active_workflow.name
                 })
             else:
                 return jsonify({
                     'has_active_workflow': False,
-                    'consortium_name': consortium_name
+                    'entity_name': entity_name,
+                    'workflow_type': workflow_type
                 })
                 
         except Exception as e:
@@ -2526,6 +2632,55 @@ Southfield, MI  48075""",
                 'description': project.description,
                 'gov_funded': project.gov_funded,
                 'uni_project': project.uni_project
+            })
+        return jsonify(project_data)
+    
+    @app.route('/api/teams')
+    @login_required
+    def api_teams():
+        """Get all active teams for workflows"""
+        teams = Team.query.filter_by(active=True).all()
+        team_data = []
+        for team in teams:
+            # Get consortium info if available
+            consortium_name = None
+            if team.consortium_consort_id:
+                consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                consortium_name = consortium.name if consortium else team.consortium_consort_id
+            
+            team_data.append({
+                'id': team.id,
+                'record_id': team.record_id,
+                'name': team.name,
+                'abbrev': team.abbrev,
+                'description': team.description,
+                'consortium_name': consortium_name
+            })
+        return jsonify(team_data)
+    
+    @app.route('/api/projects')
+    @login_required
+    def api_projects():
+        """Get all active projects for workflows"""
+        projects = Project.query.filter_by(active=True).all()
+        project_data = []
+        for project in projects:
+            # Get consortium info
+            consortium_names = []
+            consortium_ids = project.get_consortium_ids()
+            for consortium_id in consortium_ids:
+                consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
+                if consortium:
+                    consortium_names.append(consortium.name)
+            
+            project_data.append({
+                'id': project.project_id,
+                'ref': project.ref,
+                'name': project.name,
+                'description': project.description,
+                'gov_funded': project.gov_funded,
+                'uni_project': project.uni_project,
+                'consortium_names': consortium_names
             })
         return jsonify(project_data)
     

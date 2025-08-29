@@ -26,13 +26,68 @@
 .inactive-workflow small {
     color: #495057 !important;
 }
+
+/* Tab styling */
+.nav-tabs .nav-link {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.nav-tabs .nav-link.active {
+    color: #495057;
+    font-weight: 600;
+}
+
+.tab-badge {
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+}
 </style>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>🔄 RFPO Approval Workflows</h1>
-    <a href="{{ url_for('approval_workflow_new') }}" class="btn btn-primary">
-        <i class="fas fa-plus"></i> New Workflow
-    </a>
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="fas fa-plus"></i> New Workflow
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('approval_workflow_new_form', workflow_type='consortium') }}">
+                <i class="fas fa-building"></i> Consortium Workflow
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('approval_workflow_new_form', workflow_type='team') }}">
+                <i class="fas fa-users"></i> Team Workflow
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('approval_workflow_new_form', workflow_type='project') }}">
+                <i class="fas fa-project-diagram"></i> Project Workflow
+            </a></li>
+        </ul>
+    </div>
 </div>
+
+<!-- Workflow Type Tabs -->
+<ul class="nav nav-tabs mb-4" id="workflowTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {{ 'active' if current_workflow_type == 'consortium' else '' }}" 
+           href="{{ url_for('approval_workflows', workflow_type='consortium') }}" role="tab">
+            <i class="fas fa-building"></i> Consortium
+            <span class="badge bg-secondary tab-badge">{{ workflow_counts.consortium }}</span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {{ 'active' if current_workflow_type == 'team' else '' }}" 
+           href="{{ url_for('approval_workflows', workflow_type='team') }}" role="tab">
+            <i class="fas fa-users"></i> Team
+            <span class="badge bg-secondary tab-badge">{{ workflow_counts.team }}</span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {{ 'active' if current_workflow_type == 'project' else '' }}" 
+           href="{{ url_for('approval_workflows', workflow_type='project') }}" role="tab">
+            <i class="fas fa-project-diagram"></i> Project
+            <span class="badge bg-secondary tab-badge">{{ workflow_counts.project }}</span>
+        </a>
+    </li>
+</ul>
 
 <div class="card">
     <div class="card-body">
@@ -42,7 +97,10 @@
                     <tr>
                         <th>Workflow ID</th>
                         <th>Name</th>
+                        <th>{{ current_workflow_type.title() }}</th>
+                        {% if current_workflow_type in ['team', 'project'] %}
                         <th>Consortium</th>
+                        {% endif %}
                         <th>Version</th>
                         <th>Status</th>
                         <th>Stages</th>
@@ -64,9 +122,18 @@
                             {% endif %}
                         </td>
                         <td>
-                            <span class="badge badge-info">{{ workflow.consortium_abbrev }}</span>
-                            <br><small>{{ workflow.consortium_name }}</small>
+                            <span class="badge bg-primary">{{ workflow.entity_abbrev }}</span>
+                            <br><small>{{ workflow.entity_name }}</small>
                         </td>
+                        {% if current_workflow_type in ['team', 'project'] %}
+                        <td>
+                            {% if workflow.consortium_name %}
+                            <small class="text-muted">{{ workflow.consortium_name }}</small>
+                            {% else %}
+                            <small class="text-muted">No consortium</small>
+                            {% endif %}
+                        </td>
+                        {% endif %}
                         <td>{{ workflow.version }}</td>
                         <td>
                             {% if workflow.is_active %}
@@ -119,9 +186,9 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="9" class="text-center text-muted">
+                        <td colspan="{% if current_workflow_type in ['team', 'project'] %}10{% else %}9{% endif %}" class="text-center text-muted">
                             <i class="fas fa-info-circle"></i> No approval workflows found. 
-                            <a href="{{ url_for('approval_workflow_new') }}">Create the first one</a>.
+                            <a href="{{ url_for('approval_workflow_new_form', workflow_type=current_workflow_type) }}">Create the first one</a>.
                         </td>
                     </tr>
                     {% endfor %}

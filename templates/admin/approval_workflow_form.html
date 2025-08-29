@@ -1,12 +1,12 @@
 {% extends "admin/base.html" %}
 
-{% block title %}{{ action }} Approval Workflow{% endblock %}
+{% block title %}{{ action }} {{ workflow_type.title() }} Approval Workflow{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>🔄 {{ action }} Approval Workflow</h1>
-    <a href="{{ url_for('approval_workflows') }}" class="btn btn-secondary">
-        <i class="fas fa-arrow-left"></i> Back to Workflows
+    <h1>🔄 {{ action }} {{ workflow_type.title() }} Approval Workflow</h1>
+    <a href="{{ url_for('approval_workflows', workflow_type=workflow_type) }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to {{ workflow_type.title() }} Workflows
     </a>
 </div>
 
@@ -17,14 +17,16 @@
                 <h5>Workflow Information</h5>
             </div>
             <div class="card-body">
-                <form method="POST" id="workflowForm">
+                <form method="POST" action="{{ url_for('approval_workflow_create') }}" id="workflowForm">
+                    <input type="hidden" name="workflow_type" value="{{ workflow_type }}">
+                    
                     <div class="form-group">
                         <label for="name">Workflow Name *</label>
                         <input type="text" class="form-control" id="name" name="name" 
                                value="{{ workflow.name if workflow else '' }}" 
-                               placeholder="e.g., USCAR Standard Approval Process" required>
+                               placeholder="e.g., {{ workflow_type.title() }} Standard Approval Process" required>
                         <small class="form-text text-muted">
-                            A descriptive name for this approval workflow
+                            A descriptive name for this {{ workflow_type }} approval workflow
                         </small>
                     </div>
 
@@ -37,18 +39,30 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="consortium_id">Consortium *</label>
-                                <select class="form-control" id="consortium_id" name="consortium_id" required>
-                                    <option value="">Select Consortium</option>
-                                    {% for consortium in consortiums %}
-                                    <option value="{{ consortium.consort_id }}" 
-                                            {% if workflow and workflow.consortium_id == consortium.consort_id %}selected{% endif %}>
-                                        {{ consortium.abbrev }} - {{ consortium.name }}
+                                <label for="entity_id">{{ workflow_type.title() }} *</label>
+                                <select class="form-control" id="entity_id" name="entity_id" required>
+                                    <option value="">Select {{ workflow_type.title() }}</option>
+                                    {% for entity in entities %}
+                                    {% if workflow_type == 'consortium' %}
+                                    <option value="{{ entity.consort_id }}" 
+                                            {% if workflow and workflow.consortium_id == entity.consort_id %}selected{% endif %}>
+                                        {{ entity.abbrev }} - {{ entity.name }}
                                     </option>
+                                    {% elif workflow_type == 'team' %}
+                                    <option value="{{ entity.id }}" 
+                                            {% if workflow and workflow.team_id == entity.id %}selected{% endif %}>
+                                        {{ entity.abbrev }} - {{ entity.name }}
+                                    </option>
+                                    {% elif workflow_type == 'project' %}
+                                    <option value="{{ entity.project_id }}" 
+                                            {% if workflow and workflow.project_id == entity.project_id %}selected{% endif %}>
+                                        {{ entity.ref }} - {{ entity.name }}
+                                    </option>
+                                    {% endif %}
                                     {% endfor %}
                                 </select>
                                 <small class="form-text text-muted">
-                                    Which consortium this workflow applies to
+                                    Select the {{ workflow_type }} this workflow applies to
                                 </small>
                             </div>
                         </div>
@@ -141,20 +155,21 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('workflowForm');
-    const consortiumSelect = document.getElementById('consortium_id');
+    const entitySelect = document.getElementById('entity_id');
     const isActiveCheckbox = document.getElementById('is_active');
+    const workflowType = '{{ workflow_type }}';
     
     form.addEventListener('submit', function(e) {
         // Only check for conflicts if creating a new workflow and it's marked as active
-        if (isActiveCheckbox.checked && consortiumSelect.value && {{ 'true' if not workflow else 'false' }}) {
+        if (isActiveCheckbox.checked && entitySelect.value && {{ 'true' if not workflow else 'false' }}) {
             e.preventDefault();
             
-            // Check if there's already an active workflow for this consortium
-            fetch(`/api/check-active-workflow/${consortiumSelect.value}`)
+            // Check if there's already an active workflow for this entity
+            fetch(`/api/check-active-workflow/${workflowType}/${entitySelect.value}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.has_active_workflow) {
-                        const message = `There is already an active workflow for ${data.consortium_name}:\n\n` +
+                        const message = `There is already an active workflow for ${data.entity_name}:\n\n` +
                                       `"${data.active_workflow_name}" (${data.active_workflow_id})\n\n` +
                                       `Creating this new active workflow will automatically deactivate the existing one.\n\n` +
                                       `Do you want to continue?`;

@@ -1135,7 +1135,7 @@ class List(db.Model):
         return f'<List {self.list_id} ({self.type}): {self.key} = {self.value}>'
 
 class RFPOApprovalWorkflow(db.Model):
-    """RFPO Approval Workflow Templates for Consortiums"""
+    """RFPO Approval Workflow Templates for Consortiums, Teams, and Projects"""
     __tablename__ = 'rfpo_approval_workflows'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -1146,11 +1146,14 @@ class RFPOApprovalWorkflow(db.Model):
     description = db.Column(db.Text)  # Workflow description
     version = db.Column(db.String(20), default='1.0')  # Workflow version
     
-    # Consortium Association
-    consortium_id = db.Column(db.String(32), nullable=False)  # Consortium consort_id this workflow belongs to
+    # Workflow Type and Associations
+    workflow_type = db.Column(db.String(20), nullable=False, default='consortium')  # 'consortium', 'team', 'project'
+    consortium_id = db.Column(db.String(32), nullable=True)  # Consortium consort_id (nullable for team/project workflows)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)  # Team ID for team workflows
+    project_id = db.Column(db.String(32), nullable=True)  # Project ID for project workflows
     
     # Status and Control
-    is_active = db.Column(db.Boolean, default=False)  # Only one workflow can be active per consortium
+    is_active = db.Column(db.Boolean, default=False)  # Only one workflow can be active per entity
     is_template = db.Column(db.Boolean, default=True)  # True for templates, False for instances
     
     # Audit fields
@@ -1162,19 +1165,38 @@ class RFPOApprovalWorkflow(db.Model):
     # Relationships
     stages = db.relationship('RFPOApprovalStage', backref='workflow', lazy=True, cascade='all, delete-orphan', order_by='RFPOApprovalStage.stage_order')
     instances = db.relationship('RFPOApprovalInstance', backref='template_workflow', lazy=True)
+    team = db.relationship('Team', backref=db.backref('approval_workflows', lazy=True))
     
-    # Unique constraint: only one active workflow per consortium
+    # Indexes for efficient querying
     __table_args__ = (
-        db.Index('idx_consortium_active', 'consortium_id', 'is_active'),
+        db.Index('idx_consortium_type_active', 'consortium_id', 'workflow_type', 'is_active'),
+        db.Index('idx_team_type_active', 'team_id', 'workflow_type', 'is_active'),
+        db.Index('idx_project_type_active', 'project_id', 'workflow_type', 'is_active'),
     )
     
     def activate(self):
-        """Activate this workflow and deactivate others for the same consortium"""
-        # Deactivate all other workflows for this consortium
-        db.session.query(RFPOApprovalWorkflow).filter_by(
-            consortium_id=self.consortium_id,
-            is_template=True
-        ).update({'is_active': False})
+        """Activate this workflow and deactivate others for the same entity"""
+        if self.workflow_type == 'consortium':
+            # Deactivate all other consortium workflows
+            db.session.query(RFPOApprovalWorkflow).filter_by(
+                consortium_id=self.consortium_id,
+                workflow_type='consortium',
+                is_template=True
+            ).update({'is_active': False})
+        elif self.workflow_type == 'team':
+            # Deactivate all other team workflows
+            db.session.query(RFPOApprovalWorkflow).filter_by(
+                team_id=self.team_id,
+                workflow_type='team',
+                is_template=True
+            ).update({'is_active': False})
+        elif self.workflow_type == 'project':
+            # Deactivate all other project workflows
+            db.session.query(RFPOApprovalWorkflow).filter_by(
+                project_id=self.project_id,
+                workflow_type='project',
+                is_template=True
+            ).update({'is_active': False})
         
         # Activate this workflow
         self.is_active = True
@@ -1192,6 +1214,28 @@ class RFPOApprovalWorkflow(db.Model):
         """Get list of budget brackets covered by this workflow"""
         return [stage.budget_bracket_key for stage in self.stages if stage.budget_bracket_key]
     
+    def get_entity_name(self):
+        """Get the name of the entity this workflow belongs to"""
+        if self.workflow_type == 'consortium':
+            consortium = Consortium.query.filter_by(consort_id=self.consortium_id).first()
+            return consortium.name if consortium else self.consortium_id
+        elif self.workflow_type == 'team':
+            return self.team.name if self.team else f"Team {self.team_id}"
+        elif self.workflow_type == 'project':
+            project = Project.query.filter_by(project_id=self.project_id).first()
+            return project.name if project else self.project_id
+        return "Unknown"
+    
+    def get_entity_identifier(self):
+        """Get the identifier of the entity this workflow belongs to"""
+        if self.workflow_type == 'consortium':
+            return self.consortium_id
+        elif self.workflow_type == 'team':
+            return str(self.team_id)
+        elif self.workflow_type == 'project':
+            return self.project_id
+        return "Unknown"
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -1199,7 +1243,12 @@ class RFPOApprovalWorkflow(db.Model):
             'name': self.name,
             'description': self.description,
             'version': self.version,
+            'workflow_type': self.workflow_type,
             'consortium_id': self.consortium_id,
+            'team_id': self.team_id,
+            'project_id': self.project_id,
+            'entity_name': self.get_entity_name(),
+            'entity_identifier': self.get_entity_identifier(),
             'is_active': self.is_active,
             'is_template': self.is_template,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -1213,7 +1262,7 @@ class RFPOApprovalWorkflow(db.Model):
     
     def __repr__(self):
         status = "ACTIVE" if self.is_active else "INACTIVE"
-        return f'<RFPOApprovalWorkflow {self.workflow_id}: {self.name} [{status}]>'
+        return f'<RFPOApprovalWorkflow {self.workflow_id} ({self.workflow_type.upper()}): {self.name} [{status}]>'
 
 class RFPOApprovalStage(db.Model):
     """Budget Bracket Stages within RFPO Approval Workflows"""

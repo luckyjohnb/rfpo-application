@@ -22,9 +22,12 @@
                             <th>RFPO ID</th>
                             <th>Title</th>
                             <th>Vendor</th>
+                            <th>Total Amount</th>
                             <th>Status</th>
-                            <th>Due Date</th>
                             <th>Team</th>
+                            <th>Items</th>
+                            <th>Files</th>
+                            <th>Approval</th>
                             <th>Created By</th>
                             <th>Created</th>
                             <th>Actions</th>
@@ -35,22 +38,96 @@
                         <tr>
                             <td><strong>{{ rfpo.rfpo_id }}</strong></td>
                             <td>{{ rfpo.title }}</td>
-                            <td>{{ rfpo.vendor or 'N/A' }}</td>
-                            <td><span class="badge bg-primary">{{ rfpo.status }}</span></td>
-                            <td>{{ rfpo.due_date.strftime('%Y-%m-%d') if rfpo.due_date else 'No due date' }}</td>
-                            <td>{{ rfpo.team.name if rfpo.team else 'No team' }}</td>
+                            <td>{{ rfpo.vendor.company_name if rfpo.vendor else 'N/A' }}</td>
+                            <td>
+                                {% if rfpo.total_amount %}
+                                    <strong>${{ "{:,.2f}".format(rfpo.total_amount) }}</strong>
+                                {% else %}
+                                    <span class="text-muted">$0.00</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rfpo.status == 'Draft' %}
+                                    <span class="badge bg-secondary">{{ rfpo.status }}</span>
+                                {% elif rfpo.status == 'Submitted' %}
+                                    <span class="badge bg-primary">{{ rfpo.status }}</span>
+                                {% elif rfpo.status == 'Approved' %}
+                                    <span class="badge bg-success">{{ rfpo.status }}</span>
+                                {% elif rfpo.status == 'Rejected' %}
+                                    <span class="badge bg-danger">{{ rfpo.status }}</span>
+                                {% else %}
+                                    <span class="badge bg-info">{{ rfpo.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rfpo.team %}
+                                    <span class="badge bg-info">{{ rfpo.team.abbrev }}</span>
+                                {% else %}
+                                    <span class="text-muted">No team</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rfpo.line_item_count > 0 %}
+                                    <span class="badge bg-success">{{ rfpo.line_item_count }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rfpo.file_count > 0 %}
+                                    <span class="badge bg-info">{{ rfpo.file_count }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rfpo.approval_instance %}
+                                    <span class="badge bg-warning" 
+                                          data-bs-toggle="tooltip" 
+                                          title="Approval workflow: {{ rfpo.approval_instance.overall_status }}">
+                                        {{ rfpo.approval_instance.overall_status.title() }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">None</span>
+                                {% endif %}
+                            </td>
                             <td>{{ rfpo.created_by }}</td>
                             <td><small>{{ rfpo.created_at.strftime('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <a href="{{ url_for('rfpo_edit', id=rfpo.id) }}" 
-                                       class="btn btn-outline-primary btn-sm">
+                                       class="btn btn-outline-primary btn-sm"
+                                       data-bs-toggle="tooltip" title="Edit RFPO">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button type="button" class="btn btn-outline-danger btn-sm" 
-                                            onclick="deleteRFPO({{ rfpo.id }}, '{{ rfpo.title }}')">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    <a href="{{ url_for('rfpo_generate_rfpo', rfpo_id=rfpo.id) }}" 
+                                       class="btn btn-outline-info btn-sm" 
+                                       target="_blank"
+                                       data-bs-toggle="tooltip" title="View RFPO Preview">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if rfpo.vendor %}
+                                    <a href="{{ url_for('rfpo_generate_po_proof', rfpo_id=rfpo.id) }}" 
+                                       class="btn btn-outline-success btn-sm" 
+                                       target="_blank"
+                                       data-bs-toggle="tooltip" title="Generate PO Proof PDF">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if rfpo.can_delete %}
+                                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                onclick="deleteRFPO({{ rfpo.id }}, '{{ rfpo.title }}')"
+                                                data-bs-toggle="tooltip" title="Delete RFPO">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    {% else %}
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                                disabled
+                                                data-bs-toggle="tooltip" 
+                                                title="Cannot delete: RFPO has active approval workflow">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -70,4 +147,44 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete RFPO <strong id="rfpoTitle"></strong>?</p>
+                <p class="text-muted">This action cannot be undone and will also delete all associated line items and uploaded files.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+function deleteRFPO(id, title) {
+    document.getElementById('rfpoTitle').textContent = title;
+    document.getElementById('deleteForm').action = '/rfpo/' + id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
 {% endblock %}

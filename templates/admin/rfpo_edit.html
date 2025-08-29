@@ -89,6 +89,11 @@
             🏢 Vendor Information
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button" role="tab">
+            📁 Files ({{ rfpo.files|length }})
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content" id="rfpoTabContent">
@@ -467,6 +472,163 @@
             </div>
         </div>
     </div>
+    
+    <!-- Files Tab -->
+    <div class="tab-pane fade" id="files" role="tabpanel">
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📁 Uploaded Files</h5>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadFileModal">
+                    <i class="fas fa-upload"></i> Upload File
+                </button>
+            </div>
+            <div class="card-body">
+                {% if rfpo.files %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>File Name</th>
+                                <th>Document Type</th>
+                                <th>Size</th>
+                                <th>Uploaded By</th>
+                                <th>Upload Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in rfpo.files %}
+                            <tr>
+                                <td>
+                                    <i class="fas fa-file-{{ 'pdf' if file.file_extension == '.pdf' else ('image' if file.file_extension in ['.jpg', '.jpeg', '.png', '.gif'] else ('word' if file.file_extension in ['.doc', '.docx'] else ('excel' if file.file_extension in ['.xls', '.xlsx'] else 'alt'))) }}"></i>
+                                    {{ file.original_filename }}
+                                </td>
+                                <td>
+                                    {% if file.document_type %}
+                                        <span class="badge bg-info">{{ file.document_type }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Not specified</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ "%.1f"|format(file.file_size / 1024) }} KB</td>
+                                <td>{{ file.uploaded_by }}</td>
+                                <td>{{ file.uploaded_at.strftime('%Y-%m-%d %H:%M') if file.uploaded_at else 'Unknown' }}</td>
+                                <td>
+                                    {% if file.processing_status == 'completed' %}
+                                        <span class="badge bg-success">Ready</span>
+                                    {% elif file.processing_status == 'processing' %}
+                                        <span class="badge bg-warning">Processing</span>
+                                    {% elif file.processing_status == 'failed' %}
+                                        <span class="badge bg-danger">Failed</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{{ url_for('view_rfpo_file', rfpo_id=rfpo.id, file_id=file.file_id) }}" 
+                                           class="btn btn-outline-primary btn-sm" 
+                                           target="_blank"
+                                           data-bs-toggle="tooltip" title="View File">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                onclick="deleteFile('{{ file.file_id }}', '{{ file.original_filename }}')"
+                                                data-bs-toggle="tooltip" title="Delete File">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No files uploaded yet</h5>
+                    <p class="text-muted">Click "Upload File" to add supporting documents to this RFPO.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload File Modal -->
+<div class="modal fade" id="uploadFileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">📁 Upload File</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('rfpo_upload_file', rfpo_id=rfpo.id) }}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="document_type" class="form-label">Document Type <span class="text-danger">*</span></label>
+                        <select class="form-select" id="document_type" name="document_type" required>
+                            <option value="">-- Select document type --</option>
+                            {% if doc_types %}
+                                {% for doc_type in doc_types %}
+                                    {% if doc_type.value and doc_type.value.strip() %}
+                                        <option value="{{ doc_type.value }}">{{ doc_type.value }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select File <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="file" name="file" required 
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif">
+                        <div class="form-text">
+                            Supported formats: PDF, Word, Excel, Text, Images (JPG, PNG, GIF)<br>
+                            Maximum file size: 10 MB
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="description" name="description" rows="2" 
+                                  placeholder="Brief description of the file contents"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Upload File
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete File Confirmation Modal -->
+<div class="modal fade" id="deleteFileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the file <strong id="fileName"></strong>?</p>
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteFileForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Add Line Item Modal -->
@@ -639,6 +801,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if (vendorSelect.value && (siteSelect.value || {{ 'true' if rfpo.vendor_id and not rfpo.vendor_site_id else 'false' }})) {
         loadVendorSites(true);
     }
+    
+    // Initialize tooltips for file actions
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 });
+
+function deleteFile(fileId, fileName) {
+    document.getElementById('fileName').textContent = fileName;
+    document.getElementById('deleteFileForm').action = '/rfpo/{{ rfpo.id }}/file/' + fileId + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteFileModal')).show();
+}
 </script>
 {% endblock %}

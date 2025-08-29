@@ -25,6 +25,7 @@
                             <th>Consortium</th>
                             <th>Description</th>
                             <th>Projects</th>
+                            <th>RFPOs</th>
                             <th>Viewers</th>
                             <th>Admins</th>
                             <th>Status</th>
@@ -51,6 +52,20 @@
                             </td>
                             <td><small>{{ team.description[:50] if team.description else 'No description' }}{% if team.description and team.description|length > 50 %}...{% endif %}</small></td>
                             <td>{{ team.project_count }}</td>
+                            <td>
+                                {% if team.rfpo_count > 0 %}
+                                    <span class="badge bg-warning">{{ team.rfpo_count }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if team.workflow_count > 0 %}
+                                    <span class="badge bg-info">{{ team.workflow_count }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
                             <td>{{ team.viewer_count }}</td>
                             <td>{{ team.admin_count }}</td>
                             <td>
@@ -67,10 +82,19 @@
                                        class="btn btn-outline-primary btn-sm">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button type="button" class="btn btn-outline-danger btn-sm" 
-                                            onclick="deleteTeam({{ team.id }}, '{{ team.name }}')">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    {% if team.can_delete %}
+                                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                onclick="deleteTeam({{ team.id }}, '{{ team.name }}')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    {% else %}
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                                disabled
+                                                data-bs-toggle="tooltip" 
+                                                title="Cannot delete: Team has {{ team.rfpo_count }} RFPOs{% if team.workflow_count > 0 %} and {{ team.workflow_count }} workflows{% endif %}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -101,6 +125,10 @@
             </div>
             <div class="modal-body">
                 <p>Are you sure you want to delete team <strong id="teamName"></strong>?</p>
+                <div id="dependencyWarning" class="alert alert-warning d-none">
+                    <strong>⚠️ Warning:</strong> This team has dependencies that must be resolved first:
+                    <ul id="dependencyList" class="mb-0 mt-2"></ul>
+                </div>
                 <p class="text-muted">This action cannot be undone.</p>
             </div>
             <div class="modal-footer">
@@ -127,6 +155,13 @@ document.addEventListener('DOMContentLoaded', function() {
 function deleteTeam(id, name) {
     document.getElementById('teamName').textContent = name;
     document.getElementById('deleteForm').action = '/team/' + id + '/delete';
+    
+    // Reset dependency warning
+    const dependencyWarning = document.getElementById('dependencyWarning');
+    const dependencyList = document.getElementById('dependencyList');
+    dependencyWarning.classList.add('d-none');
+    dependencyList.innerHTML = '';
+    
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 </script>

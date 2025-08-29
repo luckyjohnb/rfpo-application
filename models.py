@@ -289,6 +289,8 @@ class UploadedFile(db.Model):
     file_size = db.Column(db.Integer, nullable=False)  # Size in bytes
     mime_type = db.Column(db.String(128))
     file_extension = db.Column(db.String(10))
+    document_type = db.Column(db.String(255))  # Document type from doc_types list
+    description = db.Column(db.Text)  # Optional description
     
     # RAG processing status
     processing_status = db.Column(db.String(32), default='pending')  # pending, processing, completed, failed
@@ -314,6 +316,8 @@ class UploadedFile(db.Model):
             'file_size': self.file_size,
             'mime_type': self.mime_type,
             'file_extension': self.file_extension,
+            'document_type': self.document_type,
+            'description': self.description,
             'processing_status': self.processing_status,
             'text_extracted': self.text_extracted,
             'embeddings_created': self.embeddings_created,

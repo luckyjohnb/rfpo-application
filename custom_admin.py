@@ -11,6 +11,8 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import desc
 import json
 import os
+import uuid
+import mimetypes
 from datetime import datetime
 
 # Import your models
@@ -458,6 +460,15 @@ def create_app():
                 active=True
             ).count()
             
+            # Count RFPOs associated with this team
+            team.rfpo_count = RFPO.query.filter_by(team_id=team.id).count()
+            
+            # Count workflows associated with this team
+            team.workflow_count = RFPOApprovalWorkflow.query.filter_by(team_id=team.id).count()
+            
+            # Check if team can be deleted (no dependencies)
+            team.can_delete = team.rfpo_count == 0 and team.workflow_count == 0
+            
             # Count viewers and admins
             team.viewer_count = len(team.get_rfpo_viewer_users())
             team.admin_count = len(team.get_rfpo_admin_users())
@@ -562,9 +573,29 @@ def create_app():
     def team_delete(id):
         """Delete team"""
         team = Team.query.get_or_404(id)
+        
+        # Check for dependencies before deletion
+        rfpo_count = RFPO.query.filter_by(team_id=team.id).count()
+        user_team_count = UserTeam.query.filter_by(team_id=team.id).count()
+        workflow_count = RFPOApprovalWorkflow.query.filter_by(team_id=team.id).count()
+        
+        if rfpo_count > 0:
+            flash(f'❌ Cannot delete team: {rfpo_count} RFPOs are associated with this team. Please reassign or delete the RFPOs first.', 'error')
+            return redirect(url_for('teams'))
+        
+        if workflow_count > 0:
+            flash(f'❌ Cannot delete team: {workflow_count} approval workflows are associated with this team. Please delete the workflows first.', 'error')
+            return redirect(url_for('teams'))
+        
         try:
+            # Delete user-team associations first (these can be safely deleted)
+            if user_team_count > 0:
+                UserTeam.query.filter_by(team_id=team.id).delete()
+            
+            # Now delete the team
             db.session.delete(team)
             db.session.commit()
+            
             flash('✅ Team deleted successfully!', 'success')
         except Exception as e:
             db.session.rollback()
@@ -686,6 +717,17 @@ def create_app():
     def rfpos():
         """List all RFPOs"""
         rfpos = RFPO.query.all()
+        
+        # Add additional info for each RFPO
+        for rfpo in rfpos:
+            # Check if RFPO has approval instances
+            rfpo.approval_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+            rfpo.can_delete = rfpo.approval_instance is None
+            
+            # Count line items and files
+            rfpo.line_item_count = len(rfpo.line_items) if rfpo.line_items else 0
+            rfpo.file_count = len(rfpo.files) if rfpo.files else 0
+        
         return render_template('admin/rfpos.html', rfpos=rfpos)
     
     @app.route('/rfpo/new', methods=['GET'])
@@ -905,12 +947,16 @@ Southfield, MI  48075""",
         project = Project.query.filter_by(project_id=rfpo.project_id).first()
         consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
         
+        # Get document types for file upload dropdown
+        doc_types = List.get_by_type('doc_types')
+        
         return render_template('admin/rfpo_edit.html', 
                              rfpo=rfpo, 
                              teams=teams, 
                              vendors=vendors,
                              project=project,
-                             consortium=consortium)
+                             consortium=consortium,
+                             doc_types=doc_types)
     
     @app.route('/rfpo/<int:rfpo_id>/line-item/add', methods=['POST'])
     @login_required
@@ -999,6 +1045,132 @@ Southfield, MI  48075""",
         except Exception as e:
             db.session.rollback()
             flash(f'❌ Error deleting line item: {str(e)}', 'error')
+        
+        return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
+    @app.route('/rfpo/<int:rfpo_id>/file/upload', methods=['POST'])
+    @login_required
+    def rfpo_upload_file(rfpo_id):
+        """Upload file to RFPO"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        if 'file' not in request.files:
+            flash('❌ No file selected.', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+        
+        file = request.files['file']
+        document_type = request.form.get('document_type')
+        description = request.form.get('description', '')
+        
+        if file.filename == '':
+            flash('❌ No file selected.', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+        
+        if not document_type:
+            flash('❌ Please select a document type.', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+        
+        try:
+            # Validate file size (10 MB max)
+            file.seek(0, os.SEEK_END)
+            file_size = file.tell()
+            file.seek(0)
+            
+            if file_size > 10 * 1024 * 1024:  # 10 MB
+                flash('❌ File size exceeds 10 MB limit.', 'error')
+                return redirect(url_for('rfpo_edit', id=rfpo_id))
+            
+            # Get file extension and MIME type
+            original_filename = secure_filename(file.filename)
+            file_extension = os.path.splitext(original_filename)[1].lower()
+            mime_type, _ = mimetypes.guess_type(original_filename)
+            
+            # Generate unique file ID and stored filename
+            file_id = str(uuid.uuid4())
+            stored_filename = f"{file_id}_{original_filename}"
+            
+            # Create RFPO-specific directory
+            rfpo_dir = os.path.join('uploads', 'rfpo_files', f"rfpo_{rfpo.id}")
+            os.makedirs(rfpo_dir, exist_ok=True)
+            
+            # Full file path
+            file_path = os.path.join(rfpo_dir, stored_filename)
+            
+            # Save the file
+            file.save(file_path)
+            
+            # Create database record
+            uploaded_file = UploadedFile(
+                file_id=file_id,
+                original_filename=original_filename,
+                stored_filename=stored_filename,
+                file_path=file_path,
+                file_size=file_size,
+                mime_type=mime_type,
+                file_extension=file_extension,
+                document_type=document_type,
+                description=description if description else None,
+                rfpo_id=rfpo.id,
+                uploaded_by=current_user.get_display_name(),
+                processing_status='completed'  # No RAG processing for now
+            )
+            
+            db.session.add(uploaded_file)
+            db.session.commit()
+            
+            flash(f'✅ File "{original_filename}" uploaded successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error uploading file: {str(e)}', 'error')
+        
+        return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
+    @app.route('/rfpo/<int:rfpo_id>/file/<file_id>/view')
+    @login_required
+    def view_rfpo_file(rfpo_id, file_id):
+        """View/download uploaded file"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        uploaded_file = UploadedFile.query.filter_by(file_id=file_id, rfpo_id=rfpo.id).first_or_404()
+        
+        try:
+            if not os.path.exists(uploaded_file.file_path):
+                flash('❌ File not found on disk.', 'error')
+                return redirect(url_for('rfpo_edit', id=rfpo_id))
+            
+            return send_file(
+                uploaded_file.file_path,
+                mimetype=uploaded_file.mime_type,
+                as_attachment=False,  # Display in browser if possible
+                download_name=uploaded_file.original_filename
+            )
+            
+        except Exception as e:
+            flash(f'❌ Error accessing file: {str(e)}', 'error')
+            return redirect(url_for('rfpo_edit', id=rfpo_id))
+    
+    @app.route('/rfpo/<int:rfpo_id>/file/<file_id>/delete', methods=['POST'])
+    @login_required
+    def delete_rfpo_file(rfpo_id, file_id):
+        """Delete uploaded file"""
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        uploaded_file = UploadedFile.query.filter_by(file_id=file_id, rfpo_id=rfpo.id).first_or_404()
+        
+        try:
+            # Delete the physical file
+            if os.path.exists(uploaded_file.file_path):
+                os.remove(uploaded_file.file_path)
+            
+            # Delete the database record (this will cascade delete document chunks)
+            filename = uploaded_file.original_filename
+            db.session.delete(uploaded_file)
+            db.session.commit()
+            
+            flash(f'✅ File "{filename}" deleted successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error deleting file: {str(e)}', 'error')
         
         return redirect(url_for('rfpo_edit', id=rfpo_id))
     
@@ -1155,7 +1327,17 @@ Southfield, MI  48075""",
     def rfpo_delete(id):
         """Delete RFPO"""
         rfpo = RFPO.query.get_or_404(id)
+        
+        # Check for approval instances that might prevent deletion
+        approval_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+        if approval_instance:
+            flash(f'❌ Cannot delete RFPO: It has an active approval workflow (Instance: {approval_instance.instance_id}). Please complete or cancel the approval process first.', 'error')
+            return redirect(url_for('rfpos'))
+        
         try:
+            # The following will be automatically deleted due to cascade settings:
+            # - RFPOLineItem (line items)
+            # - UploadedFile (uploaded files and their document chunks)
             db.session.delete(rfpo)
             db.session.commit()
             flash('✅ RFPO deleted successfully!', 'success')

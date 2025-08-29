@@ -1238,6 +1238,9 @@ class RFPOApprovalStage(db.Model):
     requires_all_steps = db.Column(db.Boolean, default=True)  # True: all steps must approve, False: any step can approve
     is_parallel = db.Column(db.Boolean, default=False)  # True: steps can approve in parallel, False: sequential
     
+    # Required Document Types (stored as JSON array of doc_types keys)
+    required_document_types = db.Column(db.Text)  # JSON array of document type keys from doc_types list
+    
     # Audit fields
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -1263,6 +1266,38 @@ class RFPOApprovalStage(db.Model):
         """Get list of backup approvers for this stage"""
         return [step.backup_approver_id for step in self.steps if step.backup_approver_id]
     
+    def get_required_document_types(self):
+        """Get list of required document type keys"""
+        if self.required_document_types:
+            try:
+                return json.loads(self.required_document_types)
+            except:
+                return []
+        return []
+    
+    def set_required_document_types(self, doc_type_keys):
+        """Set required document types from a list of keys"""
+        if doc_type_keys:
+            # Filter out empty strings
+            filtered_keys = [key for key in doc_type_keys if key and key.strip()]
+            self.required_document_types = json.dumps(filtered_keys)
+        else:
+            self.required_document_types = None
+    
+    def get_required_document_names(self):
+        """Get list of required document type names (for display)"""
+        from models import List  # Import here to avoid circular imports
+        doc_keys = self.get_required_document_types()
+        if not doc_keys:
+            return []
+        
+        doc_names = []
+        for key in doc_keys:
+            doc_item = List.query.filter_by(type='doc_types', key=key, active=True).first()
+            if doc_item and doc_item.value.strip():  # Only include non-empty values
+                doc_names.append(doc_item.value)
+        return doc_names
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -1275,6 +1310,8 @@ class RFPOApprovalStage(db.Model):
             'workflow_id': self.workflow_id,
             'requires_all_steps': self.requires_all_steps,
             'is_parallel': self.is_parallel,
+            'required_document_types': self.get_required_document_types(),
+            'required_document_names': self.get_required_document_names(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'total_steps': self.get_total_steps(),
@@ -1317,9 +1354,8 @@ class RFPOApprovalStep(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Unique constraint: one step per approval type per stage
+    # Unique constraint: one step per order per stage (but allow multiple of same approval type)
     __table_args__ = (
-        db.UniqueConstraint('stage_id', 'approval_type_key', name='uq_stage_approval_type'),
         db.UniqueConstraint('stage_id', 'step_order', name='uq_stage_step_order'),
     )
     

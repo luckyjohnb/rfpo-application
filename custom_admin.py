@@ -1607,7 +1607,8 @@ Southfield, MI  48075""",
             'meeting_it': 'Meeting and IT resource types',
             'rfpo_appro': 'RFPO approval workflow levels',
             'rfpo_brack': 'RFPO budget brackets and limits',
-            'rfpo_statu': 'RFPO status values'
+            'rfpo_statu': 'RFPO status values',
+            'doc_types': 'Document types required for approval stages'
         }
         
         return render_template('admin/list_form.html', 
@@ -1711,6 +1712,19 @@ Southfield, MI  48075""",
                 ('rfpo_statu', '20', 'conditional'),
                 ('rfpo_statu', '30', 'approved'),
                 ('rfpo_statu', '40', 'refused'),
+                
+                # Document Types for Approval Stages
+                ('doc_types', '00000039', 'Statement of Work'),
+                ('doc_types', '00000038', 'Quote or proposal'),
+                ('doc_types', '00000073', 'Cost Justification'),
+                ('doc_types', '00000070', 'Basis for selecting contractor'),
+                ('doc_types', '00000079', 'Signed Cross License Agreement'),
+                ('doc_types', '00000160', ''),  # Empty value as in original
+                ('doc_types', '00000221', 'EERE Pre-Award Information Sheet'),
+                ('doc_types', '00000222', 'Basis for Selecting Contractor (Waiver of Competition)'),
+                ('doc_types', '00000223', 'Financial Due Diligence Letter (signed)'),
+                ('doc_types', '00000224', 'Budget Justification'),
+                ('doc_types', '00000230', 'post RFPO upload'),
             ]
             
             created_count = 0
@@ -1889,6 +1903,7 @@ Southfield, MI  48075""",
         consortiums = Consortium.query.filter_by(active=True).all()
         budget_brackets = List.get_by_type('rfpo_brack')
         approval_types = List.get_by_type('rfpo_appro')
+        document_types = List.get_by_type('doc_types')
         users = User.query.filter_by(active=True).all()
         
         return render_template('admin/approval_workflow_edit.html', 
@@ -1896,6 +1911,7 @@ Southfield, MI  48075""",
                              consortiums=consortiums,
                              budget_brackets=budget_brackets,
                              approval_types=approval_types,
+                             document_types=document_types,
                              users=users)
     
     @app.route('/approval-workflow/<int:workflow_id>/stage/add', methods=['POST'])
@@ -1932,10 +1948,21 @@ Southfield, MI  48075""",
                 is_parallel=False  # Never parallel
             )
             
+            # Handle required document types from dual-list picker
+            doc_types_str = request.form.get('required_document_types', '')
+            if doc_types_str:
+                doc_types = [dt.strip() for dt in doc_types_str.split(',') if dt.strip()]
+                stage.set_required_document_types(doc_types)
+            
             db.session.add(stage)
             db.session.commit()
             
-            flash(f'✅ Stage "{stage.stage_name}" added successfully!', 'success')
+            # Verify no steps were auto-created
+            step_count = RFPOApprovalStep.query.filter_by(stage_id=stage.id).count()
+            if step_count > 0:
+                flash(f'⚠️ Warning: {step_count} steps were unexpectedly created for this stage!', 'warning')
+            
+            flash(f'✅ Stage "{stage.stage_name}" added successfully! (0 steps)', 'success')
             
         except Exception as e:
             db.session.rollback()
@@ -2121,6 +2148,137 @@ Southfield, MI  48075""",
             return jsonify({
                 'error': str(e),
                 'has_active_workflow': False
+            }), 500
+    
+    @app.route('/api/approval-stage/<int:stage_id>')
+    @login_required
+    def api_get_approval_stage(stage_id):
+        """API endpoint to get approval stage data for editing"""
+        stage = RFPOApprovalStage.query.get_or_404(stage_id)
+        return jsonify(stage.to_dict())
+    
+    @app.route('/approval-workflow/<int:workflow_id>/stage/<int:stage_id>/edit', methods=['POST'])
+    @login_required
+    def approval_workflow_edit_stage(workflow_id, stage_id):
+        """Edit approval stage"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        stage = RFPOApprovalStage.query.get_or_404(stage_id)
+        
+        if stage.workflow_id != workflow.id:
+            flash('❌ Stage does not belong to this workflow.', 'error')
+            return redirect(url_for('approval_workflow_edit', id=workflow_id))
+        
+        try:
+            # Get budget bracket info
+            bracket_key = request.form.get('budget_bracket_key')
+            bracket_item = List.query.filter_by(type='rfpo_brack', key=bracket_key).first()
+            bracket_amount = float(bracket_item.value) if bracket_item else 0.00
+            
+            # Generate stage name from budget bracket
+            stage_name = f"Up to ${bracket_amount:,.0f}" if bracket_amount > 0 else f"Budget Bracket {bracket_key}"
+            
+            # Update stage with new values
+            stage.budget_bracket_key = bracket_key
+            stage.budget_bracket_amount = bracket_amount
+            stage.stage_name = stage_name
+            stage.description = request.form.get('description')
+            
+            # Handle required document types from dual-list picker
+            doc_types_str = request.form.get('required_document_types', '')
+            if doc_types_str:
+                doc_types = [dt.strip() for dt in doc_types_str.split(',') if dt.strip()]
+                stage.set_required_document_types(doc_types)
+            else:
+                stage.set_required_document_types([])
+            
+            # Keep defaults for hidden fields
+            stage.requires_all_steps = True
+            stage.is_parallel = False
+            
+            db.session.commit()
+            
+            flash(f'✅ Stage "{stage.stage_name}" updated successfully!', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error updating stage: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_workflow_edit', id=workflow_id))
+    
+    @app.route('/api/approval-workflow/<int:workflow_id>/available-budget-brackets')
+    @login_required
+    def api_get_available_budget_brackets(workflow_id):
+        """API endpoint to get budget brackets not yet used in this workflow"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        
+        try:
+            # Get all budget brackets
+            all_brackets = List.get_by_type('rfpo_brack')
+            
+            # Get used budget bracket keys in this workflow
+            used_bracket_keys = [stage.budget_bracket_key for stage in workflow.stages]
+            
+            # Filter out used brackets
+            available_brackets = [
+                {
+                    'key': bracket.key,
+                    'value': bracket.value,
+                    'amount': float(bracket.value)
+                }
+                for bracket in all_brackets 
+                if bracket.key not in used_bracket_keys
+            ]
+            
+            return jsonify({
+                'success': True,
+                'brackets': available_brackets
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'brackets': []
+            }), 500
+    
+    @app.route('/api/approval-workflow/<int:workflow_id>/available-budget-brackets/<exclude_stage_id>')
+    @login_required
+    def api_get_available_budget_brackets_for_edit(workflow_id, exclude_stage_id):
+        """API endpoint to get budget brackets available for editing (excluding current stage)"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+        
+        try:
+            # Get all budget brackets
+            all_brackets = List.get_by_type('rfpo_brack')
+            
+            # Get used budget bracket keys in this workflow, excluding the stage being edited
+            used_bracket_keys = [
+                stage.budget_bracket_key 
+                for stage in workflow.stages 
+                if str(stage.id) != str(exclude_stage_id)
+            ]
+            
+            # Filter out used brackets (but allow current stage's bracket)
+            available_brackets = [
+                {
+                    'key': bracket.key,
+                    'value': bracket.value,
+                    'amount': float(bracket.value)
+                }
+                for bracket in all_brackets 
+                if bracket.key not in used_bracket_keys
+            ]
+            
+            return jsonify({
+                'success': True,
+                'brackets': available_brackets
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'brackets': []
             }), 500
     
     @app.route('/api/approval-workflow/<int:workflow_id>/stage/<int:stage_id>/reorder-steps', methods=['POST'])

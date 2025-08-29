@@ -182,14 +182,14 @@
                     </div>
                 </div>
                 <hr>
-                <small class="text-muted">
+                <div style="color: #495057;">
                     <strong>Budget Coverage:</strong><br>
-                    {% for bracket in workflow.get_bracket_coverage() %}
-                        <span class="badge badge-light">{{ bracket }}</span>
+                    {% for stage in workflow.stages %}
+                        <span class="badge badge-info">${{ "{:,.0f}".format(stage.budget_bracket_amount) }}</span>
                     {% else %}
                         <em>No budget brackets configured</em>
                     {% endfor %}
-                </small>
+                </div>
             </div>
         </div>
     </div>
@@ -199,7 +199,7 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5><i class="fas fa-layer-group"></i> Approval Stages</h5>
-        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addStageModal">
+        <button class="btn btn-sm btn-success" onclick="showAddStageModal()">
             <i class="fas fa-plus"></i> Add Stage
         </button>
     </div>
@@ -214,6 +214,17 @@
                                 <span class="badge badge-primary">Stage {{ stage.stage_order }}</span>
                                 <strong>{{ stage.stage_name or 'Stage ' + stage.stage_order|string }}</strong>
                                 <span class="badge badge-success">${{ "{:,.0f}".format(stage.budget_bracket_amount) }}</span>
+                                {% set doc_names = stage.get_required_document_names() %}
+                                {% if doc_names %}
+                                <span class="badge badge-warning ms-1" 
+                                      data-bs-toggle="tooltip" 
+                                      data-bs-placement="top" 
+                                      data-bs-html="true"
+                                      title="Required Documents:<br/>{{ doc_names|join('<br/>') }}"
+                                      style="cursor: help;">
+                                    <i class="fas fa-file-alt"></i> {{ doc_names|length }}
+                                </span>
+                                {% endif %}
                             </h6>
                             {% if stage.description %}
                             <small class="text-muted">{{ stage.description }}</small>
@@ -223,6 +234,10 @@
                             <button class="btn btn-sm btn-outline-info" 
                                     onclick="showAddStepModal({{ stage.id }}, '{{ stage.stage_name }}')">
                                 <i class="fas fa-plus"></i> Add Step
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary me-1" 
+                                    onclick="showEditStageModal({{ stage.id }})">
+                                <i class="fas fa-edit"></i>
                             </button>
                             <form method="POST" action="{{ url_for('approval_workflow_delete_stage', workflow_id=workflow.id, stage_id=stage.id) }}" 
                                   style="display:inline;" 
@@ -313,8 +328,10 @@
                         </table>
                     </div>
                     {% else %}
-                    <div class="text-center text-muted">
-                        <p><i class="fas fa-info-circle"></i> No approval steps configured for this stage.</p>
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-info-circle fa-2x mb-2"></i>
+                        <p class="mb-2"><strong>No approval steps configured for this stage</strong></p>
+                        <p class="small mb-3">This stage is empty. Click below to add the first approval step.</p>
                         <button class="btn btn-sm btn-outline-info" 
                                 onclick="showAddStepModal({{ stage.id }}, '{{ stage.stage_name }}')">
                             <i class="fas fa-plus"></i> Add First Step
@@ -362,6 +379,39 @@
                         <label for="description">Description (optional)</label>
                         <textarea class="form-control" id="description" name="description" rows="2"
                                   placeholder="Add any additional notes about this approval stage"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Required Document Types</label>
+                        <input type="text" class="form-control mb-2" id="docSearch" placeholder="🔍 Search documents..." onkeyup="filterDocuments()">
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-muted">📋 Available Documents</h6>
+                                <div class="border rounded p-2" style="height: 200px; overflow-y: auto;" id="availableDocuments">
+                                    {% for doc_type in document_types %}
+                                    {% if doc_type.value.strip() %}
+                                    <div class="d-flex align-items-center p-2 border-bottom document-item" style="cursor: pointer;" onclick="addDocument('{{ doc_type.key }}')">
+                                        <div class="me-2">
+                                            <i class="fas fa-plus-circle text-success"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div>{{ doc_type.value }}</div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted">✅ Required Documents</h6>
+                                <div class="border rounded p-2 bg-light" style="height: 200px; overflow-y: auto;" id="selectedDocuments">
+                                    <div class="text-muted p-2">No documents required</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="required_document_types" name="required_document_types" value="">
+                        <div class="form-text mt-2">Click documents to add/remove them from the requirements</div>
                     </div>
 
                     <!-- Hidden defaults -->
@@ -510,12 +560,119 @@
     </div>
 </div>
 
+<!-- Edit Stage Modal -->
+<div class="modal fade" id="editStageModal" tabindex="-1" aria-labelledby="editStageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" id="editStageForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Approval Stage</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit_budget_bracket_key">Budget Bracket *</label>
+                        <select class="form-control" id="edit_budget_bracket_key" name="budget_bracket_key" required>
+                            <option value="">Select Budget Bracket</option>
+                            {% for bracket in budget_brackets %}
+                            <option value="{{ bracket.key }}">${{ "{:,.0f}".format(bracket.value|float) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_stage_description">Description (optional)</label>
+                        <textarea class="form-control" id="edit_stage_description" name="description" rows="2"
+                                  placeholder="Add any additional notes about this approval stage"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Required Document Types</label>
+                        <input type="text" class="form-control mb-2" id="editDocSearch" placeholder="🔍 Search documents..." onkeyup="filterDocumentsEdit()">
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-muted">📋 Available Documents</h6>
+                                <div class="border rounded p-2" style="height: 200px; overflow-y: auto;" id="editAvailableDocuments">
+                                    {% for doc_type in document_types %}
+                                    {% if doc_type.value.strip() %}
+                                    <div class="d-flex align-items-center p-2 border-bottom document-item" style="cursor: pointer;" onclick="addDocumentEdit('{{ doc_type.key }}')">
+                                        <div class="me-2">
+                                            <i class="fas fa-plus-circle text-success"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div>{{ doc_type.value }}</div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted">✅ Required Documents</h6>
+                                <div class="border rounded p-2 bg-light" style="height: 200px; overflow-y: auto;" id="editSelectedDocuments">
+                                    <div class="text-muted p-2">No documents required</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="edit_required_document_types" name="required_document_types" value="">
+                        <div class="form-text mt-2">Click documents to add/remove them from the requirements</div>
+                    </div>
+
+                    <!-- Hidden defaults -->
+                    <input type="hidden" name="requires_all_steps" value="1">
+                    <input type="hidden" name="is_parallel" value="0">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Stage</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function showAddStepModal(stageId, stageName) {
     document.getElementById('stepStageName').textContent = stageName;
     document.getElementById('addStepForm').action = '{{ url_for("approval_workflow_add_step", workflow_id=workflow.id, stage_id=0) }}'.replace('0', stageId);
     const modal = new bootstrap.Modal(document.getElementById('addStepModal'));
     modal.show();
+}
+
+function showAddStageModal() {
+    // Load available budget brackets for this workflow
+    fetch(`/api/approval-workflow/{{ workflow.id }}/available-budget-brackets`)
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('budget_bracket_key');
+            
+            // Clear existing options except the first one
+            select.innerHTML = '<option value="">Select Budget Bracket</option>';
+            
+            if (data.success && data.brackets.length > 0) {
+                data.brackets.forEach(bracket => {
+                    const option = document.createElement('option');
+                    option.value = bracket.key;
+                    option.textContent = `$${bracket.amount.toLocaleString()}`;
+                    select.appendChild(option);
+                });
+            } else {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No available budget brackets';
+                option.disabled = true;
+                select.appendChild(option);
+            }
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('addStageModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error loading budget brackets:', error);
+            alert('Error loading available budget brackets.');
+        });
 }
 
 function showEditStepModal(stageId, stepId) {
@@ -543,8 +700,260 @@ function showEditStepModal(stageId, stepId) {
         });
 }
 
+function showEditStageModal(stageId) {
+    // Fetch stage data and available budget brackets
+    Promise.all([
+        fetch(`/api/approval-stage/${stageId}`),
+        fetch(`/api/approval-workflow/{{ workflow.id }}/available-budget-brackets/${stageId}`)
+    ])
+    .then(responses => Promise.all(responses.map(r => r.json())))
+    .then(([stage, bracketsData]) => {
+        // Populate budget bracket dropdown with available options
+        const select = document.getElementById('edit_budget_bracket_key');
+        select.innerHTML = '<option value="">Select Budget Bracket</option>';
+        
+        if (bracketsData.success && bracketsData.brackets.length > 0) {
+            bracketsData.brackets.forEach(bracket => {
+                const option = document.createElement('option');
+                option.value = bracket.key;
+                option.textContent = `$${bracket.amount.toLocaleString()}`;
+                if (bracket.key === stage.budget_bracket_key) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        }
+        
+        // Populate other form fields
+        document.getElementById('edit_stage_description').value = stage.description || '';
+        
+        // Reset and populate document selections
+        selectedDocumentsEdit = stage.required_document_types || [];
+        document.getElementById('edit_required_document_types').value = selectedDocumentsEdit.join(',');
+        
+        // Clear search
+        document.getElementById('editDocSearch').value = '';
+        
+        // Refresh the document lists
+        displayAvailableDocumentsEdit();
+        displaySelectedDocumentsEdit();
+        
+        // Set the form action
+        const editUrl = '/approval-workflow/{{ workflow.id }}/stage/' + stageId + '/edit';
+        document.getElementById('editStageForm').action = editUrl;
+        
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('editStageModal'));
+        modal.show();
+    })
+    .catch(error => {
+        console.error('Error fetching stage data:', error);
+        alert('Error loading stage data for editing.');
+    });
+}
+
+// Document selection functions (similar to team user selection)
+let allDocuments = [];
+let selectedDocuments = [];
+let selectedDocumentsEdit = [];
+
+// Load document types when page loads
+function initializeDocumentPickers() {
+    // Initialize document data from template
+    allDocuments = [
+        {% for doc_type in document_types %}
+        {% if doc_type.value.strip() %}
+        { key: '{{ doc_type.key }}', value: '{{ doc_type.value }}' },
+        {% endif %}
+        {% endfor %}
+    ];
+    
+    displayAvailableDocuments();
+    displaySelectedDocuments();
+}
+
+function filterDocuments() {
+    displayAvailableDocuments();
+}
+
+function filterDocumentsEdit() {
+    displayAvailableDocumentsEdit();
+}
+
+function displayAvailableDocuments() {
+    const searchTerm = document.getElementById('docSearch').value.toLowerCase();
+    
+    // Filter documents: not selected and matching search term
+    const availableDocs = allDocuments.filter(doc => 
+        !selectedDocuments.includes(doc.key) &&
+        doc.value.toLowerCase().includes(searchTerm)
+    );
+    
+    if (availableDocs.length === 0) {
+        document.getElementById('availableDocuments').innerHTML = '<div class="text-muted p-2">No available documents</div>';
+        return;
+    }
+    
+    let html = '';
+    availableDocs.forEach(doc => {
+        html += `
+            <div class="d-flex align-items-center p-2 border-bottom document-item" style="cursor: pointer;" onclick="addDocument('${doc.key}')">
+                <div class="me-2">
+                    <i class="fas fa-plus-circle text-success"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div>${doc.value}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('availableDocuments').innerHTML = html;
+}
+
+function displaySelectedDocuments() {
+    if (selectedDocuments.length === 0) {
+        document.getElementById('selectedDocuments').innerHTML = '<div class="text-muted p-2">No documents required</div>';
+        return;
+    }
+    
+    let html = '';
+    selectedDocuments.forEach(docKey => {
+        const doc = allDocuments.find(d => d.key === docKey);
+        if (doc) {
+            html += `
+                <div class="d-flex align-items-center p-2 border-bottom document-item" style="cursor: pointer;" onclick="removeDocument('${docKey}')">
+                    <div class="me-2">
+                        <i class="fas fa-minus-circle text-danger"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div>${doc.value}</div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById('selectedDocuments').innerHTML = html;
+}
+
+function addDocument(docKey) {
+    if (!selectedDocuments.includes(docKey)) {
+        selectedDocuments.push(docKey);
+        document.getElementById('required_document_types').value = selectedDocuments.join(',');
+        
+        // Refresh both lists
+        displayAvailableDocuments();
+        displaySelectedDocuments();
+    }
+}
+
+function removeDocument(docKey) {
+    const index = selectedDocuments.indexOf(docKey);
+    if (index > -1) {
+        selectedDocuments.splice(index, 1);
+        document.getElementById('required_document_types').value = selectedDocuments.join(',');
+        
+        // Refresh both lists
+        displayAvailableDocuments();
+        displaySelectedDocuments();
+    }
+}
+
+// Edit modal functions
+function displayAvailableDocumentsEdit() {
+    const searchTerm = document.getElementById('editDocSearch').value.toLowerCase();
+    
+    // Filter documents: not selected and matching search term
+    const availableDocs = allDocuments.filter(doc => 
+        !selectedDocumentsEdit.includes(doc.key) &&
+        doc.value.toLowerCase().includes(searchTerm)
+    );
+    
+    if (availableDocs.length === 0) {
+        document.getElementById('editAvailableDocuments').innerHTML = '<div class="text-muted p-2">No available documents</div>';
+        return;
+    }
+    
+    let html = '';
+    availableDocs.forEach(doc => {
+        html += `
+            <div class="d-flex align-items-center p-2 border-bottom document-item" style="cursor: pointer;" onclick="addDocumentEdit('${doc.key}')">
+                <div class="me-2">
+                    <i class="fas fa-plus-circle text-success"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div>${doc.value}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('editAvailableDocuments').innerHTML = html;
+}
+
+function displaySelectedDocumentsEdit() {
+    if (selectedDocumentsEdit.length === 0) {
+        document.getElementById('editSelectedDocuments').innerHTML = '<div class="text-muted p-2">No documents required</div>';
+        return;
+    }
+    
+    let html = '';
+    selectedDocumentsEdit.forEach(docKey => {
+        const doc = allDocuments.find(d => d.key === docKey);
+        if (doc) {
+            html += `
+                <div class="d-flex align-items-center p-2 border-bottom document-item" style="cursor: pointer;" onclick="removeDocumentEdit('${docKey}')">
+                    <div class="me-2">
+                        <i class="fas fa-minus-circle text-danger"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div>${doc.value}</div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById('editSelectedDocuments').innerHTML = html;
+}
+
+function addDocumentEdit(docKey) {
+    if (!selectedDocumentsEdit.includes(docKey)) {
+        selectedDocumentsEdit.push(docKey);
+        document.getElementById('edit_required_document_types').value = selectedDocumentsEdit.join(',');
+        
+        // Refresh both lists
+        displayAvailableDocumentsEdit();
+        displaySelectedDocumentsEdit();
+    }
+}
+
+function removeDocumentEdit(docKey) {
+    const index = selectedDocumentsEdit.indexOf(docKey);
+    if (index > -1) {
+        selectedDocumentsEdit.splice(index, 1);
+        document.getElementById('edit_required_document_types').value = selectedDocumentsEdit.join(',');
+        
+        // Refresh both lists
+        displayAvailableDocumentsEdit();
+        displaySelectedDocumentsEdit();
+    }
+}
+
 // Initialize sortable functionality when the page loads
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Bootstrap tooltips with HTML support
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            html: true
+        });
+    });
+    
+    // Initialize document pickers
+    initializeDocumentPickers();
+    
     // Initialize sortable for each stage's steps
     document.querySelectorAll('.sortable-steps').forEach(function(tbody) {
         if (typeof Sortable !== 'undefined') {
@@ -624,6 +1033,21 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .sortable-steps tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Better form spacing in modals */
+.modal-body .form-group {
+    margin-bottom: 1.5rem;
+}
+
+.modal-body .form-group label {
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+/* Document picker styling (similar to team user picker) */
+.document-item:hover {
     background-color: #f8f9fa;
 }
 </style>

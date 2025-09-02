@@ -898,15 +898,21 @@ def create_app():
         if request.method == 'POST':
             try:
                 from werkzeug.security import generate_password_hash
+                from email_service import send_welcome_email
                 
                 # Auto-generate user record ID
                 record_id = generate_next_id(User, 'record_id', '', 8)
                 
+                # Get form data
+                user_password = request.form.get('password', 'changeme123')
+                user_email = request.form.get('email')
+                user_fullname = request.form.get('fullname')
+                
                 user = User(
                     record_id=record_id,
-                    fullname=request.form.get('fullname'),
-                    email=request.form.get('email'),
-                    password_hash=generate_password_hash(request.form.get('password', 'changeme123')),
+                    fullname=user_fullname,
+                    email=user_email,
+                    password_hash=generate_password_hash(user_password),
                     sex=request.form.get('sex'),
                     company_code=request.form.get('company_code'),
                     company=request.form.get('company'),
@@ -926,7 +932,25 @@ def create_app():
                 db.session.add(user)
                 db.session.commit()
                 
-                flash('✅ User created successfully!', 'success')
+                # Send welcome email
+                try:
+                    if user_email and user_fullname:
+                        email_sent = send_welcome_email(
+                            user_email=user_email,
+                            user_name=user_fullname,
+                            temp_password=user_password
+                        )
+                        if email_sent:
+                            flash('✅ User created successfully and welcome email sent!', 'success')
+                        else:
+                            flash('✅ User created successfully, but welcome email could not be sent. Please check email configuration.', 'warning')
+                    else:
+                        flash('✅ User created successfully!', 'success')
+                except Exception as email_error:
+                    # Log the email error but don't fail the user creation
+                    print(f"Email sending failed: {str(email_error)}")
+                    flash('✅ User created successfully, but welcome email could not be sent.', 'warning')
+                
                 return redirect(url_for('users'))
                 
             except Exception as e:

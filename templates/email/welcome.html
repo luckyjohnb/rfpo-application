@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to RFPO Application</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-message {
+            font-size: 18px;
+            margin-bottom: 25px;
+            color: #2c3e50;
+        }
+        .info-box {
+            background-color: #ecf0f1;
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 4px;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+        .credentials {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .credentials strong {
+            color: #e74c3c;
+        }
+        .button {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .button:hover {
+            background-color: #2980b9;
+        }
+        .security-notice {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 25px 0;
+        }
+        .footer {
+            background-color: #34495e;
+            color: #bdc3c7;
+            padding: 20px 30px;
+            font-size: 14px;
+            text-align: center;
+        }
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 0;
+                box-shadow: none;
+            }
+            .content {
+                padding: 20px 15px;
+            }
+            .header {
+                padding: 20px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Welcome to RFPO Application</h1>
+            <p>Your account has been successfully created</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <div class="welcome-message">
+                <strong>Hello {{ user_name }},</strong>
+            </div>
+
+            <p>Welcome to the RFPO (Request for Purchase Order) Application! Your account has been successfully created and you now have access to our comprehensive procurement management system.</p>
+
+            <div class="info-box">
+                <h3>📧 Your Account Details</h3>
+                <p><strong>Email:</strong> {{ user_email }}</p>
+                <p><strong>Account Created:</strong> {{ current_date }}</p>
+            </div>
+
+            {% if temp_password %}
+            <div class="credentials">
+                <h3>🔐 Your Login Credentials</h3>
+                <p><strong>Username:</strong> {{ user_email }}</p>
+                <p><strong>Temporary Password:</strong> <strong>{{ temp_password }}</strong></p>
+            </div>
+
+            <div class="security-notice">
+                <strong>⚠️ Important Security Notice:</strong><br>
+                For your security, please change your password immediately after your first login. This temporary password should not be shared with anyone.
+            </div>
+            {% endif %}
+
+            <!-- Login Button -->
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{ login_url }}" class="button">Login to Your Account</a>
+            </div>
+
+            <div class="info-box">
+                <h3>🚀 What You Can Do With RFPO Application</h3>
+                <ul class="feature-list">
+                    <li>Create and manage Request for Purchase Orders (RFPOs)</li>
+                    <li>Track approval workflows and status updates</li>
+                    <li>Manage vendors and supplier information</li>
+                    <li>Collaborate with team members on projects</li>
+                    <li>Access comprehensive reporting and analytics</li>
+                    <li>Upload and manage procurement documents</li>
+                </ul>
+            </div>
+
+            <div class="info-box">
+                <h3>🎯 Next Steps</h3>
+                <ol>
+                    <li>Click the login button above to access your account</li>
+                    {% if temp_password %}
+                    <li>Change your temporary password to something secure</li>
+                    {% endif %}
+                    <li>Complete your profile information</li>
+                    <li>Explore the dashboard and familiarize yourself with the features</li>
+                    <li>Contact your administrator if you need additional permissions</li>
+                </ol>
+            </div>
+
+            <p>If you have any questions or need assistance getting started, please don't hesitate to reach out to our support team at <a href="mailto:{{ support_email }}">{{ support_email }}</a>.</p>
+
+            <p>We're excited to have you on board and look forward to helping you streamline your procurement processes!</p>
+
+            <p>Best regards,<br>
+            <strong>The RFPO Application Team</strong></p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>&copy; {{ current_year }} RFPO Application. All rights reserved.</p>
+            <p>
+                Need help? Contact us at <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Added to Project</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background-color: #27ae60;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .project-info {
+            background-color: #e8f5e8;
+            border-left: 4px solid #27ae60;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 4px;
+        }
+        .project-info h3 {
+            margin-top: 0;
+            color: #27ae60;
+            font-size: 16px;
+        }
+        .role-details {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 20px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .role-details h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .button {
+            display: inline-block;
+            background-color: #27ae60;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .button:hover {
+            background-color: #229954;
+        }
+        .footer {
+            background-color: #34495e;
+            color: #bdc3c7;
+            padding: 20px 30px;
+            font-size: 14px;
+            text-align: center;
+        }
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .responsibilities {
+            list-style: none;
+            padding: 0;
+        }
+        .responsibilities li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .responsibilities li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 0;
+                box-shadow: none;
+            }
+            .content {
+                padding: 20px 15px;
+            }
+            .header {
+                padding: 20px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎉 Project Assignment</h1>
+            <p>You've been added to a new project</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <p><strong>Hello {{ user_name }},</strong></p>
+
+            <p>Great news! You have been added to a project in the RFPO Application system. You now have access to collaborate on procurement activities and manage RFPOs for this project.</p>
+
+            <div class="project-info">
+                <h3>📁 Project Information</h3>
+                <p><strong>Project Name:</strong> {{ project_name }}</p>
+                <p><strong>Your Role:</strong> {{ role }}</p>
+                <p><strong>Date Added:</strong> {{ current_date }}</p>
+            </div>
+
+            <div class="role-details">
+                <h3>👤 Your Role & Responsibilities</h3>
+                <p>As a <strong>{{ role }}</strong> in this project, you will have access to:</p>
+                <ul class="responsibilities">
+                    <li>View and manage RFPOs associated with this project</li>
+                    <li>Collaborate with other team members</li>
+                    <li>Access project-specific documents and resources</li>
+                    <li>Participate in the approval workflow process</li>
+                    <li>Track project procurement activities and status</li>
+                </ul>
+            </div>
+
+            <!-- Action Button -->
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{ projects_url }}" class="button">View Project Details</a>
+            </div>
+
+            <div class="project-info">
+                <h3>🚀 Getting Started</h3>
+                <ol>
+                    <li>Click the button above to access your projects</li>
+                    <li>Review the project details and objectives</li>
+                    <li>Familiarize yourself with project-specific workflows</li>
+                    <li>Connect with other team members</li>
+                    <li>Start collaborating on procurement activities</li>
+                </ol>
+            </div>
+
+            <p>If you have any questions about your role in this project or need assistance with the RFPO Application features, please contact your project administrator or system support.</p>
+
+            <p>We look forward to your contributions to this project's success!</p>
+
+            <p>Best regards,<br>
+            <strong>The RFPO Application Team</strong></p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>&copy; {{ current_year }} RFPO Application. All rights reserved.</p>
+            <p>This is an automated notification from the project management system.</p>
+        </div>
+    </div>
+</body>
+</html>

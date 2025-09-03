@@ -1,0 +1,72 @@
+services:
+  # RFPO API Service (Port 5002)
+  rfpo-api:
+    container_name: rfpo-api
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "5002:5002"
+    env_file:
+      - .env
+    volumes:
+      - ./instance:/app/instance
+    networks:
+      - rfpo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # RFPO Admin Panel (Port 5111)
+  rfpo-admin:
+    container_name: rfpo-admin
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    ports:
+      - "5111:5111"
+    env_file:
+      - .env
+    volumes:
+      - ./instance:/app/instance
+      - ./uploads:/app/uploads
+      - ./static:/app/static
+    networks:
+      - rfpo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5111/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # RFPO User App (Port 5000)
+  rfpo-user-app:
+    container_name: rfpo-user
+    build:
+      context: .
+      dockerfile: Dockerfile.user-app
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - API_BASE_URL=http://rfpo-api:5002/api
+    depends_on:
+      rfpo-api:
+        condition: service_healthy
+    networks:
+      - rfpo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  rfpo-network:
+    driver: bridge

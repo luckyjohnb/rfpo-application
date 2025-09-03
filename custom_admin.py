@@ -19,17 +19,87 @@ from datetime import datetime
 from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam, PDFPositioning, RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep, RFPOApprovalInstance, RFPOApprovalAction
 from pdf_generator import RFPOPDFGenerator
 
+class APIHelper:
+    """
+    Safe API helper with fallback to direct database access
+    This allows gradual migration from direct DB to API calls
+    """
+    
+    def __init__(self, api_base_url='http://localhost:5002/api'):
+        self.api_base_url = api_base_url
+        self.session = None  # Will store admin session/token
+    
+    def make_api_call(self, endpoint, method='GET', data=None, fallback_func=None):
+        """
+        Make API call with fallback to direct database function
+        If API fails, use the fallback function (original DB code)
+        """
+        try:
+            import requests
+            url = f"{self.api_base_url}{endpoint}"
+            
+            headers = {'Content-Type': 'application/json'}
+            if self.session and self.session.get('token'):
+                headers['Authorization'] = f"Bearer {self.session['token']}"
+            
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=5)
+            elif method == 'POST':
+                response = requests.post(url, json=data, headers=headers, timeout=5)
+            elif method == 'PUT':
+                response = requests.put(url, json=data, headers=headers, timeout=5)
+            elif method == 'DELETE':
+                response = requests.delete(url, headers=headers, timeout=5)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"API call failed: {response.status_code}")
+                if fallback_func:
+                    print("Using database fallback...")
+                    return fallback_func()
+                
+        except Exception as e:
+            print(f"API call exception: {e}")
+            if fallback_func:
+                print("Using database fallback...")
+                return fallback_func()
+        
+        return None
+    
+    def authenticate_admin(self, email, password):
+        """Authenticate admin and store session"""
+        try:
+            import requests
+            response = requests.post(f"{self.api_base_url}/auth/login", 
+                                   json={'username': email, 'password': password},
+                                   timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    self.session = {'token': data['token'], 'user': data['user']}
+                    return True
+        except Exception as e:
+            print(f"API authentication failed: {e}")
+        
+        return False
+
 def create_app():
     """Create Flask application with custom admin panel"""
     app = Flask(__name__)
     
     # Configuration
     app.config['SECRET_KEY'] = 'rfpo-admin-secret-key-change-in-production'
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///rfpo_admin.db'
+    import os
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(os.getcwd(), "instance", "rfpo_admin.db")}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Initialize extensions
     db.init_app(app)
+    
+    # Initialize API Helper (for gradual migration to API)
+    api_helper = APIHelper('http://rfpo-api:5002/api')  # Use container name for Docker
+    app.api_helper = api_helper
     
     # Initialize Flask-Login
     login_manager = LoginManager()
@@ -415,6 +485,55 @@ def create_app():
         return document_validation
     
     # Authentication routes
+    # Health check endpoint for Docker
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        """Health check endpoint"""
+        return jsonify({
+            'status': 'healthy',
+            'service': 'RFPO Admin Panel',
+            'timestamp': datetime.utcnow().isoformat(),
+            'version': '1.0.0'
+        })
+    
+    # Test route for API integration (safe - doesn't break anything)
+    @app.route('/api-test')
+    @login_required
+    def api_test():
+        """Test API integration without breaking existing functionality"""
+        
+        # Test 1: Direct database count (current way)
+        db_user_count = User.query.count()
+        
+        # Test 2: API health check
+        api_status = "unknown"
+        try:
+            import requests
+            response = requests.get('http://rfpo-api:5002/api/health', timeout=3)
+            if response.status_code == 200:
+                api_status = "connected"
+            else:
+                api_status = f"error_{response.status_code}"
+        except Exception as e:
+            api_status = f"failed_{str(e)[:50]}"
+        
+        # Test 3: Try to authenticate with API (if current user has email)
+        api_auth_status = "not_tested"
+        if current_user and hasattr(current_user, 'email'):
+            try:
+                api_auth_result = app.api_helper.authenticate_admin(current_user.email, "test")
+                api_auth_status = "tested_but_no_password"
+            except Exception as e:
+                api_auth_status = f"auth_error_{str(e)[:30]}"
+        
+        return jsonify({
+            'database_users': db_user_count,
+            'api_status': api_status,
+            'api_auth_status': api_auth_status,
+            'current_user_email': current_user.email if current_user else None,
+            'message': 'API integration test - existing functionality unchanged'
+        })
+
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if request.method == 'POST':
@@ -898,7 +1017,13 @@ def create_app():
         if request.method == 'POST':
             try:
                 from werkzeug.security import generate_password_hash
-                from email_service import send_welcome_email
+                try:
+                    from email_service import send_welcome_email
+                    EMAIL_SERVICE_AVAILABLE = True
+                except ImportError:
+                    print("Warning: email_service not available - user creation will work but no welcome email")
+                    EMAIL_SERVICE_AVAILABLE = False
+                    send_welcome_email = None
                 
                 # Auto-generate user record ID
                 record_id = generate_next_id(User, 'record_id', '', 8)
@@ -926,15 +1051,39 @@ def create_app():
                 
                 # Handle permissions from checkboxes
                 permissions = request.form.getlist('permissions')  # Get all checked permission values
-                if permissions:
-                    user.set_permissions(permissions)
+                
+                # Validate that at least one permission is selected
+                if not permissions:
+                    flash('❌ Error: At least one permission must be selected for the user.', 'error')
+                    # Preserve form data by creating a temporary user object with form values
+                    class TempUser:
+                        def __init__(self):
+                            self.record_id = None  # Will be auto-generated
+                            self.fullname = user_fullname
+                            self.email = user_email
+                            self.sex = request.form.get('sex')
+                            self.company_code = request.form.get('company_code')
+                            self.company = request.form.get('company')
+                            self.position = request.form.get('position')
+                            self.department = request.form.get('department')
+                            self.phone = request.form.get('phone')
+                            self.active = bool(request.form.get('active', True))
+                            self.agreed_to_terms = bool(request.form.get('agreed_to_terms'))
+                        
+                        def get_permissions(self):
+                            return []  # No permissions selected
+                    
+                    temp_user = TempUser()
+                    return render_template('admin/user_form.html', user=temp_user, action='Create')
+                
+                user.set_permissions(permissions)
                 
                 db.session.add(user)
                 db.session.commit()
                 
                 # Send welcome email
                 try:
-                    if user_email and user_fullname:
+                    if user_email and user_fullname and EMAIL_SERVICE_AVAILABLE:
                         email_sent = send_welcome_email(
                             user_email=user_email,
                             user_name=user_fullname,
@@ -989,6 +1138,24 @@ def create_app():
                 
                 # Handle permissions from checkboxes
                 permissions = request.form.getlist('permissions')
+                
+                # Validate that at least one permission is selected
+                if not permissions:
+                    flash('❌ Error: At least one permission must be selected for the user.', 'error')
+                    # Preserve form data by updating user object with form values (but don't save to DB)
+                    user.fullname = request.form.get('fullname')
+                    user.email = new_email
+                    user.sex = request.form.get('sex')
+                    user.company_code = request.form.get('company_code')
+                    user.company = request.form.get('company')
+                    user.position = request.form.get('position')
+                    user.department = request.form.get('department')
+                    user.phone = request.form.get('phone')
+                    user.active = bool(request.form.get('active'))
+                    user.agreed_to_terms = bool(request.form.get('agreed_to_terms'))
+                    # Keep original permissions for display (don't clear them)
+                    return render_template('admin/user_form.html', user=user, action='Edit')
+                
                 user.set_permissions(permissions)
                 
                 db.session.commit()

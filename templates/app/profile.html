@@ -1,0 +1,641 @@
+{% extends "app/base.html" %}
+
+{% block title %}Profile - RFPO Application{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-user-cog"></i> User Profile
+        </h1>
+        <p class="text-muted">Manage your account settings and profile information</p>
+    </div>
+</div>
+
+<!-- First Time Login Alert -->
+<div id="firstLoginAlert" class="alert alert-warning alert-dismissible fade show" style="display: none;">
+    <i class="fas fa-exclamation-triangle"></i>
+    <strong>Welcome!</strong> This is your first login. Please update your password below.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Change Password (First Priority for first-time users) -->
+        <div class="card mb-4" id="passwordCard">
+            <div class="card-header" id="passwordCardHeader">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-key"></i> Change Password
+                    <span class="badge bg-danger ms-2" id="passwordRequired" style="display: none;">Required</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="passwordForm">
+                    <div class="mb-3">
+                        <label for="currentPassword" class="form-label">Current Password</label>
+                        <input type="password" class="form-control" id="currentPassword" name="currentPassword" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="newPassword" class="form-label">New Password</label>
+                            <input type="password" class="form-control" id="newPassword" name="newPassword" required>
+                            <div class="form-text">Minimum 8 characters</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="confirmPassword" class="form-label">Confirm New Password</label>
+                            <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-key"></i> Change Password
+                        <span class="loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Changing...
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Profile Information -->
+        <div class="card mb-4" id="profileCard">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-user"></i> Personal Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="profileForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="fullname" class="form-label"><strong>Your full name</strong></label>
+                            <input type="text" class="form-control" id="fullname" name="fullname" maxlength="100" size="40">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label"><strong>Email/username</strong></label>
+                            <input type="email" class="form-control" id="email" name="email" readonly maxlength="255" size="40">
+                            <div class="form-text">Contact admin to change email</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="sex" class="form-label"><strong>Sex</strong></label>
+                            <select class="form-select" id="sex" name="sex">
+                                <option value="m">Male</option>
+                                <option value="f">Female</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="position" class="form-label"><strong>Position</strong></label>
+                            <input type="text" class="form-control" id="position" name="position" maxlength="100" size="40">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Update Profile
+                        <span class="loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Saving...
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Company Information -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-building"></i> Company Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="companyForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="company_code" class="form-label"><strong>Company Code</strong></label>
+                            <select class="form-select" id="company_code" name="company_code">
+                                <option value="">Select...</option>
+                                <option value="BP">BP</option>
+                                <option value="CHEV">Chevron</option>
+                                <option value="DOE">DOE</option>
+                                <option value="EM">ExxonMobil</option>
+                                <option value="FCA">FCA US LLC</option>
+                                <option value="FRD">Ford</option>
+                                <option value="GM">General Motors</option>
+                                <option value="Lab">National Lab</option>
+                                <option value="P66">Phillips 66</option>
+                                <option value="SHL">Shell</option>
+                                <option value="USC">USCAR</option>
+                                <option value="xxx">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="company" class="form-label"><strong>Company</strong></label>
+                            <input type="text" class="form-control" id="company" name="company" maxlength="100" size="40">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="department" class="form-label"><strong>Department</strong></label>
+                        <input type="text" class="form-control" id="department" name="department" maxlength="100" size="40">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Update Company Info
+                        <span class="loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Saving...
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Address Information -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-map-marker-alt"></i> Address Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="addressForm">
+                    <div class="mb-3">
+                        <label for="building_address" class="form-label"><strong>Building/Int Mail address</strong></label>
+                        <input type="text" class="form-control" id="building_address" name="building_address" maxlength="100" size="40">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="address1" class="form-label"><strong>Address Line 1</strong></label>
+                            <input type="text" class="form-control" id="address1" name="address1" maxlength="100" size="40">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="address2" class="form-label"><strong>Address Line 2</strong></label>
+                            <input type="text" class="form-control" id="address2" name="address2" maxlength="100" size="40">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="city" class="form-label"><strong>City</strong></label>
+                            <input type="text" class="form-control" id="city" name="city" maxlength="100" size="40">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="state" class="form-label"><strong>State</strong></label>
+                            <select class="form-select" id="state" name="state">
+                                <option value="">Other/Outside US</option>
+                                <option value="AL">Alabama</option>
+                                <option value="AK">Alaska</option>
+                                <option value="AZ">Arizona</option>
+                                <option value="AR">Arkansas</option>
+                                <option value="CA">California</option>
+                                <option value="CO">Colorado</option>
+                                <option value="CT">Connecticut</option>
+                                <option value="DE">Delaware</option>
+                                <option value="FL">Florida</option>
+                                <option value="GA">Georgia</option>
+                                <option value="HI">Hawaii</option>
+                                <option value="ID">Idaho</option>
+                                <option value="IL">Illinois</option>
+                                <option value="IN">Indiana</option>
+                                <option value="IA">Iowa</option>
+                                <option value="KS">Kansas</option>
+                                <option value="KY">Kentucky</option>
+                                <option value="LA">Louisiana</option>
+                                <option value="ME">Maine</option>
+                                <option value="MD">Maryland</option>
+                                <option value="MA">Massachusetts</option>
+                                <option value="MI">Michigan</option>
+                                <option value="MN">Minnesota</option>
+                                <option value="MS">Mississippi</option>
+                                <option value="MO">Missouri</option>
+                                <option value="MT">Montana</option>
+                                <option value="NE">Nebraska</option>
+                                <option value="NV">Nevada</option>
+                                <option value="NH">New Hampshire</option>
+                                <option value="NJ">New Jersey</option>
+                                <option value="NM">New Mexico</option>
+                                <option value="NY">New York</option>
+                                <option value="NC">North Carolina</option>
+                                <option value="ND">North Dakota</option>
+                                <option value="OH">Ohio</option>
+                                <option value="OK">Oklahoma</option>
+                                <option value="OR">Oregon</option>
+                                <option value="PA">Pennsylvania</option>
+                                <option value="RI">Rhode Island</option>
+                                <option value="SC">South Carolina</option>
+                                <option value="SD">South Dakota</option>
+                                <option value="TN">Tennessee</option>
+                                <option value="TX">Texas</option>
+                                <option value="UT">Utah</option>
+                                <option value="VT">Vermont</option>
+                                <option value="VA">Virginia</option>
+                                <option value="WA">Washington</option>
+                                <option value="WV">West Virginia</option>
+                                <option value="WI">Wisconsin</option>
+                                <option value="WY">Wyoming</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="zip_code" class="form-label"><strong>Zip code</strong></label>
+                            <input type="text" class="form-control" id="zip_code" name="zip_code" maxlength="20" size="40">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="country" class="form-label"><strong>Country</strong></label>
+                        <input type="text" class="form-control" id="country" name="country" maxlength="100" size="40">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Update Address
+                        <span class="loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Saving...
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Contact Information -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-phone"></i> Contact Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="contactForm">
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label for="phone" class="form-label"><strong>Tel no</strong></label>
+                            <input type="text" class="form-control" id="phone" name="phone" maxlength="50">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="phone_ext" class="form-label"><strong>ext</strong></label>
+                            <input type="text" class="form-control" id="phone_ext" name="phone_ext" maxlength="8" size="8">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="mobile" class="form-label"><strong>Mobile/Cell no</strong></label>
+                            <input type="text" class="form-control" id="mobile" name="mobile" maxlength="50">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="fax" class="form-label"><strong>Fax No</strong></label>
+                            <input type="text" class="form-control" id="fax" name="fax" maxlength="50">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Update Contact Info
+                        <span class="loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Saving...
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Profile Summary -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-user"></i> Profile Summary
+                </h6>
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-user-circle fa-5x text-muted"></i>
+                </div>
+                <h6 id="profileSummaryName">Loading...</h6>
+                <p class="text-muted small" id="profileSummaryEmail">Loading...</p>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-bolt"></i> Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('rfpo_create') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-plus"></i> Create RFPO
+                    </a>
+                    <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-list"></i> My RFPOs
+                    </a>
+                    <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-users"></i> View Teams
+                    </a>
+                    <button class="btn btn-outline-danger btn-sm" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentUser = null;
+
+    // Check if this is first login
+    const urlParams = new URLSearchParams(window.location.search);
+    const isFirstLogin = urlParams.get('first_login') === 'true';
+    
+    if (isFirstLogin) {
+        document.getElementById('firstLoginAlert').style.display = 'block';
+        document.getElementById('passwordRequired').style.display = 'inline';
+        document.getElementById('passwordCardHeader').classList.add('bg-warning');
+        // Focus on password card for first-time users
+        document.getElementById('passwordCard').scrollIntoView();
+    }
+
+    async function loadUserProfile() {
+        try {
+            showLoading(true);
+            const response = await makeApiCall('/api/users/profile');
+            
+            if (response.success) {
+                currentUser = response.user;
+                displayUserProfile(currentUser);
+            } else {
+                throw new Error(response.message || 'Failed to load profile');
+            }
+        } catch (error) {
+            showAlert(`Error loading profile: ${error.message}`, 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function displayUserProfile(user) {
+        // Profile form
+        document.getElementById('fullname').value = user.fullname || '';
+        document.getElementById('email').value = user.email || '';
+        document.getElementById('sex').value = user.sex || '';
+        document.getElementById('position').value = user.position || '';
+        
+        // Company form
+        document.getElementById('company_code').value = user.company_code || '';
+        document.getElementById('company').value = user.company || '';
+        document.getElementById('department').value = user.department || '';
+        
+        // Address form
+        document.getElementById('building_address').value = user.building_address || '';
+        document.getElementById('address1').value = user.address1 || '';
+        document.getElementById('address2').value = user.address2 || '';
+        document.getElementById('city').value = user.city || '';
+        document.getElementById('state').value = user.state || '';
+        document.getElementById('zip_code').value = user.zip_code || '';
+        document.getElementById('country').value = user.country || '';
+        
+        // Contact form
+        document.getElementById('phone').value = user.phone || '';
+        document.getElementById('phone_ext').value = user.phone_ext || '';
+        document.getElementById('mobile').value = user.mobile || '';
+        document.getElementById('fax').value = user.fax || '';
+        
+        // Profile summary
+        document.getElementById('profileSummaryName').textContent = user.fullname || user.email;
+        document.getElementById('profileSummaryEmail').textContent = user.email;
+    }
+
+    // Password change form
+    document.getElementById('passwordForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const currentPassword = formData.get('currentPassword');
+        const newPassword = formData.get('newPassword');
+        const confirmPassword = formData.get('confirmPassword');
+        
+        // Validation
+        if (newPassword !== confirmPassword) {
+            showAlert('New passwords do not match', 'danger');
+            return;
+        }
+        
+        if (newPassword.length < 8) {
+            showAlert('Password must be at least 8 characters long', 'danger');
+            return;
+        }
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const loadingSpan = submitBtn.querySelector('.loading');
+        loadingSpan.style.display = 'inline';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await makeApiCall('/api/auth/change-password', {
+                method: 'POST',
+                body: JSON.stringify({
+                    current_password: currentPassword,
+                    new_password: newPassword
+                })
+            });
+            
+            if (response.success) {
+                showAlert('Password changed successfully! A security notification has been sent to your email. Logging out...', 'success');
+                
+                // Clear the form
+                this.reset();
+                
+                // Automatic logout after password change
+                setTimeout(async () => {
+                    try {
+                        await makeApiCall('/api/auth/logout', { method: 'POST' });
+                    } catch (e) {
+                        // Ignore logout API errors
+                    }
+                    
+                    // Clear session and redirect to login
+                    window.location.href = '/login?message=Password changed successfully. Please log in with your new password.';
+                }, 2000);
+                
+            } else {
+                throw new Error(response.message || 'Failed to change password');
+            }
+        } catch (error) {
+            showAlert(`Error changing password: ${error.message}`, 'danger');
+        } finally {
+            loadingSpan.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Profile form
+    document.getElementById('profileForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const profileData = {
+            fullname: formData.get('fullname'),
+            sex: formData.get('sex'),
+            position: formData.get('position')
+        };
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const loadingSpan = submitBtn.querySelector('.loading');
+        loadingSpan.style.display = 'inline';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await makeApiCall('/api/users/profile', {
+                method: 'PUT',
+                body: JSON.stringify(profileData)
+            });
+            
+            if (response.success) {
+                showAlert('Profile updated successfully!', 'success');
+                // Reload profile to show updated data
+                loadUserProfile();
+            } else {
+                throw new Error(response.message || 'Failed to update profile');
+            }
+        } catch (error) {
+            showAlert(`Error updating profile: ${error.message}`, 'danger');
+        } finally {
+            loadingSpan.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Company form
+    document.getElementById('companyForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const companyData = {
+            company_code: formData.get('company_code'),
+            company: formData.get('company'),
+            department: formData.get('department')
+        };
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const loadingSpan = submitBtn.querySelector('.loading');
+        loadingSpan.style.display = 'inline';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await makeApiCall('/api/users/profile', {
+                method: 'PUT',
+                body: JSON.stringify(companyData)
+            });
+            
+            if (response.success) {
+                showAlert('Company information updated successfully!', 'success');
+                // Reload profile to show updated data
+                loadUserProfile();
+            } else {
+                throw new Error(response.message || 'Failed to update company information');
+            }
+        } catch (error) {
+            showAlert(`Error updating company information: ${error.message}`, 'danger');
+        } finally {
+            loadingSpan.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    });
+    
+    // Address form
+    document.getElementById('addressForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const addressData = {
+            building_address: formData.get('building_address'),
+            address1: formData.get('address1'),
+            address2: formData.get('address2'),
+            city: formData.get('city'),
+            state: formData.get('state'),
+            zip_code: formData.get('zip_code'),
+            country: formData.get('country')
+        };
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const loadingSpan = submitBtn.querySelector('.loading');
+        loadingSpan.style.display = 'inline';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await makeApiCall('/api/users/profile', {
+                method: 'PUT',
+                body: JSON.stringify(addressData)
+            });
+            
+            if (response.success) {
+                showAlert('Address information updated successfully!', 'success');
+                // Reload profile to show updated data
+                loadUserProfile();
+            } else {
+                throw new Error(response.message || 'Failed to update address information');
+            }
+        } catch (error) {
+            showAlert(`Error updating address information: ${error.message}`, 'danger');
+        } finally {
+            loadingSpan.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    });
+    
+    // Contact form
+    document.getElementById('contactForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const contactData = {
+            phone: formData.get('phone'),
+            phone_ext: formData.get('phone_ext'),
+            mobile: formData.get('mobile'),
+            fax: formData.get('fax')
+        };
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const loadingSpan = submitBtn.querySelector('.loading');
+        loadingSpan.style.display = 'inline';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await makeApiCall('/api/users/profile', {
+                method: 'PUT',
+                body: JSON.stringify(contactData)
+            });
+            
+            if (response.success) {
+                showAlert('Contact information updated successfully!', 'success');
+                // Reload profile to show updated data
+                loadUserProfile();
+            } else {
+                throw new Error(response.message || 'Failed to update contact information');
+            }
+        } catch (error) {
+            showAlert(`Error updating contact information: ${error.message}`, 'danger');
+        } finally {
+            loadingSpan.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', function() {
+        loadUserProfile();
+    });
+</script>
+{% endblock %}

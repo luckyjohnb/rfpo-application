@@ -199,3 +199,4 @@ Potential improvements for the email service:
 - Bounce and unsubscribe handling
 - Rich text editor for email composition
 - Email analytics and reporting
+

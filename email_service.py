@@ -284,6 +284,38 @@ class EmailService:
             subject=template_data['subject']
         )
     
+    def send_password_changed_email(self, user_email: str, user_name: str, change_ip: str = None) -> bool:
+        """
+        Send password change notification email
+        
+        Args:
+            user_email: User's email address
+            user_name: User's display name
+            change_ip: IP address where password was changed (optional)
+            
+        Returns:
+            bool: True if email sent successfully, False otherwise
+        """
+        template_data = {
+            'user_name': user_name,
+            'user_email': user_email,
+            'change_ip': change_ip,
+            'change_timestamp': datetime.now().strftime('%B %d, %Y at %I:%M %p'),
+            'current_date': datetime.now().strftime('%B %d, %Y'),
+            'current_time': datetime.now().strftime('%I:%M %p'),
+            'current_year': datetime.now().year,
+            'login_url': os.environ.get('APP_URL', 'http://localhost:5000') + '/login',
+            'support_email': os.environ.get('SUPPORT_EMAIL', 'support@rfpo.com'),
+            'subject': 'Password Changed - RFPO Application Security Notification'
+        }
+        
+        return self.send_templated_email(
+            to_emails=[user_email],
+            template_name='password_changed',
+            template_data=template_data,
+            subject=template_data['subject']
+        )
+    
     def send_approval_notification(self, user_email: str, user_name: str, rfpo_id: str, approval_type: str) -> bool:
         """
         Send approval notification email
@@ -366,6 +398,10 @@ email_service = EmailService()
 def send_welcome_email(user_email: str, user_name: str, temp_password: str = None) -> bool:
     """Send welcome email to new user"""
     return email_service.send_welcome_email(user_email, user_name, temp_password)
+
+def send_password_changed_email(user_email: str, user_name: str, change_ip: str = None) -> bool:
+    """Send password change notification email"""
+    return email_service.send_password_changed_email(user_email, user_name, change_ip)
 
 def send_approval_notification(user_email: str, user_name: str, rfpo_id: str, approval_type: str) -> bool:
     """Send approval notification email"""

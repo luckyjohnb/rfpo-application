@@ -1,0 +1,303 @@
+{% extends "app/base.html" %}
+
+{% block title %}RFPO Details - RFPO Application{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-file-invoice"></i> RFPO Details
+        </h1>
+        <p class="text-muted" id="rfpoSubtitle">Loading...</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <div class="btn-group" role="group">
+            <button class="btn btn-outline-primary" onclick="editRfpo()">
+                <i class="fas fa-edit"></i> Edit
+            </button>
+            <button class="btn btn-outline-secondary" onclick="printRfpo()">
+                <i class="fas fa-print"></i> Print
+            </button>
+            <button class="btn btn-outline-danger" onclick="deleteRfpo()">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="loading text-center py-5">
+    <i class="fas fa-spinner fa-spin fa-3x text-muted"></i>
+    <p class="text-muted mt-3">Loading RFPO details...</p>
+</div>
+
+<div id="rfpoContent" style="display: none;">
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- RFPO Information -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> RFPO Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">RFPO ID:</dt>
+                                <dd class="col-sm-8" id="rfpoId">-</dd>
+                                
+                                <dt class="col-sm-4">Title:</dt>
+                                <dd class="col-sm-8" id="rfpoTitle">-</dd>
+                                
+                                <dt class="col-sm-4">Status:</dt>
+                                <dd class="col-sm-8" id="rfpoStatus">-</dd>
+                                
+                                <dt class="col-sm-4">Team:</dt>
+                                <dd class="col-sm-8" id="rfpoTeam">-</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Vendor:</dt>
+                                <dd class="col-sm-8" id="rfpoVendor">-</dd>
+                                
+                                <dt class="col-sm-4">Due Date:</dt>
+                                <dd class="col-sm-8" id="rfpoDueDate">-</dd>
+                                
+                                <dt class="col-sm-4">Created:</dt>
+                                <dd class="col-sm-8" id="rfpoCreated">-</dd>
+                                
+                                <dt class="col-sm-4">Created By:</dt>
+                                <dd class="col-sm-8" id="rfpoCreatedBy">-</dd>
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col">
+                            <dt>Description:</dt>
+                            <dd id="rfpoDescription" class="text-muted">-</dd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Line Items -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-list"></i> Line Items
+                    </h5>
+                    <button class="btn btn-sm btn-primary" onclick="addLineItem()">
+                        <i class="fas fa-plus"></i> Add Item
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="lineItemsContainer">
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-box-open fa-2x mb-2"></i>
+                            <p>No line items yet. Click "Add Item" to get started.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Files -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-paperclip"></i> Attached Files
+                    </h5>
+                    <button class="btn btn-sm btn-primary" onclick="uploadFiles()">
+                        <i class="fas fa-upload"></i> Upload Files
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="filesContainer">
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-file fa-2x mb-2"></i>
+                            <p>No files attached yet.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <!-- Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-cogs"></i> Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" onclick="editRfpo()">
+                            <i class="fas fa-edit"></i> Edit RFPO
+                        </button>
+                        <button class="btn btn-outline-success" onclick="duplicateRfpo()">
+                            <i class="fas fa-copy"></i> Duplicate
+                        </button>
+                        <button class="btn btn-outline-info" onclick="exportRfpo()">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                        <hr>
+                        <button class="btn btn-outline-danger" onclick="deleteRfpo()">
+                            <i class="fas fa-trash"></i> Delete RFPO
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-history"></i> Recent Activity
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-clock fa-2x mb-2"></i>
+                        <p class="small">Activity tracking coming soon</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const rfpoId = {{ rfpo_id }};
+    let currentRfpo = null;
+
+    async function loadRfpoDetails() {
+        try {
+            showLoading(true);
+            const response = await makeApiCall(`/api/rfpos/${rfpoId}`);
+            
+            if (response.success) {
+                currentRfpo = response.rfpo;
+                displayRfpoDetails(currentRfpo);
+                document.getElementById('rfpoContent').style.display = 'block';
+            } else {
+                throw new Error(response.message || 'Failed to load RFPO');
+            }
+        } catch (error) {
+            showAlert(`Error loading RFPO: ${error.message}`, 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function displayRfpoDetails(rfpo) {
+        document.getElementById('rfpoSubtitle').textContent = rfpo.rfpo_id + ' - ' + rfpo.title;
+        document.getElementById('rfpoId').textContent = rfpo.rfpo_id;
+        document.getElementById('rfpoTitle').textContent = rfpo.title;
+        document.getElementById('rfpoStatus').innerHTML = getStatusBadge(rfpo.status);
+        document.getElementById('rfpoTeam').textContent = rfpo.team_name || 'Unknown';
+        document.getElementById('rfpoVendor').textContent = rfpo.vendor || 'Not specified';
+        document.getElementById('rfpoDueDate').textContent = rfpo.due_date ? new Date(rfpo.due_date).toLocaleDateString() : 'Not set';
+        document.getElementById('rfpoCreated').textContent = rfpo.created_at ? new Date(rfpo.created_at).toLocaleDateString() : 'Unknown';
+        document.getElementById('rfpoCreatedBy').textContent = rfpo.created_by || 'Unknown';
+        document.getElementById('rfpoDescription').textContent = rfpo.description || 'No description provided';
+        
+        // Update page title
+        document.title = `${rfpo.rfpo_id} - ${rfpo.title} - RFPO Application`;
+        
+        // Load line items and files
+        loadLineItems(rfpo.line_items || []);
+        loadFiles(rfpo.files || []);
+    }
+
+    function getStatusBadge(status) {
+        const statusClasses = {
+            'Draft': 'bg-secondary',
+            'Pending': 'bg-warning',
+            'In Review': 'bg-info',
+            'Approved': 'bg-success',
+            'Completed': 'bg-success',
+            'Rejected': 'bg-danger',
+            'Cancelled': 'bg-dark'
+        };
+        
+        const badgeClass = statusClasses[status] || 'bg-secondary';
+        return `<span class="badge ${badgeClass}">${status}</span>`;
+    }
+
+    function loadLineItems(lineItems) {
+        const container = document.getElementById('lineItemsContainer');
+        if (lineItems.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-box-open fa-2x mb-2"></i>
+                    <p>No line items yet. Click "Add Item" to get started.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // TODO: Display line items table
+        container.innerHTML = `<p class="text-muted">Line items display coming soon (${lineItems.length} items)</p>`;
+    }
+
+    function loadFiles(files) {
+        const container = document.getElementById('filesContainer');
+        if (files.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-file fa-2x mb-2"></i>
+                    <p>No files attached yet.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // TODO: Display files list
+        container.innerHTML = `<p class="text-muted">Files display coming soon (${files.length} files)</p>`;
+    }
+
+    // Action functions
+    function editRfpo() {
+        showAlert('Edit functionality coming soon', 'info');
+    }
+
+    function printRfpo() {
+        window.print();
+    }
+
+    function deleteRfpo() {
+        if (!confirm(`Are you sure you want to delete "${currentRfpo.title}"?`)) {
+            return;
+        }
+        showAlert('Delete functionality coming soon', 'warning');
+    }
+
+    function addLineItem() {
+        showAlert('Add line item functionality coming soon', 'info');
+    }
+
+    function uploadFiles() {
+        showAlert('File upload functionality coming soon', 'info');
+    }
+
+    function duplicateRfpo() {
+        showAlert('Duplicate functionality coming soon', 'info');
+    }
+
+    function exportRfpo() {
+        showAlert('Export functionality coming soon', 'info');
+    }
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', function() {
+        loadRfpoDetails();
+    });
+</script>
+{% endblock %}
+
+

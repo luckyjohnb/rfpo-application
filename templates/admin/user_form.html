@@ -615,10 +615,12 @@
                                 <div class="card-body">
                                     <div class="capabilities-grid">
                                         {% for key, value in user_mindmap.capabilities.items() %}
-                                            <div class="capability-node {{ 'enabled' if value else 'disabled' }}">
-                                                <i class="fas {{ 'fa-check' if value else 'fa-times' }}"></i>
-                                                <span>{{ key.replace('can_', '').replace('_', ' ').title() }}</span>
-                                            </div>
+                                            {% if key != 'can_access_admin_panel' %}
+                                                <div class="capability-node {{ 'enabled' if value else 'disabled' }}">
+                                                    <i class="fas {{ 'fa-check' if value else 'fa-times' }}"></i>
+                                                    <span>{{ key.replace('can_', '').replace('_', ' ').title() }}</span>
+                                                </div>
+                                            {% endif %}
                                         {% endfor %}
                                     </div>
                                 </div>
@@ -736,9 +738,10 @@
                                                 This user is not assigned to any teams, consortiums, or projects.
                                             </p>
                                             <div class="impact-summary">
-                                                <div class="impact-item admin-impact">
+                                                {% set can_access_admin = user_mindmap.capabilities.can_access_admin_panel %}
+                                                <div class="impact-item {{ 'admin-impact' if can_access_admin else 'user-impact' }}">
                                                     <i class="fas fa-cogs"></i>
-                                                    <span>Admin Panel: <strong>Full Access</strong></span>
+                                                    <span>Admin Panel: <strong>{{ 'Full Access' if can_access_admin else 'No Access' }}</strong></span>
                                                 </div>
                                                 <div class="impact-item user-impact">
                                                     <i class="fas fa-mobile-alt"></i>

@@ -228,6 +228,7 @@ def get_user_mindmap_data(user):
                 'approval_workflows': approval_access
             },
             'capabilities': {
+                'can_access_admin_panel': user.is_rfpo_admin() or user.is_super_admin(),
                 'can_create_rfpos': len(team_data) > 0 or len(project_access) > 0 or user.is_rfpo_admin() or user.is_super_admin(),
                 'can_approve_rfpos': user.is_rfpo_admin() or user.is_super_admin(),
                 'can_manage_users': user.is_rfpo_admin() or user.is_super_admin(),
@@ -4000,6 +4001,7 @@ Southfield, MI  48075""",
                     'approval_workflows': approval_access
                 },
                 'capabilities': {
+                    'can_access_admin_panel': user.is_rfpo_admin() or user.is_super_admin(),
                     'can_create_rfpos': len(team_data) > 0 or len(project_access) > 0 or user.is_super_admin(),
                     'can_approve_rfpos': user.is_rfpo_admin() or user.is_super_admin(),
                     'can_manage_users': user.is_super_admin(),

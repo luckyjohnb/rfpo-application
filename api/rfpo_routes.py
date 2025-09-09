@@ -18,11 +18,46 @@ rfpo_api = Blueprint('rfpo_api', __name__, url_prefix='/api/rfpos')
 @rfpo_api.route('', methods=['GET'])
 @require_auth
 def list_rfpos():
-    """List RFPOs with filtering and pagination"""
+    """List RFPOs with filtering and pagination based on user permissions"""
     try:
+        from models import Team, Project
+        
+        user = request.current_user
+        
+        # Build base query with permission filtering
         query = RFPO.query
         
-        # Filters
+        # If user is super admin, they can see all RFPOs
+        if not user.is_super_admin():
+            # Get user's accessible team IDs
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+            
+            # Get user's accessible project IDs
+            all_projects = Project.query.all()
+            accessible_project_ids = []
+            for project in all_projects:
+                viewer_users = project.get_rfpo_viewer_users()
+                if user.record_id in viewer_users:
+                    accessible_project_ids.append(project.project_id)
+            
+            # Filter RFPOs to only those user can access
+            if team_ids or accessible_project_ids:
+                filters = []
+                if team_ids:
+                    filters.append(RFPO.team_id.in_(team_ids))
+                if accessible_project_ids:
+                    filters.append(RFPO.project_id.in_(accessible_project_ids))
+                
+                if len(filters) > 1:
+                    query = query.filter(db.or_(*filters))
+                else:
+                    query = query.filter(filters[0])
+            else:
+                # User has no access to any RFPOs
+                query = query.filter(RFPO.id == -1)  # This will return no results
+        
+        # Apply additional filters
         team_id = request.args.get('team_id')
         if team_id:
             query = query.filter_by(team_id=team_id)

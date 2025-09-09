@@ -1,6 +1,6 @@
 # RFPO Application
 
-A modern, containerized Request for Purchase Order (RFPO) management system with separated user and admin interfaces.
+Containerized Request for Purchase Order (RFPO) management system with separated user and admin interfaces.
 
 ## 🏗️ Architecture
 
@@ -34,7 +34,7 @@ The RFPO application consists of three containerized services:
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/luckyjohnb/rfpo-application.git
    cd rfpo-application
    ```
 

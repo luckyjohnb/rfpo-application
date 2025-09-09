@@ -179,6 +179,35 @@ class RFPO(db.Model):
     files = db.relationship('UploadedFile', backref='rfpo', lazy=True, cascade='all, delete-orphan')
     line_items = db.relationship('RFPOLineItem', backref='rfpo', lazy=True, cascade='all, delete-orphan')
     
+    def get_calculated_cost_share_amount(self):
+        """Calculate the actual cost share amount based on type and subtotal"""
+        if not self.cost_share_amount or not self.subtotal:
+            return 0.00
+        
+        if self.cost_share_type == 'percent':
+            # Calculate percentage of subtotal
+            percentage = float(self.cost_share_amount)
+            return float(self.subtotal) * (percentage / 100.0)
+        else:
+            # Direct dollar amount
+            return float(self.cost_share_amount)
+    
+    def get_calculated_total_amount(self):
+        """Calculate the total amount after cost sharing"""
+        subtotal = float(self.subtotal or 0)
+        cost_share = self.get_calculated_cost_share_amount()
+        return subtotal - cost_share
+    
+    def update_totals(self):
+        """Update subtotal and total_amount based on line items and cost sharing"""
+        if self.line_items:
+            self.subtotal = sum(float(item.total_price or 0) for item in self.line_items)
+        else:
+            self.subtotal = 0.00
+        
+        # Calculate total with cost sharing
+        self.total_amount = self.get_calculated_total_amount()
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -208,7 +237,9 @@ class RFPO(db.Model):
             'cost_share_description': self.cost_share_description,
             'cost_share_type': self.cost_share_type,
             'cost_share_amount': float(self.cost_share_amount) if self.cost_share_amount else 0.00,
+            'calculated_cost_share_amount': self.get_calculated_cost_share_amount(),
             'total_amount': float(self.total_amount) if self.total_amount else 0.00,
+            'calculated_total_amount': self.get_calculated_total_amount(),
             'comments': self.comments,
             'status': self.status,
             'due_date': self.due_date.isoformat() if self.due_date else None,

@@ -4,9 +4,6 @@
 
 {% if user %}
 {% block extra_head %}
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <style>
 /* Visual Mindmap Styles */
 .permissions-mindmap-visual {
@@ -211,22 +208,12 @@
 }
 
 .entity-node {
-    min-width: 140px;
-    max-width: 160px;
+    min-width: 120px;
     padding: 1rem;
     border-radius: 8px;
     text-align: center;
     border: 2px solid;
     background: white;
-    position: relative;
-}
-
-.entity-node[title] {
-    cursor: help;
-}
-
-.entity-node[title]:hover {
-    z-index: 10;
 }
 
 .team-node {
@@ -261,21 +248,6 @@
     font-size: 0.6rem;
     color: #999;
     margin-top: 0.25rem;
-}
-
-/* Clickable entity nodes */
-.entity-node.clickable {
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.entity-node.clickable:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-}
-
-.entity-node.clickable:active {
-    transform: translateY(0);
 }
 
 /* No Associations Warning */
@@ -323,6 +295,21 @@
     color: #ef6c00;
 }
 
+/* Clickable entity nodes */
+.entity-node.clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.entity-node.clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.entity-node.clickable:active {
+    transform: translateY(0);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .access-branches {
@@ -341,6 +328,7 @@
 {% endblock %}
 {% endif %}
 
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">👤 {{ action }} User</h1>
@@ -351,15 +339,15 @@
     </div>
 </div>
 
-<form method="POST">
-    <div class="row g-4">
-        <!-- Left Column: User Information -->
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="mb-0">👤 User Information</h5>
-                </div>
-                <div class="card-body">
+<div class="row">
+    <!-- Left Column: User Information -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">👤 User Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
                     <!-- Basic Information Section -->
                     <h6 class="mb-3 text-primary">📋 Basic Information</h6>
                     
@@ -473,206 +461,327 @@
                         </div>
                     </div>
                     
-                    <!-- Account Settings Section -->
+                    <!-- Status Checkboxes -->
                     <h6 class="mb-3 text-primary mt-4">⚙️ Account Settings</h6>
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="agreed_to_terms" 
-                                       name="agreed_to_terms" value="1"
-                                       {{ 'checked' if user and user.agreed_to_terms else '' }}>
-                                <label class="form-check-label" for="agreed_to_terms">
-                                    Agreed to Terms & Conditions
-                                </label>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="agreed_to_terms" 
+                                           name="agreed_to_terms" value="1"
+                                           {{ 'checked' if user and user.agreed_to_terms else '' }}>
+                                    <label class="form-check-label" for="agreed_to_terms">
+                                        Agreed to Terms & Conditions
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="active" 
-                                       name="active" value="1"
-                                       {{ 'checked' if not user or user.active else '' }}>
-                                <label class="form-check-label" for="active">
-                                    Active Account
-                                </label>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="active" 
+                                           name="active" value="1"
+                                           {{ 'checked' if not user or user.active else '' }}>
+                                    <label class="form-check-label" for="active">
+                                        Active Account
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- System Permissions Section -->
-                    <h6 class="mb-3 text-primary mt-4">🔐 System Permissions</h6>
+                    <!-- Form Actions -->
+                    <div class="mt-4 pt-3 border-top">
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('users') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> {{ action }} User
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column: Permissions and Access -->
+    <div class="col-lg-6">
+        <div class="row g-3">
+            <!-- System Permissions Card -->
+            <div class="col-12">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">🔐 System Permissions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Select User Permissions</label>
+                            <div class="border rounded p-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="perm_GOD" 
+                                                   name="permissions" value="GOD"
+                                                   {{ 'checked' if user and 'GOD' in user.get_permissions() else '' }}>
+                                            <label class="form-check-label" for="perm_GOD">
+                                                <strong>Super Admin</strong><br>
+                                                <small class="text-muted">Full system access</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="perm_RFPO_ADMIN" 
+                                                   name="permissions" value="RFPO_ADMIN"
+                                                   {{ 'checked' if user and 'RFPO_ADMIN' in user.get_permissions() else '' }}>
+                                            <label class="form-check-label" for="perm_RFPO_ADMIN">
+                                                <strong>RFPO Full Admin</strong><br>
+                                                <small class="text-muted">Full RFPO management</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="perm_RFPO_USER" 
+                                                   name="permissions" value="RFPO_USER"
+                                                   {{ 'checked' if user and 'RFPO_USER' in user.get_permissions() else '' }}>
+                                            <label class="form-check-label" for="perm_RFPO_USER">
+                                                <strong>RFPO User</strong><br>
+                                                <small class="text-muted">Basic RFPO access</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="perm_CAL_MEET_USER" 
+                                                   name="permissions" value="CAL_MEET_USER"
+                                                   {{ 'checked' if user and 'CAL_MEET_USER' in user.get_permissions() else '' }}>
+                                            <label class="form-check-label" for="perm_CAL_MEET_USER">
+                                                <strong>Meeting Calendar User</strong><br>
+                                                <small class="text-muted">Calendar access</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="perm_VROOM_ADMIN" 
+                                                   name="permissions" value="VROOM_ADMIN"
+                                                   {{ 'checked' if user and 'VROOM_ADMIN' in user.get_permissions() else '' }}>
+                                            <label class="form-check-label" for="perm_VROOM_ADMIN">
+                                                <strong>VROOM Full Admin</strong><br>
+                                                <small class="text-muted">Virtual room management</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="perm_VROOM_USER" 
+                                                   name="permissions" value="VROOM_USER"
+                                                   {{ 'checked' if user and 'VROOM_USER' in user.get_permissions() else '' }}>
+                                            <label class="form-check-label" for="perm_VROOM_USER">
+                                                <strong>VROOM User</strong><br>
+                                                <small class="text-muted">Virtual room access</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-text">Select all permissions that apply to this user</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- User Access Mindmap Card -->
+            {% if user %}
+            <div class="col-12">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">🗺️ User Access Mindmap</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="permissionsMindmap"
+            
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <h5 class="mb-3">🔐 System Permissions</h5>
+                    
                     <div class="mb-3">
                         <label class="form-label">Select User Permissions</label>
                         <div class="border rounded p-3">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_GOD" 
-                                               name="permissions" value="GOD"
-                                               {{ 'checked' if user and 'GOD' in user.get_permissions() else '' }}>
-                                        <label class="form-check-label" for="perm_GOD">
-                                            <strong>Super Admin</strong><br>
-                                            <small class="text-muted">Full system access</small>
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_RFPO_ADMIN" 
-                                               name="permissions" value="RFPO_ADMIN"
-                                               {{ 'checked' if user and 'RFPO_ADMIN' in user.get_permissions() else '' }}>
-                                        <label class="form-check-label" for="perm_RFPO_ADMIN">
-                                            <strong>RFPO Full Admin</strong><br>
-                                            <small class="text-muted">Full RFPO management</small>
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_RFPO_USER" 
-                                               name="permissions" value="RFPO_USER"
-                                               {{ 'checked' if user and 'RFPO_USER' in user.get_permissions() else '' }}>
-                                        <label class="form-check-label" for="perm_RFPO_USER">
-                                            <strong>RFPO User</strong><br>
-                                            <small class="text-muted">Basic RFPO access</small>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_CAL_MEET_USER" 
-                                               name="permissions" value="CAL_MEET_USER" disabled
-                                               {{ 'checked' if user and 'CAL_MEET_USER' in user.get_permissions() else '' }}>
-                                        <label class="form-check-label text-muted" for="perm_CAL_MEET_USER">
-                                            <strong>Meeting Calendar User</strong><br>
-                                            <small class="text-muted">Not implemented yet</small>
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_VROOM_ADMIN" 
-                                               name="permissions" value="VROOM_ADMIN" disabled
-                                               {{ 'checked' if user and 'VROOM_ADMIN' in user.get_permissions() else '' }}>
-                                        <label class="form-check-label text-muted" for="perm_VROOM_ADMIN">
-                                            <strong>VROOM Full Admin</strong><br>
-                                            <small class="text-muted">Not implemented yet</small>
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_VROOM_USER" 
-                                               name="permissions" value="VROOM_USER" disabled
-                                               {{ 'checked' if user and 'VROOM_USER' in user.get_permissions() else '' }}>
-                                        <label class="form-check-label text-muted" for="perm_VROOM_USER">
-                                            <strong>VROOM User</strong><br>
-                                            <small class="text-muted">Not implemented yet</small>
-                                        </label>
-                                    </div>
-                                </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_GOD" 
+                                       name="permissions" value="GOD"
+                                       {{ 'checked' if user and 'GOD' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_GOD">
+                                    <strong>Super Admin</strong> - Full system access
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_RFPO_ADMIN" 
+                                       name="permissions" value="RFPO_ADMIN"
+                                       {{ 'checked' if user and 'RFPO_ADMIN' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_RFPO_ADMIN">
+                                    <strong>RFPO Full Admin</strong> - Full RFPO management
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_RFPO_USER" 
+                                       name="permissions" value="RFPO_USER"
+                                       {{ 'checked' if user and 'RFPO_USER' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_RFPO_USER">
+                                    <strong>RFPO User</strong> - Basic RFPO access
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_CAL_MEET_USER" 
+                                       name="permissions" value="CAL_MEET_USER"
+                                       {{ 'checked' if user and 'CAL_MEET_USER' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_CAL_MEET_USER">
+                                    <strong>Meeting Calendar User</strong> - Calendar access
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_VROOM_ADMIN" 
+                                       name="permissions" value="VROOM_ADMIN"
+                                       {{ 'checked' if user and 'VROOM_ADMIN' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_VROOM_ADMIN">
+                                    <strong>VROOM Full Admin</strong> - Virtual room management
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="perm_VROOM_USER" 
+                                       name="permissions" value="VROOM_USER"
+                                       {{ 'checked' if user and 'VROOM_USER' in user.get_permissions() else '' }}>
+                                <label class="form-check-label" for="perm_VROOM_USER">
+                                    <strong>VROOM User</strong> - Virtual room access
+                                </label>
                             </div>
                         </div>
                         <div class="form-text">Select all permissions that apply to this user</div>
                     </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Right Column: User Access -->
-        <div class="col-lg-6">
-            {% if user %}
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">🗺️ User Access</h5>
-                </div>
-                <div class="card-body">
-                    {% if user_mindmap %}
-                    <div class="row g-3">
-                        <!-- Row 1: User Card | System Permissions Card -->
-                        <div class="col-md-6">
-                            <div class="card border-primary">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-user-circle fa-3x text-primary mb-2"></i>
-                                    <h6 class="mb-1">{{ user.get_display_name() }}</h6>
-                                    <small class="text-muted">{{ user.email }}</small>
-                                </div>
-                            </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="agreed_to_terms" 
+                                   name="agreed_to_terms" value="1"
+                                   {{ 'checked' if user and user.agreed_to_terms else '' }}>
+                            <label class="form-check-label" for="agreed_to_terms">
+                                Agreed to Terms & Conditions
+                            </label>
                         </div>
-                        <div class="col-md-6">
-                            <div class="card border-secondary">
-                                <div class="card-header text-center">
-                                    <h6 class="mb-0"><i class="fas fa-shield-alt"></i> System Permissions</h6>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="active" 
+                                   name="active" value="1"
+                                   {{ 'checked' if not user or user.active else '' }}>
+                            <label class="form-check-label" for="active">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if user %}
+                <div class="col-md-6">
+                    <h5 class="mb-3">🗺️ User Access Mindmap</h5>
+                    <div class="card">
+                        <div class="card-body">
+                                                <div id="permissionsMindmap">
+                        {% if user_mindmap %}
+                            <!-- Visual Mindmap Style Layout -->
+                            <div class="permissions-mindmap-visual">
+                                <!-- Central User Node -->
+                                <div class="user-central-node">
+                                    <div class="user-avatar">
+                                        <i class="fas fa-user-circle fa-3x text-primary"></i>
+                                        <div class="user-info">
+                                            <strong>{{ user.get_display_name() }}</strong>
+                                            <br><small class="text-muted">{{ user.email }}</small>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="card-body text-center">
+                                
+                                <!-- Two Application Access Branches -->
+                                <div class="access-branches">
+                                    <!-- Admin Panel Branch -->
+                                    <div class="access-branch admin-branch">
+                                        <div class="branch-header">
+                                            <div class="app-node admin-node">
+                                                <i class="fas fa-cogs"></i>
+                                                <span>Admin Panel</span>
+                                                <small>:5111</small>
+                                            </div>
+                                        </div>
+                                        <div class="capabilities-grid">
+                                            {% for key, value in user_mindmap.capabilities.items() %}
+                                                <div class="capability-node {{ 'enabled' if value else 'disabled' }}">
+                                                    <i class="fas {{ '✅' if value else '❌' }}"></i>
+                                                    <span>{{ key.replace('can_', '').replace('_', ' ').title() }}</span>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- User App Branch -->
+                                    <div class="access-branch user-branch">
+                                        <div class="branch-header">
+                                            <div class="app-node user-node">
+                                                <i class="fas fa-mobile-alt"></i>
+                                                <span>User App</span>
+                                                <small>:5000</small>
+                                            </div>
+                                        </div>
+                                        <div class="user-access-summary">
+                                            <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_rfpos == 0 else 'has-data' }}">
+                                                <div class="stat-number">{{ user_mindmap.access_summary.total_rfpos }}</div>
+                                                <div class="stat-label">RFPOs</div>
+                                            </div>
+                                            <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_teams == 0 else 'has-data' }}">
+                                                <div class="stat-number">{{ user_mindmap.access_summary.total_teams }}</div>
+                                                <div class="stat-label">Teams</div>
+                                            </div>
+                                            <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_consortiums == 0 else 'has-data' }}">
+                                                <div class="stat-number">{{ user_mindmap.access_summary.total_consortiums }}</div>
+                                                <div class="stat-label">Consortiums</div>
+                                            </div>
+                                            <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_projects == 0 else 'has-data' }}">
+                                                <div class="stat-number">{{ user_mindmap.access_summary.total_projects }}</div>
+                                                <div class="stat-label">Projects</div>
+                                            </div>
+                                        </div>
+                                        {% if user_mindmap.access_summary.total_rfpos == 0 and user_mindmap.access_summary.total_teams == 0 %}
+                                        <div class="empty-state-indicator">
+                                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                                            <span class="text-warning">Empty States Shown</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                
+                                <!-- System Permissions Row -->
+                                <div class="permissions-row">
+                                    <div class="permissions-header">
+                                        <i class="fas fa-shield-alt"></i> System Permissions
+                                    </div>
                                     <div class="permissions-badges">
                                         {% for perm in user_mindmap.system_permissions.permissions %}
                                             {% set badge_class = 'permission-god' if perm == 'GOD' else 'permission-admin' if perm == 'RFPO_ADMIN' else 'permission-user' %}
-                                            <div class="permission-badge {{ badge_class }} mb-1">{{ perm }}</div>
+                                            <div class="permission-badge {{ badge_class }}">{{ perm }}</div>
                                         {% endfor %}
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Row 2: Admin Panel Card | User App Card -->
-                        <div class="col-md-6">
-                            <div class="card border-primary">
-                                <div class="card-header text-center">
-                                    <h6 class="mb-0"><i class="fas fa-cogs"></i> Admin Panel :5111</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="capabilities-grid">
-                                        {% for key, value in user_mindmap.capabilities.items() %}
-                                            <div class="capability-node {{ 'enabled' if value else 'disabled' }}">
-                                                <i class="fas {{ 'fa-check' if value else 'fa-times' }}"></i>
-                                                <span>{{ key.replace('can_', '').replace('_', ' ').title() }}</span>
-                                            </div>
-                                        {% endfor %}
+                                
+                                <!-- Entity Associations (if any) -->
+                                {% if user_mindmap.associations.teams.count > 0 or user_mindmap.associations.consortiums.count > 0 or user_mindmap.associations.projects.count > 0 %}
+                                <div class="associations-section">
+                                    <div class="associations-header">
+                                        <i class="fas fa-link"></i> Entity Associations
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card border-warning">
-                                <div class="card-header text-center">
-                                    <h6 class="mb-0"><i class="fas fa-mobile-alt"></i> User App :5000</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="user-access-summary">
-                                        <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_rfpos == 0 else 'has-data' }}">
-                                            <div class="stat-number">{{ user_mindmap.access_summary.total_rfpos }}</div>
-                                            <div class="stat-label">RFPOs</div>
-                                        </div>
-                                        <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_teams == 0 else 'has-data' }}">
-                                            <div class="stat-number">{{ user_mindmap.access_summary.total_teams }}</div>
-                                            <div class="stat-label">Teams</div>
-                                        </div>
-                                        <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_consortiums == 0 else 'has-data' }}">
-                                            <div class="stat-number">{{ user_mindmap.access_summary.total_consortiums }}</div>
-                                            <div class="stat-label">Consortiums</div>
-                                        </div>
-                                        <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_projects == 0 else 'has-data' }}">
-                                            <div class="stat-number">{{ user_mindmap.access_summary.total_projects }}</div>
-                                            <div class="stat-label">Projects</div>
-                                        </div>
-                                    </div>
-                                    {% if user_mindmap.access_summary.total_rfpos == 0 and user_mindmap.access_summary.total_teams == 0 %}
-                                    <div class="empty-state-indicator">
-                                        <i class="fas fa-exclamation-triangle text-warning"></i>
-                                        <span class="text-warning">Empty States Shown</span>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Row 3: Entity Associations (Full Width) -->
-                        <div class="col-12">
-                            {% if user_mindmap.associations.teams.count > 0 or user_mindmap.associations.consortiums.count > 0 or user_mindmap.associations.projects.count > 0 %}
-                            <div class="card border-success">
-                                <div class="card-header">
-                                    <h6 class="mb-0"><i class="fas fa-link"></i> Entity Associations</h6>
-                                </div>
-                                <div class="card-body">
                                     <div class="associations-grid">
                                         <!-- Teams -->
                                         {% if user_mindmap.associations.teams.count > 0 %}
                                             {% for team in user_mindmap.associations.teams.list %}
-                                            <div class="entity-node team-node" title="{{ team.name }}">
+                                            <div class="entity-node team-node">
                                                 <div class="entity-icon"><i class="fas fa-users"></i></div>
-                                                <div class="entity-name">{{ team.abbrev }}</div>
+                                                <div class="entity-name">{{ team.name }}</div>
+                                                <div class="entity-detail">{{ team.abbrev }}</div>
                                                 <div class="entity-detail">
                                                     <span class="badge {{ 'bg-danger' if team.access_type == 'admin' else 'bg-info' if team.access_type == 'viewer' else 'bg-success' }}">
                                                         {{ team.access_type.title() }} Access
@@ -689,15 +798,16 @@
                                         <!-- Consortiums -->
                                         {% if user_mindmap.associations.consortiums.count > 0 %}
                                             {% for consortium in user_mindmap.associations.consortiums.list %}
-                                            <div class="entity-node consortium-node" title="{{ consortium.name }}">
+                                            <div class="entity-node consortium-node">
                                                 <div class="entity-icon"><i class="fas fa-building"></i></div>
-                                                <div class="entity-name">{{ consortium.abbrev }}</div>
+                                                <div class="entity-name">{{ consortium.name }}</div>
+                                                <div class="entity-detail">{{ consortium.abbrev }}</div>
                                                 <div class="entity-detail">
                                                     <span class="badge {{ 'bg-danger' if consortium.access_type == 'admin' else 'bg-info' }}">
                                                         {{ consortium.access_type.title() }} Access
                                                     </span>
                                                 </div>
-                                                <div class="entity-detail">{{ consortium.rfpo_count | default(0) }} RFPOs</div>
+                                                <div class="entity-detail">{{ consortium.rfpo_count }} RFPOs</div>
                                             </div>
                                             {% endfor %}
                                         {% endif %}
@@ -721,61 +831,47 @@
                                         {% endif %}
                                     </div>
                                 </div>
-                            </div>
-                            {% else %}
-                            <!-- No Associations Warning -->
-                            <div class="card border-warning">
-                                <div class="card-body">
-                                    <div class="no-associations-warning">
-                                        <div class="warning-icon">
-                                            <i class="fas fa-unlink fa-2x text-warning"></i>
-                                        </div>
-                                        <div class="warning-content">
-                                            <h6 class="text-warning mb-2">No Entity Associations</h6>
-                                            <p class="text-muted small mb-2">
-                                                This user is not assigned to any teams, consortiums, or projects.
-                                            </p>
-                                            <div class="impact-summary">
-                                                <div class="impact-item admin-impact">
-                                                    <i class="fas fa-cogs"></i>
-                                                    <span>Admin Panel: <strong>Full Access</strong></span>
-                                                </div>
-                                                <div class="impact-item user-impact">
-                                                    <i class="fas fa-mobile-alt"></i>
-                                                    <span>User App: <strong>Empty States Only</strong></span>
-                                                </div>
+                                {% else %}
+                                <!-- No Associations Warning -->
+                                <div class="no-associations-warning">
+                                    <div class="warning-icon">
+                                        <i class="fas fa-unlink fa-2x text-warning"></i>
+                                    </div>
+                                    <div class="warning-content">
+                                        <h6 class="text-warning mb-2">No Entity Associations</h6>
+                                        <p class="text-muted small mb-2">
+                                            This user is not assigned to any teams, consortiums, or projects.
+                                        </p>
+                                        <div class="impact-summary">
+                                            <div class="impact-item admin-impact">
+                                                <i class="fas fa-cogs"></i>
+                                                <span>Admin Panel: <strong>Full Access</strong></span>
+                                            </div>
+                                            <div class="impact-item user-impact">
+                                                <i class="fas fa-mobile-alt"></i>
+                                                <span>User App: <strong>Empty States Only</strong></span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                                {% endif %}
                             </div>
-                            {% endif %}
+                        {% else %}
+                            <div class="text-center py-3 text-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <p class="mb-0">Unable to load permissions data</p>
+                            </div>
+                        {% endif %}
+                    </div>
                         </div>
                     </div>
-                    {% else %}
-                    <div class="text-center py-3 text-warning">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p class="mb-0">Unable to load permissions data</p>
-                    </div>
-                    {% endif %}
                 </div>
+                {% endif %}
             </div>
-            {% else %}
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
-                    <p class="text-muted">User access information will be available after user is created.</p>
-                </div>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    
-    <!-- Form Actions Row -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <hr>
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('users') }}" class="btn btn-secondary">
                             <i class="fas fa-times"></i> Cancel
@@ -786,9 +882,9 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </form>
     </div>
-</form>
+</div>
 
 <!-- Projects Modal -->
 {% if user and user_mindmap and user_mindmap.associations.projects.count > 0 %}
@@ -881,3 +977,4 @@ function showProjectsModal() {
 {% endif %}
 
 {% endblock %}
+

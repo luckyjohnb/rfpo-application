@@ -371,13 +371,16 @@
                 <td colspan="4" class="none" style="text-align:right">
                     <b>Less supplier cost share:</b>
                     {% if rfpo.cost_share_description %}<br /><i>{{ rfpo.cost_share_description }}</i>{% endif %}
+                    {% if rfpo.cost_share_type == 'percent' and rfpo.cost_share_amount %}
+                    <br /><i>({{ rfpo.cost_share_amount }}% of subtotal)</i>
+                    {% endif %}
                 </td>
-                <td style="text-align:right">(${{ "%.2f"|format(rfpo.cost_share_amount or 0) }})</td>
+                <td style="text-align:right">(${{ "%.2f"|format(rfpo.get_calculated_cost_share_amount()) }})</td>
             </tr>
             
             <tr class="totals">
                 <td colspan="4" class="none" style="text-align:right"><b>Net purchase not to exceed:</b></td>
-                <td class="bold" style="text-align:right"><b>${{ "%.2f"|format(rfpo.total_amount or 0) }}</b></td>
+                <td class="bold" style="text-align:right"><b>${{ "%.2f"|format(rfpo.get_calculated_total_amount()) }}</b></td>
             </tr>
 
             <tr>

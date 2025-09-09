@@ -22,7 +22,7 @@ def create_user_app():
     CORS(app, origins="*", allow_headers=["Content-Type", "Authorization"])
     
     # API Configuration
-    API_BASE_URL = os.environ.get('API_BASE_URL', 'http://127.0.0.1:5002/api')
+    API_BASE_URL = os.environ.get('API_BASE_URL', 'http://127.0.0.1:5003/api')
     ADMIN_API_URL = os.environ.get('ADMIN_API_URL', 'http://127.0.0.1:5111/api')
     
     # Helper function to make API calls
@@ -101,10 +101,24 @@ def create_user_app():
         teams_response = make_api_request('/teams')
         user_teams = teams_response.get('teams', []) if teams_response.get('success') else []
         
+        # Get user permissions summary to determine access levels
+        permissions_response = make_api_request('/users/permissions-summary')
+        user_permissions = permissions_response.get('permissions_summary', {}) if permissions_response.get('success') else {}
+        
+        # Determine if user has RFPO access
+        has_rfpo_access = (
+            user_permissions.get('summary_counts', {}).get('rfpos', 0) > 0 or
+            user_permissions.get('summary_counts', {}).get('teams', 0) > 0 or
+            user_permissions.get('summary_counts', {}).get('projects', 0) > 0 or
+            user_permissions.get('is_super_admin', False)
+        )
+        
         return render_template('app/dashboard.html', 
                              user=user_info.get('user'),
                              recent_rfpos=recent_rfpos,
-                             teams=user_teams)
+                             teams=user_teams,
+                             user_permissions=user_permissions,
+                             has_rfpo_access=has_rfpo_access)
     
     @app.route('/rfpos')
     def rfpos_list():
@@ -246,6 +260,12 @@ def create_user_app():
         """Change password API proxy"""
         data = request.get_json()
         response = make_api_request('/auth/change-password', 'POST', data)
+        return jsonify(response)
+    
+    @app.route('/api/users/permissions-summary', methods=['GET'])
+    def api_user_permissions_summary():
+        """User permissions summary API proxy"""
+        response = make_api_request('/users/permissions-summary')
         return jsonify(response)
     
     # Health check

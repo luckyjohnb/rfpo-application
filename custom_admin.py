@@ -19,6 +19,228 @@ from datetime import datetime
 from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam, PDFPositioning, RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep, RFPOApprovalInstance, RFPOApprovalAction
 from pdf_generator import RFPOPDFGenerator
 
+def get_user_mindmap_data(user):
+    """Get comprehensive permissions mindmap data for a user"""
+    try:
+        # System permissions
+        system_permissions = user.get_permissions() or []
+        
+        # Team associations (both direct membership and viewer/admin access)
+        team_data = []
+        accessible_consortium_ids = set()
+        
+        # 1. Direct team memberships (UserTeam table)
+        direct_teams = user.get_teams()
+        team_ids_found = set()
+        
+        for team in direct_teams:
+            team_info = {
+                'id': team.id,
+                'record_id': team.record_id,
+                'name': team.name,
+                'abbrev': team.abbrev,
+                'consortium_id': team.consortium_consort_id,
+                'consortium_name': None,
+                'rfpo_count': RFPO.query.filter_by(team_id=team.id).count(),
+                'access_type': 'member'
+            }
+            
+            # Get consortium info
+            if team.consortium_consort_id:
+                consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                if consortium:
+                    team_info['consortium_name'] = consortium.name
+                    accessible_consortium_ids.add(team.consortium_consort_id)
+            
+            team_data.append(team_info)
+            team_ids_found.add(team.id)
+        
+        # 2. Teams where user is viewer/admin (JSON fields)
+        all_teams = Team.query.all()
+        for team in all_teams:
+            if team.id in team_ids_found:
+                continue  # Already added above
+            
+            viewer_users = team.get_rfpo_viewer_users()
+            admin_users = team.get_rfpo_admin_users()
+            
+            access_type = None
+            if user.record_id in admin_users:
+                access_type = 'admin'
+            elif user.record_id in viewer_users:
+                access_type = 'viewer'
+            
+            if access_type:
+                team_info = {
+                    'id': team.id,
+                    'record_id': team.record_id,
+                    'name': team.name,
+                    'abbrev': team.abbrev,
+                    'consortium_id': team.consortium_consort_id,
+                    'consortium_name': None,
+                    'rfpo_count': RFPO.query.filter_by(team_id=team.id).count(),
+                    'access_type': access_type
+                }
+                
+                # Get consortium info
+                if team.consortium_consort_id:
+                    consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                    if consortium:
+                        team_info['consortium_name'] = consortium.name
+                        accessible_consortium_ids.add(team.consortium_consort_id)
+                
+                team_data.append(team_info)
+        
+        # Direct consortium access
+        direct_consortium_access = []
+        all_consortiums = Consortium.query.all()
+        for consortium in all_consortiums:
+            viewer_users = consortium.get_rfpo_viewer_users()
+            admin_users = consortium.get_rfpo_admin_users()
+            
+            access_type = None
+            if user.record_id in admin_users:
+                access_type = 'admin'
+            elif user.record_id in viewer_users:
+                access_type = 'viewer'
+            
+            if access_type:
+                # Count RFPOs in this consortium (both through teams and direct consortium association)
+                consortium_teams = Team.query.filter_by(consortium_consort_id=consortium.consort_id).all()
+                team_based_rfpos = sum(RFPO.query.filter_by(team_id=team.id).count() for team in consortium_teams)
+                
+                # Also count RFPOs that directly reference this consortium
+                direct_consortium_rfpos = RFPO.query.filter_by(consortium_id=consortium.consort_id).count()
+                
+                # Total is the sum (but we need to check for potential overlaps)
+                # For now, use direct count if no team-based, otherwise use total
+                consortium_rfpo_count = direct_consortium_rfpos if team_based_rfpos == 0 else (team_based_rfpos + direct_consortium_rfpos)
+                
+                direct_consortium_access.append({
+                    'consort_id': consortium.consort_id,
+                    'name': consortium.name,
+                    'abbrev': consortium.abbrev,
+                    'access_type': access_type,
+                    'rfpo_count': consortium_rfpo_count
+                })
+                accessible_consortium_ids.add(consortium.consort_id)
+        
+        # Project access (both direct and via team membership)
+        project_access = []
+        all_projects = Project.query.all()
+        accessible_project_ids = []
+        
+        # Get team record IDs for projects accessible via teams
+        team_record_ids = [team['record_id'] for team in team_data]
+        
+        for project in all_projects:
+            access_type = None
+            
+            # Check direct project access
+            viewer_users = project.get_rfpo_viewer_users()
+            if user.record_id in viewer_users:
+                access_type = 'direct_viewer'
+            
+            # Check team-based project access
+            elif project.team_record_id in team_record_ids:
+                access_type = 'via_team'
+            
+            if access_type:
+                # Count RFPOs directly associated with this project
+                project_rfpo_count = RFPO.query.filter_by(project_id=project.project_id).count()
+                project_access.append({
+                    'project_id': project.project_id,
+                    'name': project.name,
+                    'ref': project.ref,
+                    'consortium_ids': project.get_consortium_ids(),
+                    'rfpo_count': project_rfpo_count,
+                    'access_type': access_type
+                })
+                accessible_project_ids.append(project.project_id)
+        
+        # Calculate accessible RFPOs
+        accessible_rfpos = []
+        
+        # 1. RFPOs from user's teams
+        team_ids = [team['id'] for team in team_data]
+        if team_ids:
+            team_rfpos = RFPO.query.filter(RFPO.team_id.in_(team_ids)).all()
+            accessible_rfpos.extend(team_rfpos)
+        
+        # 2. RFPOs from projects user has access to
+        if accessible_project_ids:
+            project_rfpos = RFPO.query.filter(RFPO.project_id.in_(accessible_project_ids)).all()
+            accessible_rfpos.extend(project_rfpos)
+        
+        # 3. RFPOs from consortiums user has access to
+        accessible_consortium_ids_list = [consortium['consort_id'] for consortium in direct_consortium_access]
+        if accessible_consortium_ids_list:
+            consortium_rfpos = RFPO.query.filter(RFPO.consortium_id.in_(accessible_consortium_ids_list)).all()
+            accessible_rfpos.extend(consortium_rfpos)
+        
+        # Remove duplicates
+        accessible_rfpos = list({rfpo.id: rfpo for rfpo in accessible_rfpos}.values())
+        
+        # Approval workflow access
+        approval_access = []
+        if user.is_rfpo_admin() or user.is_super_admin():
+            approval_workflows = RFPOApprovalWorkflow.query.filter_by(is_template=True, is_active=True).count()
+            approval_access.append({
+                'type': 'admin_access',
+                'description': 'All approval workflows (Admin access)',
+                'count': approval_workflows
+            })
+        
+        # Build mindmap structure
+        return {
+            'user': {
+                'id': user.id,
+                'record_id': user.record_id,
+                'email': user.email,
+                'display_name': user.get_display_name()
+            },
+            'system_permissions': {
+                'permissions': system_permissions,
+                'is_super_admin': user.is_super_admin(),
+                'is_rfpo_admin': user.is_rfpo_admin(),
+                'is_rfpo_user': user.is_rfpo_user()
+            },
+            'associations': {
+                'teams': {
+                    'count': len(team_data),
+                    'list': team_data
+                },
+                'consortiums': {
+                    'count': len(direct_consortium_access),
+                    'list': direct_consortium_access
+                },
+                'projects': {
+                    'count': len(project_access),
+                    'list': project_access
+                }
+            },
+            'access_summary': {
+                'total_rfpos': len(accessible_rfpos),
+                'total_consortiums': len(accessible_consortium_ids),
+                'total_teams': len(team_data),
+                'total_projects': len(project_access),
+                'has_admin_access': user.is_rfpo_admin() or user.is_super_admin(),
+                'approval_workflows': approval_access
+            },
+            'capabilities': {
+                'can_create_rfpos': len(team_data) > 0 or len(project_access) > 0 or user.is_rfpo_admin() or user.is_super_admin(),
+                'can_approve_rfpos': user.is_rfpo_admin() or user.is_super_admin(),
+                'can_manage_users': user.is_rfpo_admin() or user.is_super_admin(),
+                'can_manage_workflows': user.is_rfpo_admin() or user.is_super_admin()
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error in get_user_mindmap_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 class APIHelper:
     """
     Safe API helper with fallback to direct database access
@@ -248,6 +470,7 @@ def create_app():
         """Get the first applicable workflow (for backward compatibility)"""
         workflows = get_applicable_workflows(rfpo)
         return workflows[0][1] if workflows else None
+    
     
     def determine_rfpo_stage(rfpo, workflow):
         """Determine which approval stage an RFPO falls into based on its total amount"""
@@ -1167,7 +1390,21 @@ def create_app():
                 db.session.rollback()  # Important: rollback the failed transaction
                 flash(f'❌ Error updating user: {str(e)}', 'error')
         
-        return render_template('admin/user_form.html', user=user, action='Edit')
+        # Get user permissions mindmap data for display
+        try:
+            user_mindmap = get_user_mindmap_data(user)
+            # Debug output for troubleshooting
+            if user_mindmap:
+                print(f"🔍 Mindmap Debug for {user.email}:")
+                print(f"  Consortiums: {user_mindmap.get('associations', {}).get('consortiums', {})}")
+                print(f"  Projects: {user_mindmap.get('associations', {}).get('projects', {})}")
+        except Exception as e:
+            print(f"Error getting user mindmap: {e}")
+            import traceback
+            traceback.print_exc()
+            user_mindmap = None
+        
+        return render_template('admin/user_form.html', user=user, action='Edit', user_mindmap=user_mindmap)
     
     @app.route('/user/<int:id>/delete', methods=['POST'])
     @login_required
@@ -1398,10 +1635,8 @@ Southfield, MI  48075""",
                         except ValueError:
                             rfpo.cost_share_amount = 0.00
                 
-                # Recalculate totals
-                subtotal = sum(float(item.total_price) for item in rfpo.line_items)
-                rfpo.subtotal = subtotal
-                rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
+                # Recalculate totals using the new method that handles percentage cost sharing
+                rfpo.update_totals()
                 
                 db.session.commit()
                 
@@ -1476,10 +1711,8 @@ Southfield, MI  48075""",
             db.session.add(line_item)
             db.session.flush()  # Flush to get the line item in the session
             
-            # Update RFPO totals (recalculate from all line items)
-            subtotal = sum(float(item.total_price) for item in rfpo.line_items)
-            rfpo.subtotal = subtotal
-            rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
+            # Update RFPO totals using the new method that handles percentage cost sharing
+            rfpo.update_totals()
             
             db.session.commit()
             
@@ -1505,10 +1738,8 @@ Southfield, MI  48075""",
         try:
             db.session.delete(line_item)
             
-            # Update RFPO totals
-            subtotal = sum(float(item.total_price) for item in rfpo.line_items if item.id != line_item_id)
-            rfpo.subtotal = subtotal
-            rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
+            # Update RFPO totals using the new method that handles percentage cost sharing
+            rfpo.update_totals()
             
             db.session.commit()
             
@@ -3624,6 +3855,168 @@ Southfield, MI  48075""",
                 'count': 0,
                 'type': list_type
             }), 400
+    
+    @app.route('/api/user/<int:user_id>/permissions-mindmap')
+    @login_required
+    def api_user_permissions_mindmap(user_id):
+        """Get comprehensive permissions mindmap for a specific user"""
+        try:
+            user = User.query.get_or_404(user_id)
+            
+            # System permissions
+            system_permissions = user.get_permissions() or []
+            
+            # Team associations
+            user_teams = user.get_teams()
+            team_data = []
+            accessible_consortium_ids = set()
+            
+            for team in user_teams:
+                team_info = {
+                    'id': team.id,
+                    'record_id': team.record_id,
+                    'name': team.name,
+                    'abbrev': team.abbrev,
+                    'consortium_id': team.consortium_consort_id,
+                    'consortium_name': None,
+                    'rfpo_count': RFPO.query.filter_by(team_id=team.id).count()
+                }
+                
+                # Get consortium info
+                if team.consortium_consort_id:
+                    consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                    if consortium:
+                        team_info['consortium_name'] = consortium.name
+                        accessible_consortium_ids.add(team.consortium_consort_id)
+                
+                team_data.append(team_info)
+            
+            # Direct consortium access
+            direct_consortium_access = []
+            all_consortiums = Consortium.query.all()
+            for consortium in all_consortiums:
+                viewer_users = consortium.get_rfpo_viewer_users()
+                admin_users = consortium.get_rfpo_admin_users()
+                
+                access_type = None
+                if user.record_id in admin_users:
+                    access_type = 'admin'
+                elif user.record_id in viewer_users:
+                    access_type = 'viewer'
+                
+                if access_type:
+                    # Count RFPOs in this consortium (through teams)
+                    consortium_teams = Team.query.filter_by(consortium_consort_id=consortium.consort_id).all()
+                    consortium_rfpo_count = sum(RFPO.query.filter_by(team_id=team.id).count() for team in consortium_teams)
+                    
+                    direct_consortium_access.append({
+                        'consort_id': consortium.consort_id,
+                        'name': consortium.name,
+                        'abbrev': consortium.abbrev,
+                        'access_type': access_type,
+                        'rfpo_count': consortium_rfpo_count
+                    })
+                    accessible_consortium_ids.add(consortium.consort_id)
+            
+            # Project access
+            project_access = []
+            all_projects = Project.query.all()
+            accessible_project_ids = []
+            
+            for project in all_projects:
+                viewer_users = project.get_rfpo_viewer_users()
+                if user.record_id in viewer_users:
+                    project_rfpo_count = RFPO.query.filter_by(project_id=project.project_id).count()
+                    project_access.append({
+                        'project_id': project.project_id,
+                        'name': project.name,
+                        'ref': project.ref,
+                        'consortium_ids': project.get_consortium_ids(),
+                        'rfpo_count': project_rfpo_count
+                    })
+                    accessible_project_ids.append(project.project_id)
+            
+            # Calculate accessible RFPOs
+            accessible_rfpos = []
+            
+            # 1. RFPOs from user's teams
+            team_ids = [team['id'] for team in team_data]
+            if team_ids:
+                team_rfpos = RFPO.query.filter(RFPO.team_id.in_(team_ids)).all()
+                accessible_rfpos.extend(team_rfpos)
+            
+            # 2. RFPOs from projects user has access to
+            if accessible_project_ids:
+                project_rfpos = RFPO.query.filter(RFPO.project_id.in_(accessible_project_ids)).all()
+                accessible_rfpos.extend(project_rfpos)
+            
+            # Remove duplicates
+            accessible_rfpos = list({rfpo.id: rfpo for rfpo in accessible_rfpos}.values())
+            
+            # Approval workflow access
+            approval_access = []
+            if user.is_rfpo_admin() or user.is_super_admin():
+                approval_workflows = RFPOApprovalWorkflow.query.filter_by(is_template=True, is_active=True).count()
+                approval_access.append({
+                    'type': 'admin_access',
+                    'description': 'All approval workflows (Admin access)',
+                    'count': approval_workflows
+                })
+            
+            # Build mindmap structure
+            mindmap = {
+                'user': {
+                    'id': user.id,
+                    'record_id': user.record_id,
+                    'email': user.email,
+                    'display_name': user.get_display_name()
+                },
+                'system_permissions': {
+                    'permissions': system_permissions,
+                    'is_super_admin': user.is_super_admin(),
+                    'is_rfpo_admin': user.is_rfpo_admin(),
+                    'is_rfpo_user': user.is_rfpo_user()
+                },
+                'associations': {
+                    'teams': {
+                        'count': len(team_data),
+                        'items': team_data
+                    },
+                    'consortiums': {
+                        'count': len(direct_consortium_access),
+                        'items': direct_consortium_access
+                    },
+                    'projects': {
+                        'count': len(project_access),
+                        'items': project_access
+                    }
+                },
+                'access_summary': {
+                    'total_rfpos': len(accessible_rfpos),
+                    'total_consortiums': len(accessible_consortium_ids),
+                    'total_teams': len(team_data),
+                    'total_projects': len(project_access),
+                    'has_admin_access': user.is_rfpo_admin() or user.is_super_admin(),
+                    'approval_workflows': approval_access
+                },
+                'capabilities': {
+                    'can_create_rfpos': len(team_data) > 0 or len(project_access) > 0 or user.is_super_admin(),
+                    'can_approve_rfpos': user.is_rfpo_admin() or user.is_super_admin(),
+                    'can_manage_users': user.is_super_admin(),
+                    'can_manage_workflows': user.is_rfpo_admin() or user.is_super_admin()
+                }
+            }
+            
+            return jsonify({
+                'success': True,
+                'mindmap': mindmap
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
     
     # PDF to Image conversion for positioning editor background
     @app.route('/api/pdf-template-image/<template_name>')

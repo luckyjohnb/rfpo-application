@@ -80,6 +80,7 @@
 </div>
 
 <!-- Quick Actions -->
+{% if has_rfpo_access %}
 <div class="row mb-4">
     <div class="col">
         <div class="card">
@@ -119,6 +120,40 @@
         </div>
     </div>
 </div>
+{% else %}
+<!-- Limited Access Actions -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle"></i> Limited Access
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    You have system permissions but are not assigned to any teams, projects, or consortiums. 
+                    Contact your administrator to be added to the appropriate groups.
+                </p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <a href="{{ url_for('profile') }}" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-user-cog"></i><br>
+                            Manage Profile
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                            <i class="fas fa-users"></i><br>
+                            Explore Teams
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Recent RFPOs -->
 <div class="row mb-4">
@@ -222,10 +257,20 @@
             container.innerHTML = `
                 <div class="text-center py-4">
                     <i class="fas fa-file-invoice fa-3x text-muted mb-3"></i>
-                    <p class="text-muted">No RFPOs found.</p>
-                    <a href="/rfpos/create" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> Create Your First RFPO
-                    </a>
+                    <h5 class="text-muted mb-3">No RFPOs Available</h5>
+                    <p class="text-muted mb-3">You don't have access to any RFPOs yet.</p>
+                    <p class="small text-muted">
+                        To access RFPOs, you need to be assigned to teams, projects, or consortiums. 
+                        Please contact your administrator to be added to the appropriate groups.
+                    </p>
+                    <div class="mt-3">
+                        <a href="/profile" class="btn btn-outline-primary me-2">
+                            <i class="fas fa-user"></i> View Profile
+                        </a>
+                        <a href="/teams" class="btn btn-outline-success">
+                            <i class="fas fa-users"></i> Explore Teams
+                        </a>
+                    </div>
                 </div>
             `;
             return;

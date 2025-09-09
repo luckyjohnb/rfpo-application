@@ -284,14 +284,675 @@ def update_user_profile():
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@app.route('/api/users/permissions-summary')
+@require_auth
+def get_user_permissions_summary():
+    """Get comprehensive permissions summary for current user"""
+    try:
+        from models import Team, Consortium, Project
+        
+        user = request.current_user
+        
+        # System permissions
+        system_permissions = user.get_permissions() or []
+        
+        # Team associations
+        user_teams = user.get_teams()
+        team_data = []
+        accessible_consortium_ids = set()
+        
+        for team in user_teams:
+            team_info = {
+                'id': team.id,
+                'record_id': team.record_id,
+                'name': team.name,
+                'abbrev': team.abbrev,
+                'consortium_id': team.consortium_consort_id,
+                'consortium_name': None
+            }
+            
+            # Get consortium info
+            if team.consortium_consort_id:
+                consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                if consortium:
+                    team_info['consortium_name'] = consortium.name
+                    accessible_consortium_ids.add(team.consortium_consort_id)
+            
+            team_data.append(team_info)
+        
+        # Direct consortium access
+        direct_consortium_access = []
+        all_consortiums = Consortium.query.all()
+        for consortium in all_consortiums:
+            viewer_users = consortium.get_rfpo_viewer_users()
+            admin_users = consortium.get_rfpo_admin_users()
+            
+            access_type = None
+            if user.record_id in admin_users:
+                access_type = 'admin'
+            elif user.record_id in viewer_users:
+                access_type = 'viewer'
+            
+            if access_type:
+                # Count RFPOs in this consortium (both through teams and direct consortium association)
+                consortium_teams = Team.query.filter_by(consortium_consort_id=consortium.consort_id).all()
+                team_based_rfpos = sum(RFPO.query.filter_by(team_id=team.id).count() for team in consortium_teams)
+                
+                # Also count RFPOs that directly reference this consortium
+                direct_consortium_rfpos = RFPO.query.filter_by(consortium_id=consortium.consort_id).count()
+                
+                # Total is the sum (but we need to check for potential overlaps)
+                # For now, use direct count if no team-based, otherwise use total
+                consortium_rfpo_count = direct_consortium_rfpos if team_based_rfpos == 0 else (team_based_rfpos + direct_consortium_rfpos)
+                
+                direct_consortium_access.append({
+                    'consort_id': consortium.consort_id,
+                    'name': consortium.name,
+                    'abbrev': consortium.abbrev,
+                    'access_type': access_type,
+                    'rfpo_count': consortium_rfpo_count
+                })
+                accessible_consortium_ids.add(consortium.consort_id)
+        
+        # Project access (both direct and via team membership)
+        project_access = []
+        all_projects = Project.query.all()
+        accessible_project_ids = []
+        
+        # Get team record IDs for projects accessible via teams
+        team_record_ids = [team['record_id'] for team in team_data]
+        
+        for project in all_projects:
+            access_type = None
+            
+            # Check direct project access
+            viewer_users = project.get_rfpo_viewer_users()
+            if user.record_id in viewer_users:
+                access_type = 'direct_viewer'
+            
+            # Check team-based project access
+            elif project.team_record_id in team_record_ids:
+                access_type = 'via_team'
+            
+            if access_type:
+                project_rfpo_count = RFPO.query.filter_by(project_id=project.project_id).count()
+                project_access.append({
+                    'project_id': project.project_id,
+                    'name': project.name,
+                    'ref': project.ref,
+                    'consortium_ids': project.get_consortium_ids(),
+                    'rfpo_count': project_rfpo_count,
+                    'access_type': access_type
+                })
+                accessible_project_ids.append(project.project_id)
+        
+        # Calculate accessible RFPOs
+        accessible_rfpos = []
+        
+        # 1. RFPOs from user's teams
+        team_ids = [team.id for team in user_teams]
+        if team_ids:
+            team_rfpos = RFPO.query.filter(RFPO.team_id.in_(team_ids)).all()
+            accessible_rfpos.extend(team_rfpos)
+        
+        # 2. RFPOs from projects user has access to
+        if accessible_project_ids:
+            project_rfpos = RFPO.query.filter(RFPO.project_id.in_(accessible_project_ids)).all()
+            accessible_rfpos.extend(project_rfpos)
+        
+        # 3. RFPOs from consortiums user has access to
+        accessible_consortium_ids_list = [consortium['consort_id'] for consortium in direct_consortium_access]
+        if accessible_consortium_ids_list:
+            consortium_rfpos = RFPO.query.filter(RFPO.consortium_id.in_(accessible_consortium_ids_list)).all()
+            accessible_rfpos.extend(consortium_rfpos)
+        
+        # Remove duplicates
+        accessible_rfpos = list({rfpo.id: rfpo for rfpo in accessible_rfpos}.values())
+        
+        rfpo_summary = []
+        for rfpo in accessible_rfpos[:10]:  # Limit to first 10 for performance
+            rfpo_summary.append({
+                'id': rfpo.id,
+                'rfpo_id': rfpo.rfpo_id,
+                'title': rfpo.title,
+                'status': rfpo.status,
+                'total_amount': float(rfpo.total_amount or 0),
+                'created_at': rfpo.created_at.isoformat() if rfpo.created_at else None
+            })
+        
+        # Approval workflow access (for users with admin permissions)
+        approval_access = []
+        if user.is_rfpo_admin() or user.is_super_admin():
+            # They can see all approval workflows
+            approval_access = ['All approval workflows (Admin access)']
+        
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'record_id': user.record_id,
+                'email': user.email,
+                'display_name': user.get_display_name()
+            },
+            'permissions_summary': {
+                'system_permissions': system_permissions,
+                'is_super_admin': user.is_super_admin(),
+                'is_rfpo_admin': user.is_rfpo_admin(),
+                'is_rfpo_user': user.is_rfpo_user(),
+                'team_associations': team_data,
+                'direct_consortium_access': direct_consortium_access,
+                'project_access': project_access,
+                'accessible_rfpos_count': len(accessible_rfpos),
+                'accessible_rfpos_sample': rfpo_summary,
+                'approval_access': approval_access,
+                'summary_counts': {
+                    'teams': len(team_data),
+                    'consortiums': len(accessible_consortium_ids),
+                    'projects': len(project_access),
+                    'rfpos': len(accessible_rfpos)
+                }
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/api/rfpos')
 @require_auth
 def list_rfpos():
-    rfpos = RFPO.query.all()
-    return jsonify({
-        'success': True,
-        'rfpos': [{'id': r.id, 'rfpo_id': r.rfpo_id, 'title': r.title, 'status': r.status, 'created_at': r.created_at.isoformat() if r.created_at else None} for r in rfpos]
-    })
+    """List RFPOs with permission filtering"""
+    try:
+        from models import Team, Project
+        
+        user = request.current_user
+        
+        # If user is super admin, they can see all RFPOs
+        if user.is_super_admin():
+            rfpos = RFPO.query.all()
+        else:
+            # Get user's accessible team IDs
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+            
+            # Get user's accessible project IDs
+            all_projects = Project.query.all()
+            accessible_project_ids = []
+            for project in all_projects:
+                viewer_users = project.get_rfpo_viewer_users()
+                if user.record_id in viewer_users:
+                    accessible_project_ids.append(project.project_id)
+            
+            # Filter RFPOs to only those user can access
+            if team_ids or accessible_project_ids:
+                filters = []
+                if team_ids:
+                    filters.append(RFPO.team_id.in_(team_ids))
+                if accessible_project_ids:
+                    filters.append(RFPO.project_id.in_(accessible_project_ids))
+                
+                if len(filters) > 1:
+                    rfpos = RFPO.query.filter(db.or_(*filters)).all()
+                else:
+                    rfpos = RFPO.query.filter(filters[0]).all()
+            else:
+                # User has no access to any RFPOs
+                rfpos = []
+        
+        return jsonify({
+            'success': True,
+            'rfpos': [{'id': r.id, 'rfpo_id': r.rfpo_id, 'title': r.title, 'status': r.status, 'created_at': r.created_at.isoformat() if r.created_at else None} for r in rfpos],
+            'total': len(rfpos),
+            'page': 1,
+            'pages': 1
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/rfpos', methods=['POST'])
+@require_auth
+def create_rfpo():
+    """Create new RFPO"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['title', 'project_id', 'consortium_id', 'team_id']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'success': False, 'message': f'{field} is required'}), 400
+        
+        # Generate RFPO ID
+        from datetime import datetime
+        today = datetime.now()
+        date_str = today.strftime('%Y-%m-%d')
+        
+        # Get project reference for RFPO ID
+        project = Project.query.filter_by(project_id=data['project_id']).first()
+        project_ref = project.ref if project else 'PROJ'
+        
+        # Count existing RFPOs for this project and date
+        existing_count = RFPO.query.filter(
+            RFPO.rfpo_id.like(f'RFPO-{project_ref}-%{date_str}%')
+        ).count()
+        rfpo_id = f"RFPO-{project_ref}-{date_str}-N{existing_count + 1:02d}"
+        
+        # Create RFPO
+        rfpo = RFPO(
+            rfpo_id=rfpo_id,
+            title=data['title'],
+            description=data.get('description', ''),
+            project_id=data['project_id'],
+            consortium_id=data['consortium_id'],
+            team_id=data['team_id'],
+            government_agreement_number=data.get('government_agreement_number'),
+            requestor_id=request.current_user.record_id,
+            requestor_tel=data.get('requestor_tel'),
+            requestor_location=data.get('requestor_location'),
+            shipto_name=data.get('shipto_name'),
+            shipto_tel=data.get('shipto_tel'),
+            shipto_address=data.get('shipto_address'),
+            delivery_date=datetime.strptime(data['delivery_date'], '%Y-%m-%d').date() if data.get('delivery_date') else None,
+            delivery_type=data.get('delivery_type'),
+            delivery_payment=data.get('delivery_payment'),
+            delivery_routing=data.get('delivery_routing'),
+            payment_terms=data.get('payment_terms', 'Net 30'),
+            vendor_id=data.get('vendor_id'),
+            vendor_site_id=data.get('vendor_site_id'),
+            cost_share_description=data.get('cost_share_description'),
+            cost_share_type=data.get('cost_share_type', 'total'),
+            cost_share_amount=float(data.get('cost_share_amount', 0)),
+            status=data.get('status', 'Draft'),
+            comments=data.get('comments'),
+            created_by=request.current_user.get_display_name()
+        )
+        
+        # Set default invoice address from consortium
+        if data.get('consortium_id'):
+            consortium = Consortium.query.filter_by(consort_id=data['consortium_id']).first()
+            if consortium and consortium.invoicing_address:
+                rfpo.invoice_address = consortium.invoicing_address
+        
+        db.session.add(rfpo)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'rfpo': rfpo.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/rfpos/<int:rfpo_id>', methods=['GET'])
+@require_auth
+def get_rfpo(rfpo_id):
+    """Get RFPO details"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        # Check permissions - user must have access to this RFPO
+        user = request.current_user
+        if not user.is_super_admin():
+            # Check if user has access to this RFPO via team or project
+            has_access = False
+            
+            # Check team access
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+            if rfpo.team_id in team_ids:
+                has_access = True
+            
+            # Check project access
+            if not has_access:
+                all_projects = Project.query.all()
+                for project in all_projects:
+                    if project.project_id == rfpo.project_id:
+                        viewer_users = project.get_rfpo_viewer_users()
+                        if user.record_id in viewer_users:
+                            has_access = True
+                            break
+            
+            if not has_access:
+                return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        return jsonify({
+            'success': True,
+            'rfpo': rfpo.to_dict()
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/rfpos/<int:rfpo_id>', methods=['PUT'])
+@require_auth
+def update_rfpo(rfpo_id):
+    """Update RFPO"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        data = request.get_json()
+        
+        # Check permissions (same logic as GET)
+        user = request.current_user
+        if not user.is_super_admin():
+            has_access = False
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+            if rfpo.team_id in team_ids:
+                has_access = True
+            
+            if not has_access:
+                all_projects = Project.query.all()
+                for project in all_projects:
+                    if project.project_id == rfpo.project_id:
+                        viewer_users = project.get_rfpo_viewer_users()
+                        if user.record_id in viewer_users:
+                            has_access = True
+                            break
+            
+            if not has_access:
+                return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Update fields
+        updatable_fields = [
+            'title', 'description', 'government_agreement_number', 'requestor_tel',
+            'requestor_location', 'shipto_name', 'shipto_tel', 'shipto_address',
+            'delivery_type', 'delivery_payment', 'delivery_routing', 'payment_terms',
+            'vendor_id', 'vendor_site_id', 'cost_share_description', 'cost_share_type',
+            'cost_share_amount', 'status', 'comments'
+        ]
+        
+        for field in updatable_fields:
+            if field in data:
+                if field == 'delivery_date' and data[field]:
+                    rfpo.delivery_date = datetime.strptime(data[field], '%Y-%m-%d').date()
+                elif field == 'cost_share_amount':
+                    rfpo.cost_share_amount = float(data[field]) if data[field] else 0.00
+                elif field == 'vendor_id':
+                    rfpo.vendor_id = int(data[field]) if data[field] else None
+                elif field == 'vendor_site_id':
+                    rfpo.vendor_site_id = int(data[field]) if data[field] else None
+                else:
+                    setattr(rfpo, field, data[field])
+        
+        # Handle delivery_date separately
+        if 'delivery_date' in data and data['delivery_date']:
+            rfpo.delivery_date = datetime.strptime(data['delivery_date'], '%Y-%m-%d').date()
+        
+        rfpo.updated_by = user.get_display_name()
+        rfpo.update_totals()  # Recalculate totals with cost sharing
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'rfpo': rfpo.to_dict()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/rfpos/<int:rfpo_id>', methods=['DELETE'])
+@require_auth
+def delete_rfpo(rfpo_id):
+    """Delete RFPO"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        
+        # Check permissions and approval status
+        user = request.current_user
+        if not (user.is_super_admin() or user.is_rfpo_admin()):
+            return jsonify({'success': False, 'message': 'Admin access required'}), 403
+        
+        # Check if RFPO has approval instances
+        from models import RFPOApprovalInstance
+        approval_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+        if approval_instance:
+            return jsonify({
+                'success': False, 
+                'message': 'Cannot delete RFPO: It has an active approval workflow'
+            }), 400
+        
+        db.session.delete(rfpo)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'RFPO deleted successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# Line Items API
+@app.route('/api/rfpos/<int:rfpo_id>/line-items', methods=['POST'])
+@require_auth
+def add_line_item(rfpo_id):
+    """Add line item to RFPO"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        data = request.get_json()
+        
+        # Check permissions
+        user = request.current_user
+        if not user.is_super_admin():
+            has_access = False
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+            if rfpo.team_id in team_ids:
+                has_access = True
+            
+            if not has_access:
+                return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get next line number
+        max_line = db.session.query(db.func.max(RFPOLineItem.line_number)).filter_by(rfpo_id=rfpo.id).scalar()
+        next_line_number = (max_line or 0) + 1
+        
+        line_item = RFPOLineItem(
+            rfpo_id=rfpo.id,
+            line_number=next_line_number,
+            quantity=int(data.get('quantity', 1)),
+            description=data.get('description', ''),
+            unit_price=float(data.get('unit_price', 0.00)),
+            is_capital_equipment=bool(data.get('is_capital_equipment', False)),
+            capital_description=data.get('capital_description'),
+            capital_serial_id=data.get('capital_serial_id'),
+            capital_location=data.get('capital_location'),
+            capital_condition=data.get('capital_condition')
+        )
+        
+        # Handle capital equipment date and cost
+        if data.get('capital_acquisition_date'):
+            line_item.capital_acquisition_date = datetime.strptime(data['capital_acquisition_date'], '%Y-%m-%d').date()
+        
+        if data.get('capital_acquisition_cost'):
+            line_item.capital_acquisition_cost = float(data['capital_acquisition_cost'])
+        
+        line_item.calculate_total()
+        
+        db.session.add(line_item)
+        db.session.flush()
+        
+        # Update RFPO totals
+        rfpo.update_totals()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'line_item': line_item.to_dict(),
+            'rfpo': rfpo.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/rfpos/<int:rfpo_id>/line-items/<int:line_item_id>', methods=['DELETE'])
+@require_auth
+def delete_line_item(rfpo_id, line_item_id):
+    """Delete line item from RFPO"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        line_item = RFPOLineItem.query.get_or_404(line_item_id)
+        
+        if line_item.rfpo_id != rfpo.id:
+            return jsonify({'success': False, 'message': 'Line item does not belong to this RFPO'}), 400
+        
+        # Check permissions
+        user = request.current_user
+        if not user.is_super_admin():
+            has_access = False
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+            if rfpo.team_id in team_ids:
+                has_access = True
+            
+            if not has_access:
+                return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        db.session.delete(line_item)
+        
+        # Update RFPO totals
+        rfpo.update_totals()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Line item deleted successfully',
+            'rfpo': rfpo.to_dict()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# Supporting API endpoints for admin panel
+@app.route('/api/consortiums')
+@require_auth
+def list_consortiums():
+    """List all consortiums"""
+    try:
+        consortiums = Consortium.query.filter_by(active=True).all()
+        return jsonify({
+            'success': True,
+            'consortiums': [{
+                'id': c.id,
+                'consort_id': c.consort_id,
+                'name': c.name,
+                'abbrev': c.abbrev,
+                'active': c.active
+            } for c in consortiums]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/projects')
+@require_auth
+def list_projects():
+    """List all projects"""
+    try:
+        projects = Project.query.filter_by(active=True).all()
+        return jsonify({
+            'success': True,
+            'projects': [{
+                'id': p.id,
+                'project_id': p.project_id,
+                'name': p.name,
+                'ref': p.ref,
+                'description': p.description,
+                'consortium_ids': p.get_consortium_ids(),
+                'team_record_id': p.team_record_id,
+                'active': p.active
+            } for p in projects]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/projects/<consortium_id>')
+@require_auth
+def list_projects_for_consortium(consortium_id):
+    """List projects for a specific consortium"""
+    try:
+        projects = Project.query.filter(
+            Project.consortium_ids.like(f'%{consortium_id}%'),
+            Project.active == True
+        ).all()
+        
+        return jsonify({
+            'success': True,
+            'projects': [{
+                'id': p.project_id,
+                'ref': p.ref,
+                'name': p.name,
+                'description': p.description,
+                'gov_funded': p.gov_funded,
+                'uni_project': p.uni_project
+            } for p in projects]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/vendors')
+@require_auth
+def list_vendors():
+    """List all vendors"""
+    try:
+        vendors = Vendor.query.filter_by(active=True).all()
+        return jsonify({
+            'success': True,
+            'vendors': [{
+                'id': v.id,
+                'vendor_id': v.vendor_id,
+                'company_name': v.company_name,
+                'contact_name': v.contact_name,
+                'contact_tel': v.contact_tel,
+                'active': v.active
+            } for v in vendors]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/vendor-sites/<int:vendor_id>')
+@require_auth
+def list_vendor_sites(vendor_id):
+    """List sites for a specific vendor"""
+    try:
+        vendor = Vendor.query.get_or_404(vendor_id)
+        site_data = []
+        
+        # Add vendor's primary contact as first option if it has contact info
+        if vendor.contact_name:
+            site_data.append({
+                'id': f'vendor_{vendor.id}',
+                'contact_name': vendor.contact_name,
+                'contact_dept': vendor.contact_dept,
+                'contact_tel': vendor.contact_tel,
+                'contact_city': vendor.contact_city,
+                'contact_state': vendor.contact_state,
+                'is_primary': True
+            })
+        
+        # Add additional vendor sites
+        for site in vendor.sites:
+            site_data.append({
+                'id': site.id,
+                'contact_name': site.contact_name,
+                'contact_dept': site.contact_dept,
+                'contact_tel': site.contact_tel,
+                'contact_city': site.contact_city,
+                'contact_state': site.contact_state,
+                'is_primary': False
+            })
+        
+        return jsonify(site_data)
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 if __name__ == '__main__':
     print("🚀 Starting Simple RFPO API")

@@ -546,6 +546,10 @@ class User(UserMixin, db.Model):
     last_ip = db.Column(db.String(45))  # IPv4 or IPv6
     last_browser = db.Column(db.Text)  # User agent string
     
+    # Approval Flow Status
+    is_approver = db.Column(db.Boolean, default=False)  # True if user is assigned to any approval workflow
+    approver_updated_at = db.Column(db.DateTime)  # When approver status was last updated
+    
     # Status and Audit
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -640,6 +644,110 @@ class User(UserMixin, db.Model):
             return True
         return False
     
+    def check_approver_status(self):
+        """Check if user is assigned to any approval workflows and return detailed info"""
+        # Import here to avoid circular imports
+        from models import RFPOApprovalStep
+        
+        # Check if user is primary or backup approver in any active workflow steps
+        primary_steps = RFPOApprovalStep.query.filter_by(primary_approver_id=self.record_id).all()
+        backup_steps = RFPOApprovalStep.query.filter_by(backup_approver_id=self.record_id).all()
+        
+        all_steps = primary_steps + backup_steps
+        
+        # Get workflow details
+        workflow_assignments = []
+        active_workflows = set()
+        inactive_workflows = set()
+        
+        for step in all_steps:
+            if step.stage and step.stage.workflow:
+                workflow = step.stage.workflow
+                workflow_info = {
+                    'workflow_id': workflow.workflow_id,
+                    'workflow_name': workflow.name,
+                    'workflow_type': workflow.workflow_type,
+                    'entity_name': workflow.get_entity_name(),
+                    'is_active': workflow.is_active,
+                    'step_name': step.step_name,
+                    'approval_type': step.approval_type_name,
+                    'role': 'primary' if step.primary_approver_id == self.record_id else 'backup'
+                }
+                workflow_assignments.append(workflow_info)
+                
+                if workflow.is_active:
+                    active_workflows.add(workflow.workflow_id)
+                else:
+                    inactive_workflows.add(workflow.workflow_id)
+        
+        # Only consider user an approver if they have valid workflow assignments
+        # (steps with valid stages and workflows)
+        is_approver = len(workflow_assignments) > 0
+        
+        # Count only valid assignments (those with workflows)
+        valid_primary_count = sum(1 for step in primary_steps if step.stage and step.stage.workflow)
+        valid_backup_count = sum(1 for step in backup_steps if step.stage and step.stage.workflow)
+        
+        return {
+            'is_approver': is_approver,
+            'total_assignments': len(workflow_assignments),  # Only count valid assignments
+            'primary_assignments': valid_primary_count,
+            'backup_assignments': valid_backup_count,
+            'active_workflows_count': len(active_workflows),
+            'inactive_workflows_count': len(inactive_workflows),
+            'workflow_assignments': workflow_assignments
+        }
+    
+    def update_approver_status(self, updated_by=None):
+        """Update the is_approver status based on current workflow assignments"""
+        approver_info = self.check_approver_status()
+        old_status = self.is_approver
+        new_status = approver_info['is_approver']
+        
+        if old_status != new_status:
+            self.is_approver = new_status
+            self.approver_updated_at = datetime.utcnow()
+            if updated_by:
+                self.updated_by = updated_by
+            
+            return True  # Status changed
+        
+        return False  # No change
+    
+    def get_approver_summary(self):
+        """Get summary of approver assignments for display"""
+        if not self.is_approver:
+            return {
+                'is_approver': False,
+                'summary': 'Not assigned to any approval workflows',
+                'last_updated': None
+            }
+        
+        approver_info = self.check_approver_status()
+        
+        summary_parts = []
+        if approver_info['primary_assignments'] > 0:
+            summary_parts.append(f"{approver_info['primary_assignments']} primary")
+        if approver_info['backup_assignments'] > 0:
+            summary_parts.append(f"{approver_info['backup_assignments']} backup")
+        
+        active_count = approver_info['active_workflows_count']
+        inactive_count = approver_info['inactive_workflows_count']
+        
+        workflow_summary = []
+        if active_count > 0:
+            workflow_summary.append(f"{active_count} active")
+        if inactive_count > 0:
+            workflow_summary.append(f"{inactive_count} inactive")
+        
+        return {
+            'is_approver': True,
+            'summary': f"Approver in {len(approver_info['workflow_assignments'])} workflows ({', '.join(workflow_summary)})",
+            'assignments_summary': ', '.join(summary_parts) + ' approver roles',
+            'last_updated': self.approver_updated_at.isoformat() if self.approver_updated_at else None,
+            'details': approver_info
+        }
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -680,7 +788,10 @@ class User(UserMixin, db.Model):
             'team_count': len(self.user_teams),
             'is_super_admin': self.is_super_admin(),
             'is_rfpo_admin': self.is_rfpo_admin(),
-            'is_rfpo_user': self.is_rfpo_user()
+            'is_rfpo_user': self.is_rfpo_user(),
+            'is_approver': self.is_approver,
+            'approver_updated_at': self.approver_updated_at.isoformat() if self.approver_updated_at else None,
+            'approver_summary': self.get_approver_summary()
         }
     
     def __repr__(self):

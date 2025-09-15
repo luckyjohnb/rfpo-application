@@ -241,3 +241,51 @@ def get_user_permissions_summary():
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@user_api.route('/approver-status', methods=['GET'])
+@require_auth
+def get_user_approver_status():
+    """Get detailed approver status for current user"""
+    try:
+        user = request.current_user
+        approver_info = user.check_approver_status()
+        approver_summary = user.get_approver_summary()
+        
+        return jsonify({
+            'success': True,
+            'user_id': user.id,
+            'record_id': user.record_id,
+            'is_approver': user.is_approver,
+            'approver_updated_at': user.approver_updated_at.isoformat() if user.approver_updated_at else None,
+            'approver_info': approver_info,
+            'approver_summary': approver_summary
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@user_api.route('/sync-approver-status', methods=['POST'])
+@require_auth
+def sync_user_approver_status():
+    """Sync approver status for current user (force refresh)"""
+    try:
+        user = request.current_user
+        status_changed = user.update_approver_status(updated_by=user.email)
+        
+        if status_changed:
+            db.session.commit()
+            message = f"Approver status updated to: {'Approver' if user.is_approver else 'Not an approver'}"
+        else:
+            message = "Approver status is already up to date"
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'status_changed': status_changed,
+            'is_approver': user.is_approver,
+            'approver_summary': user.get_approver_summary()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500

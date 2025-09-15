@@ -74,7 +74,9 @@ def login():
                 'username': user.email,
                 'display_name': user.fullname,
                 'email': user.email,
-                'roles': user.get_permissions()
+                'roles': user.get_permissions(),
+                'is_approver': user.is_approver,
+                'approver_summary': user.get_approver_summary()
             }
         })
 
@@ -108,7 +110,9 @@ def verify_token():
                 'username': user.email,
                 'display_name': user.fullname,
                 'email': user.email,
-                'roles': user.get_permissions()
+                'roles': user.get_permissions(),
+                'is_approver': user.is_approver,
+                'approver_summary': user.get_approver_summary()
             }
         })
         

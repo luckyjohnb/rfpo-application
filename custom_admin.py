@@ -19,6 +19,53 @@ from datetime import datetime
 from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam, PDFPositioning, RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep, RFPOApprovalInstance, RFPOApprovalAction
 from pdf_generator import RFPOPDFGenerator
 
+def sync_all_users_approver_status(updated_by=None):
+    """Sync approver status for all users - useful after workflow changes"""
+    try:
+        users = User.query.all()
+        updated_count = 0
+        
+        for user in users:
+            if user.update_approver_status(updated_by=updated_by):
+                updated_count += 1
+        
+        db.session.commit()
+        return updated_count
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error syncing approver status: {e}")
+        return 0
+
+def sync_user_approver_status_for_workflow(workflow_id, updated_by=None):
+    """Sync approver status for users affected by a specific workflow"""
+    try:
+        # Get all users who are approvers in this workflow
+        affected_user_ids = set()
+        
+        workflow = RFPOApprovalWorkflow.query.get(workflow_id)
+        if not workflow:
+            return 0
+        
+        for stage in workflow.stages:
+            for step in stage.steps:
+                if step.primary_approver_id:
+                    affected_user_ids.add(step.primary_approver_id)
+                if step.backup_approver_id:
+                    affected_user_ids.add(step.backup_approver_id)
+        
+        updated_count = 0
+        for user_record_id in affected_user_ids:
+            user = User.query.filter_by(record_id=user_record_id).first()
+            if user and user.update_approver_status(updated_by=updated_by):
+                updated_count += 1
+        
+        db.session.commit()
+        return updated_count
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error syncing approver status for workflow {workflow_id}: {e}")
+        return 0
+
 def get_user_mindmap_data(user):
     """Get comprehensive permissions mindmap data for a user"""
     try:
@@ -2826,6 +2873,12 @@ Southfield, MI  48075""",
             db.session.add(workflow)
             db.session.commit()
             
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow.id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after workflow creation: {e}")
+            
             flash('✅ Approval workflow created successfully!', 'success')
             return redirect(url_for('approval_workflow_edit', id=workflow.id))
             
@@ -2857,6 +2910,12 @@ Southfield, MI  48075""",
                 workflow.updated_by = current_user.get_display_name()
                 
                 db.session.commit()
+                
+                # Sync approver status for affected users
+                try:
+                    sync_user_approver_status_for_workflow(workflow.id, updated_by=current_user.get_display_name())
+                except Exception as e:
+                    print(f"Warning: Could not sync approver status after workflow edit: {e}")
                 
                 flash('✅ Approval workflow updated successfully!', 'success')
                 return redirect(url_for('approval_workflow_edit', id=workflow.id))
@@ -2980,6 +3039,12 @@ Southfield, MI  48075""",
             db.session.add(step)
             db.session.commit()
             
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow_id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after step addition: {e}")
+            
             flash(f'✅ Step "{step.step_name}" added successfully!', 'success')
             
         except Exception as e:
@@ -3029,6 +3094,12 @@ Southfield, MI  48075""",
             db.session.delete(step)
             db.session.commit()
             
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow_id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after step deletion: {e}")
+            
             flash(f'✅ Step "{step_name}" deleted successfully!', 'success')
             
         except Exception as e:
@@ -3071,6 +3142,12 @@ Southfield, MI  48075""",
         try:
             workflow.activate()
             db.session.commit()
+            
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow.id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after workflow activation: {e}")
             
             flash(f'✅ Workflow "{workflow.name}" activated for {workflow.consortium_id}!', 'success')
             
@@ -3357,6 +3434,12 @@ Southfield, MI  48075""",
             
             db.session.commit()
             
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow_id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after step edit: {e}")
+            
             flash(f'✅ Step "{step.step_name}" updated successfully!', 'success')
             
         except Exception as e:
@@ -3364,6 +3447,22 @@ Southfield, MI  48075""",
             flash(f'❌ Error updating step: {str(e)}', 'error')
         
         return redirect(url_for('approval_workflow_edit', id=workflow_id))
+    
+    @app.route('/api/sync-all-approver-status', methods=['POST'])
+    @login_required
+    def api_sync_all_approver_status():
+        """Sync approver status for all users (admin panel utility)"""
+        try:
+            updated_count = sync_all_users_approver_status(updated_by=current_user.get_display_name())
+            
+            return jsonify({
+                'success': True,
+                'message': f'Synced approver status for {updated_count} users',
+                'updated_count': updated_count
+            })
+            
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)}), 500
     
     # RFPO Approval Instance Management routes
     @app.route('/approval-instances')
@@ -3857,6 +3956,32 @@ Southfield, MI  48075""",
                 'type': list_type
             }), 400
     
+    @app.route('/api/sync-approver-status/<int:user_id>', methods=['POST'])
+    @login_required
+    def api_sync_user_approver_status(user_id):
+        """Sync approver status for a specific user (admin panel)"""
+        try:
+            user = User.query.get_or_404(user_id)
+            status_changed = user.update_approver_status(updated_by=current_user.get_display_name())
+            
+            if status_changed:
+                db.session.commit()
+                message = f"Approver status updated to: {'Approver' if user.is_approver else 'Not an approver'}"
+            else:
+                message = "Approver status is already up to date"
+            
+            return jsonify({
+                'success': True,
+                'message': message,
+                'status_changed': status_changed,
+                'is_approver': user.is_approver,
+                'approver_summary': user.get_approver_summary()
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'message': str(e)}), 500
+
     @app.route('/api/user/<int:user_id>/permissions-mindmap')
     @login_required
     def api_user_permissions_mindmap(user_id):

@@ -660,7 +660,126 @@
                             </div>
                         </div>
                         
-                        <!-- Row 3: Entity Associations (Full Width) -->
+                        <!-- Row 3: Approver Status (Full Width) -->
+                        <div class="col-12">
+                            {% if user %}
+                            <div class="card border-info mb-3">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="fas fa-user-check"></i> Approval Workflow Status</h6>
+                                </div>
+                                <div class="card-body">
+                                    {% set approver_summary = user.get_approver_summary() %}
+                                    {% set has_active_assignments = approver_summary.details and approver_summary.details.workflow_assignments and approver_summary.details.workflow_assignments|length > 0 %}
+                                    {% if has_active_assignments %}
+                                    <div class="row align-items-center">
+                                        <div class="col-md-8">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="fas fa-check-circle text-success fa-2x me-3"></i>
+                                                <div>
+                                                    <h6 class="mb-0 text-success">Active Approver</h6>
+                                                    <p class="mb-0 text-muted">{{ approver_summary.summary }}</p>
+                                                    <small class="text-muted">{{ approver_summary.assignments_summary }}</small>
+                                                </div>
+                                            </div>
+                                            {% if approver_summary.last_updated %}
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock"></i> Status updated: {{ approver_summary.last_updated }}
+                                            </small>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-md-4 text-end">
+                                            <button type="button" class="btn btn-outline-info btn-sm" onclick="showApproverDetails()">
+                                                <i class="fas fa-eye"></i> View Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Approver Details (initially hidden) -->
+                                    <div id="approverDetails" class="mt-3" style="display: none;">
+                                        <hr>
+                                        <h6 class="text-info mb-3">Workflow Assignments</h6>
+                                        {% if approver_summary.details and approver_summary.details.workflow_assignments %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Workflow</th>
+                                                        <th>Type</th>
+                                                        <th>Entity</th>
+                                                        <th>Step</th>
+                                                        <th>Role</th>
+                                                        <th>Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for assignment in approver_summary.details.workflow_assignments %}
+                                                    <tr>
+                                                        <td>
+                                                            <strong>{{ assignment.workflow_name }}</strong>
+                                                            <br><small class="text-muted">{{ assignment.workflow_id }}</small>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-secondary">{{ assignment.workflow_type.title() }}</span>
+                                                        </td>
+                                                        <td>{{ assignment.entity_name }}</td>
+                                                        <td>
+                                                            {{ assignment.step_name }}
+                                                            <br><small class="text-muted">{{ assignment.approval_type }}</small>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge {{ 'bg-primary' if assignment.role == 'primary' else 'bg-warning' }}">
+                                                                {{ assignment.role.title() }}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge {{ 'bg-success' if assignment.is_active else 'bg-secondary' }}">
+                                                                {{ 'Active' if assignment.is_active else 'Inactive' }}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {% else %}
+                                        <p class="text-muted">No detailed workflow assignments found.</p>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-user-times text-muted fa-2x me-3"></i>
+                                        <div>
+                                            <h6 class="mb-0 text-muted">Not an Approver</h6>
+                                            {% set real_time_check = user.check_approver_status() %}
+                                            {% if real_time_check.is_approver and not has_active_assignments %}
+                                            <p class="mb-0 text-warning">User has workflow assignments but they're not displaying correctly</p>
+                                            <small class="text-muted">Database may need to be synced</small>
+                                            <div class="mt-2">
+                                                <button type="button" class="btn btn-outline-warning btn-sm" onclick="syncApproverStatus({{ user.id }})">
+                                                    <i class="fas fa-sync"></i> Sync Status
+                                                </button>
+                                            </div>
+                                            {% elif user.is_approver and not real_time_check.is_approver %}
+                                            <p class="mb-0 text-warning">Database shows approver status but no active workflow assignments found</p>
+                                            <small class="text-muted">User was likely removed from workflows - sync to update status</small>
+                                            <div class="mt-2">
+                                                <button type="button" class="btn btn-outline-warning btn-sm" onclick="syncApproverStatus({{ user.id }})">
+                                                    <i class="fas fa-sync"></i> Sync Status
+                                                </button>
+                                            </div>
+                                            {% else %}
+                                            <p class="mb-0 text-muted">{{ approver_summary.summary }}</p>
+                                            <small class="text-muted">User is not assigned to any approval workflow steps</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Row 4: Entity Associations (Full Width) -->
                         <div class="col-12">
                             {% if user_mindmap.associations.teams.count > 0 or user_mindmap.associations.consortiums.count > 0 or user_mindmap.associations.projects.count > 0 %}
                             <div class="card border-success">
@@ -880,7 +999,87 @@ function showProjectsModal() {
         modal.show();
     }
 }
+
+function showApproverDetails() {
+    const detailsDiv = document.getElementById('approverDetails');
+    const button = event.target.closest('button');
+    
+    if (detailsDiv.style.display === 'none') {
+        detailsDiv.style.display = 'block';
+        button.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Details';
+    } else {
+        detailsDiv.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-eye"></i> View Details';
+    }
+}
 </script>
 {% endif %}
+
+<!-- Always include approver details JavaScript -->
+<script>
+function showApproverDetails() {
+    const detailsDiv = document.getElementById('approverDetails');
+    const button = event.target.closest('button');
+    
+    if (detailsDiv.style.display === 'none') {
+        detailsDiv.style.display = 'block';
+        button.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Details';
+    } else {
+        detailsDiv.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-eye"></i> View Details';
+    }
+}
+
+function syncApproverStatus(userId) {
+    const button = event.target;
+    const originalHtml = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+    button.disabled = true;
+    
+    // Call the admin panel sync endpoint
+    fetch('/api/sync-approver-status/' + userId, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success and reload page after a brief delay
+            button.innerHTML = '<i class="fas fa-check"></i> Synced!';
+            button.className = 'btn btn-success btn-sm';
+            
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            // Show error
+            button.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+            button.className = 'btn btn-danger btn-sm';
+            console.error('Sync failed:', data.message);
+            
+            setTimeout(() => {
+                button.innerHTML = originalHtml;
+                button.className = 'btn btn-outline-warning btn-sm';
+                button.disabled = false;
+            }, 3000);
+        }
+    })
+    .catch(error => {
+        console.error('Sync error:', error);
+        button.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+        button.className = 'btn btn-danger btn-sm';
+        
+        setTimeout(() => {
+            button.innerHTML = originalHtml;
+            button.className = 'btn btn-outline-warning btn-sm';
+            button.disabled = false;
+        }, 3000);
+    });
+}
+</script>
 
 {% endblock %}

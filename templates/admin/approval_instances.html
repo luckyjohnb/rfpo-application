@@ -63,10 +63,12 @@
                         </td>
                         <td>
                             <div class="d-flex align-items-center">
-                                <small class="me-2">{{ instance.completed_actions_count }}/{{ instance.completed_actions_count + instance.pending_actions_count }}</small>
+                                {% set completed = instance.completed_actions_count if instance.completed_actions_count is defined else (instance.get_completed_actions()|length if instance.get_completed_actions is defined else 0) %}
+                                {% set pending = instance.pending_actions_count if instance.pending_actions_count is defined else (instance.get_pending_actions()|length if instance.get_pending_actions is defined else 0) %}
+                                <small class="me-2">{{ completed }}/{{ completed + pending }}</small>
                                 <div class="progress flex-grow-1" style="height: 20px; width: 80px;">
-                                    {% set total_actions = instance.completed_actions_count + instance.pending_actions_count %}
-                                    {% set progress = (instance.completed_actions_count / total_actions * 100) if total_actions > 0 else 0 %}
+                                    {% set total_actions = completed + pending %}
+                                    {% set progress = (completed / total_actions * 100) if total_actions > 0 else 0 %}
                                     <div class="progress-bar" style="width: {{ progress }}%"></div>
                                 </div>
                             </div>
@@ -100,10 +102,27 @@
                                 </div>
                             {% else %}
                                 <!-- Real Instance Actions -->
-                                <a href="{{ url_for('approval_instance_view', id=instance.id) }}" 
-                                   class="btn btn-sm btn-outline-primary" title="View Details">
-                                    <i class="fas fa-eye"></i>
-                                </a>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('approval_instance_view', id=instance.id) }}" 
+                                       class="btn btn-sm btn-outline-primary" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    
+                                    {% if instance.overall_status == 'approved' %}
+                                    <a href="{{ url_for('rfpo_generate_po', rfpo_id=instance.rfpo_id) }}" 
+                                       class="btn btn-sm btn-outline-success" title="Issue PO" target="_blank">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <form method="POST" action="{{ url_for('approval_instance_delete', id=instance.id) }}" 
+                                          style="display:inline;" 
+                                          onsubmit="return confirm('Delete this approval instance? This will reset the RFPO to Draft status and remove all approval history.')">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Instance">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
                             {% endif %}
                         </td>
                     </tr>

@@ -1677,8 +1677,44 @@ class RFPOApprovalInstance(db.Model):
         """Check if approval workflow is complete"""
         return self.overall_status in ['approved', 'refused']
     
+    def check_completion_status(self):
+        """Check if all actions are completed and determine final status"""
+        pending_actions = self.get_pending_actions()
+        completed_actions = self.get_completed_actions()
+        
+        # If there are still pending actions, not complete
+        if pending_actions:
+            return None
+        
+        # If no actions at all, not complete
+        if not completed_actions:
+            return None
+        
+        # Check if any action was refused
+        for action in completed_actions:
+            if action.status == 'refused':
+                return 'refused'
+        
+        # If all actions are completed and none refused, it's approved
+        return 'approved'
+    
     def advance_to_next_step(self):
-        """Advance workflow to next step or stage"""
+        """Advance workflow to next step or stage, with proper completion logic"""
+        # First, check if the workflow should be completed based on action status
+        completion_status = self.check_completion_status()
+        
+        if completion_status == 'refused':
+            # Any rejection completes the workflow as refused
+            self.overall_status = 'refused'
+            self.completed_at = datetime.utcnow()
+            return
+        elif completion_status == 'approved':
+            # All actions completed and approved
+            self.overall_status = 'approved'
+            self.completed_at = datetime.utcnow()
+            return
+        
+        # If not complete, advance to next step/stage
         current_stage = self.get_current_stage()
         if current_stage:
             steps = current_stage.get('steps', [])
@@ -1693,9 +1729,11 @@ class RFPOApprovalInstance(db.Model):
                     self.current_stage_order += 1
                     self.current_step_order = 1
                 else:
-                    # Workflow complete
-                    self.overall_status = 'approved'
-                    self.completed_at = datetime.utcnow()
+                    # Reached end of workflow structure - check completion again
+                    final_status = self.check_completion_status()
+                    if final_status:
+                        self.overall_status = final_status
+                        self.completed_at = datetime.utcnow()
     
     def to_dict(self):
         return {

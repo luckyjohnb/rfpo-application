@@ -1479,7 +1479,17 @@ def create_app():
         for rfpo in rfpos:
             # Check if RFPO has approval instances
             rfpo.approval_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
-            rfpo.can_delete = rfpo.approval_instance is None
+            
+            # Allow deletion if no approval instance OR if approval instance is completed
+            if rfpo.approval_instance is None:
+                rfpo.can_delete = True
+                rfpo.delete_reason = "No approval workflow"
+            elif rfpo.approval_instance.is_complete():
+                rfpo.can_delete = True
+                rfpo.delete_reason = f"Approval workflow completed ({rfpo.approval_instance.overall_status})"
+            else:
+                rfpo.can_delete = False
+                rfpo.delete_reason = f"Has active approval workflow ({rfpo.approval_instance.overall_status})"
             
             # Count line items and files
             rfpo.line_item_count = len(rfpo.line_items) if rfpo.line_items else 0
@@ -1545,14 +1555,27 @@ def create_app():
                 ).count()
                 rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
                 
-                # Get team from project or use default
+                # Get team from project or create a default team if none exists
                 team = Team.query.filter_by(record_id=project.team_record_id).first() if project.team_record_id else None
                 if not team:
                     team = Team.query.filter_by(active=True).first()
                 
+                # If no team exists, create a default "No Team" team
                 if not team:
-                    flash('❌ No active teams available.', 'error')
-                    return redirect(url_for('rfpo_create_stage1'))
+                    print("No teams found - creating default team for RFPO creation")
+                    default_team = Team(
+                        record_id=f"DEFAULT-{datetime.now().strftime('%Y%m%d')}",
+                        name="Default Team (No Team Assignment)",
+                        abbrev="DEFAULT",
+                        description="Auto-created default team for RFPOs without team assignment",
+                        consortium_consort_id=consortium_id,
+                        active=True,
+                        created_by=current_user.get_display_name()
+                    )
+                    db.session.add(default_team)
+                    db.session.flush()  # Get the ID
+                    team = default_team
+                    flash('ℹ️ Created default team for RFPO creation.', 'info')
                 
                 # Create RFPO with enhanced model
                 rfpo = RFPO(
@@ -1561,11 +1584,11 @@ def create_app():
                     description=request.form.get('description'),
                     project_id=project.project_id,
                     consortium_id=consortium.consort_id,
-                    team_id=team.id,
+                    team_id=team.id if team else None,
                     government_agreement_number=request.form.get('government_agreement_number'),
                     requestor_id=current_user.record_id,
-                    requestor_tel=request.form.get('requestor_tel'),
-                    requestor_location=request.form.get('requestor_location'),
+                    requestor_tel=request.form.get('requestor_tel') or current_user.phone,
+                    requestor_location=request.form.get('requestor_location') or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
                     shipto_name=request.form.get('shipto_name'),
                     shipto_tel=request.form.get('shipto_tel'),
                     shipto_address=request.form.get('shipto_address'),
@@ -1603,7 +1626,7 @@ Southfield, MI  48075""",
         
         # Pre-fill form with current user data
         current_user_data = {
-            'requestor_tel': current_user.phone,
+            'requestor_tel': current_user.phone or '',  # Don't show 'None'
             'requestor_location': f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
             'shipto_name': current_user.get_display_name(),
             'shipto_address': f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}"
@@ -2081,8 +2104,8 @@ Southfield, MI  48075""",
         
         # Check for approval instances that might prevent deletion
         approval_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
-        if approval_instance:
-            flash(f'❌ Cannot delete RFPO: It has an active approval workflow (Instance: {approval_instance.instance_id}). Please complete or cancel the approval process first.', 'error')
+        if approval_instance and not approval_instance.is_complete():
+            flash(f'❌ Cannot delete RFPO: It has an active approval workflow (Instance: {approval_instance.instance_id}, Status: {approval_instance.overall_status}). Please complete or cancel the approval process first.', 'error')
             return redirect(url_for('rfpos'))
         
         try:
@@ -2789,7 +2812,26 @@ Southfield, MI  48075""",
                         workflow.consortium_name = consortium.name if consortium else consortium_ids[0]
             
             # Count usage statistics
-            workflow.instance_count = RFPOApprovalInstance.query.filter_by(template_workflow_id=workflow.id).count()
+            all_instances = RFPOApprovalInstance.query.filter_by(template_workflow_id=workflow.id).all()
+            workflow.instance_count = len(all_instances)
+            
+            # Check if workflow can be deleted (inactive + all instances completed)
+            workflow.can_delete = True
+            if workflow.is_active:
+                workflow.can_delete = False
+                workflow.delete_reason = "Workflow is currently active"
+            elif all_instances:
+                # Check if all instances are completed
+                incomplete_instances = [inst for inst in all_instances if not inst.is_complete()]
+                if incomplete_instances:
+                    workflow.can_delete = False
+                    workflow.delete_reason = f"Has {len(incomplete_instances)} incomplete approval instances"
+                else:
+                    workflow.can_delete = True
+                    workflow.delete_reason = f"All {len(all_instances)} instances are completed"
+            else:
+                workflow.can_delete = True
+                workflow.delete_reason = "No instances using this workflow"
         
         # Get counts for each workflow type for tabs
         workflow_counts = {
@@ -3448,6 +3490,43 @@ Southfield, MI  48075""",
         
         return redirect(url_for('approval_workflow_edit', id=workflow_id))
     
+    @app.route('/api/fix-approval-instance-status/<int:instance_id>', methods=['POST'])
+    @login_required
+    def api_fix_approval_instance_status(instance_id):
+        """Fix approval instance status based on completed actions"""
+        try:
+            instance = RFPOApprovalInstance.query.get_or_404(instance_id)
+            
+            # Check current completion status
+            completion_status = instance.check_completion_status()
+            
+            if completion_status:
+                old_status = instance.overall_status
+                instance.overall_status = completion_status
+                if not instance.completed_at:
+                    instance.completed_at = datetime.utcnow()
+                instance.updated_at = datetime.utcnow()
+                
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Instance status updated from "{old_status}" to "{completion_status}"',
+                    'old_status': old_status,
+                    'new_status': completion_status,
+                    'completed_at': instance.completed_at.isoformat() if instance.completed_at else None
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'message': 'Instance status is correct - workflow still in progress',
+                    'current_status': instance.overall_status
+                })
+                
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'message': str(e)}), 500
+
     @app.route('/api/sync-all-approver-status', methods=['POST'])
     @login_required
     def api_sync_all_approver_status():
@@ -3519,6 +3598,10 @@ Southfield, MI  48075""",
                 instance.rfpo_title = f"RFPO #{instance.rfpo_id}"
                 instance.rfpo_total = 0.00
             instance.is_virtual = False
+            
+            # Add action counts using the model methods
+            instance.pending_actions_count = len(instance.get_pending_actions())
+            instance.completed_actions_count = len(instance.get_completed_actions())
         
         # Combine and sort all instances
         all_instances = list(instances) + virtual_instances
@@ -3560,28 +3643,40 @@ Southfield, MI  48075""",
         
         # Check if current user can take this action
         if (action.approver_id != current_user.record_id and 
-            action.backup_approver_id != current_user.record_id and 
             not current_user.is_super_admin()):
             flash('❌ You are not authorized to take this action.', 'error')
             return redirect(url_for('approval_instance_view', id=instance_id))
         
         try:
-            status = request.form.get('status')  # approved, conditional, refused
+            status = request.form.get('status')  # approved or refused
             comments = request.form.get('comments')
-            conditions = request.form.get('conditions') if status == 'conditional' else None
+            
+            # Validate status
+            if status not in ['approved', 'refused']:
+                flash('❌ Invalid action status.', 'error')
+                return redirect(url_for('approval_instance_view', id=instance_id))
             
             # Complete the action
-            action.complete_action(status, comments, conditions, current_user.record_id)
+            action.complete_action(status, comments, None, current_user.record_id)
             
-            # Update instance status and advance workflow if needed
-            if status == 'approved':
-                instance.advance_to_next_step()
-            elif status == 'refused':
+            # Update instance status based on action result
+            if status == 'refused':
+                # Any rejection immediately completes the workflow as refused
                 instance.overall_status = 'refused'
                 instance.completed_at = datetime.utcnow()
-            elif status == 'conditional':
-                # For conditional approval, advance but note conditions
+                
+                # Update RFPO status to refused
+                if instance.rfpo:
+                    instance.rfpo.status = 'Refused'
+                    instance.rfpo.updated_by = current_user.get_display_name()
+            else:
+                # For approvals, advance workflow and check for completion
                 instance.advance_to_next_step()
+                
+                # If workflow is now complete and approved, update RFPO status
+                if instance.overall_status == 'approved' and instance.rfpo:
+                    instance.rfpo.status = 'Approved'
+                    instance.rfpo.updated_by = current_user.get_display_name()
             
             instance.updated_at = datetime.utcnow()
             
@@ -3594,6 +3689,33 @@ Southfield, MI  48075""",
             flash(f'❌ Error processing action: {str(e)}', 'error')
         
         return redirect(url_for('approval_instance_view', id=instance_id))
+    
+    @app.route('/approval-instance/<int:id>/delete', methods=['POST'])
+    @login_required
+    def approval_instance_delete(id):
+        """Delete approval instance (admin only)"""
+        instance = RFPOApprovalInstance.query.get_or_404(id)
+        
+        try:
+            instance_id = instance.instance_id
+            rfpo_id = instance.rfpo_id
+            
+            # Reset RFPO status if it was set by this approval workflow
+            if instance.rfpo and instance.rfpo.status in ['Approved', 'Refused']:
+                instance.rfpo.status = 'Draft'
+                instance.rfpo.updated_by = current_user.get_display_name()
+            
+            # Delete the approval instance (actions will be cascade deleted)
+            db.session.delete(instance)
+            db.session.commit()
+            
+            flash(f'✅ Approval instance "{instance_id}" deleted successfully! RFPO reset to Draft status.', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error deleting approval instance: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_instances'))
     
     @app.route('/api/rfpo/<int:rfpo_id>/test-approval')
     @login_required
@@ -3660,6 +3782,10 @@ Southfield, MI  48075""",
             first_stage = None
             all_actions = []
             
+            # Use timestamp-based action ID generation to ensure uniqueness
+            import time
+            action_id_counter = 0
+            
             for workflow_type, workflow, phase_number in applicable_workflows:
                 if phase_number == 1:
                     first_workflow = workflow
@@ -3709,7 +3835,11 @@ Southfield, MI  48075""",
                     
                     # Create actions for Phase 1 only (others will be created when phases advance)
                     if phase_number == 1:
-                        action_id = generate_next_id(RFPOApprovalAction, 'action_id', 'ACT-', 8)
+                        # Generate unique action ID using timestamp + counter
+                        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                        action_id_counter += 1
+                        action_id = f"ACT-{timestamp}-{action_id_counter:03d}"
+                        
                         primary_approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
                         
                         action = RFPOApprovalAction(

@@ -105,20 +105,36 @@ def create_user_app():
         permissions_response = make_api_request('/users/permissions-summary')
         user_permissions = permissions_response.get('permissions_summary', {}) if permissions_response.get('success') else {}
         
-        # Determine if user has RFPO access
-        has_rfpo_access = (
-            user_permissions.get('summary_counts', {}).get('rfpos', 0) > 0 or
-            user_permissions.get('summary_counts', {}).get('teams', 0) > 0 or
-            user_permissions.get('summary_counts', {}).get('projects', 0) > 0 or
-            user_permissions.get('is_super_admin', False)
-        )
+        # Get approver status
+        approver_response = make_api_request('/users/approver-status')
+        approver_info = approver_response if approver_response.get('success') else {}
+        
+        # Determine user access level
+        user_data = user_info.get('user', {})
+        is_rfpo_user = 'RFPO_USER' in user_data.get('roles', [])
+        is_rfpo_admin = 'RFPO_ADMIN' in user_data.get('roles', []) or 'GOD' in user_data.get('roles', [])
+        is_approver = approver_info.get('is_approver', False)
+        
+        # Determine dashboard type
+        if is_rfpo_admin:
+            dashboard_type = 'admin'
+        elif is_rfpo_user and is_approver:
+            dashboard_type = 'approver'
+        elif is_rfpo_user:
+            dashboard_type = 'profile_only'
+        else:
+            dashboard_type = 'no_access'
+        
+        # The dashboard will load user-specific data via JavaScript based on user type
+        # This keeps the server-side logic simple and leverages existing API endpoints
         
         return render_template('app/dashboard.html', 
                              user=user_info.get('user'),
                              recent_rfpos=recent_rfpos,
                              teams=user_teams,
                              user_permissions=user_permissions,
-                             has_rfpo_access=has_rfpo_access)
+                             dashboard_type=dashboard_type,
+                             is_approver=is_approver)
     
     @app.route('/rfpos')
     def rfpos_list():
@@ -267,6 +283,150 @@ def create_user_app():
         """User permissions summary API proxy"""
         response = make_api_request('/users/permissions-summary')
         return jsonify(response)
+    
+    @app.route('/api/users/approver-status', methods=['GET'])
+    def api_user_approver_status():
+        """User approver status API proxy"""
+        response = make_api_request('/users/approver-status')
+        return jsonify(response)
+    
+    @app.route('/api/users/approver-rfpos', methods=['GET'])
+    def api_user_approver_rfpos():
+        """User approver RFPOs API proxy"""
+        response = make_api_request('/users/approver-rfpos')
+        return jsonify(response)
+    
+    @app.route('/api/users/approval-action/<action_id>', methods=['POST'])
+    def api_take_approval_action(action_id):
+        """Take approval action API proxy"""
+        data = request.get_json()
+        response = make_api_request(f'/users/approval-action/{action_id}', 'POST', data)
+        return jsonify(response)
+    
+    @app.route('/api/rfpos/<int:rfpo_id>/rendered-view', methods=['GET'])
+    def api_rfpo_rendered_view(rfpo_id):
+        """RFPO rendered view API proxy"""
+        response = make_api_request(f'/rfpos/{rfpo_id}/rendered-view')
+        return jsonify(response)
+    
+    @app.route('/rfpos/<int:rfpo_id>/preview')
+    def rfpo_preview(rfpo_id):
+        """Render RFPO preview HTML (same as admin panel)"""
+        if 'auth_token' not in session:
+            return redirect(url_for('login_page'))
+        
+        # Get RFPO data from API
+        rfpo_response = make_api_request(f'/rfpos/{rfpo_id}')
+        if not rfpo_response.get('success'):
+            return f"Error loading RFPO: {rfpo_response.get('message', 'Unknown error')}", 404
+        
+        rfpo = rfpo_response['rfpo']
+        
+        # Get related data from API
+        project = None
+        consortium = None
+        vendor = None
+        vendor_site = None
+        requestor = None
+        
+        # Get project info
+        if rfpo.get('project_id'):
+            projects_response = make_api_request('/projects')
+            if projects_response.get('success'):
+                for p in projects_response.get('projects', []):
+                    if p.get('project_id') == rfpo['project_id']:
+                        project = p
+                        break
+        
+        # Get consortium info
+        if rfpo.get('consortium_id'):
+            consortiums_response = make_api_request('/consortiums')
+            if consortiums_response.get('success'):
+                for c in consortiums_response.get('consortiums', []):
+                    if c.get('consort_id') == rfpo['consortium_id']:
+                        consortium = c
+                        break
+        
+        # Get vendor info
+        if rfpo.get('vendor_id'):
+            vendors_response = make_api_request('/vendors')
+            if vendors_response.get('success'):
+                for v in vendors_response.get('vendors', []):
+                    if v.get('id') == rfpo['vendor_id']:
+                        vendor = v
+                        break
+        
+        # Get vendor site info
+        if rfpo.get('vendor_site_id') and vendor:
+            vendor_sites_response = make_api_request(f'/vendor-sites/{vendor["id"]}')
+            if vendor_sites_response:
+                for site in vendor_sites_response:
+                    if site.get('id') == rfpo['vendor_site_id']:
+                        vendor_site = site
+                        break
+        
+        # Create simple namespace objects to match template expectations
+        from types import SimpleNamespace
+        from datetime import datetime
+        
+        # Convert date strings to datetime objects for template compatibility
+        if rfpo.get('created_at'):
+            try:
+                if isinstance(rfpo['created_at'], str):
+                    rfpo['created_at'] = datetime.fromisoformat(rfpo['created_at'].replace('Z', '+00:00'))
+            except:
+                rfpo['created_at'] = None
+        
+        if rfpo.get('delivery_date'):
+            try:
+                if isinstance(rfpo['delivery_date'], str):
+                    rfpo['delivery_date'] = datetime.fromisoformat(rfpo['delivery_date'].replace('Z', '+00:00')).date()
+            except:
+                rfpo['delivery_date'] = None
+        
+        rfpo_obj = SimpleNamespace(**rfpo)
+        project_obj = SimpleNamespace(**project) if project else None
+        consortium_obj = SimpleNamespace(**consortium) if consortium else None
+        vendor_obj = SimpleNamespace(**vendor) if vendor else None
+        vendor_site_obj = SimpleNamespace(**vendor_site) if vendor_site else None
+        
+        # Add line_items as a list of SimpleNamespace objects
+        if hasattr(rfpo_obj, 'line_items') and rfpo_obj.line_items:
+            rfpo_obj.line_items = [SimpleNamespace(**item) for item in rfpo_obj.line_items]
+        else:
+            rfpo_obj.line_items = []
+        
+        # Add helper methods to rfpo_obj
+        def get_calculated_cost_share_amount():
+            if hasattr(rfpo_obj, 'cost_share_amount') and hasattr(rfpo_obj, 'subtotal'):
+                if rfpo_obj.cost_share_type == 'percent':
+                    return (float(rfpo_obj.subtotal or 0) * float(rfpo_obj.cost_share_amount or 0)) / 100
+                else:
+                    return float(rfpo_obj.cost_share_amount or 0)
+            return 0.0
+        
+        def get_calculated_total_amount():
+            subtotal = float(rfpo_obj.subtotal or 0)
+            cost_share = get_calculated_cost_share_amount()
+            return subtotal - cost_share
+        
+        rfpo_obj.get_calculated_cost_share_amount = get_calculated_cost_share_amount
+        rfpo_obj.get_calculated_total_amount = get_calculated_total_amount
+        
+        # Add helper method to requestor
+        if requestor:
+            requestor_obj = SimpleNamespace(**requestor)
+            requestor_obj.get_display_name = lambda: requestor.get('fullname', requestor.get('display_name', 'Unknown'))
+        else:
+            requestor_obj = None
+        
+        return render_template('app/rfpo_preview.html',
+                             rfpo=rfpo_obj,
+                             project=project_obj,
+                             consortium=consortium_obj,
+                             vendor=vendor_obj,
+                             vendor_site=vendor_site_obj,
+                             requestor=requestor_obj)
     
     # Health check
     @app.route('/health')

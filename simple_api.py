@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import os
 
 # Import our models
-from models import db, User, Team, RFPO
+from models import db, User, Team, RFPO, Consortium, Project, Vendor, VendorSite
 
 # Import admin routes
 import sys
@@ -27,8 +27,8 @@ except ImportError as e:
 # User routes are handled directly in this file
 USER_ROUTES_AVAILABLE = False
 
-# Create Flask app
-app = Flask(__name__)
+# Create Flask app with template folder
+app = Flask(__name__, template_folder='templates')
 
 # Configuration
 app.config['SECRET_KEY'] = 'simple-api-secret'
@@ -217,6 +217,186 @@ def change_password():
             print(f"⚠️ Error sending password change notification: {e}")
         
         return jsonify({'success': True, 'message': 'Password changed successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/users/approver-rfpos', methods=['GET'])
+@require_auth
+def get_approver_rfpos():
+    """Get RFPOs where current user is an approver"""
+    try:
+        from models import RFPOApprovalInstance, RFPOApprovalAction, Project, Consortium, Vendor
+        
+        user = request.current_user
+        
+        # Find RFPOs where user is an approver through approval actions
+        user_actions = RFPOApprovalAction.query.filter_by(approver_id=user.record_id).all()
+        
+        rfpo_data = []
+        seen_rfpo_ids = set()
+        
+        for action in user_actions:
+            if action.instance and action.instance.rfpo and action.instance.rfpo.id not in seen_rfpo_ids:
+                rfpo = action.instance.rfpo
+                instance = action.instance
+                
+                # Get related data
+                project = Project.query.filter_by(project_id=rfpo.project_id).first()
+                consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+                vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+                
+                # Get user's specific action for this RFPO
+                user_action = action
+                
+                rfpo_info = {
+                    'id': rfpo.id,
+                    'rfpo_id': rfpo.rfpo_id,
+                    'title': rfpo.title,
+                    'description': rfpo.description,
+                    'total_amount': float(rfpo.total_amount or 0),
+                    'status': rfpo.status,
+                    'created_at': rfpo.created_at.isoformat() if rfpo.created_at else None,
+                    'created_by': rfpo.created_by,
+                    
+                    # Project info
+                    'project': {
+                        'id': project.project_id if project else None,
+                        'name': project.name if project else None,
+                        'ref': project.ref if project else None
+                    } if project else None,
+                    
+                    # Consortium info
+                    'consortium': {
+                        'id': consortium.consort_id if consortium else None,
+                        'name': consortium.name if consortium else None,
+                        'abbrev': consortium.abbrev if consortium else None
+                    } if consortium else None,
+                    
+                    # Vendor info
+                    'vendor': {
+                        'id': vendor.id if vendor else None,
+                        'company_name': vendor.company_name if vendor else None
+                    } if vendor else None,
+                    
+                    # Approval info
+                    'approval_instance': {
+                        'instance_id': instance.instance_id,
+                        'workflow_name': instance.workflow_name,
+                        'overall_status': instance.overall_status,
+                        'current_stage_order': instance.current_stage_order,
+                        'current_step_order': instance.current_step_order,
+                        'submitted_at': instance.submitted_at.isoformat() if instance.submitted_at else None,
+                        'completed_at': instance.completed_at.isoformat() if instance.completed_at else None
+                    },
+                    
+                    # User's specific action
+                    'user_action': {
+                        'action_id': user_action.action_id,
+                        'step_name': user_action.step_name,
+                        'stage_name': user_action.stage_name,
+                        'status': user_action.status,
+                        'assigned_at': user_action.assigned_at.isoformat() if user_action.assigned_at else None,
+                        'completed_at': user_action.completed_at.isoformat() if user_action.completed_at else None,
+                        'comments': user_action.comments,
+                        'approval_type': user_action.approval_type_key
+                    }
+                }
+                
+                rfpo_data.append(rfpo_info)
+                seen_rfpo_ids.add(rfpo.id)
+        
+        # Categorize RFPOs by status for dashboard
+        categorized_rfpos = {
+            'pending': [r for r in rfpo_data if r['user_action']['status'] == 'pending'],
+            'approved': [r for r in rfpo_data if r['user_action']['status'] == 'approved'],
+            'rejected': [r for r in rfpo_data if r['user_action']['status'] == 'refused'],
+            'waiting': [r for r in rfpo_data if r['approval_instance']['overall_status'] == 'waiting' and r['user_action']['status'] != 'pending']
+        }
+        
+        return jsonify({
+            'success': True,
+            'rfpos': rfpo_data,
+            'categorized': categorized_rfpos,
+            'summary': {
+                'total': len(rfpo_data),
+                'pending': len(categorized_rfpos['pending']),
+                'approved': len(categorized_rfpos['approved']),
+                'rejected': len(categorized_rfpos['rejected']),
+                'waiting': len(categorized_rfpos['waiting'])
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/users/approval-action/<action_id>', methods=['POST'])
+@require_auth
+def take_approval_action(action_id):
+    """Take an approval action (approve/reject)"""
+    try:
+        from models import RFPOApprovalAction, RFPOApprovalInstance
+        
+        user = request.current_user
+        data = request.get_json()
+        
+        # Find the action
+        action = RFPOApprovalAction.query.filter_by(action_id=action_id).first()
+        if not action:
+            return jsonify({'success': False, 'message': 'Approval action not found'}), 404
+        
+        # Check if user is authorized to take this action
+        if action.approver_id != user.record_id and not user.is_super_admin():
+            return jsonify({'success': False, 'message': 'Not authorized to take this action'}), 403
+        
+        # Check if action is still pending
+        if action.status != 'pending':
+            return jsonify({'success': False, 'message': 'Action has already been completed'}), 400
+        
+        # Validate status
+        status = data.get('status')
+        if status not in ['approved', 'refused']:
+            return jsonify({'success': False, 'message': 'Status must be approved or refused'}), 400
+        
+        comments = data.get('comments', '')
+        
+        # Complete the action
+        action.complete_action(status, comments, None, user.record_id)
+        
+        # Update instance status
+        instance = action.instance
+        if status == 'refused':
+            instance.overall_status = 'refused'
+            instance.completed_at = datetime.utcnow()
+            
+            # Update RFPO status
+            if instance.rfpo:
+                instance.rfpo.status = 'Refused'
+                instance.rfpo.updated_by = user.get_display_name()
+        else:
+            # For approvals, advance workflow and check for completion
+            instance.advance_to_next_step()
+            
+            # If workflow is now complete and approved, update RFPO status
+            if instance.overall_status == 'approved' and instance.rfpo:
+                instance.rfpo.status = 'Approved'
+                instance.rfpo.updated_by = user.get_display_name()
+        
+        instance.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Action {status} successfully',
+            'action': {
+                'action_id': action.action_id,
+                'status': action.status,
+                'completed_at': action.completed_at.isoformat() if action.completed_at else None
+            },
+            'instance_status': instance.overall_status,
+            'rfpo_status': instance.rfpo.status if instance.rfpo else None
+        })
         
     except Exception as e:
         db.session.rollback()
@@ -524,11 +704,13 @@ def list_rfpos():
         if user.is_super_admin():
             rfpos = RFPO.query.all()
         else:
-            # Get user's accessible team IDs
+            accessible_rfpo_ids = set()
+            
+            # 1. Get user's accessible team IDs
             user_teams = user.get_teams()
             team_ids = [team.id for team in user_teams]
             
-            # Get user's accessible project IDs
+            # 2. Get user's accessible project IDs
             all_projects = Project.query.all()
             accessible_project_ids = []
             for project in all_projects:
@@ -536,14 +718,25 @@ def list_rfpos():
                 if user.record_id in viewer_users:
                     accessible_project_ids.append(project.project_id)
             
-            # Filter RFPOs to only those user can access
-            if team_ids or accessible_project_ids:
-                filters = []
-                if team_ids:
-                    filters.append(RFPO.team_id.in_(team_ids))
-                if accessible_project_ids:
-                    filters.append(RFPO.project_id.in_(accessible_project_ids))
-                
+            # 3. Get RFPOs where user is an approver
+            if user.is_approver:
+                from models import RFPOApprovalAction
+                user_actions = RFPOApprovalAction.query.filter_by(approver_id=user.record_id).all()
+                for action in user_actions:
+                    if action.instance and action.instance.rfpo:
+                        accessible_rfpo_ids.add(action.instance.rfpo.id)
+            
+            # Build query filters
+            filters = []
+            if team_ids:
+                filters.append(RFPO.team_id.in_(team_ids))
+            if accessible_project_ids:
+                filters.append(RFPO.project_id.in_(accessible_project_ids))
+            if accessible_rfpo_ids:
+                filters.append(RFPO.id.in_(accessible_rfpo_ids))
+            
+            # Apply filters
+            if filters:
                 if len(filters) > 1:
                     rfpos = RFPO.query.filter(db.or_(*filters)).all()
                 else:
@@ -644,18 +837,20 @@ def create_rfpo():
 def get_rfpo(rfpo_id):
     """Get RFPO details"""
     try:
+        from models import Project, Consortium, Vendor, VendorSite, RFPOApprovalInstance, RFPOApprovalAction
+        
         rfpo = RFPO.query.get_or_404(rfpo_id)
         
         # Check permissions - user must have access to this RFPO
         user = request.current_user
         if not user.is_super_admin():
-            # Check if user has access to this RFPO via team or project
+            # Check if user has access to this RFPO via team, project, or approval
             has_access = False
             
             # Check team access
             user_teams = user.get_teams()
             team_ids = [team.id for team in user_teams]
-            if rfpo.team_id in team_ids:
+            if rfpo.team_id and rfpo.team_id in team_ids:
                 has_access = True
             
             # Check project access
@@ -668,12 +863,97 @@ def get_rfpo(rfpo_id):
                             has_access = True
                             break
             
+            # Check approver access
+            if not has_access and user.is_approver:
+                user_action = RFPOApprovalAction.query.filter_by(
+                    approver_id=user.record_id
+                ).join(RFPOApprovalInstance).filter(
+                    RFPOApprovalInstance.rfpo_id == rfpo.id
+                ).first()
+                if user_action:
+                    has_access = True
+            
             if not has_access:
                 return jsonify({'success': False, 'message': 'Access denied'}), 403
         
+        # Get approval information if user is an approver
+        approval_data = None
+        user_action = None
+        
+        if user.is_approver:
+            # Find approval instance for this RFPO
+            approval_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+            if approval_instance:
+                # Get user's specific action for this RFPO
+                user_action_obj = RFPOApprovalAction.query.filter_by(
+                    instance_id=approval_instance.id,
+                    approver_id=user.record_id
+                ).first()
+                
+                if user_action_obj:
+                    user_action = {
+                        'action_id': user_action_obj.action_id,
+                        'step_name': user_action_obj.step_name,
+                        'stage_name': user_action_obj.stage_name,
+                        'status': user_action_obj.status,
+                        'approval_type': user_action_obj.approval_type_key,
+                        'assigned_at': user_action_obj.assigned_at.isoformat() if user_action_obj.assigned_at else None,
+                        'completed_at': user_action_obj.completed_at.isoformat() if user_action_obj.completed_at else None,
+                        'comments': user_action_obj.comments,
+                        'can_take_action': user_action_obj.status == 'pending'
+                    }
+                
+                # Get all actions for approval chain display
+                all_actions = RFPOApprovalAction.query.filter_by(instance_id=approval_instance.id).order_by(
+                    RFPOApprovalAction.stage_order, RFPOApprovalAction.step_order
+                ).all()
+                
+                approval_chain = []
+                for action in all_actions:
+                    approval_chain.append({
+                        'action_id': action.action_id,
+                        'stage_name': action.stage_name,
+                        'step_name': action.step_name,
+                        'approver_name': action.approver_name,
+                        'approver_id': action.approver_id,
+                        'status': action.status,
+                        'assigned_at': action.assigned_at.isoformat() if action.assigned_at else None,
+                        'completed_at': action.completed_at.isoformat() if action.completed_at else None,
+                        'comments': action.comments,
+                        'is_user_action': action.approver_id == user.record_id
+                    })
+                
+                approval_data = {
+                    'instance_id': approval_instance.instance_id,
+                    'workflow_name': approval_instance.workflow_name,
+                    'overall_status': approval_instance.overall_status,
+                    'current_stage_order': approval_instance.current_stage_order,
+                    'current_step_order': approval_instance.current_step_order,
+                    'submitted_at': approval_instance.submitted_at.isoformat() if approval_instance.submitted_at else None,
+                    'completed_at': approval_instance.completed_at.isoformat() if approval_instance.completed_at else None,
+                    'approval_chain': approval_chain
+                }
+        
+        # Get RFPO files/attachments
+        files_data = []
+        if rfpo.files:
+            for file in rfpo.files:
+                files_data.append({
+                    'file_id': file.file_id,
+                    'original_filename': file.original_filename,
+                    'file_size': file.file_size,
+                    'document_type': file.document_type,
+                    'description': file.description,
+                    'uploaded_at': file.uploaded_at.isoformat() if file.uploaded_at else None,
+                    'uploaded_by': file.uploaded_by
+                })
+        
         return jsonify({
             'success': True,
-            'rfpo': rfpo.to_dict()
+            'rfpo': rfpo.to_dict(),
+            'approval_data': approval_data,
+            'user_action': user_action,
+            'files': files_data
         })
         
     except Exception as e:
@@ -1005,6 +1285,96 @@ def list_vendor_sites(vendor_id):
             })
         
         return jsonify(site_data)
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/rfpos/<int:rfpo_id>/rendered-view')
+@require_auth  
+def get_rfpo_rendered_view(rfpo_id):
+    """Get RFPO rendered HTML view for approvers (like admin panel)"""
+    try:
+        from models import Project, Consortium, Vendor, VendorSite
+        from flask import render_template
+        
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        user = request.current_user
+        
+        # Check permissions (same as get_rfpo)
+        if not user.is_super_admin():
+            has_access = False
+            
+            # Check team access
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+            if rfpo.team_id and rfpo.team_id in team_ids:
+                has_access = True
+            
+            # Check project access
+            if not has_access:
+                all_projects = Project.query.all()
+                for project in all_projects:
+                    if project.project_id == rfpo.project_id:
+                        viewer_users = project.get_rfpo_viewer_users()
+                        if user.record_id in viewer_users:
+                            has_access = True
+                            break
+            
+            # Check approver access
+            if not has_access and user.is_approver:
+                from models import RFPOApprovalAction, RFPOApprovalInstance
+                user_action = RFPOApprovalAction.query.filter_by(
+                    approver_id=user.record_id
+                ).join(RFPOApprovalInstance).filter(
+                    RFPOApprovalInstance.rfpo_id == rfpo.id
+                ).first()
+                if user_action:
+                    has_access = True
+            
+            if not has_access:
+                return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get related data for rendering (same as admin panel)
+        project = Project.query.filter_by(project_id=rfpo.project_id).first()
+        consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+        vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+        vendor_site = None
+        
+        # Handle vendor_site_id
+        if rfpo.vendor_site_id:
+            try:
+                vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+            except (ValueError, TypeError):
+                vendor_site = None
+        
+        # Get requestor user information
+        requestor = User.query.filter_by(record_id=rfpo.requestor_id).first() if rfpo.requestor_id else None
+        
+        # Return the same HTML that admin panel generates
+        try:
+            html_content = render_template('admin/rfpo_preview.html',
+                                         rfpo=rfpo,
+                                         project=project,
+                                         consortium=consortium,
+                                         vendor=vendor,
+                                         vendor_site=vendor_site,
+                                         requestor=requestor)
+            
+            return jsonify({
+                'success': True,
+                'html_content': html_content
+            })
+        except Exception as template_error:
+            # Fallback if template not available in API container
+            return jsonify({
+                'success': True,
+                'rfpo': rfpo.to_dict(),
+                'project': project.to_dict() if project else None,
+                'consortium': consortium.to_dict() if consortium else None,
+                'vendor': vendor.to_dict() if vendor else None,
+                'vendor_site': vendor_site.to_dict() if vendor_site else None,
+                'requestor': requestor.to_dict() if requestor else None
+            })
+        
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 

@@ -276,42 +276,41 @@
     function loadRfpoDocument() {
         const container = document.getElementById('rfpoDocumentContainer');
         
-        // Load RFPO rendered HTML view from user app (same rendering as admin panel)
-        fetch(`/rfpos/${rfpoId}/preview`)
-            .then(response => {
-                if (response.ok) {
-                    return response.text();
+        // Load RFPO rendered view via API
+        fetch(`/api/rfpos/${rfpoId}/rendered-view`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Create RFPO document display using the API data
+                    const rfpo = data.rfpo;
+                    const project = data.project;
+                    const consortium = data.consortium;
+                    const vendor = data.vendor;
+                    const requestor = data.requestor;
+                    
+                    const documentHtml = createRfpoDocumentHtml(rfpo, project, consortium, vendor, requestor);
+                    container.innerHTML = documentHtml;
                 } else {
-                    throw new Error('Failed to load RFPO preview');
+                    container.innerHTML = `
+                        <div class="text-center py-4 text-danger">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                            <p class="mt-2">Error loading RFPO document</p>
+                        </div>
+                    `;
                 }
             })
-            .then(htmlContent => {
-                // Load the complete HTML page in an iframe for proper styling
-                const iframe = document.createElement('iframe');
-                iframe.style.width = '100%';
-                iframe.style.height = '100%';
-                iframe.style.border = 'none';
-                iframe.srcdoc = htmlContent;
-                
-                container.innerHTML = '';
-                container.appendChild(iframe);
-            })
             .catch(error => {
-                console.error('Error loading RFPO document:', error);
                 container.innerHTML = `
                     <div class="text-center py-4 text-danger">
                         <i class="fas fa-exclamation-triangle fa-2x"></i>
                         <p class="mt-2">Error loading document: ${error.message}</p>
-                        <button class="btn btn-outline-primary mt-2" onclick="loadRfpoDocument()">
-                            <i class="fas fa-redo"></i> Retry
-                        </button>
                     </div>
                 `;
             });
     }
     
     function createRfpoDocumentHtml(rfpo, project, consortium, vendor, requestor) {
-        // Fallback RFPO document view (if admin template not available)
+        // Create a simplified RFPO document view
         return `
             <div class="p-3" style="font-size: 0.9rem;">
                 <div class="text-center mb-3">
@@ -409,7 +408,7 @@
     
     function openRfpoInNewTab() {
         // Open full RFPO document in new tab
-        window.open(`/rfpos/${rfpoId}/preview`, '_blank');
+        window.open(`/api/rfpos/${rfpoId}/rendered-view`, '_blank');
     }
     
     let currentUserAction = null;

@@ -9,6 +9,19 @@
             <i class="fas fa-tachometer-alt"></i> Dashboard
         </h1>
         <p class="text-muted">Welcome back, {{ user.display_name or user.username }}!</p>
+        
+        <!-- User Type Indicator -->
+        <div class="mb-3">
+            {% if dashboard_type == 'admin' %}
+                <span class="badge bg-danger fs-6"><i class="fas fa-crown"></i> Admin User</span>
+            {% elif dashboard_type == 'approver' %}
+                <span class="badge bg-success fs-6"><i class="fas fa-user-check"></i> RFPO Approver</span>
+            {% elif dashboard_type == 'profile_only' %}
+                <span class="badge bg-info fs-6"><i class="fas fa-user"></i> RFPO User</span>
+            {% else %}
+                <span class="badge bg-secondary fs-6"><i class="fas fa-user-times"></i> Limited Access</span>
+            {% endif %}
+        </div>
     </div>
 </div>
 
@@ -323,9 +336,91 @@
         return `<span class="badge ${badgeClass}">${status}</span>`;
     }
 
+    // Load appropriate dashboard data based on user type
+    async function loadUserSpecificDashboard() {
+        try {
+            const authResponse = await fetch('/api/auth/verify');
+            const authData = await authResponse.json();
+            
+            if (authData.authenticated) {
+                const user = authData.user;
+                const isRfpoUser = user.roles.includes('RFPO_USER');
+                const isRfpoAdmin = user.roles.includes('RFPO_ADMIN') || user.roles.includes('GOD');
+                const isApprover = user.is_approver;
+                
+                if (isRfpoAdmin) {
+                    // Admin gets full dashboard
+                    loadDashboardData();
+                } else if (isRfpoUser && isApprover) {
+                    // Approver gets approval-focused dashboard
+                    loadApproverDashboard();
+                } else if (isRfpoUser) {
+                    // Profile-only user gets limited view
+                    showProfileOnlyDashboard();
+                } else {
+                    // No access
+                    showNoAccessDashboard();
+                }
+            }
+        } catch (error) {
+            console.error('Error loading user-specific dashboard:', error);
+            loadDashboardData(); // Fallback to default
+        }
+    }
+    
+    function loadApproverDashboard() {
+        fetch('/api/users/approver-rfpos')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update statistics for approver view
+                    document.getElementById('totalRfpos').textContent = data.summary.total || 0;
+                    document.getElementById('pendingRfpos').textContent = data.summary.pending || 0;
+                    
+                    // Update recent RFPOs with approval-focused data
+                    updateRecentRfpos(data.rfpos.slice(0, 5));
+                }
+            })
+            .catch(error => {
+                console.error('Error loading approver dashboard:', error);
+            });
+    }
+    
+    function showProfileOnlyDashboard() {
+        // Hide RFPO-related statistics and show profile message
+        document.getElementById('totalRfpos').textContent = 'N/A';
+        document.getElementById('pendingRfpos').textContent = 'N/A';
+        
+        const recentRfposContainer = document.getElementById('recentRfpos');
+        recentRfposContainer.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-user-circle fa-4x text-muted mb-3"></i>
+                <h6>Profile Management Access</h6>
+                <p class="text-muted">You have RFPO User permissions but are not assigned as an approver.</p>
+                <p class="text-muted">Contact your administrator to be assigned to approval workflows.</p>
+                <a href="/profile" class="btn btn-primary">
+                    <i class="fas fa-edit"></i> Manage Profile
+                </a>
+            </div>
+        `;
+    }
+    
+    function showNoAccessDashboard() {
+        // Show no access message
+        const recentRfposContainer = document.getElementById('recentRfpos');
+        recentRfposContainer.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-exclamation-triangle fa-4x text-warning mb-3"></i>
+                <h6>Limited Access</h6>
+                <p class="text-muted">You don't have sufficient permissions to access RFPO features.</p>
+                <p class="text-muted">Please contact your administrator for access.</p>
+            </div>
+        `;
+    }
+
     // Load dashboard data when page loads
     document.addEventListener('DOMContentLoaded', function() {
-        loadDashboardData();
+        loadUserSpecificDashboard();
     });
 </script>
 {% endblock %}

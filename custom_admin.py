@@ -2096,6 +2096,45 @@ Southfield, MI  48075""",
             flash(f'❌ Error generating RFPO: {str(e)}', 'error')
             return redirect(url_for('rfpo_edit', id=rfpo_id))
     
+    @app.route('/api/rfpo/<int:rfpo_id>/rendered-html')
+    def api_rfpo_rendered_html(rfpo_id):
+        """API endpoint to get RFPO rendered HTML (for user app)"""
+        try:
+            rfpo = RFPO.query.get_or_404(rfpo_id)
+            
+            # Get related data (same as generate-rfpo route)
+            project = Project.query.filter_by(project_id=rfpo.project_id).first()
+            consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+            vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+            vendor_site = None
+            
+            # Handle vendor_site_id
+            if rfpo.vendor_site_id:
+                try:
+                    vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+                except (ValueError, TypeError):
+                    vendor_site = None
+            
+            # Get requestor user information
+            requestor = User.query.filter_by(record_id=rfpo.requestor_id).first() if rfpo.requestor_id else None
+            
+            # Render the same template as admin panel
+            html_content = render_template('admin/rfpo_preview.html',
+                                         rfpo=rfpo,
+                                         project=project,
+                                         consortium=consortium,
+                                         vendor=vendor,
+                                         vendor_site=vendor_site,
+                                         requestor=requestor)
+            
+            return jsonify({
+                'success': True,
+                'html_content': html_content
+            })
+            
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)}), 500
+    
     @app.route('/rfpo/<int:id>/delete', methods=['POST'])
     @login_required
     def rfpo_delete(id):

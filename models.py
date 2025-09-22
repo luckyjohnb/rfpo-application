@@ -179,6 +179,35 @@ class RFPO(db.Model):
     files = db.relationship('UploadedFile', backref='rfpo', lazy=True, cascade='all, delete-orphan')
     line_items = db.relationship('RFPOLineItem', backref='rfpo', lazy=True, cascade='all, delete-orphan')
     
+    def get_calculated_cost_share_amount(self):
+        """Calculate the actual cost share amount based on type and subtotal"""
+        if not self.cost_share_amount or not self.subtotal:
+            return 0.00
+        
+        if self.cost_share_type == 'percent':
+            # Calculate percentage of subtotal
+            percentage = float(self.cost_share_amount)
+            return float(self.subtotal) * (percentage / 100.0)
+        else:
+            # Direct dollar amount
+            return float(self.cost_share_amount)
+    
+    def get_calculated_total_amount(self):
+        """Calculate the total amount after cost sharing"""
+        subtotal = float(self.subtotal or 0)
+        cost_share = self.get_calculated_cost_share_amount()
+        return subtotal - cost_share
+    
+    def update_totals(self):
+        """Update subtotal and total_amount based on line items and cost sharing"""
+        if self.line_items:
+            self.subtotal = sum(float(item.total_price or 0) for item in self.line_items)
+        else:
+            self.subtotal = 0.00
+        
+        # Calculate total with cost sharing
+        self.total_amount = self.get_calculated_total_amount()
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -208,7 +237,9 @@ class RFPO(db.Model):
             'cost_share_description': self.cost_share_description,
             'cost_share_type': self.cost_share_type,
             'cost_share_amount': float(self.cost_share_amount) if self.cost_share_amount else 0.00,
+            'calculated_cost_share_amount': self.get_calculated_cost_share_amount(),
             'total_amount': float(self.total_amount) if self.total_amount else 0.00,
+            'calculated_total_amount': self.get_calculated_total_amount(),
             'comments': self.comments,
             'status': self.status,
             'due_date': self.due_date.isoformat() if self.due_date else None,
@@ -515,6 +546,10 @@ class User(UserMixin, db.Model):
     last_ip = db.Column(db.String(45))  # IPv4 or IPv6
     last_browser = db.Column(db.Text)  # User agent string
     
+    # Approval Flow Status
+    is_approver = db.Column(db.Boolean, default=False)  # True if user is assigned to any approval workflow
+    approver_updated_at = db.Column(db.DateTime)  # When approver status was last updated
+    
     # Status and Audit
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -609,6 +644,110 @@ class User(UserMixin, db.Model):
             return True
         return False
     
+    def check_approver_status(self):
+        """Check if user is assigned to any approval workflows and return detailed info"""
+        # Import here to avoid circular imports
+        from models import RFPOApprovalStep
+        
+        # Check if user is primary or backup approver in any active workflow steps
+        primary_steps = RFPOApprovalStep.query.filter_by(primary_approver_id=self.record_id).all()
+        backup_steps = RFPOApprovalStep.query.filter_by(backup_approver_id=self.record_id).all()
+        
+        all_steps = primary_steps + backup_steps
+        
+        # Get workflow details
+        workflow_assignments = []
+        active_workflows = set()
+        inactive_workflows = set()
+        
+        for step in all_steps:
+            if step.stage and step.stage.workflow:
+                workflow = step.stage.workflow
+                workflow_info = {
+                    'workflow_id': workflow.workflow_id,
+                    'workflow_name': workflow.name,
+                    'workflow_type': workflow.workflow_type,
+                    'entity_name': workflow.get_entity_name(),
+                    'is_active': workflow.is_active,
+                    'step_name': step.step_name,
+                    'approval_type': step.approval_type_name,
+                    'role': 'primary' if step.primary_approver_id == self.record_id else 'backup'
+                }
+                workflow_assignments.append(workflow_info)
+                
+                if workflow.is_active:
+                    active_workflows.add(workflow.workflow_id)
+                else:
+                    inactive_workflows.add(workflow.workflow_id)
+        
+        # Only consider user an approver if they have valid workflow assignments
+        # (steps with valid stages and workflows)
+        is_approver = len(workflow_assignments) > 0
+        
+        # Count only valid assignments (those with workflows)
+        valid_primary_count = sum(1 for step in primary_steps if step.stage and step.stage.workflow)
+        valid_backup_count = sum(1 for step in backup_steps if step.stage and step.stage.workflow)
+        
+        return {
+            'is_approver': is_approver,
+            'total_assignments': len(workflow_assignments),  # Only count valid assignments
+            'primary_assignments': valid_primary_count,
+            'backup_assignments': valid_backup_count,
+            'active_workflows_count': len(active_workflows),
+            'inactive_workflows_count': len(inactive_workflows),
+            'workflow_assignments': workflow_assignments
+        }
+    
+    def update_approver_status(self, updated_by=None):
+        """Update the is_approver status based on current workflow assignments"""
+        approver_info = self.check_approver_status()
+        old_status = self.is_approver
+        new_status = approver_info['is_approver']
+        
+        if old_status != new_status:
+            self.is_approver = new_status
+            self.approver_updated_at = datetime.utcnow()
+            if updated_by:
+                self.updated_by = updated_by
+            
+            return True  # Status changed
+        
+        return False  # No change
+    
+    def get_approver_summary(self):
+        """Get summary of approver assignments for display"""
+        if not self.is_approver:
+            return {
+                'is_approver': False,
+                'summary': 'Not assigned to any approval workflows',
+                'last_updated': None
+            }
+        
+        approver_info = self.check_approver_status()
+        
+        summary_parts = []
+        if approver_info['primary_assignments'] > 0:
+            summary_parts.append(f"{approver_info['primary_assignments']} primary")
+        if approver_info['backup_assignments'] > 0:
+            summary_parts.append(f"{approver_info['backup_assignments']} backup")
+        
+        active_count = approver_info['active_workflows_count']
+        inactive_count = approver_info['inactive_workflows_count']
+        
+        workflow_summary = []
+        if active_count > 0:
+            workflow_summary.append(f"{active_count} active")
+        if inactive_count > 0:
+            workflow_summary.append(f"{inactive_count} inactive")
+        
+        return {
+            'is_approver': True,
+            'summary': f"Approver in {len(approver_info['workflow_assignments'])} workflows ({', '.join(workflow_summary)})",
+            'assignments_summary': ', '.join(summary_parts) + ' approver roles',
+            'last_updated': self.approver_updated_at.isoformat() if self.approver_updated_at else None,
+            'details': approver_info
+        }
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -649,7 +788,10 @@ class User(UserMixin, db.Model):
             'team_count': len(self.user_teams),
             'is_super_admin': self.is_super_admin(),
             'is_rfpo_admin': self.is_rfpo_admin(),
-            'is_rfpo_user': self.is_rfpo_user()
+            'is_rfpo_user': self.is_rfpo_user(),
+            'is_approver': self.is_approver,
+            'approver_updated_at': self.approver_updated_at.isoformat() if self.approver_updated_at else None,
+            'approver_summary': self.get_approver_summary()
         }
     
     def __repr__(self):
@@ -1535,8 +1677,44 @@ class RFPOApprovalInstance(db.Model):
         """Check if approval workflow is complete"""
         return self.overall_status in ['approved', 'refused']
     
+    def check_completion_status(self):
+        """Check if all actions are completed and determine final status"""
+        pending_actions = self.get_pending_actions()
+        completed_actions = self.get_completed_actions()
+        
+        # If there are still pending actions, not complete
+        if pending_actions:
+            return None
+        
+        # If no actions at all, not complete
+        if not completed_actions:
+            return None
+        
+        # Check if any action was refused
+        for action in completed_actions:
+            if action.status == 'refused':
+                return 'refused'
+        
+        # If all actions are completed and none refused, it's approved
+        return 'approved'
+    
     def advance_to_next_step(self):
-        """Advance workflow to next step or stage"""
+        """Advance workflow to next step or stage, with proper completion logic"""
+        # First, check if the workflow should be completed based on action status
+        completion_status = self.check_completion_status()
+        
+        if completion_status == 'refused':
+            # Any rejection completes the workflow as refused
+            self.overall_status = 'refused'
+            self.completed_at = datetime.utcnow()
+            return
+        elif completion_status == 'approved':
+            # All actions completed and approved
+            self.overall_status = 'approved'
+            self.completed_at = datetime.utcnow()
+            return
+        
+        # If not complete, advance to next step/stage
         current_stage = self.get_current_stage()
         if current_stage:
             steps = current_stage.get('steps', [])
@@ -1551,9 +1729,11 @@ class RFPOApprovalInstance(db.Model):
                     self.current_stage_order += 1
                     self.current_step_order = 1
                 else:
-                    # Workflow complete
-                    self.overall_status = 'approved'
-                    self.completed_at = datetime.utcnow()
+                    # Reached end of workflow structure - check completion again
+                    final_status = self.check_completion_status()
+                    if final_status:
+                        self.overall_status = final_status
+                        self.completed_at = datetime.utcnow()
     
     def to_dict(self):
         return {

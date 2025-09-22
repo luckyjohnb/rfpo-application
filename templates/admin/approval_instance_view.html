@@ -1,0 +1,327 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Approval Instance Details - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📋 Approval Instance: {{ instance.instance_id }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('approval_instances') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Instance Overview -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📊 Instance Overview</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">Instance ID:</dt>
+                    <dd class="col-sm-8"><code>{{ instance.instance_id }}</code></dd>
+                    
+                    <dt class="col-sm-4">Workflow:</dt>
+                    <dd class="col-sm-8">
+                        <strong>{{ instance.workflow_name }}</strong>
+                        <br><small class="text-muted">Version {{ instance.workflow_version }}</small>
+                    </dd>
+                    
+                    <dt class="col-sm-4">Status:</dt>
+                    <dd class="col-sm-8">
+                        {% if instance.overall_status == 'draft' %}
+                            <span class="badge bg-secondary">{{ instance.overall_status|title }}</span>
+                        {% elif instance.overall_status == 'waiting' %}
+                            <span class="badge bg-warning">{{ instance.overall_status|title }}</span>
+                        {% elif instance.overall_status == 'approved' %}
+                            <span class="badge bg-success">{{ instance.overall_status|title }}</span>
+                        {% elif instance.overall_status == 'refused' %}
+                            <span class="badge bg-danger">{{ instance.overall_status|title }}</span>
+                        {% else %}
+                            <span class="badge bg-info">{{ instance.overall_status|title }}</span>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Current Stage:</dt>
+                    <dd class="col-sm-8">
+                        Stage {{ instance.current_stage_order or 'N/A' }}
+                        {% if instance.current_step_order %}
+                            , Step {{ instance.current_step_order }}
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Progress:</dt>
+                    <dd class="col-sm-8">
+                        <div class="d-flex align-items-center">
+                            {% set completed = instance.completed_actions_count if instance.completed_actions_count is defined else (instance.get_completed_actions()|length if instance.get_completed_actions is defined else 0) %}
+                            {% set pending = instance.pending_actions_count if instance.pending_actions_count is defined else (instance.get_pending_actions()|length if instance.get_pending_actions is defined else 0) %}
+                            <small class="me-2">{{ completed }}/{{ completed + pending }}</small>
+                            <div class="progress flex-grow-1" style="height: 20px;">
+                                {% set total_actions = completed + pending %}
+                                {% set progress = (completed / total_actions * 100) if total_actions > 0 else 0 %}
+                                <div class="progress-bar" style="width: {{ progress }}%"></div>
+                            </div>
+                            <small class="ms-2">{{ progress|round(1) }}%</small>
+                        </div>
+                    </dd>
+                    
+                    <dt class="col-sm-4">Submitted:</dt>
+                    <dd class="col-sm-8">
+                        {% if instance.submitted_at %}
+                            {{ instance.submitted_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        {% else %}
+                            <em class="text-muted">Not submitted</em>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Completed:</dt>
+                    <dd class="col-sm-8">
+                        {% if instance.completed_at %}
+                            {{ instance.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        {% else %}
+                            <em class="text-muted">In progress</em>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Created By:</dt>
+                    <dd class="col-sm-8">{{ instance.created_by or 'System' }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column: RFPO Information -->
+    <div class="col-lg-6">
+        {% if rfpo %}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📄 RFPO Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">RFPO ID:</dt>
+                    <dd class="col-sm-8">
+                        <code>{{ rfpo.rfpo_id }}</code>
+                        <a href="{{ url_for('rfpo_edit', id=rfpo.id) }}" class="btn btn-sm btn-outline-primary ms-2">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                    </dd>
+                    
+                    <dt class="col-sm-4">Title:</dt>
+                    <dd class="col-sm-8"><strong>{{ rfpo.title }}</strong></dd>
+                    
+                    <dt class="col-sm-4">Total Amount:</dt>
+                    <dd class="col-sm-8">
+                        <strong>${{ "{:,.2f}".format(rfpo.total_amount or 0) }}</strong>
+                    </dd>
+                    
+                    <dt class="col-sm-4">Status:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-info">{{ rfpo.status }}</span>
+                    </dd>
+                    
+                    {% if project %}
+                    <dt class="col-sm-4">Project:</dt>
+                    <dd class="col-sm-8">
+                        <strong>{{ project.name }}</strong>
+                        <br><small class="text-muted">{{ project.ref }}</small>
+                    </dd>
+                    {% endif %}
+                    
+                    {% if consortium %}
+                    <dt class="col-sm-4">Consortium:</dt>
+                    <dd class="col-sm-8">
+                        <strong>{{ consortium.name }}</strong>
+                        <br><small class="text-muted">{{ consortium.abbrev }}</small>
+                    </dd>
+                    {% endif %}
+                    
+                    <dt class="col-sm-4">Created:</dt>
+                    <dd class="col-sm-8">{{ rfpo.created_at.strftime('%Y-%m-%d %H:%M:%S') if rfpo.created_at else 'Unknown' }}</dd>
+                    
+                    <dt class="col-sm-4">Created By:</dt>
+                    <dd class="col-sm-8">{{ rfpo.created_by or 'Unknown' }}</dd>
+                </dl>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center text-muted">
+                <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                <p>RFPO information not available</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Approval Actions Section -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🔄 Approval Actions</h5>
+            </div>
+            <div class="card-body">
+                {% if instance.actions %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Action ID</th>
+                                <th>Stage/Step</th>
+                                <th>Approver</th>
+                                <th>Status</th>
+                                <th>Comments</th>
+                                <th>Assigned</th>
+                                <th>Completed</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for action in instance.actions %}
+                            <tr>
+                                <td><code>{{ action.action_id }}</code></td>
+                                <td>
+                                    <strong>{{ action.stage_name }}</strong>
+                                    <br><small class="text-muted">{{ action.step_name }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ action.approver_name }}</strong>
+                                    {% if action.is_backup_approver %}
+                                        <br><span class="badge bg-warning">Backup</span>
+                                    {% else %}
+                                        <br><span class="badge bg-primary">Primary</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if action.status == 'pending' %}
+                                        <span class="badge bg-warning">Pending</span>
+                                    {% elif action.status == 'approved' %}
+                                        <span class="badge bg-success">Approved</span>
+                                    {% elif action.status == 'conditional' %}
+                                        <span class="badge bg-info">Conditional</span>
+                                    {% elif action.status == 'refused' %}
+                                        <span class="badge bg-danger">Refused</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ action.status|title }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if action.comments %}
+                                        <small>{{ action.comments[:100] }}{% if action.comments|length > 100 %}...{% endif %}</small>
+                                    {% else %}
+                                        <em class="text-muted">No comments</em>
+                                    {% endif %}
+                                    {% if action.conditions %}
+                                        <br><small class="text-info"><strong>Conditions:</strong> {{ action.conditions[:50] }}{% if action.conditions|length > 50 %}...{% endif %}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if action.assigned_at %}
+                                        {{ action.assigned_at.strftime('%m/%d %H:%M') }}
+                                    {% else %}
+                                        <em class="text-muted">N/A</em>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if action.completed_at %}
+                                        {{ action.completed_at.strftime('%m/%d %H:%M') }}
+                                    {% else %}
+                                        <em class="text-muted">Pending</em>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if action.status == 'pending' %}
+                                        <button type="button" class="btn btn-sm btn-success" 
+                                                onclick="approveAction({{ instance.id }}, {{ action.id }}, 'approved')">
+                                            <i class="fas fa-check"></i> Approve
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-danger" 
+                                                onclick="approveAction({{ instance.id }}, {{ action.id }}, 'refused')">
+                                            <i class="fas fa-times"></i> Reject
+                                        </button>
+                                    {% else %}
+                                        <small class="text-muted">Completed</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                    <p>No approval actions found for this instance</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approval Action Modal -->
+<div class="modal fade" id="approvalModal" tabindex="-1" aria-labelledby="approvalModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="approvalModalLabel">Take Approval Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="approvalForm" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" id="actionStatus" name="status">
+                    
+                    <div class="mb-3">
+                        <label for="comments" class="form-label">Comments</label>
+                        <textarea class="form-control" id="comments" name="comments" rows="3" 
+                                  placeholder="Enter your comments for this approval action..."></textarea>
+                    </div>
+                    
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" id="submitButton">Submit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function approveAction(instanceId, actionId, status) {
+    const modal = new bootstrap.Modal(document.getElementById('approvalModal'));
+    const form = document.getElementById('approvalForm');
+    const statusInput = document.getElementById('actionStatus');
+    const submitButton = document.getElementById('submitButton');
+    const modalTitle = document.getElementById('approvalModalLabel');
+    
+    // Set form action
+    form.action = `/approval-instance/${instanceId}/action/${actionId}/approve`;
+    
+    // Set status
+    statusInput.value = status;
+    
+    // Configure modal based on action type
+    if (status === 'approved') {
+        modalTitle.textContent = 'Approve Action';
+        submitButton.className = 'btn btn-success';
+        submitButton.innerHTML = '<i class="fas fa-check"></i> Approve';
+    } else if (status === 'refused') {
+        modalTitle.textContent = 'Reject Action';
+        submitButton.className = 'btn btn-danger';
+        submitButton.innerHTML = '<i class="fas fa-times"></i> Reject';
+    }
+    
+    // Clear previous values
+    document.getElementById('comments').value = '';
+    
+    modal.show();
+}
+</script>
+
+{% endblock %}

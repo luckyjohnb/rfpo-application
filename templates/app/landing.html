@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFPO Application</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+        .feature-card {
+            transition: transform 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-4 fw-bold mb-4">
+                        <i class="fas fa-file-invoice"></i> RFPO Application
+                    </h1>
+                    <p class="lead mb-4">
+                        Streamline your Request for Purchase Order process with our comprehensive management system.
+                    </p>
+                    <div class="d-grid gap-2 d-md-flex">
+                        <a href="/login" class="btn btn-light btn-lg px-4">
+                            <i class="fas fa-sign-in-alt"></i> Login
+                        </a>
+                        <a href="/dashboard" class="btn btn-outline-light btn-lg px-4">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="text-center">
+                        <i class="fas fa-clipboard-list fa-10x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row text-center mb-5">
+                <div class="col">
+                    <h2 class="display-5 fw-bold">Key Features</h2>
+                    <p class="lead text-muted">Everything you need to manage your RFPOs efficiently</p>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card h-100 feature-card shadow-sm">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-file-plus fa-3x text-primary mb-3"></i>
+                            <h5 class="card-title">Create RFPOs</h5>
+                            <p class="card-text">
+                                Easily create and manage Request for Purchase Orders with our intuitive interface.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card h-100 feature-card shadow-sm">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-users fa-3x text-success mb-3"></i>
+                            <h5 class="card-title">Team Management</h5>
+                            <p class="card-text">
+                                Organize your teams and manage access permissions for different user roles.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card h-100 feature-card shadow-sm">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
+                            <h5 class="card-title">Analytics & Reporting</h5>
+                            <p class="card-text">
+                                Track progress and generate comprehensive reports on your RFPO activities.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="bg-light py-5">
+        <div class="container">
+            <div class="row text-center">
+                <div class="col">
+                    <h3 class="mb-4">Ready to get started?</h3>
+                    <a href="/login" class="btn btn-primary btn-lg px-5">
+                        <i class="fas fa-rocket"></i> Get Started
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-file-invoice"></i> RFPO Application</h5>
+                    <p class="mb-0">Streamlining purchase order management.</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="mb-0">&copy; 2024 RFPO Application. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
+

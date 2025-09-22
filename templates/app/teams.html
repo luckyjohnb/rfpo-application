@@ -1,0 +1,255 @@
+{% extends "app/base.html" %}
+
+{% block title %}Teams - RFPO Application{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-users"></i> Teams
+        </h1>
+        <p class="text-muted">View and manage teams</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <button class="btn btn-primary" onclick="requestTeamAccess()">
+            <i class="fas fa-user-plus"></i> Request Team Access
+        </button>
+    </div>
+</div>
+
+<!-- Search and Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form id="filterForm" class="row g-3">
+            <div class="col-md-6">
+                <label for="searchInput" class="form-label">Search Teams</label>
+                <input type="text" class="form-control" id="searchInput" placeholder="Search by name or abbreviation...">
+            </div>
+            <div class="col-md-3">
+                <label for="consortiumFilter" class="form-label">Consortium</label>
+                <select class="form-select" id="consortiumFilter">
+                    <option value="">All Consortiums</option>
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-secondary me-2" onclick="clearFilters()">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search"></i> Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Teams List -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Teams</h5>
+        <span class="badge bg-primary" id="totalCount">0</span>
+    </div>
+    <div class="card-body">
+        <div id="teamsContainer">
+            <div class="text-center py-4">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                    <p class="text-muted mt-2">Loading teams...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        <nav id="paginationContainer" style="display: none;">
+            <ul class="pagination justify-content-center">
+                <!-- Pagination will be inserted here -->
+            </ul>
+        </nav>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentPage = 1;
+    let totalPages = 1;
+    let currentFilters = {};
+
+    async function loadTeams(page = 1) {
+        try {
+            showLoading(true);
+            
+            // Build query parameters
+            const params = new URLSearchParams({
+                page: page,
+                per_page: 12,
+                ...currentFilters
+            });
+            
+            const response = await makeApiCall(`/api/teams?${params}`);
+            
+            if (response.success) {
+                displayTeams(response.teams);
+                updatePagination(response.page || 1, response.pages || 1, response.total || response.teams.length);
+                document.getElementById('totalCount').textContent = response.total || response.teams.length;
+            } else {
+                throw new Error(response.message || 'Failed to load teams');
+            }
+        } catch (error) {
+            document.getElementById('teamsContainer').innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                    <p class="text-danger">Error loading teams: ${error.message}</p>
+                    <button class="btn btn-outline-primary" onclick="loadTeams()">
+                        <i class="fas fa-redo"></i> Retry
+                    </button>
+                </div>
+            `;
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function displayTeams(teams) {
+        const container = document.getElementById('teamsContainer');
+        
+        if (teams.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No teams found.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const teamsGrid = teams.map(team => `
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 team-card" style="cursor: pointer;" onclick="viewTeam(${team.id})">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title mb-0">${team.name}</h6>
+                            <span class="badge bg-primary">${team.abbrev}</span>
+                        </div>
+                        <p class="card-text text-muted small">
+                            ${team.description || 'No description available'}
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                <i class="fas fa-building"></i> ${team.consortium_name || 'Unknown Consortium'}
+                            </small>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); viewTeam(${team.id})">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); requestAccess(${team.id}, '${team.name}')">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        container.innerHTML = `<div class="row">${teamsGrid}</div>`;
+    }
+
+    function updatePagination(page, pages, total) {
+        currentPage = page;
+        totalPages = pages;
+        
+        const container = document.getElementById('paginationContainer');
+        
+        if (pages <= 1) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'block';
+        
+        let paginationHTML = '';
+        
+        // Previous button
+        paginationHTML += `
+            <li class="page-item ${page <= 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="loadTeams(${page - 1})">Previous</a>
+            </li>
+        `;
+        
+        // Page numbers
+        for (let i = 1; i <= pages; i++) {
+            if (i === page) {
+                paginationHTML += `<li class="page-item active"><span class="page-link">${i}</span></li>`;
+            } else if (i === 1 || i === pages || (i >= page - 2 && i <= page + 2)) {
+                paginationHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadTeams(${i})">${i}</a></li>`;
+            } else if (i === page - 3 || i === page + 3) {
+                paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+        
+        // Next button
+        paginationHTML += `
+            <li class="page-item ${page >= pages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="loadTeams(${page + 1})">Next</a>
+            </li>
+        `;
+        
+        container.querySelector('.pagination').innerHTML = paginationHTML;
+    }
+
+    function clearFilters() {
+        document.getElementById('filterForm').reset();
+        currentFilters = {};
+        loadTeams(1);
+    }
+
+    function viewTeam(teamId) {
+        showAlert(`Team details view coming soon for team ID: ${teamId}`, 'info');
+    }
+
+    function requestAccess(teamId, teamName) {
+        if (confirm(`Request access to team "${teamName}"?`)) {
+            showAlert('Team access request functionality coming soon', 'info');
+        }
+    }
+
+    function requestTeamAccess() {
+        showAlert('General team access request functionality coming soon', 'info');
+    }
+
+    // Event listeners
+    document.getElementById('filterForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        currentFilters = {};
+        
+        const search = document.getElementById('searchInput').value.trim();
+        if (search) currentFilters.search = search;
+        
+        const consortium = document.getElementById('consortiumFilter').value;
+        if (consortium) currentFilters.consortium_id = consortium;
+        
+        loadTeams(1);
+    });
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTeams();
+    });
+</script>
+
+<style>
+    .team-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .team-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+</style>
+{% endblock %}
+
+

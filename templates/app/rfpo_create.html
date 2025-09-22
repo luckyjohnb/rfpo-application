@@ -1,0 +1,151 @@
+{% extends "app/base.html" %}
+
+{% block title %}Create RFPO - RFPO Application{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-plus"></i> Create New RFPO
+        </h1>
+        <p class="text-muted">Create a new Request for Purchase Order</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">RFPO Details</h5>
+            </div>
+            <div class="card-body">
+                <form id="rfpoCreateForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="title" name="title" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="team_id" class="form-label">Team <span class="text-danger">*</span></label>
+                            <select class="form-select" id="team_id" name="team_id" required>
+                                <option value="">Select a team...</option>
+                                {% for team in teams %}
+                                <option value="{{ team.id }}">{{ team.name }} ({{ team.abbrev }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="vendor" class="form-label">Vendor</label>
+                            <input type="text" class="form-control" id="vendor" name="vendor">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="due_date" class="form-label">Due Date</label>
+                            <input type="date" class="form-control" id="due_date" name="due_date">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="Draft" selected>Draft</option>
+                            <option value="Pending">Pending</option>
+                            <option value="In Review">In Review</option>
+                        </select>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Create RFPO
+                            <span class="loading" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i> Creating...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-info-circle"></i> Help
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    <strong>Title:</strong> A descriptive name for your RFPO
+                </p>
+                <p class="small text-muted">
+                    <strong>Team:</strong> The team responsible for this RFPO
+                </p>
+                <p class="small text-muted">
+                    <strong>Description:</strong> Additional details about the request
+                </p>
+                <p class="small text-muted">
+                    <strong>Vendor:</strong> The preferred or selected vendor
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('rfpoCreateForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const rfpoData = {
+            title: formData.get('title'),
+            team_id: parseInt(formData.get('team_id')),
+            description: formData.get('description'),
+            vendor: formData.get('vendor'),
+            due_date: formData.get('due_date'),
+            status: formData.get('status')
+        };
+        
+        // Show loading state
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const loadingSpan = submitBtn.querySelector('.loading');
+        loadingSpan.style.display = 'inline';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await makeApiCall('/api/rfpos', {
+                method: 'POST',
+                body: JSON.stringify(rfpoData)
+            });
+            
+            if (response.success) {
+                showAlert('RFPO created successfully!', 'success');
+                setTimeout(() => {
+                    window.location.href = `/rfpos/${response.rfpo.id}`;
+                }, 1500);
+            } else {
+                throw new Error(response.message || 'Failed to create RFPO');
+            }
+        } catch (error) {
+            showAlert(`Error creating RFPO: ${error.message}`, 'danger');
+        } finally {
+            loadingSpan.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    });
+</script>
+{% endblock %}
+
+

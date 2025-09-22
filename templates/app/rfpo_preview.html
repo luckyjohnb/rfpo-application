@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>USCAR RFPO - {{ rfpo.rfpo_id }}</title>
-    <meta name="generator" content="RFPO Admin Panel">
+    <meta name="generator" content="RFPO User Application">
     <meta http-equiv="Expires" content="0">
     <meta http-equiv="Pragma" content="no-cache">
     
@@ -187,9 +187,9 @@
         <div class="header1">
             <div class="logo1">
                 {% if consortium and consortium.logo %}
-                <img width="300" src="{{ url_for('uploaded_logo', filename=consortium.logo) }}" alt="{{ consortium.name }}" border="0">
+                <img width="300" src="{{ url_for('static', filename='po_files/uscar_logo.jpg') }}" alt="{{ consortium.name }}" border="0">
                 {% else %}
-                <img width="300" src="{{ url_for('static', filename='po_files/uscar_logo.gif') }}" alt="United States Council for Automotive Research LLC" border="0">
+                <img width="300" src="{{ url_for('static', filename='po_files/uscar_logo.jpg') }}" alt="United States Council for Automotive Research LLC" border="0">
                 {% endif %}
             </div>
             <p class="header1">
@@ -404,7 +404,7 @@
         of the conversion process, nor does the text retain its original formatting.  
         Please refer to the 
         {% if consortium and consortium.terms_pdf %}
-        <A href="{{ url_for('uploaded_terms', filename=consortium.terms_pdf) }}" target="_blank">PDF template files</A>
+        <A href="{{ url_for('static', filename='po_files/uscar_terms.pdf') }}" target="_blank">PDF template files</A>
         {% else %}
         <A href="{{ url_for('static', filename='po_files/uscar_terms.pdf') }}" target="_blank">PDF template files</A>
         {% endif %}

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFPO Approval Required</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background-color: #e67e22;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .urgent-notice {
+            background-color: #fff5f5;
+            border-left: 4px solid #e74c3c;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 4px;
+        }
+        .urgent-notice h3 {
+            margin-top: 0;
+            color: #e74c3c;
+            font-size: 16px;
+        }
+        .rfpo-details {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 20px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .rfpo-details h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .button {
+            display: inline-block;
+            background-color: #e67e22;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            margin: 20px 0;
+            text-align: center;
+            font-size: 16px;
+        }
+        .button:hover {
+            background-color: #d35400;
+        }
+        .footer {
+            background-color: #34495e;
+            color: #bdc3c7;
+            padding: 20px 30px;
+            font-size: 14px;
+            text-align: center;
+        }
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 0;
+                box-shadow: none;
+            }
+            .content {
+                padding: 20px 15px;
+            }
+            .header {
+                padding: 20px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>⏰ RFPO Approval Required</h1>
+            <p>Action needed on your assigned approval</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <p><strong>Hello {{ user_name }},</strong></p>
+
+            <div class="urgent-notice">
+                <h3>🔔 Approval Request</h3>
+                <p>A new RFPO requires your approval. Please review and take action as soon as possible.</p>
+            </div>
+
+            <div class="rfpo-details">
+                <h3>📋 RFPO Details</h3>
+                <p><strong>RFPO ID:</strong> {{ rfpo_id }}</p>
+                <p><strong>Approval Type:</strong> {{ approval_type }}</p>
+                <p><strong>Date Submitted:</strong> {{ current_date }}</p>
+            </div>
+
+            <p>As an assigned approver for this RFPO, your review and approval is required to proceed with the procurement process. Please log in to the RFPO Application to review the details and provide your decision.</p>
+
+            <!-- Action Button -->
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{ rfpo_url }}" class="button">Review & Approve RFPO</a>
+            </div>
+
+            <div class="urgent-notice">
+                <h3>⚡ Important Reminders</h3>
+                <ul>
+                    <li>Review all attached documents and specifications</li>
+                    <li>Verify budget allocation and approval authority</li>
+                    <li>Check vendor compliance and certification requirements</li>
+                    <li>Provide detailed comments if requesting changes</li>
+                    <li>Contact the requestor if you need additional information</li>
+                </ul>
+            </div>
+
+            <p>If you have any questions about this RFPO or the approval process, please contact the system administrator or the RFPO requestor directly.</p>
+
+            <p>Thank you for your prompt attention to this matter.</p>
+
+            <p>Best regards,<br>
+            <strong>RFPO Application System</strong></p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>&copy; {{ current_year }} RFPO Application. All rights reserved.</p>
+            <p>This is an automated notification. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+

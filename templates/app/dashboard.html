@@ -1,0 +1,428 @@
+{% extends "app/base.html" %}
+
+{% block title %}Dashboard - RFPO Application{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </h1>
+        <p class="text-muted">Welcome back, {{ user.display_name or user.username }}!</p>
+        
+        <!-- User Type Indicator -->
+        <div class="mb-3">
+            {% if dashboard_type == 'admin' %}
+                <span class="badge bg-danger fs-6"><i class="fas fa-crown"></i> Admin User</span>
+            {% elif dashboard_type == 'approver' %}
+                <span class="badge bg-success fs-6"><i class="fas fa-user-check"></i> RFPO Approver</span>
+            {% elif dashboard_type == 'profile_only' %}
+                <span class="badge bg-info fs-6"><i class="fas fa-user"></i> RFPO User</span>
+            {% else %}
+                <span class="badge bg-secondary fs-6"><i class="fas fa-user-times"></i> Limited Access</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Total RFPOs</h5>
+                        <h2 class="mb-0" id="totalRfpos">-</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-file-invoice fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Active Teams</h5>
+                        <h2 class="mb-0">{{ teams|length }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Pending</h5>
+                        <h2 class="mb-0" id="pendingRfpos">-</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Completed</h5>
+                        <h2 class="mb-0" id="completedRfpos">-</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+{% if has_rfpo_access %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bolt"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('rfpo_create') }}" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-plus"></i><br>
+                            Create RFPO
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
+                            <i class="fas fa-list"></i><br>
+                            View All RFPOs
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                            <i class="fas fa-users"></i><br>
+                            Manage Teams
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('profile') }}" class="btn btn-outline-info btn-lg w-100">
+                            <i class="fas fa-user-cog"></i><br>
+                            Profile Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Limited Access Actions -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle"></i> Limited Access
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    You have system permissions but are not assigned to any teams, projects, or consortiums. 
+                    Contact your administrator to be added to the appropriate groups.
+                </p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <a href="{{ url_for('profile') }}" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-user-cog"></i><br>
+                            Manage Profile
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                            <i class="fas fa-users"></i><br>
+                            Explore Teams
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent RFPOs -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-clock"></i> Recent RFPOs
+                </h5>
+                <a href="{{ url_for('rfpos_list') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body">
+                <div id="recentRfposContainer">
+                    <div class="text-center py-4">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                            <p class="text-muted mt-2">Loading recent RFPOs...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- My Teams -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-users"></i> My Teams
+                </h5>
+                <a href="{{ url_for('teams_list') }}" class="btn btn-sm btn-outline-success">
+                    Manage Teams
+                </a>
+            </div>
+            <div class="card-body">
+                {% if teams %}
+                    <div class="row g-3">
+                        {% for team in teams %}
+                        <div class="col-md-4">
+                            <div class="card border-success">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ team.name }}</h6>
+                                    <p class="card-text text-muted small">{{ team.description or 'No description' }}</p>
+                                    <span class="badge bg-success">{{ team.abbrev }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">You are not assigned to any teams yet.</p>
+                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success">
+                            Explore Teams
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadDashboardData() {
+        try {
+            // Load RFPO statistics
+            const rfposResponse = await makeApiCall('/api/rfpos?per_page=100');
+            if (rfposResponse.success) {
+                const rfpos = rfposResponse.rfpos;
+                document.getElementById('totalRfpos').textContent = rfpos.length;
+                
+                const pendingCount = rfpos.filter(rfpo => rfpo.status === 'Draft' || rfpo.status === 'Pending').length;
+                const completedCount = rfpos.filter(rfpo => rfpo.status === 'Completed' || rfpo.status === 'Approved').length;
+                
+                document.getElementById('pendingRfpos').textContent = pendingCount;
+                document.getElementById('completedRfpos').textContent = completedCount;
+                
+                // Display recent RFPOs
+                displayRecentRfpos(rfpos.slice(0, 5));
+            }
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            document.getElementById('totalRfpos').textContent = '0';
+            document.getElementById('pendingRfpos').textContent = '0';
+            document.getElementById('completedRfpos').textContent = '0';
+        }
+    }
+
+    function displayRecentRfpos(rfpos) {
+        const container = document.getElementById('recentRfposContainer');
+        
+        if (rfpos.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-file-invoice fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted mb-3">No RFPOs Available</h5>
+                    <p class="text-muted mb-3">You don't have access to any RFPOs yet.</p>
+                    <p class="small text-muted">
+                        To access RFPOs, you need to be assigned to teams, projects, or consortiums. 
+                        Please contact your administrator to be added to the appropriate groups.
+                    </p>
+                    <div class="mt-3">
+                        <a href="/profile" class="btn btn-outline-primary me-2">
+                            <i class="fas fa-user"></i> View Profile
+                        </a>
+                        <a href="/teams" class="btn btn-outline-success">
+                            <i class="fas fa-users"></i> Explore Teams
+                        </a>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        const rfposList = rfpos.map(rfpo => {
+            const statusBadge = getStatusBadge(rfpo.status);
+            const createdDate = new Date(rfpo.created_at).toLocaleDateString();
+            
+            return `
+                <div class="border-bottom pb-3 mb-3">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6 class="mb-1">
+                                <a href="/rfpos/${rfpo.id}" class="text-decoration-none">
+                                    ${rfpo.title}
+                                </a>
+                            </h6>
+                            <p class="text-muted small mb-1">${rfpo.rfpo_id}</p>
+                            <p class="text-muted small mb-0">Created: ${createdDate}</p>
+                        </div>
+                        <div class="col-md-3">
+                            ${statusBadge}
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <a href="/rfpos/${rfpo.id}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = rfposList;
+    }
+
+    function getStatusBadge(status) {
+        const statusClasses = {
+            'Draft': 'bg-secondary',
+            'Pending': 'bg-warning',
+            'In Review': 'bg-info',
+            'Approved': 'bg-success',
+            'Completed': 'bg-success',
+            'Rejected': 'bg-danger',
+            'Cancelled': 'bg-dark'
+        };
+        
+        const badgeClass = statusClasses[status] || 'bg-secondary';
+        return `<span class="badge ${badgeClass}">${status}</span>`;
+    }
+
+    // Load appropriate dashboard data based on user type
+    async function loadUserSpecificDashboard() {
+        try {
+            const authResponse = await fetch('/api/auth/verify');
+            const authData = await authResponse.json();
+            
+            if (authData.authenticated) {
+                const user = authData.user;
+                const isRfpoUser = user.roles.includes('RFPO_USER');
+                const isRfpoAdmin = user.roles.includes('RFPO_ADMIN') || user.roles.includes('GOD');
+                const isApprover = user.is_approver;
+                
+                if (isRfpoAdmin) {
+                    // Admin gets full dashboard
+                    loadDashboardData();
+                } else if (isRfpoUser && isApprover) {
+                    // Approver gets approval-focused dashboard
+                    loadApproverDashboard();
+                } else if (isRfpoUser) {
+                    // Profile-only user gets limited view
+                    showProfileOnlyDashboard();
+                } else {
+                    // No access
+                    showNoAccessDashboard();
+                }
+            }
+        } catch (error) {
+            console.error('Error loading user-specific dashboard:', error);
+            loadDashboardData(); // Fallback to default
+        }
+    }
+    
+    function loadApproverDashboard() {
+        fetch('/api/users/approver-rfpos')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update statistics for approver view
+                    document.getElementById('totalRfpos').textContent = data.summary.total || 0;
+                    document.getElementById('pendingRfpos').textContent = data.summary.pending || 0;
+                    
+                    // Update recent RFPOs with approval-focused data
+                    updateRecentRfpos(data.rfpos.slice(0, 5));
+                }
+            })
+            .catch(error => {
+                console.error('Error loading approver dashboard:', error);
+            });
+    }
+    
+    function showProfileOnlyDashboard() {
+        // Hide RFPO-related statistics and show profile message
+        document.getElementById('totalRfpos').textContent = 'N/A';
+        document.getElementById('pendingRfpos').textContent = 'N/A';
+        
+        const recentRfposContainer = document.getElementById('recentRfpos');
+        recentRfposContainer.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-user-circle fa-4x text-muted mb-3"></i>
+                <h6>Profile Management Access</h6>
+                <p class="text-muted">You have RFPO User permissions but are not assigned as an approver.</p>
+                <p class="text-muted">Contact your administrator to be assigned to approval workflows.</p>
+                <a href="/profile" class="btn btn-primary">
+                    <i class="fas fa-edit"></i> Manage Profile
+                </a>
+            </div>
+        `;
+    }
+    
+    function showNoAccessDashboard() {
+        // Show no access message
+        const recentRfposContainer = document.getElementById('recentRfpos');
+        recentRfposContainer.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-exclamation-triangle fa-4x text-warning mb-3"></i>
+                <h6>Limited Access</h6>
+                <p class="text-muted">You don't have sufficient permissions to access RFPO features.</p>
+                <p class="text-muted">Please contact your administrator for access.</p>
+            </div>
+        `;
+    }
+
+    // Load dashboard data when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadUserSpecificDashboard();
+    });
+</script>
+{% endblock %}
+
+

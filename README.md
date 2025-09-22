@@ -1,282 +1,288 @@
-# Flask User Management Application
+# RFPO Application
 
-A comprehensive Flask-based web application with advanced user management, role-based access control (RBAC), file processing, and secure authentication features.
+Containerized Request for Purchase Order (RFPO) management system with separated user and admin interfaces.
 
-## 🚀 Features
+## 🏗️ Architecture
 
-### Core Features
-- **Advanced User Management**: Complete CRUD operations with role-based permissions
-- **Secure Authentication**: JWT-based authentication with bcrypt password hashing
-- **Role-Based Access Control**: Four user roles (Administrator, Manager, User, Inactive)
-- **File Upload & Processing**: Support for CSV/Excel files with pandas integration
-- **Account Security**: Password policies, account lockout, audit logging
-- **Multi-Environment Support**: Development, production, and testing configurations
+The RFPO application consists of three containerized services:
 
-### Security Features
-- Strong password requirements (uppercase, lowercase, numbers, special characters)
-- Account lockout after multiple failed login attempts
-- JWT token-based authentication with expiration
-- Comprehensive audit logging
-- Environment-based configuration management
-- CSRF protection and secure headers
+```
+┌─────────────────────────────────────────────────────────┐
+│                    RFPO Application                     │
+├─────────────────┬─────────────────┬─────────────────────┤
+│   User App      │   Admin Panel   │      API Layer      │
+│   Port: 5000    │   Port: 5111    │     Port: 5002      │
+│                 │                 │                     │
+│ • Modern UI     │ • User Mgmt     │ • Auth Routes       │
+│ • Dashboard     │ • Team Mgmt     │ • Team Routes       │
+│ • RFPO Views    │ • RFPO Admin    │ • RFPO Routes       │
+│ • API Consumer  │ • Reports       │ • Database Access   │
+└─────────────────┴─────────────────┴─────────────────────┤
+│                  Database: instance/rfpo_admin.db       │
+│                     (SQLite Database)                   │
+└─────────────────────────────────────────────────────────┘
+```
 
-### Administrative Features
-- User management dashboard
-- Audit log viewing
-- Account unlock capabilities
-- Role assignment and management
-- System health monitoring
+## 🚀 Quick Start
 
-## 📋 Requirements
+### Prerequisites
 
-- Python 3.8+
-- Flask 2.3.3
-- bcrypt for password hashing
-- PyJWT for token authentication
-- Optional: pandas for file processing
-- Optional: ReportLab for PDF generation
+- **Docker & Docker Compose**
+- **Git** for cloning
 
-## 🛠️ Installation & Setup
+### Deployment
 
-### 1. Clone and Navigate
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/luckyjohnb/rfpo-application.git
+   cd rfpo-application
+   ```
+
+2. **Configure environment:**
+   ```bash
+   cp env.example .env
+   # Edit .env file with your email/SMTP settings
+   ```
+
+3. **Start all services:**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Check status:**
+   ```bash
+   docker-compose ps
+   ```
+
+5. **Access applications:**
+   - **User Application**: http://localhost:5000
+   - **Admin Panel**: http://localhost:5111
+   - **API Documentation**: http://localhost:5002/api
+
+## 🔐 Default Login
+
+### Admin Panel (http://localhost:5111)
+- **Email**: `admin@rfpo.com`
+- **Password**: `admin123`
+
+### User App (http://localhost:5000)
+- **Create users** in the admin panel first
+- **Users receive welcome emails** with login instructions
+- **First-time login** requires password change
+
+## 📋 Core Features
+
+### Admin Panel (Port 5111)
+- **User Management**: Create, edit, delete users with role-based permissions
+- **Team Management**: Organize users into teams and consortiums
+- **RFPO Management**: Full RFPO lifecycle management
+- **Vendor Management**: Maintain vendor database
+- **Project Management**: Track projects and assignments
+- **Approval Workflows**: Configure multi-stage approval processes
+- **Email Service**: Automated welcome emails and notifications
+
+### User Application (Port 5000)
+- **Modern Bootstrap UI**: Responsive, mobile-friendly interface
+- **Dashboard**: Overview of RFPOs, teams, and quick actions
+- **RFPO Views**: Create, view, and manage RFPOs
+- **Team Views**: Browse and request team access
+- **Profile Management**: Update personal information and password
+- **First-Time Login Flow**: Guided password change and profile setup
+
+### API Layer (Port 5002)
+- **RESTful API**: JSON-based communication
+- **JWT Authentication**: Secure token-based auth
+- **CRUD Operations**: Full database operations
+- **Health Monitoring**: Built-in health checks
+
+## 🗄️ Database
+
+The application uses a **single SQLite database** (`instance/rfpo_admin.db`) shared across all services:
+
+- **Users**: User accounts with permissions and profile data
+- **Teams**: Team organization and membership
+- **RFPOs**: Request for Purchase Orders with line items
+- **Vendors**: Vendor information and contacts
+- **Projects**: Project definitions and assignments
+- **Consortiums**: Consortium management
+- **Approval Workflows**: Multi-stage approval configurations
+
+## 🔧 Configuration
+
+### Environment Variables (.env file)
+
 ```bash
-cd "Example 1/simple-webpage"
+# JWT Secret Key
+JWT_SECRET_KEY=your-jwt-secret-key
+
+# Email Configuration (Gmail example)
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USE_TLS=True
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+
+# Application URLs
+APP_URL=http://localhost:5000
+SUPPORT_EMAIL=support@yourcompany.com
+
+# Database (default SQLite)
+DATABASE_URL=sqlite:///instance/rfpo_admin.db
 ```
 
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+### Email Setup
 
-### 3. Environment Configuration
-```bash
-# Copy environment template
-copy .env.example .env
+For email functionality to work, configure SMTP settings in your `.env` file:
 
-# Edit .env file with your configurations
-# Update SECRET_KEY, database settings, etc.
-```
+1. **Gmail**: Use App Passwords (not your regular password)
+2. **Outlook/Office365**: Use your account credentials
+3. **Custom SMTP**: Configure your mail server details
 
-### 4. Initialize Admin User
-```bash
-python init_admin.py
-```
+## 🛠️ Development
 
-### 5. Run Application
-```bash
-# Development mode
-python app.py
-
-# Production mode (Windows)
-setup_production.bat
-```
-
-## 🎯 Usage
-
-### Access Points
-- **Landing Page**: http://localhost:5000
-- **Main Application**: http://localhost:5000/app
-- **Admin Dashboard**: http://localhost:5000/admin (admin users only)
-
-### Default Credentials
-After running `init_admin.py`:
-- **Username**: admin
-- **Password**: Admin123!
-
-### API Endpoints
-
-#### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout
-- `POST /api/auth/register` - User registration (if enabled)
-
-#### User Management
-- `GET /api/users` - List users (admin/manager only)
-- `POST /api/users` - Create user (admin/manager only)
-- `PUT /api/users/<id>` - Update user (admin/manager only)
-- `DELETE /api/users/<id>` - Delete user (admin only)
-
-#### File Processing
-- `POST /upload` - Upload and process files
-- `GET /files` - List uploaded files
-
-## 🔧 Development Tools
-
-### Development Utilities
-```bash
-# Create sample users for testing
-python dev_utils.py create-samples
-
-# List all users
-python dev_utils.py list-users
-
-# Reset user password
-python dev_utils.py reset-password username newpassword
-
-# Unlock user account
-python dev_utils.py unlock-account username
-
-# System health check
-python dev_utils.py health-check
-
-# Clean up old data
-python dev_utils.py cleanup
-```
-
-### Testing
-```bash
-# Run comprehensive test suite
-python test_suite.py
-
-# Run specific test categories
-python -m unittest test_suite.TestUserManagement
-python -m unittest test_suite.TestSecurity
-python -m unittest test_suite.TestFlaskApp
-```
-
-### Environment Check
-```bash
-# Check Python environment
-check_env.bat
-
-# Verify all dependencies
-python -c "import flask, bcrypt, jwt; print('All dependencies OK')"
-```
-
-## 📁 Project Structure
+### Project Structure
 
 ```
-simple-webpage/
-├── app.py                    # Main Flask application
-├── user_management.py        # User management system
-├── config.py                # Configuration management
-├── init_admin.py            # Admin user initialization
-├── dev_utils.py             # Development utilities
-├── test_suite.py            # Comprehensive test suite
-├── requirements.txt          # Python dependencies
-├── .env.example             # Environment template
-├── .gitignore               # Git ignore rules
-├── README.md                # Documentation
-├── CHANGELOG.md             # Version history
-├── CHAT_SYSTEM_DOCUMENTATION.md # Chat system docs
-├── config/
-│   └── users.json           # User data storage
-├── static/
-│   └── main.js              # Frontend JavaScript
+rfpo-application/
+├── app.py                  # User-facing application (Port 5000)
+├── custom_admin.py         # Admin panel (Port 5111)
+├── simple_api.py          # API server (Port 5002)
+├── models.py              # Database models
+├── email_service.py       # Email functionality
+├── api/                   # API routes (future expansion)
 ├── templates/
-│   ├── index.html           # Main application UI
-│   └── landing.html         # Landing page
-└── uploads/                 # File upload directory
+│   ├── admin/            # Admin panel templates
+│   └── app/              # User app templates
+├── static/               # CSS, JS, images
+├── instance/             # Database files
+├── uploads/              # File uploads
+├── Dockerfile.api        # API service container
+├── Dockerfile.admin      # Admin panel container  
+├── Dockerfile.user-app   # User app container
+└── docker-compose.yml    # Container orchestration
 ```
 
-## ⚙️ Configuration
+### Development Workflow
 
-### Environment Variables (.env)
+1. **Make code changes** to Python files or templates
+2. **Rebuild and restart** affected services:
+   ```bash
+   docker-compose up --build -d
+   ```
+3. **View logs** to debug:
+   ```bash
+   docker-compose logs -f rfpo-admin  # Follow admin logs
+   ```
+4. **Test changes** via web interfaces
+
+### Adding New Features
+
+1. **User App Features**: Edit `app.py` and add templates in `templates/app/`
+2. **Admin Features**: Edit `custom_admin.py` and add templates in `templates/admin/`
+3. **API Endpoints**: Add to `simple_api.py` or create new files in `api/`
+4. **Database Changes**: Edit `models.py` and rebuild containers
+
+### Docker Commands
+
 ```bash
-# Application Settings
-FLASK_ENV=development
-SECRET_KEY=your-secret-key-here
-DEBUG=True
+# Start all services
+docker-compose up -d
 
-# Security Settings
-JWT_EXPIRATION_HOURS=24
-MAX_LOGIN_ATTEMPTS=5
-ACCOUNT_LOCKOUT_MINUTES=30
+# View logs
+docker-compose logs
+docker-compose logs rfpo-admin  # Specific service
 
-# Upload Settings
-MAX_FILE_SIZE_MB=10
-ALLOWED_EXTENSIONS=txt,csv,xlsx,pdf
+# Rebuild after changes
+docker-compose up --build -d
 
-# Optional: Database Configuration
-DATABASE_URL=sqlite:///app.db
+# Stop services
+docker-compose down
+
+# Check status
+docker-compose ps
+
+# Access container shell for debugging
+docker exec -it rfpo-admin /bin/bash
 ```
 
-### User Roles & Permissions
+## 🧪 Testing
 
-| Role | Permissions |
-|------|------------|
-| **Administrator** | Full system access, user management, system configuration |
-| **Manager** | User management (except admins), data access, reporting |
-| **User** | Basic application access, file upload, personal data |
-| **Inactive** | No system access (disabled accounts) |
+### Health Checks
 
-## 🛡️ Security Considerations
+All services provide health endpoints:
 
-### Password Policy
-- Minimum 8 characters
-- At least one uppercase letter
-- At least one lowercase letter
-- At least one number
-- At least one special character
+- **API**: http://localhost:5002/api/health
+- **Admin**: http://localhost:5111/health
+- **User App**: http://localhost:5000/health
 
-### Account Security
-- Maximum 5 failed login attempts
-- 30-minute account lockout
-- JWT token expiration
-- Comprehensive audit logging
+### User Flow Testing
 
-### File Upload Security
-- File type validation
-- Size limitations
-- Secure file storage
-- Malware scanning (configurable)
+1. **Create user** in admin panel
+2. **Check email** for welcome message
+3. **Login to user app** with admin-set password
+4. **Change password** (required on first login)
+5. **Access dashboard** and features
+
+## 🔒 Security Features
+
+- **JWT Authentication**: Secure token-based authentication
+- **Password Hashing**: Werkzeug security with salt
+- **Role-Based Access**: Granular permission system
+- **Input Validation**: Form validation and sanitization
+- **CORS Protection**: Configurable cross-origin policies
+- **Session Management**: Secure session handling
+
+## 📧 User Permissions
+
+- **GOD**: Super admin with full system access
+- **RFPO_ADMIN**: Full RFPO management capabilities
+- **RFPO_USER**: Basic RFPO access and creation
+- **CAL_MEET_USER**: Meeting calendar access
+- **VROOM_ADMIN**: Virtual room administration
+- **VROOM_USER**: Virtual room access
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **Import Errors**
-   ```bash
-   # Ensure you're in the correct directory
-   cd "Example 1/simple-webpage"
-   python -c "import app; print('OK')"
-   ```
+1. **Services not starting**: Check `docker-compose logs`
+2. **Database errors**: Verify `instance/rfpo_admin.db` exists and has proper permissions
+3. **Email not working**: Check SMTP configuration in `.env`
+4. **Port conflicts**: Ensure ports 5000, 5002, 5111 are available
 
-2. **Permission Errors**
-   ```bash
-   # Check file permissions
-   python dev_utils.py health-check
-   ```
+### Logs
 
-3. **Database Issues**
-   ```bash
-   # Reset user data (CAUTION: This deletes all users)
-   del config\users.json
-   python init_admin.py
-   ```
+```bash
+# View all logs
+docker-compose logs
 
-4. **Dependencies Missing**
-   ```bash
-   pip install -r requirements.txt --upgrade
-   ```
+# View specific service logs
+docker-compose logs rfpo-admin
+docker-compose logs rfpo-api
+docker-compose logs rfpo-user
 
-### Log Files
-- Application logs: Console output
-- Audit logs: Stored in user data
-- Error logs: Flask development server
+# Follow logs in real-time
+docker-compose logs -f
+```
 
-## 📚 Documentation
+## 📞 Support
 
-- **API Documentation**: Available at `/api/docs` (when running)
-- **Chat System**: See `CHAT_SYSTEM_DOCUMENTATION.md`
-- **Change Log**: See `CHANGELOG.md`
-- **Development Guide**: See inline code comments
+For issues or questions:
+1. Check the logs first: `docker-compose logs`
+2. Verify configuration: `.env` file settings
+3. Test individual services: Use health check endpoints
+4. Database issues: Check `instance/rfpo_admin.db` permissions
 
-## 🤝 Contributing
+## 🎯 Production Deployment
 
-1. Run tests before submitting changes
-2. Follow PEP 8 style guidelines
-3. Update documentation for new features
-4. Add tests for new functionality
+For production deployment:
 
-## 📄 License
+1. **Update secrets**: Change all default passwords and keys
+2. **Configure email**: Set up proper SMTP credentials
+3. **Database backup**: Implement regular backups of `rfpo_admin.db`
+4. **Reverse proxy**: Use nginx or similar for SSL termination
+5. **Monitoring**: Set up log aggregation and monitoring
 
-This project is for educational and development purposes. Please ensure compliance with your organization's security policies before production deployment.
+---
 
-## 🆘 Support
-
-For issues and questions:
-1. Check the troubleshooting section
-2. Run `python dev_utils.py health-check`
-3. Review application logs
-4. Consult the comprehensive test suite for examples
+**RFPO Application - Modern, Scalable, Containerized Purchase Order Management** 🚀

@@ -1,0 +1,910 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action }} User - RFPO Admin{% endblock %}
+
+{% if user %}
+{% block extra_head %}
+<style>
+/* Visual Mindmap Styles */
+.permissions-mindmap-visual {
+    font-size: 0.9rem;
+    position: relative;
+}
+
+/* Central User Node */
+.user-central-node {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    border-radius: 15px;
+    border: 2px solid #1976d2;
+}
+
+.user-avatar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Access Branches */
+.access-branches {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.access-branch {
+    flex: 1;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 2px solid;
+}
+
+.admin-branch {
+    border-color: #1976d2;
+    background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%);
+}
+
+.user-branch {
+    border-color: #f57c00;
+    background: linear-gradient(135deg, #fff3e0 0%, #ffffff 100%);
+}
+
+.app-node {
+    text-align: center;
+    padding: 0.75rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-weight: bold;
+}
+
+.admin-node {
+    background: #1976d2;
+    color: white;
+}
+
+.user-node {
+    background: #f57c00;
+    color: white;
+}
+
+/* Capabilities Grid */
+.capabilities-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.capability-node {
+    padding: 0.5rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.capability-node.enabled {
+    background: #e8f5e8;
+    color: #2e7d32;
+    border-left: 3px solid #4caf50;
+}
+
+.capability-node.disabled {
+    background: #fafafa;
+    color: #757575;
+    border-left: 3px solid #bdbdbd;
+}
+
+/* User Access Summary */
+.user-access-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.access-stat {
+    text-align: center;
+    padding: 0.75rem 0.5rem;
+    border-radius: 6px;
+    border: 2px solid;
+}
+
+.access-stat.empty {
+    border-color: #e0e0e0;
+    background: #fafafa;
+    color: #757575;
+}
+
+.access-stat.has-data {
+    border-color: #4caf50;
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.empty-state-indicator {
+    text-align: center;
+    padding: 0.5rem;
+    background: #fff3cd;
+    border-radius: 6px;
+    border: 1px solid #ffc107;
+}
+
+/* Permissions Row */
+.permissions-row {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border-left: 4px solid #7b1fa2;
+}
+
+.permissions-header {
+    font-weight: bold;
+    color: #7b1fa2;
+    margin-bottom: 0.75rem;
+}
+
+.permissions-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.permission-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.8rem;
+}
+
+.permission-god {
+    background: #d32f2f;
+    color: white;
+}
+
+.permission-admin {
+    background: #ff9800;
+    color: white;
+}
+
+.permission-user {
+    background: #2196f3;
+    color: white;
+}
+
+/* Entity Associations */
+.associations-section {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border-left: 4px solid #388e3c;
+}
+
+.associations-header {
+    font-weight: bold;
+    color: #388e3c;
+    margin-bottom: 0.75rem;
+}
+
+.associations-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.entity-node {
+    min-width: 140px;
+    max-width: 160px;
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    border: 2px solid;
+    background: white;
+    position: relative;
+}
+
+.entity-node[title] {
+    cursor: help;
+}
+
+.entity-node[title]:hover {
+    z-index: 10;
+}
+
+.team-node {
+    border-color: #4caf50;
+}
+
+.consortium-node {
+    border-color: #ff9800;
+}
+
+.project-node {
+    border-color: #2196f3;
+}
+
+.entity-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.entity-name {
+    font-weight: bold;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.entity-detail {
+    font-size: 0.7rem;
+    color: #666;
+}
+
+.entity-parent {
+    font-size: 0.6rem;
+    color: #999;
+    margin-top: 0.25rem;
+}
+
+/* Clickable entity nodes */
+.entity-node.clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.entity-node.clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.entity-node.clickable:active {
+    transform: translateY(0);
+}
+
+/* No Associations Warning */
+.no-associations-warning {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: #fff8e1;
+    border-radius: 10px;
+    border: 2px solid #ffc107;
+}
+
+.warning-icon {
+    flex-shrink: 0;
+}
+
+.warning-content {
+    flex: 1;
+}
+
+.impact-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.impact-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+
+.admin-impact {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.user-impact {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .access-branches {
+        flex-direction: column;
+    }
+    
+    .associations-grid {
+        justify-content: center;
+    }
+    
+    .permissions-badges {
+        justify-content: center;
+    }
+}
+</style>
+{% endblock %}
+{% endif %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">👤 {{ action }} User</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('users') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<form method="POST">
+    <div class="row g-4">
+        <!-- Left Column: User Information -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">👤 User Information</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Basic Information Section -->
+                    <h6 class="mb-3 text-primary">📋 Basic Information</h6>
+                    
+                    {% if user %}
+                    <div class="mb-3">
+                        <label for="record_id" class="form-label">User ID</label>
+                        <input type="text" class="form-control form-control-sm" id="record_id" name="record_id" 
+                               value="{{ user.record_id }}" readonly>
+                        <div class="form-text">Auto-generated unique identifier</div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info alert-sm">
+                        <i class="fas fa-info-circle"></i> <strong>User ID</strong> will be auto-generated when you save
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="fullname" class="form-label">Full Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" id="fullname" name="fullname" 
+                                       value="{{ user.fullname if user else '' }}" required
+                                       placeholder="Full name">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="sex" class="form-label">Gender</label>
+                                <select class="form-control form-control-sm" id="sex" name="sex">
+                                    <option value="">Select...</option>
+                                    <option value="m" {{ 'selected' if user and user.sex == 'm' else '' }}>Male</option>
+                                    <option value="f" {{ 'selected' if user and user.sex == 'f' else '' }}>Female</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control form-control-sm" id="email" name="email" 
+                               value="{{ user.email if user else '' }}" required
+                               placeholder="user@company.com">
+                    </div>
+                    
+                    {% if not user %}
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control form-control-sm" id="password" name="password" 
+                               placeholder="Enter password" required>
+                        <div class="form-text">Minimum 8 characters recommended</div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Company Information Section -->
+                    <h6 class="mb-3 text-primary mt-4">🏢 Company Information</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="company_code" class="form-label">Company Code</label>
+                                <select class="form-control form-control-sm" id="company_code" name="company_code">
+                                    <option value="">Select...</option>
+                                    <option value="BP" {{ 'selected' if user and user.company_code == 'BP' else '' }}>[BP] BP</option>
+                                    <option value="CHEV" {{ 'selected' if user and user.company_code == 'CHEV' else '' }}>[CHEV] Chevron</option>
+                                    <option value="DOE" {{ 'selected' if user and user.company_code == 'DOE' else '' }}>[DOE] DOE</option>
+                                    <option value="EM" {{ 'selected' if user and user.company_code == 'EM' else '' }}>[EM] ExxonMobil</option>
+                                    <option value="FCA" {{ 'selected' if user and user.company_code == 'FCA' else '' }}>[FCA] FCA US LLC</option>
+                                    <option value="FRD" {{ 'selected' if user and user.company_code == 'FRD' else '' }}>[FRD] Ford</option>
+                                    <option value="GM" {{ 'selected' if user and user.company_code == 'GM' else '' }}>[GM] General Motors</option>
+                                    <option value="Lab" {{ 'selected' if user and user.company_code == 'Lab' else '' }}>[Lab] National Lab</option>
+                                    <option value="P66" {{ 'selected' if user and user.company_code == 'P66' else '' }}>[P66] Phillips 66</option>
+                                    <option value="SHL" {{ 'selected' if user and user.company_code == 'SHL' else '' }}>[SHL] Shell</option>
+                                    <option value="USC" {{ 'selected' if user and user.company_code == 'USC' else '' }}>[USC] USCAR</option>
+                                    <option value="xxx" {{ 'selected' if user and user.company_code == 'xxx' else '' }}>[xxx] Unknown</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Phone</label>
+                                <input type="text" class="form-control form-control-sm" id="phone" name="phone" 
+                                       value="{{ user.phone if user else '' }}"
+                                       placeholder="Phone number">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="company" class="form-label">Company Name</label>
+                        <input type="text" class="form-control form-control-sm" id="company" name="company" 
+                               value="{{ user.company if user else '' }}"
+                               placeholder="Full company name">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="position" class="form-label">Position</label>
+                                <input type="text" class="form-control form-control-sm" id="position" name="position" 
+                                       value="{{ user.position if user else '' }}"
+                                       placeholder="Job title">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="department" class="form-label">Department</label>
+                                <input type="text" class="form-control form-control-sm" id="department" name="department" 
+                                       value="{{ user.department if user else '' }}"
+                                       placeholder="Department">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Account Settings Section -->
+                    <h6 class="mb-3 text-primary mt-4">⚙️ Account Settings</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="agreed_to_terms" 
+                                       name="agreed_to_terms" value="1"
+                                       {{ 'checked' if user and user.agreed_to_terms else '' }}>
+                                <label class="form-check-label" for="agreed_to_terms">
+                                    Agreed to Terms & Conditions
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="active" 
+                                       name="active" value="1"
+                                       {{ 'checked' if not user or user.active else '' }}>
+                                <label class="form-check-label" for="active">
+                                    Active Account
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column: User Access -->
+        <div class="col-lg-6">
+            <div class="row g-3">
+                <!-- System Permissions Card -->
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">🔐 System Permissions</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Select User Permissions</label>
+                                <div class="border rounded p-2">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="perm_GOD_right" 
+                                               name="permissions" value="GOD"
+                                               {{ 'checked' if user and 'GOD' in user.get_permissions() else '' }}>
+                                        <label class="form-check-label" for="perm_GOD_right">
+                                            <strong>Super Admin</strong><br>
+                                            <small class="text-muted">Full system access</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="perm_RFPO_ADMIN_right" 
+                                               name="permissions" value="RFPO_ADMIN"
+                                               {{ 'checked' if user and 'RFPO_ADMIN' in user.get_permissions() else '' }}>
+                                        <label class="form-check-label" for="perm_RFPO_ADMIN_right">
+                                            <strong>RFPO Full Admin</strong><br>
+                                            <small class="text-muted">Full RFPO management</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="perm_RFPO_USER_right" 
+                                               name="permissions" value="RFPO_USER"
+                                               {{ 'checked' if user and 'RFPO_USER' in user.get_permissions() else '' }}>
+                                        <label class="form-check-label" for="perm_RFPO_USER_right">
+                                            <strong>RFPO User</strong><br>
+                                            <small class="text-muted">Basic RFPO access</small>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-text">Active permissions for this user</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- User Access Summary Card -->
+                {% if user %}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">📊 Access Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if user_mindmap %}
+                            <div class="user-access-summary">
+                                <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_rfpos == 0 else 'has-data' }}">
+                                    <div class="stat-number">{{ user_mindmap.access_summary.total_rfpos }}</div>
+                                    <div class="stat-label">RFPOs</div>
+                                </div>
+                                <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_teams == 0 else 'has-data' }}">
+                                    <div class="stat-number">{{ user_mindmap.access_summary.total_teams }}</div>
+                                    <div class="stat-label">Teams</div>
+                                </div>
+                                <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_consortiums == 0 else 'has-data' }}">
+                                    <div class="stat-number">{{ user_mindmap.access_summary.total_consortiums }}</div>
+                                    <div class="stat-label">Consortiums</div>
+                                </div>
+                                <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_projects == 0 else 'has-data' }}">
+                                    <div class="stat-number">{{ user_mindmap.access_summary.total_projects }}</div>
+                                    <div class="stat-label">Projects</div>
+                                </div>
+                            </div>
+                            {% if user_mindmap.access_summary.total_rfpos == 0 and user_mindmap.access_summary.total_teams == 0 %}
+                            <div class="empty-state-indicator mt-3">
+                                <i class="fas fa-exclamation-triangle text-warning"></i>
+                                <span class="text-warning">Empty States Shown</span>
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <div class="text-center py-3 text-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <p class="mb-0">Unable to load access data</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Full Width Mindmap -->
+                {% if user %}
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">🗺️ User Access Mindmap</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="permissionsMindmap">
+                                {% if user_mindmap %}
+                                    <!-- Visual Mindmap Style Layout -->
+                                    <div class="permissions-mindmap-visual">
+                                        <!-- Central User Node -->
+                                        <div class="user-central-node">
+                                            <div class="user-avatar">
+                                                <i class="fas fa-user-circle fa-3x text-primary"></i>
+                                                <div class="user-info">
+                                                    <strong>{{ user.get_display_name() }}</strong>
+                                                    <br><small class="text-muted">{{ user.email }}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Two Application Access Branches -->
+                                        <div class="access-branches">
+                                            <!-- Admin Panel Branch -->
+                                            <div class="access-branch admin-branch">
+                                                <div class="branch-header">
+                                                    <div class="app-node admin-node">
+                                                        <i class="fas fa-cogs"></i>
+                                                        <span>Admin Panel</span>
+                                                        <small>:5111</small>
+                                                    </div>
+                                                </div>
+                                                <div class="capabilities-grid">
+                                                    {% for key, value in user_mindmap.capabilities.items() %}
+                                                        <div class="capability-node {{ 'enabled' if value else 'disabled' }}">
+                                                            <i class="fas {{ 'fa-check' if value else 'fa-times' }}"></i>
+                                                            <span>{{ key.replace('can_', '').replace('_', ' ').title() }}</span>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- User App Branch -->
+                                            <div class="access-branch user-branch">
+                                                <div class="branch-header">
+                                                    <div class="app-node user-node">
+                                                        <i class="fas fa-mobile-alt"></i>
+                                                        <span>User App</span>
+                                                        <small>:5000</small>
+                                                    </div>
+                                                </div>
+                                                <div class="user-access-summary">
+                                                    <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_rfpos == 0 else 'has-data' }}">
+                                                        <div class="stat-number">{{ user_mindmap.access_summary.total_rfpos }}</div>
+                                                        <div class="stat-label">RFPOs</div>
+                                                    </div>
+                                                    <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_teams == 0 else 'has-data' }}">
+                                                        <div class="stat-number">{{ user_mindmap.access_summary.total_teams }}</div>
+                                                        <div class="stat-label">Teams</div>
+                                                    </div>
+                                                    <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_consortiums == 0 else 'has-data' }}">
+                                                        <div class="stat-number">{{ user_mindmap.access_summary.total_consortiums }}</div>
+                                                        <div class="stat-label">Consortiums</div>
+                                                    </div>
+                                                    <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_projects == 0 else 'has-data' }}">
+                                                        <div class="stat-number">{{ user_mindmap.access_summary.total_projects }}</div>
+                                                        <div class="stat-label">Projects</div>
+                                                    </div>
+                                                </div>
+                                                {% if user_mindmap.access_summary.total_rfpos == 0 and user_mindmap.access_summary.total_teams == 0 %}
+                                                <div class="empty-state-indicator">
+                                                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                                                    <span class="text-warning">Empty States Shown</span>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- System Permissions Row -->
+                                        <div class="permissions-row">
+                                            <div class="permissions-header">
+                                                <i class="fas fa-shield-alt"></i> System Permissions
+                                            </div>
+                                            <div class="permissions-badges">
+                                                {% for perm in user_mindmap.system_permissions.permissions %}
+                                                    {% set badge_class = 'permission-god' if perm == 'GOD' else 'permission-admin' if perm == 'RFPO_ADMIN' else 'permission-user' %}
+                                                    <div class="permission-badge {{ badge_class }}">{{ perm }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Entity Associations (if any) -->
+                                        {% if user_mindmap.associations.teams.count > 0 or user_mindmap.associations.consortiums.count > 0 or user_mindmap.associations.projects.count > 0 %}
+                                        <div class="associations-section">
+                                            <div class="associations-header">
+                                                <i class="fas fa-link"></i> Entity Associations
+                                            </div>
+                                            <div class="associations-grid">
+                                                <!-- Teams -->
+                                                {% if user_mindmap.associations.teams.count > 0 %}
+                                                    {% for team in user_mindmap.associations.teams.list %}
+                                                    <div class="entity-node team-node" title="{{ team.name }}">
+                                                        <div class="entity-icon"><i class="fas fa-users"></i></div>
+                                                        <div class="entity-name">{{ team.abbrev }}</div>
+                                                        <div class="entity-detail">
+                                                            <span class="badge {{ 'bg-danger' if team.access_type == 'admin' else 'bg-info' if team.access_type == 'viewer' else 'bg-success' }}">
+                                                                {{ team.access_type.title() }} Access
+                                                            </span>
+                                                        </div>
+                                                        <div class="entity-detail">{{ team.rfpo_count }} RFPOs</div>
+                                                        {% if team.consortium_name %}
+                                                        <div class="entity-parent">→ {{ team.consortium_name }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                    {% endfor %}
+                                                {% endif %}
+                                                
+                                                <!-- Consortiums -->
+                                                {% if user_mindmap.associations.consortiums.count > 0 %}
+                                                    {% for consortium in user_mindmap.associations.consortiums.list %}
+                                                    <div class="entity-node consortium-node" title="{{ consortium.name }}">
+                                                        <div class="entity-icon"><i class="fas fa-building"></i></div>
+                                                        <div class="entity-name">{{ consortium.abbrev }}</div>
+                                                        <div class="entity-detail">
+                                                            <span class="badge {{ 'bg-danger' if consortium.access_type == 'admin' else 'bg-info' }}">
+                                                                {{ consortium.access_type.title() }} Access
+                                                            </span>
+                                                        </div>
+                                                        <div class="entity-detail">{{ consortium.rfpo_count }} RFPOs</div>
+                                                    </div>
+                                                    {% endfor %}
+                                                {% endif %}
+                                                
+                                                <!-- Projects (Consolidated) -->
+                                                {% if user_mindmap.associations.projects.count > 0 %}
+                                                    <div class="entity-node project-node clickable" onclick="showProjectsModal()">
+                                                        <div class="entity-icon"><i class="fas fa-project-diagram"></i></div>
+                                                        <div class="entity-name">Projects</div>
+                                                        <div class="entity-detail">
+                                                            <span class="badge bg-info">{{ user_mindmap.associations.projects.count }} Projects</span>
+                                                        </div>
+                                                        <div class="entity-detail">
+                                                            {% set total_project_rfpos = user_mindmap.associations.projects.list | sum(attribute='rfpo_count') %}
+                                                            {{ total_project_rfpos }} Total RFPOs
+                                                        </div>
+                                                        <div class="entity-detail">
+                                                            <small class="text-muted"><i class="fas fa-mouse-pointer"></i> Click to view details</small>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% else %}
+                                        <!-- No Associations Warning -->
+                                        <div class="no-associations-warning">
+                                            <div class="warning-icon">
+                                                <i class="fas fa-unlink fa-2x text-warning"></i>
+                                            </div>
+                                            <div class="warning-content">
+                                                <h6 class="text-warning mb-2">No Entity Associations</h6>
+                                                <p class="text-muted small mb-2">
+                                                    This user is not assigned to any teams, consortiums, or projects.
+                                                </p>
+                                                <div class="impact-summary">
+                                                    <div class="impact-item admin-impact">
+                                                        <i class="fas fa-cogs"></i>
+                                                        <span>Admin Panel: <strong>Full Access</strong></span>
+                                                    </div>
+                                                    <div class="impact-item user-impact">
+                                                        <i class="fas fa-mobile-alt"></i>
+                                                        <span>User App: <strong>Empty States Only</strong></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <div class="text-center py-3 text-warning">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <p class="mb-0">Unable to load permissions data</p>
+                                    </div>
+                                {% else %}
+                                    <div class="text-center py-3 text-warning">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <p class="mb-0">Unable to load permissions data</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-12">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
+                            <p class="text-muted">User access information will be available after user is created.</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Form Actions Row -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('users') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} User
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Projects Modal -->
+{% if user and user_mindmap and user_mindmap.associations.projects.count > 0 %}
+<div class="modal fade" id="projectsModal" tabindex="-1" aria-labelledby="projectsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="projectsModalLabel">
+                    <i class="fas fa-project-diagram"></i> User's Project Access
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card border-info">
+                            <div class="card-body text-center">
+                                <h4 class="text-info mb-0">{{ user_mindmap.associations.projects.count }}</h4>
+                                <small class="text-muted">Total Projects</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-primary">
+                            <div class="card-body text-center">
+                                {% set total_project_rfpos = user_mindmap.associations.projects.list | sum(attribute='rfpo_count') %}
+                                <h4 class="text-primary mb-0">{{ total_project_rfpos }}</h4>
+                                <small class="text-muted">Total RFPOs</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th><i class="fas fa-project-diagram"></i> Project Name</th>
+                                <th><i class="fas fa-tag"></i> Reference</th>
+                                <th><i class="fas fa-shield-alt"></i> Access Level</th>
+                                <th><i class="fas fa-file-invoice"></i> RFPOs</th>
+                                <th><i class="fas fa-building"></i> Consortiums</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for project in user_mindmap.associations.projects.list %}
+                            <tr>
+                                <td>
+                                    <strong>{{ project.name }}</strong>
+                                </td>
+                                <td>
+                                    <code>{{ project.ref }}</code>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">Viewer Access</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary rounded-pill">{{ project.rfpo_count }}</span>
+                                </td>
+                                <td>
+                                    {% for consortium_id in project.consortium_ids %}
+                                        <span class="badge bg-warning me-1">{{ consortium_id }}</span>
+                                    {% endfor %}
+                                    {% if not project.consortium_ids %}
+                                        <span class="text-muted">None</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showProjectsModal() {
+    const modalElement = document.getElementById('projectsModal');
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
+}
+</script>
+{% endif %}
+
+{% endblock %}

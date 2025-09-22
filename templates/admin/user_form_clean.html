@@ -4,9 +4,6 @@
 
 {% if user %}
 {% block extra_head %}
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <style>
 /* Visual Mindmap Styles */
 .permissions-mindmap-visual {
@@ -573,220 +570,91 @@
         <!-- Right Column: User Access -->
         <div class="col-lg-6">
             {% if user %}
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5 class="mb-0">🗺️ User Access</h5>
                 </div>
                 <div class="card-body">
-                    {% if user_mindmap %}
-                    <div class="row g-3">
-                        <!-- Row 1: User Card | System Permissions Card -->
-                        <div class="col-md-6">
-                            <div class="card border-primary">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-user-circle fa-3x text-primary mb-2"></i>
-                                    <h6 class="mb-1">{{ user.get_display_name() }}</h6>
-                                    <small class="text-muted">{{ user.email }}</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card border-secondary">
-                                <div class="card-header text-center">
-                                    <h6 class="mb-0"><i class="fas fa-shield-alt"></i> System Permissions</h6>
-                                </div>
-                                <div class="card-body text-center">
-                                    <div class="permissions-badges">
-                                        {% for perm in user_mindmap.system_permissions.permissions %}
-                                            {% set badge_class = 'permission-god' if perm == 'GOD' else 'permission-admin' if perm == 'RFPO_ADMIN' else 'permission-user' %}
-                                            <div class="permission-badge {{ badge_class }} mb-1">{{ perm }}</div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Row 2: Admin Panel Card | User App Card -->
-                        <div class="col-md-6">
-                            <div class="card border-primary">
-                                <div class="card-header text-center">
-                                    <h6 class="mb-0"><i class="fas fa-cogs"></i> Admin Panel :5111</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="capabilities-grid">
-                                        {% for key, value in user_mindmap.capabilities.items() %}
-                                            {% if key != 'can_access_admin_panel' %}
+                    <div id="permissionsMindmap">
+                        {% if user_mindmap %}
+                            <!-- Visual Mindmap Style Layout -->
+                            <div class="permissions-mindmap-visual">
+                                <!-- Two Application Access Branches -->
+                                <div class="access-branches">
+                                    <!-- Admin Panel Branch -->
+                                    <div class="access-branch admin-branch">
+                                        <div class="branch-header">
+                                            <div class="app-node admin-node">
+                                                <i class="fas fa-cogs"></i>
+                                                <span>Admin Panel</span>
+                                                <small>:5111</small>
+                                            </div>
+                                        </div>
+                                        <div class="capabilities-grid">
+                                            {% for key, value in user_mindmap.capabilities.items() %}
                                                 <div class="capability-node {{ 'enabled' if value else 'disabled' }}">
                                                     <i class="fas {{ 'fa-check' if value else 'fa-times' }}"></i>
                                                     <span>{{ key.replace('can_', '').replace('_', ' ').title() }}</span>
                                                 </div>
-                                            {% endif %}
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card border-warning">
-                                <div class="card-header text-center">
-                                    <h6 class="mb-0"><i class="fas fa-mobile-alt"></i> User App :5000</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="user-access-summary">
-                                        <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_rfpos == 0 else 'has-data' }}">
-                                            <div class="stat-number">{{ user_mindmap.access_summary.total_rfpos }}</div>
-                                            <div class="stat-label">RFPOs</div>
-                                        </div>
-                                        <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_teams == 0 else 'has-data' }}">
-                                            <div class="stat-number">{{ user_mindmap.access_summary.total_teams }}</div>
-                                            <div class="stat-label">Teams</div>
-                                        </div>
-                                        <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_consortiums == 0 else 'has-data' }}">
-                                            <div class="stat-number">{{ user_mindmap.access_summary.total_consortiums }}</div>
-                                            <div class="stat-label">Consortiums</div>
-                                        </div>
-                                        <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_projects == 0 else 'has-data' }}">
-                                            <div class="stat-number">{{ user_mindmap.access_summary.total_projects }}</div>
-                                            <div class="stat-label">Projects</div>
-                                        </div>
-                                    </div>
-                                    {% if user_mindmap.access_summary.total_rfpos == 0 and user_mindmap.access_summary.total_teams == 0 %}
-                                    <div class="empty-state-indicator">
-                                        <i class="fas fa-exclamation-triangle text-warning"></i>
-                                        <span class="text-warning">Empty States Shown</span>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Row 3: Approver Status (Full Width) -->
-                        <div class="col-12">
-                            {% if user %}
-                            <div class="card border-info mb-3">
-                                <div class="card-header">
-                                    <h6 class="mb-0"><i class="fas fa-user-check"></i> Approval Workflow Status</h6>
-                                </div>
-                                <div class="card-body">
-                                    {% set approver_summary = user.get_approver_summary() %}
-                                    {% set has_active_assignments = approver_summary.details and approver_summary.details.workflow_assignments and approver_summary.details.workflow_assignments|length > 0 %}
-                                    {% if has_active_assignments %}
-                                    <div class="row align-items-center">
-                                        <div class="col-md-8">
-                                            <div class="d-flex align-items-center mb-2">
-                                                <i class="fas fa-check-circle text-success fa-2x me-3"></i>
-                                                <div>
-                                                    <h6 class="mb-0 text-success">Active Approver</h6>
-                                                    <p class="mb-0 text-muted">{{ approver_summary.summary }}</p>
-                                                    <small class="text-muted">{{ approver_summary.assignments_summary }}</small>
-                                                </div>
-                                            </div>
-                                            {% if approver_summary.last_updated %}
-                                            <small class="text-muted">
-                                                <i class="fas fa-clock"></i> Status updated: {{ approver_summary.last_updated }}
-                                            </small>
-                                            {% endif %}
-                                        </div>
-                                        <div class="col-md-4 text-end">
-                                            <button type="button" class="btn btn-outline-info btn-sm" onclick="showApproverDetails()">
-                                                <i class="fas fa-eye"></i> View Details
-                                            </button>
+                                            {% endfor %}
                                         </div>
                                     </div>
                                     
-                                    <!-- Approver Details (initially hidden) -->
-                                    <div id="approverDetails" class="mt-3" style="display: none;">
-                                        <hr>
-                                        <h6 class="text-info mb-3">Workflow Assignments</h6>
-                                        {% if approver_summary.details and approver_summary.details.workflow_assignments %}
-                                        <div class="table-responsive">
-                                            <table class="table table-sm">
-                                                <thead class="table-light">
-                                                    <tr>
-                                                        <th>Workflow</th>
-                                                        <th>Type</th>
-                                                        <th>Entity</th>
-                                                        <th>Step</th>
-                                                        <th>Role</th>
-                                                        <th>Status</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for assignment in approver_summary.details.workflow_assignments %}
-                                                    <tr>
-                                                        <td>
-                                                            <strong>{{ assignment.workflow_name }}</strong>
-                                                            <br><small class="text-muted">{{ assignment.workflow_id }}</small>
-                                                        </td>
-                                                        <td>
-                                                            <span class="badge bg-secondary">{{ assignment.workflow_type.title() }}</span>
-                                                        </td>
-                                                        <td>{{ assignment.entity_name }}</td>
-                                                        <td>
-                                                            {{ assignment.step_name }}
-                                                            <br><small class="text-muted">{{ assignment.approval_type }}</small>
-                                                        </td>
-                                                        <td>
-                                                            <span class="badge {{ 'bg-primary' if assignment.role == 'primary' else 'bg-warning' }}">
-                                                                {{ assignment.role.title() }}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <span class="badge {{ 'bg-success' if assignment.is_active else 'bg-secondary' }}">
-                                                                {{ 'Active' if assignment.is_active else 'Inactive' }}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
+                                    <!-- User App Branch -->
+                                    <div class="access-branch user-branch">
+                                        <div class="branch-header">
+                                            <div class="app-node user-node">
+                                                <i class="fas fa-mobile-alt"></i>
+                                                <span>User App</span>
+                                                <small>:5000</small>
+                                            </div>
                                         </div>
-                                        {% else %}
-                                        <p class="text-muted">No detailed workflow assignments found.</p>
+                                        <div class="user-access-summary">
+                                            <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_rfpos == 0 else 'has-data' }}">
+                                                <div class="stat-number">{{ user_mindmap.access_summary.total_rfpos }}</div>
+                                                <div class="stat-label">RFPOs</div>
+                                            </div>
+                                            <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_teams == 0 else 'has-data' }}">
+                                                <div class="stat-number">{{ user_mindmap.access_summary.total_teams }}</div>
+                                                <div class="stat-label">Teams</div>
+                                            </div>
+                                            <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_consortiums == 0 else 'has-data' }}">
+                                                <div class="stat-number">{{ user_mindmap.access_summary.total_consortiums }}</div>
+                                                <div class="stat-label">Consortiums</div>
+                                            </div>
+                                            <div class="access-stat {{ 'empty' if user_mindmap.access_summary.total_projects == 0 else 'has-data' }}">
+                                                <div class="stat-number">{{ user_mindmap.access_summary.total_projects }}</div>
+                                                <div class="stat-label">Projects</div>
+                                            </div>
+                                        </div>
+                                        {% if user_mindmap.access_summary.total_rfpos == 0 and user_mindmap.access_summary.total_teams == 0 %}
+                                        <div class="empty-state-indicator">
+                                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                                            <span class="text-warning">Empty States Shown</span>
+                                        </div>
                                         {% endif %}
                                     </div>
-                                    {% else %}
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-user-times text-muted fa-2x me-3"></i>
-                                        <div>
-                                            <h6 class="mb-0 text-muted">Not an Approver</h6>
-                                            {% set real_time_check = user.check_approver_status() %}
-                                            {% if real_time_check.is_approver and not has_active_assignments %}
-                                            <p class="mb-0 text-warning">User has workflow assignments but they're not displaying correctly</p>
-                                            <small class="text-muted">Database may need to be synced</small>
-                                            <div class="mt-2">
-                                                <button type="button" class="btn btn-outline-warning btn-sm" onclick="syncApproverStatus({{ user.id }})">
-                                                    <i class="fas fa-sync"></i> Sync Status
-                                                </button>
-                                            </div>
-                                            {% elif user.is_approver and not real_time_check.is_approver %}
-                                            <p class="mb-0 text-warning">Database shows approver status but no active workflow assignments found</p>
-                                            <small class="text-muted">User was likely removed from workflows - sync to update status</small>
-                                            <div class="mt-2">
-                                                <button type="button" class="btn btn-outline-warning btn-sm" onclick="syncApproverStatus({{ user.id }})">
-                                                    <i class="fas fa-sync"></i> Sync Status
-                                                </button>
-                                            </div>
-                                            {% else %}
-                                            <p class="mb-0 text-muted">{{ approver_summary.summary }}</p>
-                                            <small class="text-muted">User is not assigned to any approval workflow steps</small>
-                                            {% endif %}
-                                        </div>
+                                </div>
+                                
+                                <!-- System Permissions Row -->
+                                <div class="permissions-row">
+                                    <div class="permissions-header">
+                                        <i class="fas fa-shield-alt"></i> System Permissions
                                     </div>
-                                    {% endif %}
+                                    <div class="permissions-badges">
+                                        {% for perm in user_mindmap.system_permissions.permissions %}
+                                            {% set badge_class = 'permission-god' if perm == 'GOD' else 'permission-admin' if perm == 'RFPO_ADMIN' else 'permission-user' %}
+                                            <div class="permission-badge {{ badge_class }}">{{ perm }}</div>
+                                        {% endfor %}
+                                    </div>
                                 </div>
-                            </div>
-                            {% endif %}
-                        </div>
-                        
-                        <!-- Row 4: Entity Associations (Full Width) -->
-                        <div class="col-12">
-                            {% if user_mindmap.associations.teams.count > 0 or user_mindmap.associations.consortiums.count > 0 or user_mindmap.associations.projects.count > 0 %}
-                            <div class="card border-success">
-                                <div class="card-header">
-                                    <h6 class="mb-0"><i class="fas fa-link"></i> Entity Associations</h6>
-                                </div>
-                                <div class="card-body">
+                                
+                                <!-- Entity Associations (if any) -->
+                                {% if user_mindmap.associations.teams.count > 0 or user_mindmap.associations.consortiums.count > 0 or user_mindmap.associations.projects.count > 0 %}
+                                <div class="associations-section">
+                                    <div class="associations-header">
+                                        <i class="fas fa-link"></i> Entity Associations
+                                    </div>
                                     <div class="associations-grid">
                                         <!-- Teams -->
                                         {% if user_mindmap.associations.teams.count > 0 %}
@@ -818,7 +686,7 @@
                                                         {{ consortium.access_type.title() }} Access
                                                     </span>
                                                 </div>
-                                                <div class="entity-detail">{{ consortium.rfpo_count | default(0) }} RFPOs</div>
+                                                <div class="entity-detail">{{ consortium.rfpo_count }} RFPOs</div>
                                             </div>
                                             {% endfor %}
                                         {% endif %}
@@ -842,44 +710,38 @@
                                         {% endif %}
                                     </div>
                                 </div>
-                            </div>
-                            {% else %}
-                            <!-- No Associations Warning -->
-                            <div class="card border-warning">
-                                <div class="card-body">
-                                    <div class="no-associations-warning">
-                                        <div class="warning-icon">
-                                            <i class="fas fa-unlink fa-2x text-warning"></i>
-                                        </div>
-                                        <div class="warning-content">
-                                            <h6 class="text-warning mb-2">No Entity Associations</h6>
-                                            <p class="text-muted small mb-2">
-                                                This user is not assigned to any teams, consortiums, or projects.
-                                            </p>
-                                            <div class="impact-summary">
-                                                {% set can_access_admin = user_mindmap.capabilities.can_access_admin_panel %}
-                                                <div class="impact-item {{ 'admin-impact' if can_access_admin else 'user-impact' }}">
-                                                    <i class="fas fa-cogs"></i>
-                                                    <span>Admin Panel: <strong>{{ 'Full Access' if can_access_admin else 'No Access' }}</strong></span>
-                                                </div>
-                                                <div class="impact-item user-impact">
-                                                    <i class="fas fa-mobile-alt"></i>
-                                                    <span>User App: <strong>Empty States Only</strong></span>
-                                                </div>
+                                {% else %}
+                                <!-- No Associations Warning -->
+                                <div class="no-associations-warning">
+                                    <div class="warning-icon">
+                                        <i class="fas fa-unlink fa-2x text-warning"></i>
+                                    </div>
+                                    <div class="warning-content">
+                                        <h6 class="text-warning mb-2">No Entity Associations</h6>
+                                        <p class="text-muted small mb-2">
+                                            This user is not assigned to any teams, consortiums, or projects.
+                                        </p>
+                                        <div class="impact-summary">
+                                            <div class="impact-item admin-impact">
+                                                <i class="fas fa-cogs"></i>
+                                                <span>Admin Panel: <strong>Full Access</strong></span>
+                                            </div>
+                                            <div class="impact-item user-impact">
+                                                <i class="fas fa-mobile-alt"></i>
+                                                <span>User App: <strong>Empty States Only</strong></span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                                {% endif %}
                             </div>
-                            {% endif %}
-                        </div>
+                        {% else %}
+                            <div class="text-center py-3 text-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <p class="mb-0">Unable to load permissions data</p>
+                            </div>
+                        {% endif %}
                     </div>
-                    {% else %}
-                    <div class="text-center py-3 text-warning">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p class="mb-0">Unable to load permissions data</p>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
             {% else %}
@@ -999,87 +861,9 @@ function showProjectsModal() {
         modal.show();
     }
 }
-
-function showApproverDetails() {
-    const detailsDiv = document.getElementById('approverDetails');
-    const button = event.target.closest('button');
-    
-    if (detailsDiv.style.display === 'none') {
-        detailsDiv.style.display = 'block';
-        button.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Details';
-    } else {
-        detailsDiv.style.display = 'none';
-        button.innerHTML = '<i class="fas fa-eye"></i> View Details';
-    }
-}
 </script>
 {% endif %}
 
-<!-- Always include approver details JavaScript -->
-<script>
-function showApproverDetails() {
-    const detailsDiv = document.getElementById('approverDetails');
-    const button = event.target.closest('button');
-    
-    if (detailsDiv.style.display === 'none') {
-        detailsDiv.style.display = 'block';
-        button.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Details';
-    } else {
-        detailsDiv.style.display = 'none';
-        button.innerHTML = '<i class="fas fa-eye"></i> View Details';
-    }
-}
-
-function syncApproverStatus(userId) {
-    const button = event.target;
-    const originalHtml = button.innerHTML;
-    
-    // Show loading state
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
-    button.disabled = true;
-    
-    // Call the admin panel sync endpoint
-    fetch('/api/sync-approver-status/' + userId, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Show success and reload page after a brief delay
-            button.innerHTML = '<i class="fas fa-check"></i> Synced!';
-            button.className = 'btn btn-success btn-sm';
-            
-            setTimeout(() => {
-                location.reload();
-            }, 1500);
-        } else {
-            // Show error
-            button.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
-            button.className = 'btn btn-danger btn-sm';
-            console.error('Sync failed:', data.message);
-            
-            setTimeout(() => {
-                button.innerHTML = originalHtml;
-                button.className = 'btn btn-outline-warning btn-sm';
-                button.disabled = false;
-            }, 3000);
-        }
-    })
-    .catch(error => {
-        console.error('Sync error:', error);
-        button.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
-        button.className = 'btn btn-danger btn-sm';
-        
-        setTimeout(() => {
-            button.innerHTML = originalHtml;
-            button.className = 'btn btn-outline-warning btn-sm';
-            button.disabled = false;
-        }, 3000);
-    });
-}
-</script>
-
 {% endblock %}
+
+

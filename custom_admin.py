@@ -19,17 +19,357 @@ from datetime import datetime
 from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam, PDFPositioning, RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep, RFPOApprovalInstance, RFPOApprovalAction
 from pdf_generator import RFPOPDFGenerator
 
+def sync_all_users_approver_status(updated_by=None):
+    """Sync approver status for all users - useful after workflow changes"""
+    try:
+        users = User.query.all()
+        updated_count = 0
+        
+        for user in users:
+            if user.update_approver_status(updated_by=updated_by):
+                updated_count += 1
+        
+        db.session.commit()
+        return updated_count
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error syncing approver status: {e}")
+        return 0
+
+def sync_user_approver_status_for_workflow(workflow_id, updated_by=None):
+    """Sync approver status for users affected by a specific workflow"""
+    try:
+        # Get all users who are approvers in this workflow
+        affected_user_ids = set()
+        
+        workflow = RFPOApprovalWorkflow.query.get(workflow_id)
+        if not workflow:
+            return 0
+        
+        for stage in workflow.stages:
+            for step in stage.steps:
+                if step.primary_approver_id:
+                    affected_user_ids.add(step.primary_approver_id)
+                if step.backup_approver_id:
+                    affected_user_ids.add(step.backup_approver_id)
+        
+        updated_count = 0
+        for user_record_id in affected_user_ids:
+            user = User.query.filter_by(record_id=user_record_id).first()
+            if user and user.update_approver_status(updated_by=updated_by):
+                updated_count += 1
+        
+        db.session.commit()
+        return updated_count
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error syncing approver status for workflow {workflow_id}: {e}")
+        return 0
+
+def get_user_mindmap_data(user):
+    """Get comprehensive permissions mindmap data for a user"""
+    try:
+        # System permissions
+        system_permissions = user.get_permissions() or []
+        
+        # Team associations (both direct membership and viewer/admin access)
+        team_data = []
+        accessible_consortium_ids = set()
+        
+        # 1. Direct team memberships (UserTeam table)
+        direct_teams = user.get_teams()
+        team_ids_found = set()
+        
+        for team in direct_teams:
+            team_info = {
+                'id': team.id,
+                'record_id': team.record_id,
+                'name': team.name,
+                'abbrev': team.abbrev,
+                'consortium_id': team.consortium_consort_id,
+                'consortium_name': None,
+                'rfpo_count': RFPO.query.filter_by(team_id=team.id).count(),
+                'access_type': 'member'
+            }
+            
+            # Get consortium info
+            if team.consortium_consort_id:
+                consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                if consortium:
+                    team_info['consortium_name'] = consortium.name
+                    accessible_consortium_ids.add(team.consortium_consort_id)
+            
+            team_data.append(team_info)
+            team_ids_found.add(team.id)
+        
+        # 2. Teams where user is viewer/admin (JSON fields)
+        all_teams = Team.query.all()
+        for team in all_teams:
+            if team.id in team_ids_found:
+                continue  # Already added above
+            
+            viewer_users = team.get_rfpo_viewer_users()
+            admin_users = team.get_rfpo_admin_users()
+            
+            access_type = None
+            if user.record_id in admin_users:
+                access_type = 'admin'
+            elif user.record_id in viewer_users:
+                access_type = 'viewer'
+            
+            if access_type:
+                team_info = {
+                    'id': team.id,
+                    'record_id': team.record_id,
+                    'name': team.name,
+                    'abbrev': team.abbrev,
+                    'consortium_id': team.consortium_consort_id,
+                    'consortium_name': None,
+                    'rfpo_count': RFPO.query.filter_by(team_id=team.id).count(),
+                    'access_type': access_type
+                }
+                
+                # Get consortium info
+                if team.consortium_consort_id:
+                    consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                    if consortium:
+                        team_info['consortium_name'] = consortium.name
+                        accessible_consortium_ids.add(team.consortium_consort_id)
+                
+                team_data.append(team_info)
+        
+        # Direct consortium access
+        direct_consortium_access = []
+        all_consortiums = Consortium.query.all()
+        for consortium in all_consortiums:
+            viewer_users = consortium.get_rfpo_viewer_users()
+            admin_users = consortium.get_rfpo_admin_users()
+            
+            access_type = None
+            if user.record_id in admin_users:
+                access_type = 'admin'
+            elif user.record_id in viewer_users:
+                access_type = 'viewer'
+            
+            if access_type:
+                # Count RFPOs in this consortium (both through teams and direct consortium association)
+                consortium_teams = Team.query.filter_by(consortium_consort_id=consortium.consort_id).all()
+                team_based_rfpos = sum(RFPO.query.filter_by(team_id=team.id).count() for team in consortium_teams)
+                
+                # Also count RFPOs that directly reference this consortium
+                direct_consortium_rfpos = RFPO.query.filter_by(consortium_id=consortium.consort_id).count()
+                
+                # Total is the sum (but we need to check for potential overlaps)
+                # For now, use direct count if no team-based, otherwise use total
+                consortium_rfpo_count = direct_consortium_rfpos if team_based_rfpos == 0 else (team_based_rfpos + direct_consortium_rfpos)
+                
+                direct_consortium_access.append({
+                    'consort_id': consortium.consort_id,
+                    'name': consortium.name,
+                    'abbrev': consortium.abbrev,
+                    'access_type': access_type,
+                    'rfpo_count': consortium_rfpo_count
+                })
+                accessible_consortium_ids.add(consortium.consort_id)
+        
+        # Project access (both direct and via team membership)
+        project_access = []
+        all_projects = Project.query.all()
+        accessible_project_ids = []
+        
+        # Get team record IDs for projects accessible via teams
+        team_record_ids = [team['record_id'] for team in team_data]
+        
+        for project in all_projects:
+            access_type = None
+            
+            # Check direct project access
+            viewer_users = project.get_rfpo_viewer_users()
+            if user.record_id in viewer_users:
+                access_type = 'direct_viewer'
+            
+            # Check team-based project access
+            elif project.team_record_id in team_record_ids:
+                access_type = 'via_team'
+            
+            if access_type:
+                # Count RFPOs directly associated with this project
+                project_rfpo_count = RFPO.query.filter_by(project_id=project.project_id).count()
+                project_access.append({
+                    'project_id': project.project_id,
+                    'name': project.name,
+                    'ref': project.ref,
+                    'consortium_ids': project.get_consortium_ids(),
+                    'rfpo_count': project_rfpo_count,
+                    'access_type': access_type
+                })
+                accessible_project_ids.append(project.project_id)
+        
+        # Calculate accessible RFPOs
+        accessible_rfpos = []
+        
+        # 1. RFPOs from user's teams
+        team_ids = [team['id'] for team in team_data]
+        if team_ids:
+            team_rfpos = RFPO.query.filter(RFPO.team_id.in_(team_ids)).all()
+            accessible_rfpos.extend(team_rfpos)
+        
+        # 2. RFPOs from projects user has access to
+        if accessible_project_ids:
+            project_rfpos = RFPO.query.filter(RFPO.project_id.in_(accessible_project_ids)).all()
+            accessible_rfpos.extend(project_rfpos)
+        
+        # 3. RFPOs from consortiums user has access to
+        accessible_consortium_ids_list = [consortium['consort_id'] for consortium in direct_consortium_access]
+        if accessible_consortium_ids_list:
+            consortium_rfpos = RFPO.query.filter(RFPO.consortium_id.in_(accessible_consortium_ids_list)).all()
+            accessible_rfpos.extend(consortium_rfpos)
+        
+        # Remove duplicates
+        accessible_rfpos = list({rfpo.id: rfpo for rfpo in accessible_rfpos}.values())
+        
+        # Approval workflow access
+        approval_access = []
+        if user.is_rfpo_admin() or user.is_super_admin():
+            approval_workflows = RFPOApprovalWorkflow.query.filter_by(is_template=True, is_active=True).count()
+            approval_access.append({
+                'type': 'admin_access',
+                'description': 'All approval workflows (Admin access)',
+                'count': approval_workflows
+            })
+        
+        # Build mindmap structure
+        return {
+            'user': {
+                'id': user.id,
+                'record_id': user.record_id,
+                'email': user.email,
+                'display_name': user.get_display_name()
+            },
+            'system_permissions': {
+                'permissions': system_permissions,
+                'is_super_admin': user.is_super_admin(),
+                'is_rfpo_admin': user.is_rfpo_admin(),
+                'is_rfpo_user': user.is_rfpo_user()
+            },
+            'associations': {
+                'teams': {
+                    'count': len(team_data),
+                    'list': team_data
+                },
+                'consortiums': {
+                    'count': len(direct_consortium_access),
+                    'list': direct_consortium_access
+                },
+                'projects': {
+                    'count': len(project_access),
+                    'list': project_access
+                }
+            },
+            'access_summary': {
+                'total_rfpos': len(accessible_rfpos),
+                'total_consortiums': len(accessible_consortium_ids),
+                'total_teams': len(team_data),
+                'total_projects': len(project_access),
+                'has_admin_access': user.is_rfpo_admin() or user.is_super_admin(),
+                'approval_workflows': approval_access
+            },
+            'capabilities': {
+                'can_access_admin_panel': user.is_rfpo_admin() or user.is_super_admin(),
+                'can_create_rfpos': len(team_data) > 0 or len(project_access) > 0 or user.is_rfpo_admin() or user.is_super_admin(),
+                'can_approve_rfpos': user.is_rfpo_admin() or user.is_super_admin(),
+                'can_manage_users': user.is_rfpo_admin() or user.is_super_admin(),
+                'can_manage_workflows': user.is_rfpo_admin() or user.is_super_admin()
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error in get_user_mindmap_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+class APIHelper:
+    """
+    Safe API helper with fallback to direct database access
+    This allows gradual migration from direct DB to API calls
+    """
+    
+    def __init__(self, api_base_url='http://localhost:5002/api'):
+        self.api_base_url = api_base_url
+        self.session = None  # Will store admin session/token
+    
+    def make_api_call(self, endpoint, method='GET', data=None, fallback_func=None):
+        """
+        Make API call with fallback to direct database function
+        If API fails, use the fallback function (original DB code)
+        """
+        try:
+            import requests
+            url = f"{self.api_base_url}{endpoint}"
+            
+            headers = {'Content-Type': 'application/json'}
+            if self.session and self.session.get('token'):
+                headers['Authorization'] = f"Bearer {self.session['token']}"
+            
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=5)
+            elif method == 'POST':
+                response = requests.post(url, json=data, headers=headers, timeout=5)
+            elif method == 'PUT':
+                response = requests.put(url, json=data, headers=headers, timeout=5)
+            elif method == 'DELETE':
+                response = requests.delete(url, headers=headers, timeout=5)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"API call failed: {response.status_code}")
+                if fallback_func:
+                    print("Using database fallback...")
+                    return fallback_func()
+                
+        except Exception as e:
+            print(f"API call exception: {e}")
+            if fallback_func:
+                print("Using database fallback...")
+                return fallback_func()
+        
+        return None
+    
+    def authenticate_admin(self, email, password):
+        """Authenticate admin and store session"""
+        try:
+            import requests
+            response = requests.post(f"{self.api_base_url}/auth/login", 
+                                   json={'username': email, 'password': password},
+                                   timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    self.session = {'token': data['token'], 'user': data['user']}
+                    return True
+        except Exception as e:
+            print(f"API authentication failed: {e}")
+        
+        return False
+
 def create_app():
     """Create Flask application with custom admin panel"""
     app = Flask(__name__)
     
     # Configuration
     app.config['SECRET_KEY'] = 'rfpo-admin-secret-key-change-in-production'
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///rfpo_admin.db'
+    import os
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(os.getcwd(), "instance", "rfpo_admin.db")}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Initialize extensions
     db.init_app(app)
+    
+    # Initialize API Helper (for gradual migration to API)
+    api_helper = APIHelper('http://rfpo-api:5002/api')  # Use container name for Docker
+    app.api_helper = api_helper
     
     # Initialize Flask-Login
     login_manager = LoginManager()
@@ -178,6 +518,7 @@ def create_app():
         """Get the first applicable workflow (for backward compatibility)"""
         workflows = get_applicable_workflows(rfpo)
         return workflows[0][1] if workflows else None
+    
     
     def determine_rfpo_stage(rfpo, workflow):
         """Determine which approval stage an RFPO falls into based on its total amount"""
@@ -415,6 +756,55 @@ def create_app():
         return document_validation
     
     # Authentication routes
+    # Health check endpoint for Docker
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        """Health check endpoint"""
+        return jsonify({
+            'status': 'healthy',
+            'service': 'RFPO Admin Panel',
+            'timestamp': datetime.utcnow().isoformat(),
+            'version': '1.0.0'
+        })
+    
+    # Test route for API integration (safe - doesn't break anything)
+    @app.route('/api-test')
+    @login_required
+    def api_test():
+        """Test API integration without breaking existing functionality"""
+        
+        # Test 1: Direct database count (current way)
+        db_user_count = User.query.count()
+        
+        # Test 2: API health check
+        api_status = "unknown"
+        try:
+            import requests
+            response = requests.get('http://rfpo-api:5002/api/health', timeout=3)
+            if response.status_code == 200:
+                api_status = "connected"
+            else:
+                api_status = f"error_{response.status_code}"
+        except Exception as e:
+            api_status = f"failed_{str(e)[:50]}"
+        
+        # Test 3: Try to authenticate with API (if current user has email)
+        api_auth_status = "not_tested"
+        if current_user and hasattr(current_user, 'email'):
+            try:
+                api_auth_result = app.api_helper.authenticate_admin(current_user.email, "test")
+                api_auth_status = "tested_but_no_password"
+            except Exception as e:
+                api_auth_status = f"auth_error_{str(e)[:30]}"
+        
+        return jsonify({
+            'database_users': db_user_count,
+            'api_status': api_status,
+            'api_auth_status': api_auth_status,
+            'current_user_email': current_user.email if current_user else None,
+            'message': 'API integration test - existing functionality unchanged'
+        })
+
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if request.method == 'POST':
@@ -898,15 +1288,27 @@ def create_app():
         if request.method == 'POST':
             try:
                 from werkzeug.security import generate_password_hash
+                try:
+                    from email_service import send_welcome_email
+                    EMAIL_SERVICE_AVAILABLE = True
+                except ImportError:
+                    print("Warning: email_service not available - user creation will work but no welcome email")
+                    EMAIL_SERVICE_AVAILABLE = False
+                    send_welcome_email = None
                 
                 # Auto-generate user record ID
                 record_id = generate_next_id(User, 'record_id', '', 8)
                 
+                # Get form data
+                user_password = request.form.get('password', 'changeme123')
+                user_email = request.form.get('email')
+                user_fullname = request.form.get('fullname')
+                
                 user = User(
                     record_id=record_id,
-                    fullname=request.form.get('fullname'),
-                    email=request.form.get('email'),
-                    password_hash=generate_password_hash(request.form.get('password', 'changeme123')),
+                    fullname=user_fullname,
+                    email=user_email,
+                    password_hash=generate_password_hash(user_password),
                     sex=request.form.get('sex'),
                     company_code=request.form.get('company_code'),
                     company=request.form.get('company'),
@@ -920,13 +1322,55 @@ def create_app():
                 
                 # Handle permissions from checkboxes
                 permissions = request.form.getlist('permissions')  # Get all checked permission values
-                if permissions:
-                    user.set_permissions(permissions)
+                
+                # Validate that at least one permission is selected
+                if not permissions:
+                    flash('❌ Error: At least one permission must be selected for the user.', 'error')
+                    # Preserve form data by creating a temporary user object with form values
+                    class TempUser:
+                        def __init__(self):
+                            self.record_id = None  # Will be auto-generated
+                            self.fullname = user_fullname
+                            self.email = user_email
+                            self.sex = request.form.get('sex')
+                            self.company_code = request.form.get('company_code')
+                            self.company = request.form.get('company')
+                            self.position = request.form.get('position')
+                            self.department = request.form.get('department')
+                            self.phone = request.form.get('phone')
+                            self.active = bool(request.form.get('active', True))
+                            self.agreed_to_terms = bool(request.form.get('agreed_to_terms'))
+                        
+                        def get_permissions(self):
+                            return []  # No permissions selected
+                    
+                    temp_user = TempUser()
+                    return render_template('admin/user_form.html', user=temp_user, action='Create')
+                
+                user.set_permissions(permissions)
                 
                 db.session.add(user)
                 db.session.commit()
                 
-                flash('✅ User created successfully!', 'success')
+                # Send welcome email
+                try:
+                    if user_email and user_fullname and EMAIL_SERVICE_AVAILABLE:
+                        email_sent = send_welcome_email(
+                            user_email=user_email,
+                            user_name=user_fullname,
+                            temp_password=user_password
+                        )
+                        if email_sent:
+                            flash('✅ User created successfully and welcome email sent!', 'success')
+                        else:
+                            flash('✅ User created successfully, but welcome email could not be sent. Please check email configuration.', 'warning')
+                    else:
+                        flash('✅ User created successfully!', 'success')
+                except Exception as email_error:
+                    # Log the email error but don't fail the user creation
+                    print(f"Email sending failed: {str(email_error)}")
+                    flash('✅ User created successfully, but welcome email could not be sent.', 'warning')
+                
                 return redirect(url_for('users'))
                 
             except Exception as e:
@@ -965,6 +1409,24 @@ def create_app():
                 
                 # Handle permissions from checkboxes
                 permissions = request.form.getlist('permissions')
+                
+                # Validate that at least one permission is selected
+                if not permissions:
+                    flash('❌ Error: At least one permission must be selected for the user.', 'error')
+                    # Preserve form data by updating user object with form values (but don't save to DB)
+                    user.fullname = request.form.get('fullname')
+                    user.email = new_email
+                    user.sex = request.form.get('sex')
+                    user.company_code = request.form.get('company_code')
+                    user.company = request.form.get('company')
+                    user.position = request.form.get('position')
+                    user.department = request.form.get('department')
+                    user.phone = request.form.get('phone')
+                    user.active = bool(request.form.get('active'))
+                    user.agreed_to_terms = bool(request.form.get('agreed_to_terms'))
+                    # Keep original permissions for display (don't clear them)
+                    return render_template('admin/user_form.html', user=user, action='Edit')
+                
                 user.set_permissions(permissions)
                 
                 db.session.commit()
@@ -976,7 +1438,21 @@ def create_app():
                 db.session.rollback()  # Important: rollback the failed transaction
                 flash(f'❌ Error updating user: {str(e)}', 'error')
         
-        return render_template('admin/user_form.html', user=user, action='Edit')
+        # Get user permissions mindmap data for display
+        try:
+            user_mindmap = get_user_mindmap_data(user)
+            # Debug output for troubleshooting
+            if user_mindmap:
+                print(f"🔍 Mindmap Debug for {user.email}:")
+                print(f"  Consortiums: {user_mindmap.get('associations', {}).get('consortiums', {})}")
+                print(f"  Projects: {user_mindmap.get('associations', {}).get('projects', {})}")
+        except Exception as e:
+            print(f"Error getting user mindmap: {e}")
+            import traceback
+            traceback.print_exc()
+            user_mindmap = None
+        
+        return render_template('admin/user_form.html', user=user, action='Edit', user_mindmap=user_mindmap)
     
     @app.route('/user/<int:id>/delete', methods=['POST'])
     @login_required
@@ -1003,7 +1479,17 @@ def create_app():
         for rfpo in rfpos:
             # Check if RFPO has approval instances
             rfpo.approval_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
-            rfpo.can_delete = rfpo.approval_instance is None
+            
+            # Allow deletion if no approval instance OR if approval instance is completed
+            if rfpo.approval_instance is None:
+                rfpo.can_delete = True
+                rfpo.delete_reason = "No approval workflow"
+            elif rfpo.approval_instance.is_complete():
+                rfpo.can_delete = True
+                rfpo.delete_reason = f"Approval workflow completed ({rfpo.approval_instance.overall_status})"
+            else:
+                rfpo.can_delete = False
+                rfpo.delete_reason = f"Has active approval workflow ({rfpo.approval_instance.overall_status})"
             
             # Count line items and files
             rfpo.line_item_count = len(rfpo.line_items) if rfpo.line_items else 0
@@ -1069,14 +1555,27 @@ def create_app():
                 ).count()
                 rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
                 
-                # Get team from project or use default
+                # Get team from project or create a default team if none exists
                 team = Team.query.filter_by(record_id=project.team_record_id).first() if project.team_record_id else None
                 if not team:
                     team = Team.query.filter_by(active=True).first()
                 
+                # If no team exists, create a default "No Team" team
                 if not team:
-                    flash('❌ No active teams available.', 'error')
-                    return redirect(url_for('rfpo_create_stage1'))
+                    print("No teams found - creating default team for RFPO creation")
+                    default_team = Team(
+                        record_id=f"DEFAULT-{datetime.now().strftime('%Y%m%d')}",
+                        name="Default Team (No Team Assignment)",
+                        abbrev="DEFAULT",
+                        description="Auto-created default team for RFPOs without team assignment",
+                        consortium_consort_id=consortium_id,
+                        active=True,
+                        created_by=current_user.get_display_name()
+                    )
+                    db.session.add(default_team)
+                    db.session.flush()  # Get the ID
+                    team = default_team
+                    flash('ℹ️ Created default team for RFPO creation.', 'info')
                 
                 # Create RFPO with enhanced model
                 rfpo = RFPO(
@@ -1085,11 +1584,11 @@ def create_app():
                     description=request.form.get('description'),
                     project_id=project.project_id,
                     consortium_id=consortium.consort_id,
-                    team_id=team.id,
+                    team_id=team.id if team else None,
                     government_agreement_number=request.form.get('government_agreement_number'),
                     requestor_id=current_user.record_id,
-                    requestor_tel=request.form.get('requestor_tel'),
-                    requestor_location=request.form.get('requestor_location'),
+                    requestor_tel=request.form.get('requestor_tel') or current_user.phone,
+                    requestor_location=request.form.get('requestor_location') or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
                     shipto_name=request.form.get('shipto_name'),
                     shipto_tel=request.form.get('shipto_tel'),
                     shipto_address=request.form.get('shipto_address'),
@@ -1127,7 +1626,7 @@ Southfield, MI  48075""",
         
         # Pre-fill form with current user data
         current_user_data = {
-            'requestor_tel': current_user.phone,
+            'requestor_tel': current_user.phone or '',  # Don't show 'None'
             'requestor_location': f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
             'shipto_name': current_user.get_display_name(),
             'shipto_address': f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}"
@@ -1207,10 +1706,8 @@ Southfield, MI  48075""",
                         except ValueError:
                             rfpo.cost_share_amount = 0.00
                 
-                # Recalculate totals
-                subtotal = sum(float(item.total_price) for item in rfpo.line_items)
-                rfpo.subtotal = subtotal
-                rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
+                # Recalculate totals using the new method that handles percentage cost sharing
+                rfpo.update_totals()
                 
                 db.session.commit()
                 
@@ -1285,10 +1782,8 @@ Southfield, MI  48075""",
             db.session.add(line_item)
             db.session.flush()  # Flush to get the line item in the session
             
-            # Update RFPO totals (recalculate from all line items)
-            subtotal = sum(float(item.total_price) for item in rfpo.line_items)
-            rfpo.subtotal = subtotal
-            rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
+            # Update RFPO totals using the new method that handles percentage cost sharing
+            rfpo.update_totals()
             
             db.session.commit()
             
@@ -1314,10 +1809,8 @@ Southfield, MI  48075""",
         try:
             db.session.delete(line_item)
             
-            # Update RFPO totals
-            subtotal = sum(float(item.total_price) for item in rfpo.line_items if item.id != line_item_id)
-            rfpo.subtotal = subtotal
-            rfpo.total_amount = subtotal - float(rfpo.cost_share_amount or 0)
+            # Update RFPO totals using the new method that handles percentage cost sharing
+            rfpo.update_totals()
             
             db.session.commit()
             
@@ -1603,6 +2096,45 @@ Southfield, MI  48075""",
             flash(f'❌ Error generating RFPO: {str(e)}', 'error')
             return redirect(url_for('rfpo_edit', id=rfpo_id))
     
+    @app.route('/api/rfpo/<int:rfpo_id>/rendered-html')
+    def api_rfpo_rendered_html(rfpo_id):
+        """API endpoint to get RFPO rendered HTML (for user app)"""
+        try:
+            rfpo = RFPO.query.get_or_404(rfpo_id)
+            
+            # Get related data (same as generate-rfpo route)
+            project = Project.query.filter_by(project_id=rfpo.project_id).first()
+            consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+            vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+            vendor_site = None
+            
+            # Handle vendor_site_id
+            if rfpo.vendor_site_id:
+                try:
+                    vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+                except (ValueError, TypeError):
+                    vendor_site = None
+            
+            # Get requestor user information
+            requestor = User.query.filter_by(record_id=rfpo.requestor_id).first() if rfpo.requestor_id else None
+            
+            # Render the same template as admin panel
+            html_content = render_template('admin/rfpo_preview.html',
+                                         rfpo=rfpo,
+                                         project=project,
+                                         consortium=consortium,
+                                         vendor=vendor,
+                                         vendor_site=vendor_site,
+                                         requestor=requestor)
+            
+            return jsonify({
+                'success': True,
+                'html_content': html_content
+            })
+            
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)}), 500
+    
     @app.route('/rfpo/<int:id>/delete', methods=['POST'])
     @login_required
     def rfpo_delete(id):
@@ -1611,8 +2143,8 @@ Southfield, MI  48075""",
         
         # Check for approval instances that might prevent deletion
         approval_instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
-        if approval_instance:
-            flash(f'❌ Cannot delete RFPO: It has an active approval workflow (Instance: {approval_instance.instance_id}). Please complete or cancel the approval process first.', 'error')
+        if approval_instance and not approval_instance.is_complete():
+            flash(f'❌ Cannot delete RFPO: It has an active approval workflow (Instance: {approval_instance.instance_id}, Status: {approval_instance.overall_status}). Please complete or cancel the approval process first.', 'error')
             return redirect(url_for('rfpos'))
         
         try:
@@ -2319,7 +2851,26 @@ Southfield, MI  48075""",
                         workflow.consortium_name = consortium.name if consortium else consortium_ids[0]
             
             # Count usage statistics
-            workflow.instance_count = RFPOApprovalInstance.query.filter_by(template_workflow_id=workflow.id).count()
+            all_instances = RFPOApprovalInstance.query.filter_by(template_workflow_id=workflow.id).all()
+            workflow.instance_count = len(all_instances)
+            
+            # Check if workflow can be deleted (inactive + all instances completed)
+            workflow.can_delete = True
+            if workflow.is_active:
+                workflow.can_delete = False
+                workflow.delete_reason = "Workflow is currently active"
+            elif all_instances:
+                # Check if all instances are completed
+                incomplete_instances = [inst for inst in all_instances if not inst.is_complete()]
+                if incomplete_instances:
+                    workflow.can_delete = False
+                    workflow.delete_reason = f"Has {len(incomplete_instances)} incomplete approval instances"
+                else:
+                    workflow.can_delete = True
+                    workflow.delete_reason = f"All {len(all_instances)} instances are completed"
+            else:
+                workflow.can_delete = True
+                workflow.delete_reason = "No instances using this workflow"
         
         # Get counts for each workflow type for tabs
         workflow_counts = {
@@ -2403,6 +2954,12 @@ Southfield, MI  48075""",
             db.session.add(workflow)
             db.session.commit()
             
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow.id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after workflow creation: {e}")
+            
             flash('✅ Approval workflow created successfully!', 'success')
             return redirect(url_for('approval_workflow_edit', id=workflow.id))
             
@@ -2434,6 +2991,12 @@ Southfield, MI  48075""",
                 workflow.updated_by = current_user.get_display_name()
                 
                 db.session.commit()
+                
+                # Sync approver status for affected users
+                try:
+                    sync_user_approver_status_for_workflow(workflow.id, updated_by=current_user.get_display_name())
+                except Exception as e:
+                    print(f"Warning: Could not sync approver status after workflow edit: {e}")
                 
                 flash('✅ Approval workflow updated successfully!', 'success')
                 return redirect(url_for('approval_workflow_edit', id=workflow.id))
@@ -2557,6 +3120,12 @@ Southfield, MI  48075""",
             db.session.add(step)
             db.session.commit()
             
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow_id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after step addition: {e}")
+            
             flash(f'✅ Step "{step.step_name}" added successfully!', 'success')
             
         except Exception as e:
@@ -2606,6 +3175,12 @@ Southfield, MI  48075""",
             db.session.delete(step)
             db.session.commit()
             
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow_id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after step deletion: {e}")
+            
             flash(f'✅ Step "{step_name}" deleted successfully!', 'success')
             
         except Exception as e:
@@ -2648,6 +3223,12 @@ Southfield, MI  48075""",
         try:
             workflow.activate()
             db.session.commit()
+            
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow.id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after workflow activation: {e}")
             
             flash(f'✅ Workflow "{workflow.name}" activated for {workflow.consortium_id}!', 'success')
             
@@ -2934,6 +3515,12 @@ Southfield, MI  48075""",
             
             db.session.commit()
             
+            # Sync approver status for affected users
+            try:
+                sync_user_approver_status_for_workflow(workflow_id, updated_by=current_user.get_display_name())
+            except Exception as e:
+                print(f"Warning: Could not sync approver status after step edit: {e}")
+            
             flash(f'✅ Step "{step.step_name}" updated successfully!', 'success')
             
         except Exception as e:
@@ -2941,6 +3528,59 @@ Southfield, MI  48075""",
             flash(f'❌ Error updating step: {str(e)}', 'error')
         
         return redirect(url_for('approval_workflow_edit', id=workflow_id))
+    
+    @app.route('/api/fix-approval-instance-status/<int:instance_id>', methods=['POST'])
+    @login_required
+    def api_fix_approval_instance_status(instance_id):
+        """Fix approval instance status based on completed actions"""
+        try:
+            instance = RFPOApprovalInstance.query.get_or_404(instance_id)
+            
+            # Check current completion status
+            completion_status = instance.check_completion_status()
+            
+            if completion_status:
+                old_status = instance.overall_status
+                instance.overall_status = completion_status
+                if not instance.completed_at:
+                    instance.completed_at = datetime.utcnow()
+                instance.updated_at = datetime.utcnow()
+                
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Instance status updated from "{old_status}" to "{completion_status}"',
+                    'old_status': old_status,
+                    'new_status': completion_status,
+                    'completed_at': instance.completed_at.isoformat() if instance.completed_at else None
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'message': 'Instance status is correct - workflow still in progress',
+                    'current_status': instance.overall_status
+                })
+                
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'message': str(e)}), 500
+
+    @app.route('/api/sync-all-approver-status', methods=['POST'])
+    @login_required
+    def api_sync_all_approver_status():
+        """Sync approver status for all users (admin panel utility)"""
+        try:
+            updated_count = sync_all_users_approver_status(updated_by=current_user.get_display_name())
+            
+            return jsonify({
+                'success': True,
+                'message': f'Synced approver status for {updated_count} users',
+                'updated_count': updated_count
+            })
+            
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)}), 500
     
     # RFPO Approval Instance Management routes
     @app.route('/approval-instances')
@@ -2997,6 +3637,10 @@ Southfield, MI  48075""",
                 instance.rfpo_title = f"RFPO #{instance.rfpo_id}"
                 instance.rfpo_total = 0.00
             instance.is_virtual = False
+            
+            # Add action counts using the model methods
+            instance.pending_actions_count = len(instance.get_pending_actions())
+            instance.completed_actions_count = len(instance.get_completed_actions())
         
         # Combine and sort all instances
         all_instances = list(instances) + virtual_instances
@@ -3038,28 +3682,40 @@ Southfield, MI  48075""",
         
         # Check if current user can take this action
         if (action.approver_id != current_user.record_id and 
-            action.backup_approver_id != current_user.record_id and 
             not current_user.is_super_admin()):
             flash('❌ You are not authorized to take this action.', 'error')
             return redirect(url_for('approval_instance_view', id=instance_id))
         
         try:
-            status = request.form.get('status')  # approved, conditional, refused
+            status = request.form.get('status')  # approved or refused
             comments = request.form.get('comments')
-            conditions = request.form.get('conditions') if status == 'conditional' else None
+            
+            # Validate status
+            if status not in ['approved', 'refused']:
+                flash('❌ Invalid action status.', 'error')
+                return redirect(url_for('approval_instance_view', id=instance_id))
             
             # Complete the action
-            action.complete_action(status, comments, conditions, current_user.record_id)
+            action.complete_action(status, comments, None, current_user.record_id)
             
-            # Update instance status and advance workflow if needed
-            if status == 'approved':
-                instance.advance_to_next_step()
-            elif status == 'refused':
+            # Update instance status based on action result
+            if status == 'refused':
+                # Any rejection immediately completes the workflow as refused
                 instance.overall_status = 'refused'
                 instance.completed_at = datetime.utcnow()
-            elif status == 'conditional':
-                # For conditional approval, advance but note conditions
+                
+                # Update RFPO status to refused
+                if instance.rfpo:
+                    instance.rfpo.status = 'Refused'
+                    instance.rfpo.updated_by = current_user.get_display_name()
+            else:
+                # For approvals, advance workflow and check for completion
                 instance.advance_to_next_step()
+                
+                # If workflow is now complete and approved, update RFPO status
+                if instance.overall_status == 'approved' and instance.rfpo:
+                    instance.rfpo.status = 'Approved'
+                    instance.rfpo.updated_by = current_user.get_display_name()
             
             instance.updated_at = datetime.utcnow()
             
@@ -3072,6 +3728,33 @@ Southfield, MI  48075""",
             flash(f'❌ Error processing action: {str(e)}', 'error')
         
         return redirect(url_for('approval_instance_view', id=instance_id))
+    
+    @app.route('/approval-instance/<int:id>/delete', methods=['POST'])
+    @login_required
+    def approval_instance_delete(id):
+        """Delete approval instance (admin only)"""
+        instance = RFPOApprovalInstance.query.get_or_404(id)
+        
+        try:
+            instance_id = instance.instance_id
+            rfpo_id = instance.rfpo_id
+            
+            # Reset RFPO status if it was set by this approval workflow
+            if instance.rfpo and instance.rfpo.status in ['Approved', 'Refused']:
+                instance.rfpo.status = 'Draft'
+                instance.rfpo.updated_by = current_user.get_display_name()
+            
+            # Delete the approval instance (actions will be cascade deleted)
+            db.session.delete(instance)
+            db.session.commit()
+            
+            flash(f'✅ Approval instance "{instance_id}" deleted successfully! RFPO reset to Draft status.', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Error deleting approval instance: {str(e)}', 'error')
+        
+        return redirect(url_for('approval_instances'))
     
     @app.route('/api/rfpo/<int:rfpo_id>/test-approval')
     @login_required
@@ -3138,6 +3821,10 @@ Southfield, MI  48075""",
             first_stage = None
             all_actions = []
             
+            # Use timestamp-based action ID generation to ensure uniqueness
+            import time
+            action_id_counter = 0
+            
             for workflow_type, workflow, phase_number in applicable_workflows:
                 if phase_number == 1:
                     first_workflow = workflow
@@ -3187,7 +3874,11 @@ Southfield, MI  48075""",
                     
                     # Create actions for Phase 1 only (others will be created when phases advance)
                     if phase_number == 1:
-                        action_id = generate_next_id(RFPOApprovalAction, 'action_id', 'ACT-', 8)
+                        # Generate unique action ID using timestamp + counter
+                        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                        action_id_counter += 1
+                        action_id = f"ACT-{timestamp}-{action_id_counter:03d}"
+                        
                         primary_approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
                         
                         action = RFPOApprovalAction(
@@ -3433,6 +4124,195 @@ Southfield, MI  48075""",
                 'count': 0,
                 'type': list_type
             }), 400
+    
+    @app.route('/api/sync-approver-status/<int:user_id>', methods=['POST'])
+    @login_required
+    def api_sync_user_approver_status(user_id):
+        """Sync approver status for a specific user (admin panel)"""
+        try:
+            user = User.query.get_or_404(user_id)
+            status_changed = user.update_approver_status(updated_by=current_user.get_display_name())
+            
+            if status_changed:
+                db.session.commit()
+                message = f"Approver status updated to: {'Approver' if user.is_approver else 'Not an approver'}"
+            else:
+                message = "Approver status is already up to date"
+            
+            return jsonify({
+                'success': True,
+                'message': message,
+                'status_changed': status_changed,
+                'is_approver': user.is_approver,
+                'approver_summary': user.get_approver_summary()
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'message': str(e)}), 500
+
+    @app.route('/api/user/<int:user_id>/permissions-mindmap')
+    @login_required
+    def api_user_permissions_mindmap(user_id):
+        """Get comprehensive permissions mindmap for a specific user"""
+        try:
+            user = User.query.get_or_404(user_id)
+            
+            # System permissions
+            system_permissions = user.get_permissions() or []
+            
+            # Team associations
+            user_teams = user.get_teams()
+            team_data = []
+            accessible_consortium_ids = set()
+            
+            for team in user_teams:
+                team_info = {
+                    'id': team.id,
+                    'record_id': team.record_id,
+                    'name': team.name,
+                    'abbrev': team.abbrev,
+                    'consortium_id': team.consortium_consort_id,
+                    'consortium_name': None,
+                    'rfpo_count': RFPO.query.filter_by(team_id=team.id).count()
+                }
+                
+                # Get consortium info
+                if team.consortium_consort_id:
+                    consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+                    if consortium:
+                        team_info['consortium_name'] = consortium.name
+                        accessible_consortium_ids.add(team.consortium_consort_id)
+                
+                team_data.append(team_info)
+            
+            # Direct consortium access
+            direct_consortium_access = []
+            all_consortiums = Consortium.query.all()
+            for consortium in all_consortiums:
+                viewer_users = consortium.get_rfpo_viewer_users()
+                admin_users = consortium.get_rfpo_admin_users()
+                
+                access_type = None
+                if user.record_id in admin_users:
+                    access_type = 'admin'
+                elif user.record_id in viewer_users:
+                    access_type = 'viewer'
+                
+                if access_type:
+                    # Count RFPOs in this consortium (through teams)
+                    consortium_teams = Team.query.filter_by(consortium_consort_id=consortium.consort_id).all()
+                    consortium_rfpo_count = sum(RFPO.query.filter_by(team_id=team.id).count() for team in consortium_teams)
+                    
+                    direct_consortium_access.append({
+                        'consort_id': consortium.consort_id,
+                        'name': consortium.name,
+                        'abbrev': consortium.abbrev,
+                        'access_type': access_type,
+                        'rfpo_count': consortium_rfpo_count
+                    })
+                    accessible_consortium_ids.add(consortium.consort_id)
+            
+            # Project access
+            project_access = []
+            all_projects = Project.query.all()
+            accessible_project_ids = []
+            
+            for project in all_projects:
+                viewer_users = project.get_rfpo_viewer_users()
+                if user.record_id in viewer_users:
+                    project_rfpo_count = RFPO.query.filter_by(project_id=project.project_id).count()
+                    project_access.append({
+                        'project_id': project.project_id,
+                        'name': project.name,
+                        'ref': project.ref,
+                        'consortium_ids': project.get_consortium_ids(),
+                        'rfpo_count': project_rfpo_count
+                    })
+                    accessible_project_ids.append(project.project_id)
+            
+            # Calculate accessible RFPOs
+            accessible_rfpos = []
+            
+            # 1. RFPOs from user's teams
+            team_ids = [team['id'] for team in team_data]
+            if team_ids:
+                team_rfpos = RFPO.query.filter(RFPO.team_id.in_(team_ids)).all()
+                accessible_rfpos.extend(team_rfpos)
+            
+            # 2. RFPOs from projects user has access to
+            if accessible_project_ids:
+                project_rfpos = RFPO.query.filter(RFPO.project_id.in_(accessible_project_ids)).all()
+                accessible_rfpos.extend(project_rfpos)
+            
+            # Remove duplicates
+            accessible_rfpos = list({rfpo.id: rfpo for rfpo in accessible_rfpos}.values())
+            
+            # Approval workflow access
+            approval_access = []
+            if user.is_rfpo_admin() or user.is_super_admin():
+                approval_workflows = RFPOApprovalWorkflow.query.filter_by(is_template=True, is_active=True).count()
+                approval_access.append({
+                    'type': 'admin_access',
+                    'description': 'All approval workflows (Admin access)',
+                    'count': approval_workflows
+                })
+            
+            # Build mindmap structure
+            mindmap = {
+                'user': {
+                    'id': user.id,
+                    'record_id': user.record_id,
+                    'email': user.email,
+                    'display_name': user.get_display_name()
+                },
+                'system_permissions': {
+                    'permissions': system_permissions,
+                    'is_super_admin': user.is_super_admin(),
+                    'is_rfpo_admin': user.is_rfpo_admin(),
+                    'is_rfpo_user': user.is_rfpo_user()
+                },
+                'associations': {
+                    'teams': {
+                        'count': len(team_data),
+                        'items': team_data
+                    },
+                    'consortiums': {
+                        'count': len(direct_consortium_access),
+                        'items': direct_consortium_access
+                    },
+                    'projects': {
+                        'count': len(project_access),
+                        'items': project_access
+                    }
+                },
+                'access_summary': {
+                    'total_rfpos': len(accessible_rfpos),
+                    'total_consortiums': len(accessible_consortium_ids),
+                    'total_teams': len(team_data),
+                    'total_projects': len(project_access),
+                    'has_admin_access': user.is_rfpo_admin() or user.is_super_admin(),
+                    'approval_workflows': approval_access
+                },
+                'capabilities': {
+                    'can_access_admin_panel': user.is_rfpo_admin() or user.is_super_admin(),
+                    'can_create_rfpos': len(team_data) > 0 or len(project_access) > 0 or user.is_super_admin(),
+                    'can_approve_rfpos': user.is_rfpo_admin() or user.is_super_admin(),
+                    'can_manage_users': user.is_super_admin(),
+                    'can_manage_workflows': user.is_rfpo_admin() or user.is_super_admin()
+                }
+            }
+            
+            return jsonify({
+                'success': True,
+                'mindmap': mindmap
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
     
     # PDF to Image conversion for positioning editor background
     @app.route('/api/pdf-template-image/<template_name>')

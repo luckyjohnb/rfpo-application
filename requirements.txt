@@ -9,6 +9,7 @@ flask-migrate==4.0.5
 flask-login==0.6.3
 jinja2>=3.0.0
 requests==2.32.5
+python-dotenv==1.0.0
 
 # PDF Generation
 reportlab>=4.0.0

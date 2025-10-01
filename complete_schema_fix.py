@@ -9,9 +9,10 @@ import os
 import sys
 from werkzeug.security import generate_password_hash
 from datetime import datetime
+from env_config import get_database_url
 
-# Set the DATABASE_URL for Azure PostgreSQL
-os.environ['DATABASE_URL'] = "postgresql://rfpoadmin:RfpoSecure123!@rfpo-db-5kn5bsg47vvac.postgres.database.azure.com:5432/rfpodb?sslmode=require"
+# Load DATABASE_URL from environment variables
+os.environ['DATABASE_URL'] = get_database_url()
 
 # Import Flask and all SQLAlchemy models
 from flask import Flask

@@ -8,9 +8,10 @@ import os
 import sys
 import psycopg2
 import psycopg2.extras
+from env_config import get_database_url
 
-# Database connection string
-DATABASE_URL = "postgresql://rfpoadmin:RfpoSecure123!@rfpo-db-5kn5bsg47vvac.postgres.database.azure.com:5432/rfpodb?sslmode=require"
+# Load DATABASE_URL from environment variables
+DATABASE_URL = get_database_url()
 
 def fix_database_schema():
     """Add missing columns to existing tables"""

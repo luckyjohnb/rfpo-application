@@ -1,29 +1,5 @@
 #!/usr/bin/env python3
 """
-PostgreSQL Database Initialization Script for RFPO Application
-This script initializes the PostgreSQL database with the required schema and admin user.
-"""
-
-import os
-import sys
-import logging
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
-import bcrypt
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-def get_database_url():
-    """Get database URL from environment variable"""
-    database_url = os.environ.get('DATABASE_URL')
-    if not database_url:
-        raise ValueError("DATABASE_URL environment variable is required")
-    return database_url
-
-#!/usr/bin/env python3
-"""
 SQLAlchemy Database Initializer for Azure PostgreSQL
 This script uses SQLAlchemy models to create tables properly
 """
@@ -32,9 +8,10 @@ import os
 import sys
 import bcrypt
 from datetime import datetime
+from env_config import get_database_url
 
-# Set the DATABASE_URL for Azure PostgreSQL
-os.environ['DATABASE_URL'] = "postgresql://rfpoadmin:RfpoSecure123!@rfpo-db-5kn5bsg47vvac.postgres.database.azure.com:5432/rfpodb?sslmode=require"
+# Load DATABASE_URL from environment variables
+os.environ['DATABASE_URL'] = get_database_url()
 
 # Import Flask and SQLAlchemy models
 from flask import Flask

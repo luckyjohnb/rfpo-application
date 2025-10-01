@@ -9,9 +9,10 @@ import psycopg2.extras
 import bcrypt
 import os
 import sys
+from env_config import get_database_url
 
-# Database connection string
-DATABASE_URL = "postgresql://rfpoadmin:RfpoSecure123!@rfpo-db-5kn5bsg47vvac.postgres.database.azure.com:5432/rfpodb?sslmode=require"
+# Load DATABASE_URL from environment variables
+DATABASE_URL = get_database_url()
 
 def create_admin_user():
     """Create the admin user with hashed password"""

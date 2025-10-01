@@ -21,6 +21,10 @@ from team_routes import team_api
 from rfpo_routes import rfpo_api
 from user_routes import user_api
 
+# Import error handling
+from error_handlers import register_error_handlers
+from logging_config import setup_logging
+
 def create_api_app():
     """Create Flask API application"""
     app = Flask(__name__)
@@ -33,6 +37,13 @@ def create_api_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
     print(f"DEBUG: Database path: {db_path}")
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Setup logging
+    logger = setup_logging('api', log_to_file=True)
+    app.logger = logger
+    
+    # Register error handlers
+    register_error_handlers(app, 'api')
     
     # Enable CORS for all origins (configure for production)
     CORS(app, origins="*", allow_headers=["Content-Type", "Authorization"])

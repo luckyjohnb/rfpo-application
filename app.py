@@ -11,12 +11,23 @@ import requests
 from datetime import datetime
 import json
 
+# Import error handling
+from error_handlers import register_error_handlers
+from logging_config import setup_logging
+
 def create_user_app():
     """Create user-facing Flask application"""
     app = Flask(__name__)
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('USER_APP_SECRET_KEY', 'user-app-secret-change-in-production')
+    
+    # Setup logging
+    logger = setup_logging('user_app', log_to_file=True)
+    app.logger = logger
+    
+    # Register error handlers
+    register_error_handlers(app, 'user_app')
     
     # Enable CORS
     CORS(app, origins="*", allow_headers=["Content-Type", "Authorization"])

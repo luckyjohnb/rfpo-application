@@ -19,6 +19,11 @@ from datetime import datetime
 from models import db, User, Consortium, Team, RFPO, RFPOLineItem, UploadedFile, DocumentChunk, Project, Vendor, VendorSite, List, UserTeam, PDFPositioning, RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep, RFPOApprovalInstance, RFPOApprovalAction
 from pdf_generator import RFPOPDFGenerator
 
+# Import error handling
+from error_handlers import register_error_handlers
+from logging_config import setup_logging, log_exception, log_authentication
+from exceptions import AuthenticationException, DatabaseException
+
 def sync_all_users_approver_status(updated_by=None):
     """Sync approver status for all users - useful after workflow changes"""
     try:
@@ -365,6 +370,13 @@ def create_app():
     
     # Initialize extensions
     db.init_app(app)
+    
+    # Setup logging
+    logger = setup_logging('admin', log_to_file=True)
+    app.logger = logger
+    
+    # Register error handlers
+    register_error_handlers(app, 'admin')
     
     # Initialize API Helper (for gradual migration to API)
     api_helper = APIHelper('http://rfpo-api:5002/api')  # Use container name for Docker

@@ -189,6 +189,60 @@ Users have multi-layer permissions:
 - Ensure reportlab and PyPDF2 installed
 - Review positioning coordinates in database
 
+## Error Handling
+
+**Custom exception hierarchy** (exceptions.py):
+All applications use structured exceptions with proper HTTP status codes:
+```python
+from exceptions import (
+    AuthenticationException,  # 401 - Invalid credentials, expired tokens
+    AuthorizationException,   # 403 - Insufficient permissions
+    ValidationException,      # 400 - Invalid input data
+    ResourceNotFoundException, # 404 - RFPO, user, team not found
+    DatabaseException,        # 500 - DB connection, query errors
+    ConfigurationException,   # 500 - Missing/invalid env vars
+    FileProcessingException,  # 400 - Upload failures, invalid format
+    ExternalServiceException, # 503 - Email, external API failures
+    BusinessLogicException    # 422 - Budget exceeded, workflow violations
+)
+
+# Raise with context
+raise ValidationException(
+    "Invalid email format",
+    payload={'field': 'email', 'value': email}
+)
+```
+
+**Structured logging** (logging_config.py):
+```python
+from logging_config import get_logger, log_exception, log_api_request
+
+logger = get_logger('app_name')
+
+# Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+logger.info("User logged in successfully")
+logger.warning("Failed login attempt")
+logger.error("Database connection failed")
+
+# Log exceptions with context
+try:
+    process_rfpo(rfpo_id)
+except Exception as e:
+    log_exception(logger, e, {'rfpo_id': rfpo_id, 'user_id': user.id})
+
+# Log API requests
+log_api_request(logger, 'POST', '/api/rfpo', user_id=user.id, status_code=201)
+```
+
+**Flask error handlers** (error_handlers.py):
+All Flask apps auto-register error handlers:
+```python
+from error_handlers import register_error_handlers
+
+app = Flask(__name__)
+register_error_handlers(app, 'app_name')  # Done! All errors now handled
+```
+
 ## Testing
 
 **Admin login (localhost:5111):**

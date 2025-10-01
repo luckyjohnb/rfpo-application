@@ -184,20 +184,29 @@ For email functionality to work:
 rfpo-application/
 ├── app.py                  # User-facing application (Port 5000)
 ├── custom_admin.py         # Admin panel (Port 5111)
-├── simple_api.py          # API server (Port 5002)
-├── models.py              # Database models
-├── email_service.py       # Email functionality
-├── api/                   # API routes (future expansion)
+├── simple_api.py           # API server (Port 5002)
+├── models.py               # Database models (17 SQLAlchemy models)
+├── env_config.py           # Centralized configuration management
+├── exceptions.py           # Custom exception hierarchy
+├── error_handlers.py       # Flask error handlers
+├── logging_config.py       # Structured logging setup
+├── email_service.py        # Email functionality
+├── pdf_generator.py        # RFPO PDF generation
+├── api/                    # API routes (auth, teams, rfpo, users)
 ├── templates/
-│   ├── admin/            # Admin panel templates
-│   └── app/              # User app templates
-├── static/               # CSS, JS, images
-├── instance/             # Database files
-├── uploads/              # File uploads
-├── Dockerfile.api        # API service container
-├── Dockerfile.admin      # Admin panel container  
-├── Dockerfile.user-app   # User app container
-└── docker-compose.yml    # Container orchestration
+│   ├── admin/              # Admin panel templates
+│   ├── app/                # User app templates
+│   └── error.html          # Error page template
+├── static/                 # CSS, JS, images
+├── instance/               # Database files
+├── uploads/                # File uploads
+├── logs/                   # Application logs (auto-created)
+├── .env                    # Environment variables (DO NOT COMMIT)
+├── .env.example            # Environment variable template
+├── Dockerfile.api          # API service container
+├── Dockerfile.admin        # Admin panel container  
+├── Dockerfile.user-app     # User app container
+└── docker-compose.yml      # Container orchestration
 ```
 
 ### Development Workflow
@@ -219,6 +228,46 @@ rfpo-application/
 2. **Admin Features**: Edit `custom_admin.py` and add templates in `templates/admin/`
 3. **API Endpoints**: Add to `simple_api.py` or create new files in `api/`
 4. **Database Changes**: Edit `models.py` and rebuild containers
+
+### Error Handling & Logging
+
+The application includes comprehensive error handling and structured logging:
+
+**Custom Exceptions** (`exceptions.py`):
+- `AuthenticationException` (401) - Invalid credentials, expired tokens
+- `AuthorizationException` (403) - Insufficient permissions
+- `ValidationException` (400) - Invalid input data
+- `ResourceNotFoundException` (404) - Resources not found
+- `DatabaseException` (500) - Database errors
+- `ConfigurationException` (500) - Config/environment errors
+- `FileProcessingException` (400) - File upload/processing errors
+- `ExternalServiceException` (503) - External API failures
+- `BusinessLogicException` (422) - Business rule violations
+
+**Structured Logging** (`logging_config.py`):
+- Rotating log files in `logs/` directory (10MB max, 5 backups)
+- Configurable log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- Standardized log formats with timestamps and context
+- Helper functions for API requests, database operations, auth events
+
+**Error Handlers** (`error_handlers.py`):
+- Automatic registration in all Flask applications
+- Returns JSON for API requests, HTML for web requests
+- User-friendly error pages with Bootstrap styling
+- Security-conscious (no sensitive data in error responses)
+
+**Viewing Logs:**
+```bash
+# View application logs
+tail -f logs/admin.log      # Admin panel logs
+tail -f logs/user_app.log   # User application logs
+tail -f logs/api.log        # API server logs
+
+# Or use Docker logs
+docker-compose logs -f rfpo-admin
+docker-compose logs -f rfpo-user
+docker-compose logs -f rfpo-api
+```
 
 ### Docker Commands
 

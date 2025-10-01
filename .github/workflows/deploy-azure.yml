@@ -1,0 +1,181 @@
+name: Deploy RFPO to Azure Container Apps
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+
+env:
+  AZURE_SUBSCRIPTION_ID: 'e108977f-44ed-4400-9580-f7a0bc1d3630'
+  AZURE_RESOURCE_GROUP: 'rg-rfpo-e108977f'
+  AZURE_LOCATION: 'East US'
+  ACR_NAME: 'acrrfpoe108977f'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Log in to Azure Container Registry
+      run: |
+        az acr login --name ${{ env.ACR_NAME }}
+
+    - name: Get ACR login server
+      id: acr-login-server
+      run: |
+        ACR_LOGIN_SERVER=$(az acr show --name ${{ env.ACR_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query loginServer --output tsv)
+        echo "acr-login-server=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
+
+    - name: Build and push API image
+      run: |
+        docker build -f Dockerfile.api -t ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-api:${{ github.sha }} -t ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-api:latest .
+        docker push ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-api:${{ github.sha }}
+        docker push ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-api:latest
+
+    - name: Build and push Admin image
+      run: |
+        docker build -f Dockerfile.admin -t ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-admin:${{ github.sha }} -t ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-admin:latest .
+        docker push ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-admin:${{ github.sha }}
+        docker push ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-admin:latest
+
+    - name: Build and push User App image
+      run: |
+        docker build -f Dockerfile.user-app -t ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-user:${{ github.sha }} -t ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-user:latest .
+        docker push ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-user:${{ github.sha }}
+        docker push ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-user:latest
+
+    - name: Install Azure Container Apps extension
+      run: |
+        az extension add --name containerapp --upgrade
+
+    - name: Register providers
+      run: |
+        az provider register --namespace Microsoft.App --wait
+        az provider register --namespace Microsoft.OperationalInsights --wait
+
+    - name: Deploy to Azure Container Apps
+      run: |
+        # Determine environment
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+        elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          ENVIRONMENT="prod"
+        else
+          ENVIRONMENT="dev"
+        fi
+        
+        echo "Deploying to environment: $ENVIRONMENT"
+        
+        # Deploy using Bicep template
+        az deployment group create \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --template-file azure/main.bicep \
+          --parameters environmentType="$ENVIRONMENT" \
+          --name "rfpo-deployment-$(date +%Y%m%d-%H%M%S)"
+
+    - name: Update Container Apps with new images
+      run: |
+        # Update API container app
+        az containerapp update \
+          --name rfpo-api \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --image ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-api:${{ github.sha }}
+
+        # Update Admin container app
+        az containerapp update \
+          --name rfpo-admin \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --image ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-admin:${{ github.sha }}
+
+        # Update User App container app
+        az containerapp update \
+          --name rfpo-user \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --image ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-user:${{ github.sha }}
+
+    - name: Get application URLs
+      id: get-urls
+      run: |
+        # Get the FQDNs of the container apps
+        API_URL="https://$(az containerapp show --name rfpo-api --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn -o tsv)"
+        ADMIN_URL="https://$(az containerapp show --name rfpo-admin --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn -o tsv)"
+        USER_URL="https://$(az containerapp show --name rfpo-user --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn -o tsv)"
+        
+        echo "api-url=$API_URL" >> $GITHUB_OUTPUT
+        echo "admin-url=$ADMIN_URL" >> $GITHUB_OUTPUT
+        echo "user-url=$USER_URL" >> $GITHUB_OUTPUT
+
+    - name: Health check
+      run: |
+        echo "Waiting for applications to be ready..."
+        sleep 60
+        
+        # Check API health
+        curl -f ${{ steps.get-urls.outputs.api-url }}/api/health || echo "API health check failed"
+        
+        # Check Admin panel
+        curl -f ${{ steps.get-urls.outputs.admin-url }}/health || echo "Admin health check failed"
+        
+        # Check User app
+        curl -f ${{ steps.get-urls.outputs.user-url }}/ || echo "User app health check failed"
+
+    - name: Create deployment summary
+      run: |
+        cat >> $GITHUB_STEP_SUMMARY << EOF
+        # 🚀 RFPO Application Deployment Summary
+        
+        ## 📱 Application URLs
+        - **Admin Panel**: [${{ steps.get-urls.outputs.admin-url }}](${{ steps.get-urls.outputs.admin-url }})
+        - **User App**: [${{ steps.get-urls.outputs.user-url }}](${{ steps.get-urls.outputs.user-url }})
+        - **API**: [${{ steps.get-urls.outputs.api-url }}](${{ steps.get-urls.outputs.api-url }})
+        
+        ## 🔐 Default Login
+        - **Email**: admin@rfpo.com
+        - **Password**: admin123
+        
+        ## 🐳 Docker Images
+        - rfpo-api:${{ github.sha }}
+        - rfpo-admin:${{ github.sha }}
+        - rfpo-user:${{ github.sha }}
+        
+        ## 🏗️ Infrastructure
+        - **Resource Group**: ${{ env.AZURE_RESOURCE_GROUP }}
+        - **Container Registry**: ${{ steps.acr-login-server.outputs.acr-login-server }}
+        - **Location**: ${{ env.AZURE_LOCATION }}
+        
+        Deployment completed at: $(date)
+        EOF
+
+  notify-on-failure:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+    - name: Notify on failure
+      run: |
+        echo "Deployment failed! Check the logs above for details."
+        # Add your notification logic here (Slack, Teams, email, etc.)

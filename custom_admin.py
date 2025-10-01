@@ -359,9 +359,8 @@ def create_app():
     app = Flask(__name__)
     
     # Configuration
-    app.config['SECRET_KEY'] = 'rfpo-admin-secret-key-change-in-production'
-    import os
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(os.getcwd(), "instance", "rfpo_admin.db")}'
+    app.config['SECRET_KEY'] = os.environ.get('ADMIN_SECRET_KEY', 'rfpo-admin-secret-key-change-in-production')
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{os.path.join(os.getcwd(), "instance", "rfpo_admin.db")}')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Initialize extensions

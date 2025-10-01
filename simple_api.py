@@ -31,8 +31,8 @@ USER_ROUTES_AVAILABLE = False
 app = Flask(__name__, template_folder='templates')
 
 # Configuration
-app.config['SECRET_KEY'] = 'simple-api-secret'
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.abspath("instance/rfpo_admin.db")}'
+app.config['SECRET_KEY'] = os.environ.get('API_SECRET_KEY', 'simple-api-secret')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{os.path.abspath("instance/rfpo_admin.db")}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize database

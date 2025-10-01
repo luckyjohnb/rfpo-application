@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFPO Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        .credentials { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 RFPO Login System Test</h1>
+        
+        <div class="credentials">
+            <h3>Default Login Credentials:</h3>
+            <p><strong>Email:</strong> admin@rfpo.com</p>
+            <p><strong>Password:</strong> admin123</p>
+        </div>
+        
+        <div class="test-result info">
+            <strong>Instructions:</strong><br>
+            1. Click "Test User App Login" to test the JSON API login<br>
+            2. Click "Open Admin Panel" to test the admin panel login<br>
+            3. Click "Open User App" to test the user application login
+        </div>
+        
+        <div id="results"></div>
+        
+        <button onclick="testUserAppLogin()">Test User App Login (API)</button>
+        <button onclick="window.open('http://localhost:5111', '_blank')">Open Admin Panel</button>
+        <button onclick="window.open('http://localhost:5001', '_blank')">Open User App</button>
+        
+        <hr>
+        
+        <h3>Application URLs:</h3>
+        <ul>
+            <li><a href="http://localhost:5111" target="_blank">Admin Panel (Port 5111)</a></li>
+            <li><a href="http://localhost:5001" target="_blank">User Application (Port 5001)</a></li>
+            <li><a href="http://localhost:5002/api" target="_blank">API Layer (Port 5002)</a></li>
+        </ul>
+    </div>
+
+    <script>
+        function showResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${type}`;
+            resultDiv.innerHTML = message;
+            resultsDiv.appendChild(resultDiv);
+            
+            // Scroll to result
+            resultDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function testUserAppLogin() {
+            showResult('🔄 Testing user app API login...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:5001/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin@rfpo.com',
+                        password: 'admin123',
+                        remember_me: false
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.token) {
+                    showResult(`✅ <strong>User App Login Successful!</strong><br>
+                               User: ${data.user.display_name}<br>
+                               Email: ${data.user.email}<br>
+                               Roles: ${data.user.roles.join(', ')}<br>
+                               Token: ${data.token.substring(0, 50)}...`, 'success');
+                } else {
+                    showResult(`❌ <strong>Login Failed:</strong> ${data.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ <strong>Network Error:</strong> ${error.message}<br>
+                           Make sure the application is running on port 5001`, 'error');
+            }
+        }
+
+        // Test if services are running when page loads
+        window.addEventListener('load', async function() {
+            showResult('🚀 <strong>RFPO Login Test Page Loaded</strong>', 'info');
+            
+            // Test if services are accessible
+            const services = [
+                { name: 'Admin Panel', url: 'http://localhost:5111', port: 5111 },
+                { name: 'User App', url: 'http://localhost:5001', port: 5001 },
+                { name: 'API Layer', url: 'http://localhost:5002/api', port: 5002 }
+            ];
+            
+            for (const service of services) {
+                try {
+                    const response = await fetch(service.url, { method: 'GET', mode: 'no-cors' });
+                    showResult(`✅ ${service.name} is accessible on port ${service.port}`, 'success');
+                } catch (error) {
+                    showResult(`❌ ${service.name} may not be running on port ${service.port}`, 'error');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

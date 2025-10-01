@@ -1,0 +1,311 @@
+# Phase 1 Azure Deployment Guide
+
+This guide explains how to deploy the Phase 1 security and error handling improvements to your Azure Container Apps environment.
+
+## What's Being Deployed
+
+### Phase 1 Activity 1: Environment Configuration
+- ✅ Centralized `env_config.py` for all configuration
+- ✅ Eliminated hardcoded database credentials from 10 scripts
+- ✅ Environment variable validation on startup
+- ✅ Secure secret key management
+
+### Phase 1 Activity 3: Error Handling & Logging
+- ✅ Custom exception hierarchy (9 exception types)
+- ✅ Structured logging with rotation (10MB, 5 backups)
+- ✅ Flask error handlers for all applications
+- ✅ Beautiful error pages for end users
+- ✅ JSON error responses for API requests
+
+## Prerequisites
+
+1. **Azure CLI installed** and logged in:
+   ```bash
+   az --version
+   az login
+   ```
+
+2. **Docker installed** (for building images):
+   ```bash
+   docker --version
+   ```
+
+3. **On correct branch**:
+   ```bash
+   git status  # Should show: feature/phase1-security-improvements
+   ```
+
+## Deployment Steps
+
+### Option 1: Quick Deployment (Recommended)
+
+This rebuilds containers and updates Azure in one step:
+
+```bash
+# Run the deployment script
+./redeploy-phase1.sh
+```
+
+This script will:
+1. ✅ Build Docker images for Linux/AMD64 (Azure platform)
+2. ✅ Push images to Azure Container Registry
+3. ✅ Update all 3 Container Apps with new images
+4. ✅ Display application URLs when complete
+
+**Time:** ~10-15 minutes
+
+### Option 2: Step-by-Step Deployment
+
+If you prefer more control:
+
+#### Step 1: Update Environment Variables
+
+```bash
+# Update all Container Apps with proper environment variables
+./update-azure-env-vars.sh
+```
+
+This sets:
+- `DATABASE_URL` - PostgreSQL connection string
+- `FLASK_SECRET_KEY`, `JWT_SECRET_KEY`, etc. - Secure random secrets (64 chars)
+- `LOG_LEVEL=INFO` - Logging configuration
+- `API_BASE_URL` - Internal API communication
+
+#### Step 2: Build and Push Images
+
+```bash
+# Navigate to project root
+cd /Users/johnbouchard/projects/rfpo-application
+
+# Login to Azure Container Registry
+az acr login --name acrrfpoe108977f
+
+# Get ACR login server
+ACR_SERVER=$(az acr show --name acrrfpoe108977f --resource-group rg-rfpo-e108977f --query loginServer --output tsv)
+
+# Build and push API image
+docker build --platform linux/amd64 -f Dockerfile.api -t $ACR_SERVER/rfpo-api:phase1 -t $ACR_SERVER/rfpo-api:latest .
+docker push $ACR_SERVER/rfpo-api:phase1
+docker push $ACR_SERVER/rfpo-api:latest
+
+# Build and push Admin image
+docker build --platform linux/amd64 -f Dockerfile.admin -t $ACR_SERVER/rfpo-admin:phase1 -t $ACR_SERVER/rfpo-admin:latest .
+docker push $ACR_SERVER/rfpo-admin:phase1
+docker push $ACR_SERVER/rfpo-admin:latest
+
+# Build and push User App image
+docker build --platform linux/amd64 -f Dockerfile.user-app -t $ACR_SERVER/rfpo-user:phase1 -t $ACR_SERVER/rfpo-user:latest .
+docker push $ACR_SERVER/rfpo-user:phase1
+docker push $ACR_SERVER/rfpo-user:latest
+```
+
+#### Step 3: Update Container Apps
+
+```bash
+# Update API
+az containerapp update \
+    --name rfpo-api \
+    --resource-group rg-rfpo-e108977f \
+    --image $ACR_SERVER/rfpo-api:latest
+
+# Update Admin
+az containerapp update \
+    --name rfpo-admin \
+    --resource-group rg-rfpo-e108977f \
+    --image $ACR_SERVER/rfpo-admin:latest
+
+# Update User App
+az containerapp update \
+    --name rfpo-user \
+    --resource-group rg-rfpo-e108977f \
+    --image $ACR_SERVER/rfpo-user:latest
+```
+
+## Verification & Testing
+
+### 1. Check Application URLs
+
+```bash
+# Get all URLs
+az containerapp show --name rfpo-admin --resource-group rg-rfpo-e108977f --query properties.configuration.ingress.fqdn -o tsv
+az containerapp show --name rfpo-user --resource-group rg-rfpo-e108977f --query properties.configuration.ingress.fqdn -o tsv
+az containerapp show --name rfpo-api --resource-group rg-rfpo-e108977f --query properties.configuration.ingress.fqdn -o tsv
+```
+
+### 2. Test Admin Panel
+
+Visit: `https://rfpo-admin-5kn5bsg47vvac.proudbush-cac5d6af.eastus.azurecontainerapps.io`
+
+- Login: `admin@rfpo.com` / `admin123`
+- Should load without errors
+- Check browser console for any JavaScript errors
+
+### 3. Test Error Handling
+
+Visit a non-existent page to test error handling:
+- `https://rfpo-admin-<...>.azurecontainerapps.io/nonexistent`
+- Should see beautiful error page (not generic Azure error)
+
+### 4. View Logs
+
+Check that structured logging is working:
+
+```bash
+# Admin logs
+az containerapp logs show \
+    --name rfpo-admin \
+    --resource-group rg-rfpo-e108977f \
+    --follow
+
+# API logs
+az containerapp logs show \
+    --name rfpo-api \
+    --resource-group rg-rfpo-e108977f \
+    --follow
+
+# User App logs
+az containerapp logs show \
+    --name rfpo-user \
+    --resource-group rg-rfpo-e108977f \
+    --follow
+```
+
+Look for:
+- ✅ "Logging initialized for [app_name] at level INFO"
+- ✅ "Error handlers registered for [app_name]"
+- ✅ Structured log format with timestamps
+- ✅ No errors about missing environment variables
+
+### 5. Test Environment Configuration
+
+Check that environment variables are loading correctly:
+
+```bash
+# Check admin app logs for startup messages
+az containerapp logs show --name rfpo-admin --resource-group rg-rfpo-e108977f --tail 50
+
+# Look for:
+# - "Logging initialized..."
+# - "Error handlers registered..."
+# - No "ConfigurationException" errors
+```
+
+## Troubleshooting
+
+### Issue: "Module not found: dotenv"
+
+**Solution:** The container needs python-dotenv installed. Check Dockerfile:
+
+```dockerfile
+RUN pip install -r requirements.txt
+```
+
+Make sure `requirements.txt` includes `python-dotenv==1.0.0`
+
+### Issue: "Configuration validation failed"
+
+**Solution:** Environment variables not set in Azure. Run:
+
+```bash
+./update-azure-env-vars.sh
+```
+
+### Issue: "Database connection failed"
+
+**Solution:** Check DATABASE_URL environment variable:
+
+```bash
+az containerapp show \
+    --name rfpo-admin \
+    --resource-group rg-rfpo-e108977f \
+    --query properties.template.containers[0].env
+```
+
+### Issue: Images not updating
+
+**Solution:** Container Apps may cache images. Force restart:
+
+```bash
+az containerapp revision restart \
+    --name rfpo-admin \
+    --resource-group rg-rfpo-e108977f
+```
+
+## Rollback Plan
+
+If something goes wrong:
+
+### Option 1: Quick Rollback to Previous Image
+
+```bash
+# List revisions
+az containerapp revision list \
+    --name rfpo-admin \
+    --resource-group rg-rfpo-e108977f \
+    --query "[].name"
+
+# Activate previous revision
+az containerapp revision activate \
+    --name rfpo-admin \
+    --resource-group rg-rfpo-e108977f \
+    --revision <previous-revision-name>
+```
+
+### Option 2: Rollback Git Branch
+
+```bash
+# Switch back to main branch
+git checkout main
+
+# Redeploy from main
+./redeploy-phase1.sh
+```
+
+## Monitoring Post-Deployment
+
+### 1. Azure Portal
+
+1. Go to Azure Portal → Container Apps
+2. Select each app (rfpo-api, rfpo-admin, rfpo-user)
+3. View:
+   - **Metrics**: CPU, Memory, Request count
+   - **Logs**: Application logs with filtering
+   - **Revisions**: Active revision and history
+
+### 2. Application Health
+
+Check health endpoints:
+- API: `https://rfpo-api-<...>.azurecontainerapps.io/api/health`
+- Admin: `https://rfpo-admin-<...>.azurecontainerapps.io/health`
+- User: `https://rfpo-user-<...>.azurecontainerapps.io/health`
+
+All should return JSON with `"status": "healthy"`
+
+## Performance Impact
+
+Expected changes:
+- **Startup time**: +2-3 seconds (environment validation, logger setup)
+- **Memory usage**: +5-10 MB (logging buffers)
+- **Error response time**: Slightly faster (optimized error handlers)
+- **Log file size**: Auto-rotated at 10MB (5 backups = 50MB max per app)
+
+## Next Steps After Deployment
+
+1. **Monitor for 24 hours**: Check logs for any unexpected errors
+2. **Test all major workflows**: Login, RFPO creation, approval workflows
+3. **Review error logs**: Look for any ValidationException or AuthenticationException patterns
+4. **Merge to main**: Once stable, merge `feature/phase1-security-improvements` to `main`
+5. **Enable automated deployments**: GitHub Actions will auto-deploy on push to main
+
+## Questions?
+
+Check:
+- Azure Portal Logs for real-time errors
+- `DEPLOYMENT_SUMMARY.md` for infrastructure details
+- `.github/copilot-instructions.md` for architecture patterns
+
+---
+
+**Deployed by:** Phase 1 Security & Error Handling Improvements  
+**Branch:** feature/phase1-security-improvements  
+**Date:** October 1, 2025

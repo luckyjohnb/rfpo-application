@@ -40,9 +40,15 @@ The RFPO application consists of three containerized services:
 
 2. **Configure environment:**
    ```bash
-   cp env.example .env
-   # Edit .env file with your email/SMTP settings
+   cp .env.example .env
+   # Edit .env file with your configuration:
+   # - DATABASE_URL (PostgreSQL for production, SQLite for local dev)
+   # - FLASK_SECRET_KEY, JWT_SECRET_KEY (generate with: python -c "import secrets; print(secrets.token_hex(32))")
+   # - GMAIL_USER, GMAIL_APP_PASSWORD (for email functionality)
+   # - API_BASE_URL (adjust for your deployment)
    ```
+   
+   **Important:** Never commit the `.env` file to version control! It contains sensitive credentials.
 
 3. **Start all services:**
    ```bash
@@ -109,34 +115,66 @@ The application uses a **single SQLite database** (`instance/rfpo_admin.db`) sha
 
 ## 🔧 Configuration
 
-### Environment Variables (.env file)
+### Environment Variables Setup
 
-```bash
-# JWT Secret Key
-JWT_SECRET_KEY=your-jwt-secret-key
+All configuration is managed via a `.env` file. **Never commit this file to version control!**
 
-# Email Configuration (Gmail example)
-MAIL_SERVER=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USE_TLS=True
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
+1. **Create .env file from template:**
+   ```bash
+   cp .env.example .env
+   ```
 
-# Application URLs
-APP_URL=http://localhost:5000
-SUPPORT_EMAIL=support@yourcompany.com
+2. **Edit .env with your configuration:**
 
-# Database (default SQLite)
-DATABASE_URL=sqlite:///instance/rfpo_admin.db
-```
+   ```bash
+   # Database Configuration
+   # For local development (SQLite):
+   DATABASE_URL=sqlite:///instance/rfpo_admin.db
+   # For production (PostgreSQL on Azure):
+   DATABASE_URL=postgresql://username:password@server:5432/database?sslmode=require
 
-### Email Setup
+   # Application Secrets (MUST CHANGE FOR PRODUCTION!)
+   # Generate secure keys with: python -c "import secrets; print(secrets.token_hex(32))"
+   FLASK_SECRET_KEY=your-64-char-hex-string-here-change-in-production
+   JWT_SECRET_KEY=your-64-char-hex-string-here-change-in-production
+   API_SECRET_KEY=your-64-char-hex-string-here-change-in-production
+   USER_APP_SECRET_KEY=your-64-char-hex-string-here-change-in-production
+   ADMIN_SECRET_KEY=your-64-char-hex-string-here-change-in-production
 
-For email functionality to work, configure SMTP settings in your `.env` file:
+   # API Configuration
+   API_BASE_URL=http://localhost:5002
 
-1. **Gmail**: Use App Passwords (not your regular password)
-2. **Outlook/Office365**: Use your account credentials
-3. **Custom SMTP**: Configure your mail server details
+   # Email Configuration (Gmail example)
+   GMAIL_USER=your-email@gmail.com
+   GMAIL_APP_PASSWORD=your-gmail-app-password
+
+   # Security Settings
+   SESSION_COOKIE_SECURE=false  # Set to true for HTTPS
+   SESSION_COOKIE_HTTPONLY=true
+   SESSION_COOKIE_SAMESITE=Lax
+
+   # Logging
+   LOG_LEVEL=INFO
+   LOG_FILE=logs/rfpo.log
+   ```
+
+3. **Validate configuration:**
+   ```bash
+   python -c "from env_config import validate_configuration; validate_configuration(); print('✅ Configuration valid')"
+   ```
+
+### Email Setup (Gmail)
+
+For email functionality to work:
+
+1. **Enable 2-Factor Authentication** on your Gmail account
+2. **Generate App Password**: 
+   - Go to Google Account Settings → Security → 2-Step Verification → App passwords
+   - Select "Mail" and your device
+   - Copy the 16-character password
+3. **Update .env file** with `GMAIL_USER` and `GMAIL_APP_PASSWORD`
+
+**Security Note:** Never use your regular Gmail password. Always use App Passwords.
 
 ## 🛠️ Development
 

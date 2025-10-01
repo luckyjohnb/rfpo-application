@@ -32,13 +32,31 @@ from models import (
 
 **CRITICAL:** When initializing databases (especially Azure PostgreSQL), use `sqlalchemy_db_init.py`:
 - Imports all 17 models (required for table creation)
-- Creates admin user with bcrypt hashed password
-- Handles both SQLite and PostgreSQL via `DATABASE_URL` env var
+- Creates admin user with werkzeug hashed password (NOT bcrypt!)
+- Handles both SQLite and PostgreSQL via `DATABASE_URL` env var from `.env` file
+- **NEVER hardcode connection strings** - use `env_config.py` centralized configuration
 - Run with: `python sqlalchemy_db_init.py`
 
-**Azure PostgreSQL connection string format:**
+**Environment Configuration:**
+All configuration now managed via `.env` file and `env_config.py`:
+```python
+from env_config import get_database_url, get_secret_key, Config
+
+# Get database URL (validates PostgreSQL/SQLite format)
+db_url = get_database_url()
+
+# Get validated secret key (ensures 32+ chars, not default value)
+secret = get_secret_key('FLASK_SECRET_KEY')
+
+# Or use Config singleton for all settings
+config = Config()
+db_url = config.DATABASE_URL
+api_url = config.API_BASE_URL
 ```
-postgresql://rfpoadmin:RfpoSecure123!@rfpo-db-{unique}.postgres.database.azure.com:5432/rfpodb?sslmode=require
+
+**Azure PostgreSQL connection string format (in .env file):**
+```
+DATABASE_URL=postgresql://rfpoadmin:PASSWORD@rfpo-db-{unique}.postgres.database.azure.com:5432/rfpodb?sslmode=require
 ```
 
 ## Application Structure
@@ -144,13 +162,20 @@ Users have multi-layer permissions:
 
 ## Troubleshooting
 
+**Environment configuration:**
+- Create `.env` file from `.env.example` template
+- All scripts now use `env_config.py` - no hardcoded credentials
+- Use `validate_configuration()` to check all required values are set
+- Secret keys must be 32+ characters and not default values
+- Database URL must start with `postgresql://` or `sqlite://`
+
 **Database issues:**
-- Always check `DATABASE_URL` env var
+- Always use `get_database_url()` from `env_config` instead of hardcoding
 - Verify all 17 models imported in init scripts
 - For Azure: ensure `sslmode=require` in connection string
 - Check `docker-compose logs` for SQLAlchemy errors
 - **Schema mismatches**: `db.create_all()` won't add columns to existing tables - use ALTER TABLE or drop/recreate
-- **Password hashing**: MUST use `werkzeug.security.generate_password_hash` (NOT bcrypt) to match login verification
+- **Password hashing**: MUST use `werkzeug.security.generate_password_hash` (NOT bcrypt!) to match login verification
 
 **API connection failures:**
 - Verify `API_BASE_URL` env var in User App

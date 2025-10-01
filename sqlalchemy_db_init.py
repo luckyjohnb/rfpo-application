@@ -6,7 +6,7 @@ This script uses SQLAlchemy models to create tables properly
 
 import os
 import sys
-import bcrypt
+from werkzeug.security import generate_password_hash
 from datetime import datetime
 
 # Set the DATABASE_URL for Azure PostgreSQL
@@ -32,18 +32,23 @@ def create_app():
     return app
 
 
-def create_admin_user(app):
+def create_admin_user(app, force_recreate=False):
     """Create the admin user with proper SQLAlchemy model"""
     with app.app_context():
         # Check if admin user already exists
         existing_admin = User.query.filter_by(email='admin@rfpo.com').first()
         if existing_admin:
-            print("👤 Admin user already exists")
-            return existing_admin
+            if force_recreate:
+                print("🔄 Deleting existing admin user to recreate with correct password hash...")
+                db.session.delete(existing_admin)
+                db.session.commit()
+            else:
+                print("👤 Admin user already exists")
+                return existing_admin
         
-        # Hash the password
+        # Hash the password using Werkzeug (same as custom_admin.py)
         password = "admin123"
-        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        password_hash = generate_password_hash(password)
         
         # Create admin user
         admin_user = User(
@@ -71,9 +76,11 @@ def test_database_connection(app):
     """Test database connection before initialization"""
     try:
         with app.app_context():
-            # Test connection by running a simple query
-            result = db.engine.execute('SELECT 1')
-            result.close()
+            # Test connection by running a simple query (SQLAlchemy 2.x compatible)
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                result = conn.execute(text('SELECT 1'))
+                result.close()
             print("✅ Database connection successful")
             return True
     except Exception as e:
@@ -254,8 +261,8 @@ def initialize_database():
                 print("❌ Table verification failed")
                 return False
             
-            # Create admin user
-            create_admin_user(app)
+            # Create admin user (force recreate to fix password hash)
+            create_admin_user(app, force_recreate=True)
             
             # Initialize reference data
             initialize_reference_data(app)

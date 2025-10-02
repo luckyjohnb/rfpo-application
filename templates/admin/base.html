@@ -53,14 +53,14 @@
                         <h4 class="text-white">🔧 RFPO Admin</h4>
                         <small class="text-light">USCAR</small>
                     </div>
-                    
+
                     <ul class="nav flex-column">
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('dashboard') }}">
                                 <i class="fas fa-tachometer-alt"></i> Dashboard
                             </a>
                         </li>
-                        
+
                         <li class="nav-item mt-3">
                             <h6 class="sidebar-heading text-muted px-3">Core</h6>
                         </li>
@@ -79,7 +79,7 @@
                                 <i class="fas fa-file-contract"></i> RFPOs
                             </a>
                         </li>
-                        
+
                         <li class="nav-item mt-3">
                             <h6 class="sidebar-heading text-muted px-3">Management</h6>
                         </li>
@@ -103,7 +103,7 @@
                                 <i class="fas fa-cog"></i> Configuration Lists
                             </a>
                         </li>
-                        
+
                         <li class="nav-item mt-3">
                             <h6 class="sidebar-heading text-muted px-3">Approval System</h6>
                         </li>
@@ -117,7 +117,7 @@
                                 <i class="fas fa-clipboard-list"></i> Approval Instances
                             </a>
                         </li>
-                        
+
                         <li class="nav-item mt-3">
                             <h6 class="sidebar-heading text-muted px-3">Tools</h6>
                         </li>
@@ -126,14 +126,14 @@
                                 <i class="fas fa-file-pdf"></i> PDF Positioning
                             </a>
                         </li>
-                        
+
                         <li class="nav-item mt-4">
                             <a class="nav-link text-warning" href="{{ url_for('logout') }}">
                                 <i class="fas fa-sign-out-alt"></i> Logout
                             </a>
                         </li>
                     </ul>
-                    
+
                     <div class="mt-4 px-3">
                         <small class="text-light">
                             Logged in as:<br>
@@ -142,7 +142,7 @@
                     </div>
                 </div>
             </nav>
-            
+
             <!-- Main content -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
                 <div class="pt-3">
@@ -156,13 +156,13 @@
                             {% endfor %}
                         {% endif %}
                     {% endwith %}
-                    
+
                     {% block content %}{% endblock %}
                 </div>
             </main>
         </div>
     </div>
-    
+
     <footer class="text-center text-muted py-2">
         <small>RFPO Admin • Build {{ APP_BUILD_SHA_SHORT or 'dev' }}</small>
     </footer>

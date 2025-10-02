@@ -386,6 +386,16 @@ def create_app():
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'login'
+
+    # Expose build/version info to all admin templates
+    @app.context_processor
+    def inject_build_info():
+        build_sha = os.environ.get('APP_BUILD_SHA', '')
+        short_sha = build_sha[:7] if build_sha else ''
+        return {
+            'APP_BUILD_SHA': build_sha,
+            'APP_BUILD_SHA_SHORT': short_sha,
+        }
     
     @login_manager.user_loader
     def load_user(user_id):

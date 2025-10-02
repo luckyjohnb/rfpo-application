@@ -163,6 +163,10 @@
         </div>
     </div>
     
+    <footer class="text-center text-muted py-2">
+        <small>RFPO Admin • Build {{ APP_BUILD_SHA_SHORT or 'dev' }}</small>
+    </footer>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>

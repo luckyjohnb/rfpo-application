@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Quick redeploy script for Phase 1 improvements
-# This rebuilds containers and updates Azure Container Apps
+# Builds images on Azure Container Registry (server-side) from GitHub main
+# and updates Azure Container Apps to the new images
 
 set -e
 
@@ -17,10 +18,12 @@ SUBSCRIPTION_ID="e108977f-44ed-4400-9580-f7a0bc1d3630"
 RESOURCE_GROUP="rg-rfpo-e108977f"
 ACR_NAME="acrrfpoe108977f"
 LOCATION="eastus"
+REPO_URL="https://github.com/luckyjohnb/rfpo-application.git"
+GIT_REF="${GIT_REF:-main}"
 
 echo -e "${BLUE}🚀 RFPO Phase 1 Improvements - Quick Redeploy${NC}"
 echo "=============================================="
-echo "This will rebuild and redeploy all containers with:"
+echo "This will rebuild and redeploy all containers with ACR builds from GitHub ($GIT_REF):"
 echo "  ✅ Environment variable management"
 echo "  ✅ Comprehensive error handling"
 echo "  ✅ Structured logging"
@@ -44,40 +47,28 @@ fi
 echo -e "${YELLOW}📋 Setting subscription...${NC}"
 az account set --subscription "$SUBSCRIPTION_ID"
 
-# Get ACR login server
-echo -e "${YELLOW}🔍 Getting ACR details...${NC}"
-ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer --output tsv)
-echo -e "${GREEN}✅ ACR Server: $ACR_LOGIN_SERVER${NC}"
-
-# Login to ACR
-echo -e "${YELLOW}🔑 Logging into ACR...${NC}"
-az acr login --name "$ACR_NAME"
-
-# Build and push images with linux/amd64 platform
 echo ""
-echo -e "${BLUE}🏗️  Building Docker images for Linux (Azure)...${NC}"
+echo -e "${BLUE}🏗️  Building images in ACR from GitHub ($GIT_REF)...${NC}"
 echo "=============================================="
 
-# Build API image
-echo -e "${YELLOW}Building RFPO API...${NC}"
-docker build --platform linux/amd64 -f Dockerfile.api -t "$ACR_LOGIN_SERVER/rfpo-api:phase1" -t "$ACR_LOGIN_SERVER/rfpo-api:latest" .
-docker push "$ACR_LOGIN_SERVER/rfpo-api:phase1"
-docker push "$ACR_LOGIN_SERVER/rfpo-api:latest"
-echo -e "${GREEN}✅ API image pushed${NC}"
+# Helper: ACR build function
+acr_build() {
+    local image="$1"; shift
+    local dockerfile="$1"; shift
+    echo -e "${YELLOW}Building ${image}...${NC}"
+    az acr build \
+        --registry "$ACR_NAME" \
+        --image "${image}:latest" \
+        --file "$dockerfile" \
+        --platform linux/amd64 \
+        "${REPO_URL}#${GIT_REF}:."
+    echo -e "${GREEN}✅ ${image} build complete${NC}"
+}
 
-# Build Admin image
-echo -e "${YELLOW}Building RFPO Admin...${NC}"
-docker build --platform linux/amd64 -f Dockerfile.admin -t "$ACR_LOGIN_SERVER/rfpo-admin:phase1" -t "$ACR_LOGIN_SERVER/rfpo-admin:latest" .
-docker push "$ACR_LOGIN_SERVER/rfpo-admin:phase1"
-docker push "$ACR_LOGIN_SERVER/rfpo-admin:latest"
-echo -e "${GREEN}✅ Admin image pushed${NC}"
-
-# Build User App image
-echo -e "${YELLOW}Building RFPO User App...${NC}"
-docker build --platform linux/amd64 -f Dockerfile.user-app -t "$ACR_LOGIN_SERVER/rfpo-user:phase1" -t "$ACR_LOGIN_SERVER/rfpo-user:latest" .
-docker push "$ACR_LOGIN_SERVER/rfpo-user:phase1"
-docker push "$ACR_LOGIN_SERVER/rfpo-user:latest"
-echo -e "${GREEN}✅ User App image pushed${NC}"
+# API, Admin, User builds
+acr_build rfpo-api Dockerfile.api
+acr_build rfpo-admin Dockerfile.admin
+acr_build rfpo-user Dockerfile.user-app
 
 # Restart Container Apps to pull new images
 echo ""
@@ -94,12 +85,15 @@ fi
 
 echo -e "${GREEN}✅ Environment: $ENV_NAME${NC}"
 
+ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer --output tsv)
+
 # Update API Container App
 echo -e "${YELLOW}Updating rfpo-api container app...${NC}"
 az containerapp update \
     --name rfpo-api \
     --resource-group "$RESOURCE_GROUP" \
     --image "$ACR_LOGIN_SERVER/rfpo-api:latest" \
+    --revision-suffix "git-${GIT_REF}-$(date +%Y%m%d%H%M%S)" \
     --output none
 
 echo -e "${GREEN}✅ rfpo-api updated${NC}"
@@ -110,6 +104,7 @@ az containerapp update \
     --name rfpo-admin \
     --resource-group "$RESOURCE_GROUP" \
     --image "$ACR_LOGIN_SERVER/rfpo-admin:latest" \
+    --revision-suffix "git-${GIT_REF}-$(date +%Y%m%d%H%M%S)" \
     --output none
 
 echo -e "${GREEN}✅ rfpo-admin updated${NC}"
@@ -120,6 +115,7 @@ az containerapp update \
     --name rfpo-user \
     --resource-group "$RESOURCE_GROUP" \
     --image "$ACR_LOGIN_SERVER/rfpo-user:latest" \
+    --revision-suffix "git-${GIT_REF}-$(date +%Y%m%d%H%M%S)" \
     --output none
 
 echo -e "${GREEN}✅ rfpo-user updated${NC}"

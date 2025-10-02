@@ -1,3 +1,63 @@
+# ----- OS / Editor -----
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.vscode/
+.idea/
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+coverage.xml
+htmlcov/
+
+# ----- Environments / Secrets -----
+.env
+.env.*
+!env.example
+*.env.local
+*.secret
+
+# ----- Build / Dist -----
+dist/
+build/
+*.egg-info/
+
+# ----- Docker / Compose -----
+docker-compose.override.yml
+
+# ----- Local Databases / Instances -----
+instance/*.db
+instance/*.sqlite
+instance/*.sqlite3
+
+# ----- Uploads (keep folder only) -----
+uploads/*
+!uploads/.gitkeep
+
+# ----- Logs & Artifacts -----
+logs/
+*.log
+deployment-log.txt
+DEPLOYMENT_TEST_RESULTS.md
+cookies*.txt
+
+# ----- Cache / Temp -----
+*.cache
+tmp/
+temp/
+.benchmarks/
+
+# ----- Azure / CI extras (local) -----
+azure/*.local.env
+*.azcli
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

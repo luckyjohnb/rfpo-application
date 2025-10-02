@@ -7,6 +7,47 @@
     <h1 class="h2">📊 Dashboard</h1>
 </div>
 
+<!-- New Project Confirm Modal -->
+<div class="modal fade" id="newProjectConfirmModal" tabindex="-1" aria-labelledby="newProjectConfirmLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newProjectConfirmLabel">Create New Project</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to create a new project? You can edit all details after creation.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="{{ url_for('project_new') }}" class="btn btn-dark">Yes, create project</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Initialize Bootstrap tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+
+        // Wire up New Project button to open confirmation modal
+        const newProjectBtn = document.getElementById('btnNewProject');
+        if (newProjectBtn) {
+            newProjectBtn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('newProjectConfirmModal'));
+                modal.show();
+            });
+        }
+    });
+</script>
+{% endblock %}
+
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-xl-3 col-md-6 mb-4">
@@ -161,9 +202,9 @@
                         </a>
                     </div>
                     <div class="col-md-3 mb-2">
-                        <a href="{{ url_for('project_new') }}" class="btn btn-dark w-100">
+                        <button type="button" class="btn btn-dark w-100" data-bs-toggle="tooltip" title="Create a new project" id="btnNewProject">
                             <i class="fas fa-plus"></i> New Project
-                        </a>
+                        </button>
                     </div>
                     <div class="col-md-3 mb-2">
                         <a href="{{ url_for('rfpo_new') }}" class="btn btn-info w-100">
@@ -177,6 +218,11 @@
                     </div>
                 </div>
                 <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('projects') }}" class="btn btn-outline-dark w-100" data-bs-toggle="tooltip" title="View all projects">
+                            <i class="fas fa-project-diagram"></i> View Projects
+                        </a>
+                    </div>
                     <div class="col-md-3 mb-2">
                         <a href="{{ url_for('approval_workflow_new_form') }}" class="btn btn-secondary w-100">
                             <i class="fas fa-route"></i> New Workflow

@@ -40,9 +40,15 @@ The RFPO application consists of three containerized services:
 
 2. **Configure environment:**
    ```bash
-   cp env.example .env
-   # Edit .env file with your email/SMTP settings
+   cp .env.example .env
+   # Edit .env file with your configuration:
+   # - DATABASE_URL (PostgreSQL for production, SQLite for local dev)
+   # - FLASK_SECRET_KEY, JWT_SECRET_KEY (generate with: python -c "import secrets; print(secrets.token_hex(32))")
+   # - GMAIL_USER, GMAIL_APP_PASSWORD (for email functionality)
+   # - API_BASE_URL (adjust for your deployment)
    ```
+   
+   **Important:** Never commit the `.env` file to version control! It contains sensitive credentials.
 
 3. **Start all services:**
    ```bash
@@ -109,34 +115,66 @@ The application uses a **single SQLite database** (`instance/rfpo_admin.db`) sha
 
 ## 🔧 Configuration
 
-### Environment Variables (.env file)
+### Environment Variables Setup
 
-```bash
-# JWT Secret Key
-JWT_SECRET_KEY=your-jwt-secret-key
+All configuration is managed via a `.env` file. **Never commit this file to version control!**
 
-# Email Configuration (Gmail example)
-MAIL_SERVER=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USE_TLS=True
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
+1. **Create .env file from template:**
+   ```bash
+   cp .env.example .env
+   ```
 
-# Application URLs
-APP_URL=http://localhost:5000
-SUPPORT_EMAIL=support@yourcompany.com
+2. **Edit .env with your configuration:**
 
-# Database (default SQLite)
-DATABASE_URL=sqlite:///instance/rfpo_admin.db
-```
+   ```bash
+   # Database Configuration
+   # For local development (SQLite):
+   DATABASE_URL=sqlite:///instance/rfpo_admin.db
+   # For production (PostgreSQL on Azure):
+   DATABASE_URL=postgresql://username:password@server:5432/database?sslmode=require
 
-### Email Setup
+   # Application Secrets (MUST CHANGE FOR PRODUCTION!)
+   # Generate secure keys with: python -c "import secrets; print(secrets.token_hex(32))"
+   FLASK_SECRET_KEY=your-64-char-hex-string-here-change-in-production
+   JWT_SECRET_KEY=your-64-char-hex-string-here-change-in-production
+   API_SECRET_KEY=your-64-char-hex-string-here-change-in-production
+   USER_APP_SECRET_KEY=your-64-char-hex-string-here-change-in-production
+   ADMIN_SECRET_KEY=your-64-char-hex-string-here-change-in-production
 
-For email functionality to work, configure SMTP settings in your `.env` file:
+   # API Configuration
+   API_BASE_URL=http://localhost:5002
 
-1. **Gmail**: Use App Passwords (not your regular password)
-2. **Outlook/Office365**: Use your account credentials
-3. **Custom SMTP**: Configure your mail server details
+   # Email Configuration (Gmail example)
+   GMAIL_USER=your-email@gmail.com
+   GMAIL_APP_PASSWORD=your-gmail-app-password
+
+   # Security Settings
+   SESSION_COOKIE_SECURE=false  # Set to true for HTTPS
+   SESSION_COOKIE_HTTPONLY=true
+   SESSION_COOKIE_SAMESITE=Lax
+
+   # Logging
+   LOG_LEVEL=INFO
+   LOG_FILE=logs/rfpo.log
+   ```
+
+3. **Validate configuration:**
+   ```bash
+   python -c "from env_config import validate_configuration; validate_configuration(); print('✅ Configuration valid')"
+   ```
+
+### Email Setup (Gmail)
+
+For email functionality to work:
+
+1. **Enable 2-Factor Authentication** on your Gmail account
+2. **Generate App Password**: 
+   - Go to Google Account Settings → Security → 2-Step Verification → App passwords
+   - Select "Mail" and your device
+   - Copy the 16-character password
+3. **Update .env file** with `GMAIL_USER` and `GMAIL_APP_PASSWORD`
+
+**Security Note:** Never use your regular Gmail password. Always use App Passwords.
 
 ## 🛠️ Development
 
@@ -146,20 +184,29 @@ For email functionality to work, configure SMTP settings in your `.env` file:
 rfpo-application/
 ├── app.py                  # User-facing application (Port 5000)
 ├── custom_admin.py         # Admin panel (Port 5111)
-├── simple_api.py          # API server (Port 5002)
-├── models.py              # Database models
-├── email_service.py       # Email functionality
-├── api/                   # API routes (future expansion)
+├── simple_api.py           # API server (Port 5002)
+├── models.py               # Database models (17 SQLAlchemy models)
+├── env_config.py           # Centralized configuration management
+├── exceptions.py           # Custom exception hierarchy
+├── error_handlers.py       # Flask error handlers
+├── logging_config.py       # Structured logging setup
+├── email_service.py        # Email functionality
+├── pdf_generator.py        # RFPO PDF generation
+├── api/                    # API routes (auth, teams, rfpo, users)
 ├── templates/
-│   ├── admin/            # Admin panel templates
-│   └── app/              # User app templates
-├── static/               # CSS, JS, images
-├── instance/             # Database files
-├── uploads/              # File uploads
-├── Dockerfile.api        # API service container
-├── Dockerfile.admin      # Admin panel container  
-├── Dockerfile.user-app   # User app container
-└── docker-compose.yml    # Container orchestration
+│   ├── admin/              # Admin panel templates
+│   ├── app/                # User app templates
+│   └── error.html          # Error page template
+├── static/                 # CSS, JS, images
+├── instance/               # Database files
+├── uploads/                # File uploads
+├── logs/                   # Application logs (auto-created)
+├── .env                    # Environment variables (DO NOT COMMIT)
+├── .env.example            # Environment variable template
+├── Dockerfile.api          # API service container
+├── Dockerfile.admin        # Admin panel container  
+├── Dockerfile.user-app     # User app container
+└── docker-compose.yml      # Container orchestration
 ```
 
 ### Development Workflow
@@ -181,6 +228,46 @@ rfpo-application/
 2. **Admin Features**: Edit `custom_admin.py` and add templates in `templates/admin/`
 3. **API Endpoints**: Add to `simple_api.py` or create new files in `api/`
 4. **Database Changes**: Edit `models.py` and rebuild containers
+
+### Error Handling & Logging
+
+The application includes comprehensive error handling and structured logging:
+
+**Custom Exceptions** (`exceptions.py`):
+- `AuthenticationException` (401) - Invalid credentials, expired tokens
+- `AuthorizationException` (403) - Insufficient permissions
+- `ValidationException` (400) - Invalid input data
+- `ResourceNotFoundException` (404) - Resources not found
+- `DatabaseException` (500) - Database errors
+- `ConfigurationException` (500) - Config/environment errors
+- `FileProcessingException` (400) - File upload/processing errors
+- `ExternalServiceException` (503) - External API failures
+- `BusinessLogicException` (422) - Business rule violations
+
+**Structured Logging** (`logging_config.py`):
+- Rotating log files in `logs/` directory (10MB max, 5 backups)
+- Configurable log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- Standardized log formats with timestamps and context
+- Helper functions for API requests, database operations, auth events
+
+**Error Handlers** (`error_handlers.py`):
+- Automatic registration in all Flask applications
+- Returns JSON for API requests, HTML for web requests
+- User-friendly error pages with Bootstrap styling
+- Security-conscious (no sensitive data in error responses)
+
+**Viewing Logs:**
+```bash
+# View application logs
+tail -f logs/admin.log      # Admin panel logs
+tail -f logs/user_app.log   # User application logs
+tail -f logs/api.log        # API server logs
+
+# Or use Docker logs
+docker-compose logs -f rfpo-admin
+docker-compose logs -f rfpo-user
+docker-compose logs -f rfpo-api
+```
 
 ### Docker Commands
 

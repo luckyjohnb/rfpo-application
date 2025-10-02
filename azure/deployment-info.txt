@@ -1,0 +1,86 @@
+🎉 RFPO Application - Azure Deployment Complete!
+======================================================
+
+## Deployment Information
+
+**Subscription ID:** e108977f-44ed-4400-9580-f7a0bc1d3630
+**Resource Group:** rg-rfpo-e108977f
+**Location:** East US
+**Environment:** Development
+
+## Application URLs
+
+### Admin Panel
+- **URL:** https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io
+- **Purpose:** Administrative interface for managing RFPOs, users, and teams
+- **Default Login:** admin@rfpo.com / admin123
+
+### User Application
+- **URL:** https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io
+- **Purpose:** Main user interface for creating and managing RFPOs
+
+### API Endpoint
+- **URL:** https://rfpo-api.livelyforest-d06a98a0.eastus.azurecontainerapps.io
+- **Purpose:** RESTful API for programmatic access
+
+## Azure Resources Created
+
+1. **Container Registry:** acrrfpoe108977f.azurecr.io
+2. **Container Apps Environment:** Container Apps managed environment
+3. **Storage Account:** For persistent data storage
+4. **File Share:** For database and file storage
+5. **Container Apps:** 3 applications (API, Admin, User)
+
+## Next Steps
+
+1. **Access the Admin Panel:**
+   - Visit: https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io
+   - Login with: admin@rfpo.com / admin123
+   - Create users and configure teams
+
+2. **Test the User Application:**
+   - Visit: https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io
+   - Create and manage RFPOs
+
+3. **Monitor and Scale:**
+   - Use Azure Portal to monitor application performance
+   - Scale containers as needed based on usage
+
+## Management Commands
+
+```bash
+# View application logs
+az containerapp logs show --name rfpo-admin --resource-group rg-rfpo-e108977f --follow
+
+# Scale an application
+az containerapp update --name rfpo-admin --resource-group rg-rfpo-e108977f --min-replicas 2
+
+# Update application (after pushing new images)
+az containerapp update --name rfpo-admin --resource-group rg-rfpo-e108977f --image acrrfpoe108977f.azurecr.io/rfpo-admin:latest
+```
+
+## Cost Optimization
+
+- **Current Configuration:** Development tier (Basic SKU)
+- **Estimated Monthly Cost:** $50-100 USD
+- **Cost Optimization Tips:**
+  - Scale down replicas during off-hours
+  - Use Azure Cost Management for monitoring
+  - Consider moving to consumption-based pricing for low usage
+
+## Security Notes
+
+- All applications are deployed with HTTPS enabled
+- Container Registry has admin access enabled for initial deployment
+- Consider implementing Azure AD authentication for production use
+- Database is stored in Azure File Share with encryption at rest
+
+## Support
+
+For issues or questions:
+1. Check application logs using the Azure CLI commands above
+2. Review Azure Portal for resource health
+3. Monitor container restart events and error messages
+
+**Deployment Date:** $(date)
+**Deployment Status:** ✅ SUCCESSFUL

@@ -43,14 +43,14 @@ services:
       timeout: 5s
       retries: 3
 
-  # RFPO User App (Port 5000)
+  # RFPO User App (Port 5001)
   rfpo-user-app:
     container_name: rfpo-user
     build:
       context: .
       dockerfile: Dockerfile.user-app
     ports:
-      - "5000:5000"
+      - "5001:5000"
     env_file:
       - .env
     environment:

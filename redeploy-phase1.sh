@@ -64,8 +64,9 @@ if ! az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" &> /dev/n
 fi
 
 # Enforce canonical tag if present
-CANONICAL=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query "tags.canonical" -o tsv || true)
-if [ -n "$CANONICAL" ] && [ "${CANONICAL^^}" != "TRUE" ]; then
+CANONICAL=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query "tags.canonical" -o tsv 2>/dev/null || true)
+CANONICAL_UPPER=$(printf '%s' "$CANONICAL" | tr '[:lower:]' '[:upper:]')
+if [ -n "$CANONICAL" ] && [ "$CANONICAL_UPPER" != "TRUE" ]; then
     echo -e "${RED}❌ ACR '$ACR_NAME' is present but not tagged canonical=true (found: '$CANONICAL').${NC}"
     echo -e "${YELLOW}Resolve:${NC} Tag it with: az acr update --name $ACR_NAME --resource-group $RESOURCE_GROUP --set tags.canonical=true"
     exit 1

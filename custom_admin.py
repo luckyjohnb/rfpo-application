@@ -950,6 +950,8 @@ def create_app():
             }
         )
 
+    # Note: Removed temporary /version diagnostics route after verification
+
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":

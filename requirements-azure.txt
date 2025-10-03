@@ -40,3 +40,6 @@ nltk==3.8.1
 
 # PDF processing
 pymupdf==1.23.14
+
+# Env loader
+python-dotenv==1.0.1

@@ -19,6 +19,10 @@ COPY config.py .
 COPY pdf_generator.py .
 COPY email_service.py .
 COPY init_postgres_db.py .
+COPY error_handlers.py .
+COPY exceptions.py .
+COPY logging_config.py .
+COPY env_config.py .
 COPY templates/ ./templates/
 COPY static/ ./static/
 

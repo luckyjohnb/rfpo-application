@@ -26,6 +26,25 @@
     </div>
 </div>
 
+<!-- New Vendor Confirm Modal -->
+<div class="modal fade" id="newVendorConfirmModal" tabindex="-1" aria-labelledby="newVendorConfirmLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newVendorConfirmLabel">Create New Vendor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to create a new vendor? You can edit all details after creation.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="{{ url_for('vendor_new') }}" class="btn btn-dark">Yes, create vendor</a>
+            </div>
+        </div>
+    </div>
+    </div>
+
 {% block scripts %}
 {{ super() }}
 <script>
@@ -41,6 +60,15 @@
         if (newProjectBtn) {
             newProjectBtn.addEventListener('click', function() {
                 const modal = new bootstrap.Modal(document.getElementById('newProjectConfirmModal'));
+                modal.show();
+            });
+        }
+
+        // Wire up New Vendor button to open confirmation modal
+        const newVendorBtn = document.getElementById('btnNewVendor');
+        if (newVendorBtn) {
+            newVendorBtn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('newVendorConfirmModal'));
                 modal.show();
             });
         }
@@ -65,7 +93,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-success border-4">
             <div class="card-body">
@@ -81,7 +109,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-info border-4">
             <div class="card-body">
@@ -97,7 +125,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-warning border-4">
             <div class="card-body">
@@ -132,7 +160,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-info border-4">
             <div class="card-body">
@@ -148,7 +176,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-warning border-4">
             <div class="card-body">
@@ -164,7 +192,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-danger border-4">
             <div class="card-body">
@@ -215,6 +243,11 @@
                         <a href="{{ url_for('user_new') }}" class="btn btn-warning w-100">
                             <i class="fas fa-plus"></i> New User
                         </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <button type="button" class="btn btn-secondary w-100" data-bs-toggle="tooltip" title="Create a new vendor" id="btnNewVendor">
+                            <i class="fas fa-plus"></i> New Vendor
+                        </button>
                     </div>
                 </div>
                 <div class="row">
@@ -286,7 +319,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-lg-6 mb-4">
         <div class="card">
             <div class="card-header">

@@ -21,6 +21,14 @@ LOCATION="eastus"
 REPO_URL="https://github.com/luckyjohnb/rfpo-application.git"
 GIT_REF="${GIT_REF:-main}"
 
+# Resolve the current commit SHA for the ref (short and full) for traceability
+echo -e "${YELLOW}🔎 Resolving commit SHA for ${GIT_REF}...${NC}"
+GIT_SHORT_SHA=$(git rev-parse --short=7 "${GIT_REF}" 2>/dev/null || true)
+if [ -z "$GIT_SHORT_SHA" ]; then
+    # Fallback: query GitHub latest commit SHA via ACR build metadata later
+    echo -e "${YELLOW}⚠️  Could not resolve local git SHA for ${GIT_REF}. Will extract from ACR build output.${NC}"
+fi
+
 echo -e "${BLUE}🚀 RFPO Phase 1 Improvements - Quick Redeploy${NC}"
 echo "=============================================="
 echo "This will rebuild and redeploy all containers with ACR builds from GitHub ($GIT_REF):"
@@ -47,6 +55,23 @@ fi
 echo -e "${YELLOW}📋 Setting subscription...${NC}"
 az account set --subscription "$SUBSCRIPTION_ID"
 
+# Validate ACR exists and is canonical
+echo -e "${YELLOW}🔎 Validating ACR '${ACR_NAME}' in resource group '${RESOURCE_GROUP}'...${NC}"
+if ! az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" &> /dev/null; then
+    echo -e "${RED}❌ ACR '$ACR_NAME' not found in resource group '$RESOURCE_GROUP'.${NC}"
+    echo -e "${YELLOW}Hint:${NC} Run 'az acr list --resource-group $RESOURCE_GROUP -o table' to see available registries."
+    exit 1
+fi
+
+# Enforce canonical tag if present
+CANONICAL=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query "tags.canonical" -o tsv || true)
+if [ -n "$CANONICAL" ] && [ "${CANONICAL^^}" != "TRUE" ]; then
+    echo -e "${RED}❌ ACR '$ACR_NAME' is present but not tagged canonical=true (found: '$CANONICAL').${NC}"
+    echo -e "${YELLOW}Resolve:${NC} Tag it with: az acr update --name $ACR_NAME --resource-group $RESOURCE_GROUP --set tags.canonical=true"
+    exit 1
+fi
+echo -e "${GREEN}✅ ACR validation passed${NC}"
+
 echo ""
 echo -e "${BLUE}🏗️  Building images in ACR from GitHub ($GIT_REF)...${NC}"
 echo "=============================================="
@@ -56,12 +81,32 @@ acr_build() {
     local image="$1"; shift
     local dockerfile="$1"; shift
     echo -e "${YELLOW}Building ${image}...${NC}"
-    az acr build \
+        az acr build \
         --registry "$ACR_NAME" \
         --image "${image}:latest" \
         --file "$dockerfile" \
         --platform linux/amd64 \
-        "${REPO_URL}#${GIT_REF}:."
+                "${REPO_URL}#${GIT_REF}:." | tee "/tmp/acr-build-${image}.log"
+
+        # Capture digest and git-head-revision from the build output for pinning and metadata
+        DIGEST=$(grep -Eo 'digest: sha256:[a-f0-9]+' "/tmp/acr-build-${image}.log" | tail -n1 | awk '{print $2}')
+        GIT_HEAD=$(grep -Eo 'git-head-revision: [a-f0-9]+' "/tmp/acr-build-${image}.log" | awk '{print $2}' | tail -n1)
+        if [ -z "$DIGEST" ]; then
+            echo -e "${RED}❌ Failed to extract image digest for ${image} from ACR build output${NC}"
+            exit 1
+        fi
+        if [ -z "$GIT_HEAD" ]; then
+            # Fallback to local short sha if available
+            if [ -n "$GIT_SHORT_SHA" ]; then
+                GIT_HEAD="$GIT_SHORT_SHA"
+            else
+                echo -e "${YELLOW}⚠️  Could not extract git-head-revision from build. Using 'unknown'.${NC}"
+                GIT_HEAD="unknown"
+            fi
+        fi
+        # Export for callers
+        eval "${image//-/_}_DIGEST='$DIGEST'"
+        eval "${image//-/_}_GIT_HEAD='$GIT_HEAD'"
     echo -e "${GREEN}✅ ${image} build complete${NC}"
 }
 
@@ -70,7 +115,7 @@ acr_build rfpo-api Dockerfile.api
 acr_build rfpo-admin Dockerfile.admin
 acr_build rfpo-user Dockerfile.user-app
 
-# Restart Container Apps to pull new images
+# Restart Container Apps to pull new images (pin by digest) and inject APP_BUILD_SHA
 echo ""
 echo -e "${BLUE}🔄 Restarting Azure Container Apps...${NC}"
 echo "=============================================="
@@ -92,8 +137,9 @@ echo -e "${YELLOW}Updating rfpo-api container app...${NC}"
 az containerapp update \
     --name rfpo-api \
     --resource-group "$RESOURCE_GROUP" \
-    --image "$ACR_LOGIN_SERVER/rfpo-api:latest" \
-    --revision-suffix "git-${GIT_REF}-$(date +%Y%m%d%H%M%S)" \
+    --image "$ACR_LOGIN_SERVER/rfpo-api@${rfpo_api_DIGEST}" \
+    --set-env-vars APP_BUILD_SHA="${rfpo_api_GIT_HEAD}" \
+    --revision-suffix "api-${rfpo_api_GIT_HEAD}" \
     --output none
 
 echo -e "${GREEN}✅ rfpo-api updated${NC}"
@@ -103,8 +149,9 @@ echo -e "${YELLOW}Updating rfpo-admin container app...${NC}"
 az containerapp update \
     --name rfpo-admin \
     --resource-group "$RESOURCE_GROUP" \
-    --image "$ACR_LOGIN_SERVER/rfpo-admin:latest" \
-    --revision-suffix "git-${GIT_REF}-$(date +%Y%m%d%H%M%S)" \
+    --image "$ACR_LOGIN_SERVER/rfpo-admin@${rfpo_admin_DIGEST}" \
+    --set-env-vars APP_BUILD_SHA="${rfpo_admin_GIT_HEAD}" \
+    --revision-suffix "admin-${rfpo_admin_GIT_HEAD}" \
     --output none
 
 echo -e "${GREEN}✅ rfpo-admin updated${NC}"
@@ -114,9 +161,27 @@ echo -e "${YELLOW}Updating rfpo-user container app...${NC}"
 az containerapp update \
     --name rfpo-user \
     --resource-group "$RESOURCE_GROUP" \
-    --image "$ACR_LOGIN_SERVER/rfpo-user:latest" \
-    --revision-suffix "git-${GIT_REF}-$(date +%Y%m%d%H%M%S)" \
+        --image "$ACR_LOGIN_SERVER/rfpo-user@${rfpo_user_DIGEST}" \
+        --set-env-vars APP_BUILD_SHA="${rfpo_user_GIT_HEAD}" \
+        --revision-suffix "user-${rfpo_user_GIT_HEAD}" \
     --output none
+
+# Quick health checks
+echo ""
+echo -e "${BLUE}🩺 Running health checks...${NC}"
+for APP in rfpo-api rfpo-admin rfpo-user; do
+    FQDN=$(az containerapp show --name "$APP" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+    URL="https://${FQDN}"
+    PATH="/api/health"
+    [ "$APP" = "rfpo-admin" ] && PATH="/health"
+    [ "$APP" = "rfpo-user" ] && PATH="/health"
+    echo -e "${YELLOW}→ Checking ${APP} at ${URL}${PATH}${NC}"
+    if curl -fsS "${URL}${PATH}" >/dev/null; then
+        echo -e "${GREEN}   ${APP} healthy${NC}"
+    else
+        echo -e "${RED}   ${APP} health check failed${NC}"
+    fi
+done
 
 echo -e "${GREEN}✅ rfpo-user updated${NC}"
 

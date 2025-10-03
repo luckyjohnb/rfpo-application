@@ -6,7 +6,7 @@ Containerized Request for Purchase Order (RFPO) management system with separated
 
 The RFPO application consists of three containerized services:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                    RFPO Application                     │
 ├─────────────────┬─────────────────┬─────────────────────┤
@@ -27,18 +27,18 @@ The RFPO application consists of three containerized services:
 
 ### Prerequisites
 
-- **Docker & Docker Compose**
-- **Git** for cloning
 
 ### Deployment
 
 1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/luckyjohnb/rfpo-application.git
    cd rfpo-application
    ```
 
 2. **Configure environment:**
+
    ```bash
    cp .env.example .env
    # Edit .env file with your configuration:
@@ -51,67 +51,50 @@ The RFPO application consists of three containerized services:
    **Important:** Never commit the `.env` file to version control! It contains sensitive credentials.
 
 3. **Start all services:**
+
    ```bash
    docker-compose up -d
    ```
 
 4. **Check status:**
+
    ```bash
    docker-compose ps
    ```
 
 5. **Access applications:**
-   - **User Application**: http://localhost:5000
-   - **Admin Panel**: http://localhost:5111
-   - **API Documentation**: http://localhost:5002/api
+
+   - **User Application**: <http://localhost:5000>
+   - **Admin Panel**: <http://localhost:5111>
+   - **API Documentation**: <http://localhost:5002/api>
 
 ## 🔐 Default Login
 
-### Admin Panel (http://localhost:5111)
-- **Email**: `admin@rfpo.com`
-- **Password**: `admin123`
+### Admin Panel
 
-### User App (http://localhost:5000)
-- **Create users** in the admin panel first
-- **Users receive welcome emails** with login instructions
-- **First-time login** requires password change
+URL: <http://localhost:5111>
+
+
+### User App
+
+URL: <http://localhost:5000>
+
 
 ## 📋 Core Features
 
 ### Admin Panel (Port 5111)
-- **User Management**: Create, edit, delete users with role-based permissions
-- **Team Management**: Organize users into teams and consortiums
-- **RFPO Management**: Full RFPO lifecycle management
-- **Vendor Management**: Maintain vendor database
-- **Project Management**: Track projects and assignments
-- **Approval Workflows**: Configure multi-stage approval processes
-- **Email Service**: Automated welcome emails and notifications
+
 
 ### User Application (Port 5000)
-- **Modern Bootstrap UI**: Responsive, mobile-friendly interface
-- **Dashboard**: Overview of RFPOs, teams, and quick actions
-- **RFPO Views**: Create, view, and manage RFPOs
-- **Team Views**: Browse and request team access
-- **Profile Management**: Update personal information and password
-- **First-Time Login Flow**: Guided password change and profile setup
+
 
 ### API Layer (Port 5002)
-- **RESTful API**: JSON-based communication
-- **JWT Authentication**: Secure token-based auth
-- **CRUD Operations**: Full database operations
-- **Health Monitoring**: Built-in health checks
+
 
 ## 🗄️ Database
 
 The application uses a **single SQLite database** (`instance/rfpo_admin.db`) shared across all services:
 
-- **Users**: User accounts with permissions and profile data
-- **Teams**: Team organization and membership
-- **RFPOs**: Request for Purchase Orders with line items
-- **Vendors**: Vendor information and contacts
-- **Projects**: Project definitions and assignments
-- **Consortiums**: Consortium management
-- **Approval Workflows**: Multi-stage approval configurations
 
 ## � File Upload Storage
 
@@ -163,6 +146,7 @@ All configuration is managed via a `.env` file. **Never commit this file to vers
    ```
 
 3. **Validate configuration:**
+   
    ```bash
    python -c "from env_config import validate_configuration; validate_configuration(); print('✅ Configuration valid')"
    ```
@@ -172,7 +156,7 @@ All configuration is managed via a `.env` file. **Never commit this file to vers
 For email functionality to work:
 
 1. **Enable 2-Factor Authentication** on your Gmail account
-2. **Generate App Password**: 
+2. **Generate App Password**:
    - Go to Google Account Settings → Security → 2-Step Verification → App passwords
    - Select "Mail" and your device
    - Copy the 16-character password
@@ -184,7 +168,7 @@ For email functionality to work:
 
 ### Project Structure
 
-```
+```text
 rfpo-application/
 ├── app.py                  # User-facing application (Port 5000)
 ├── custom_admin.py         # Admin panel (Port 5111)
@@ -217,10 +201,12 @@ rfpo-application/
 
 1. **Make code changes** to Python files or templates
 2. **Rebuild and restart** affected services:
+   
    ```bash
    docker-compose up --build -d
    ```
 3. **View logs** to debug:
+   
    ```bash
    docker-compose logs -f rfpo-admin  # Follow admin logs
    ```
@@ -238,27 +224,10 @@ rfpo-application/
 The application includes comprehensive error handling and structured logging:
 
 **Custom Exceptions** (`exceptions.py`):
-- `AuthenticationException` (401) - Invalid credentials, expired tokens
-- `AuthorizationException` (403) - Insufficient permissions
-- `ValidationException` (400) - Invalid input data
-- `ResourceNotFoundException` (404) - Resources not found
-- `DatabaseException` (500) - Database errors
-- `ConfigurationException` (500) - Config/environment errors
-- `FileProcessingException` (400) - File upload/processing errors
-- `ExternalServiceException` (503) - External API failures
-- `BusinessLogicException` (422) - Business rule violations
 
 **Structured Logging** (`logging_config.py`):
-- Rotating log files in `logs/` directory (10MB max, 5 backups)
-- Configurable log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- Standardized log formats with timestamps and context
-- Helper functions for API requests, database operations, auth events
 
 **Error Handlers** (`error_handlers.py`):
-- Automatic registration in all Flask applications
-- Returns JSON for API requests, HTML for web requests
-- User-friendly error pages with Bootstrap styling
-- Security-conscious (no sensitive data in error responses)
 
 **Viewing Logs:**
 ```bash
@@ -302,9 +271,6 @@ docker exec -it rfpo-admin /bin/bash
 
 All services provide health endpoints:
 
-- **API**: http://localhost:5002/api/health
-- **Admin**: http://localhost:5111/health
-- **User App**: http://localhost:5000/health
 
 ### User Flow Testing
 
@@ -316,21 +282,9 @@ All services provide health endpoints:
 
 ## 🔒 Security Features
 
-- **JWT Authentication**: Secure token-based authentication
-- **Password Hashing**: Werkzeug security with salt
-- **Role-Based Access**: Granular permission system
-- **Input Validation**: Form validation and sanitization
-- **CORS Protection**: Configurable cross-origin policies
-- **Session Management**: Secure session handling
 
 ## 📧 User Permissions
 
-- **GOD**: Super admin with full system access
-- **RFPO_ADMIN**: Full RFPO management capabilities
-- **RFPO_USER**: Basic RFPO access and creation
-- **CAL_MEET_USER**: Meeting calendar access
-- **VROOM_ADMIN**: Virtual room administration
-- **VROOM_USER**: Virtual room access
 
 ## 🐛 Troubleshooting
 
@@ -359,6 +313,7 @@ docker-compose logs -f
 ## 📞 Support
 
 For issues or questions:
+
 1. Check the logs first: `docker-compose logs`
 2. Verify configuration: `.env` file settings
 3. Test individual services: Use health check endpoints
@@ -374,6 +329,5 @@ For production deployment:
 4. **Reverse proxy**: Use nginx or similar for SSL termination
 5. **Monitoring**: Set up log aggregation and monitoring
 
----
 
 **RFPO Application - Modern, Scalable, Containerized Purchase Order Management** 🚀

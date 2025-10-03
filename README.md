@@ -113,7 +113,11 @@ The application uses a **single SQLite database** (`instance/rfpo_admin.db`) sha
 - **Consortiums**: Consortium management
 - **Approval Workflows**: Multi-stage approval configurations
 
-## 🔧 Configuration
+## � File Upload Storage
+
+Looking for where uploaded documents live locally and in Azure (and how to access them)? See FILE_UPLOAD_STORAGE.md for a concise guide to paths, Azure Files mounting, RBAC, and retrieval options.
+
+## �🔧 Configuration
 
 ### Environment Variables Setup
 

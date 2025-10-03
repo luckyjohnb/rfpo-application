@@ -368,9 +368,36 @@ Check:
 - Azure Portal Logs for real-time errors
 - `DEPLOYMENT_SUMMARY.md` for infrastructure details
 - `.github/copilot-instructions.md` for architecture patterns
+- `FILE_UPLOAD_STORAGE.md` for where uploads live and how to access them (local and Azure)
 
 ---
 
 **Deployed by:** Phase 1 Security & Error Handling Improvements  
 **Branch:** feature/phase1-security-improvements  
 **Date:** October 2, 2025
+
+---
+
+## Canonical ACR and cleanup
+
+- Canonical registry: `acrrfpoe108977f` (eastus, Basic)
+- The redeploy script validates that the configured ACR exists and, if a `canonical` tag is present, it must be `true`.
+- Useful commands:
+
+    - List registries in RG:
+
+        ```bash
+        az acr list --resource-group rg-rfpo-e108977f -o table
+        ```
+
+    - Delete an unused registry:
+
+        ```bash
+        az acr delete --name <registryName> --resource-group rg-rfpo-e108977f --yes
+        ```
+
+    - Tag the canonical registry:
+
+        ```bash
+        az acr update --name acrrfpoe108977f --resource-group rg-rfpo-e108977f --set tags.canonical=true
+        ```

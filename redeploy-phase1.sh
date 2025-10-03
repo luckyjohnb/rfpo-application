@@ -90,7 +90,17 @@ acr_build() {
                 "${REPO_URL}#${GIT_REF}:." | tee "/tmp/acr-build-${image}.log"
 
         # Capture digest and git-head-revision from the build output for pinning and metadata
-        DIGEST=$(grep -Eo 'digest: sha256:[a-f0-9]+' "/tmp/acr-build-${image}.log" | tail -n1 | awk '{print $2}')
+        # Prefer the digest from the "- image:" dependency block (this is the built image),
+        # NOT the base image digest printed earlier.
+        IMAGE_BLOCK=$(sed -n '/- image:/,/- runtime-dependency:/p' "/tmp/acr-build-${image}.log" 2>/dev/null || true)
+        DIGEST=$(printf "%s\n" "$IMAGE_BLOCK" | awk -v img="$image" '
+            $1=="repository:" && $2==img { inrepo=1; next }
+            inrepo && $1=="digest:" { print $2; exit }
+        ')
+        # Fallback: grab the digest from the "latest: digest:" push line if block parse failed
+        if [ -z "$DIGEST" ]; then
+            DIGEST=$(grep -Eo 'latest: digest: sha256:[a-f0-9]+' "/tmp/acr-build-${image}.log" | tail -n1 | awk '{print $3}')
+        fi
         GIT_HEAD=$(grep -Eo 'git-head-revision: [a-f0-9]+' "/tmp/acr-build-${image}.log" | awk '{print $2}' | tail -n1)
         if [ -z "$DIGEST" ]; then
             echo -e "${RED}❌ Failed to extract image digest for ${image} from ACR build output${NC}"
@@ -105,9 +115,12 @@ acr_build() {
                 GIT_HEAD="unknown"
             fi
         fi
+        # Compute short SHA (first 8 chars) for use in revision suffixes
+        GIT_SHORT="${GIT_HEAD:0:8}"
         # Export for callers
         eval "${image//-/_}_DIGEST='$DIGEST'"
         eval "${image//-/_}_GIT_HEAD='$GIT_HEAD'"
+        eval "${image//-/_}_GIT_SHORT='$GIT_SHORT'"
     echo -e "${GREEN}✅ ${image} build complete${NC}"
 }
 
@@ -140,7 +153,7 @@ az containerapp update \
     --resource-group "$RESOURCE_GROUP" \
     --image "$ACR_LOGIN_SERVER/rfpo-api@${rfpo_api_DIGEST}" \
     --set-env-vars APP_BUILD_SHA="${rfpo_api_GIT_HEAD}" \
-    --revision-suffix "api-${rfpo_api_GIT_HEAD}" \
+    --revision-suffix "api-${rfpo_api_GIT_SHORT}" \
     --output none
 
 echo -e "${GREEN}✅ rfpo-api updated${NC}"
@@ -152,7 +165,7 @@ az containerapp update \
     --resource-group "$RESOURCE_GROUP" \
     --image "$ACR_LOGIN_SERVER/rfpo-admin@${rfpo_admin_DIGEST}" \
     --set-env-vars APP_BUILD_SHA="${rfpo_admin_GIT_HEAD}" \
-    --revision-suffix "admin-${rfpo_admin_GIT_HEAD}" \
+    --revision-suffix "admin-${rfpo_admin_GIT_SHORT}" \
     --output none
 
 echo -e "${GREEN}✅ rfpo-admin updated${NC}"
@@ -164,7 +177,7 @@ az containerapp update \
     --resource-group "$RESOURCE_GROUP" \
         --image "$ACR_LOGIN_SERVER/rfpo-user@${rfpo_user_DIGEST}" \
         --set-env-vars APP_BUILD_SHA="${rfpo_user_GIT_HEAD}" \
-        --revision-suffix "user-${rfpo_user_GIT_HEAD}" \
+        --revision-suffix "user-${rfpo_user_GIT_SHORT}" \
     --output none
 
 # Quick health checks

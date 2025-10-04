@@ -62,6 +62,44 @@ az containerapp update \
 
 echo -e "${GREEN}✅ rfpo-admin environment variables updated${NC}"
 
+# Optionally set ACS email configuration if provided
+if [[ -n "${ACS_CONNECTION_STRING}" && -n "${ACS_SENDER_EMAIL}" ]]; then
+    echo -e "${YELLOW}Updating rfpo-admin ACS email settings...${NC}"
+    az containerapp update \
+            --name rfpo-admin \
+            --resource-group "$RESOURCE_GROUP" \
+            --set-env-vars \
+                    "ACS_CONNECTION_STRING=${ACS_CONNECTION_STRING}" \
+                    "ACS_SENDER_EMAIL=${ACS_SENDER_EMAIL}" \
+            --output none
+    echo -e "${GREEN}✅ rfpo-admin ACS email settings applied${NC}"
+else
+    echo -e "${YELLOW}Skipping ACS email settings (ACS_CONNECTION_STRING/ACS_SENDER_EMAIL not set)${NC}"
+fi
+
+# Optionally set SMTP settings if provided
+SMTP_USER_COMBINED="${MAIL_USERNAME:-${SMTP_USERNAME:-${GMAIL_USER:-}}}"
+SMTP_PASS_COMBINED="${MAIL_PASSWORD:-${SMTP_PASSWORD:-${GMAIL_APP_PASSWORD:-}}}"
+SMTP_SENDER_COMBINED="${MAIL_DEFAULT_SENDER:-${SMTP_DEFAULT_SENDER:-${GMAIL_USER:-}}}"
+
+if [[ -n "${MAIL_SERVER}${SMTP_SERVER}${SMTP_USER_COMBINED}" ]]; then
+    echo -e "${YELLOW}Updating rfpo-admin SMTP settings...${NC}"
+    az containerapp update \
+            --name rfpo-admin \
+            --resource-group "$RESOURCE_GROUP" \
+            --set-env-vars \
+                    "MAIL_SERVER=${MAIL_SERVER:-${SMTP_SERVER:-smtp.gmail.com}}" \
+                    "MAIL_PORT=${MAIL_PORT:-${SMTP_PORT:-587}}" \
+                    "MAIL_USE_TLS=${MAIL_USE_TLS:-${SMTP_USE_TLS:-true}}" \
+                    "MAIL_USERNAME=${SMTP_USER_COMBINED}" \
+                    "MAIL_PASSWORD=${SMTP_PASS_COMBINED}" \
+                    "MAIL_DEFAULT_SENDER=${SMTP_SENDER_COMBINED}" \
+            --output none
+    echo -e "${GREEN}✅ rfpo-admin SMTP settings applied${NC}"
+else
+    echo -e "${YELLOW}Skipping SMTP settings (no SMTP/MAIL/GMAIL credentials detected)${NC}"
+fi
+
 # Update rfpo-user environment variables
 echo -e "${YELLOW}Updating rfpo-user environment variables...${NC}"
 az containerapp update \

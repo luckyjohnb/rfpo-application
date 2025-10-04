@@ -112,23 +112,37 @@ jobs:
 
       - name: Update Container Apps with new images
         run: |
-          # Update API container app
+          set -euo pipefail
+
+          ACR=${{ steps.acr-login-server.outputs.acr-login-server }}
+
+          # Resolve digests for each image we just pushed
+          API_DIGEST=$(az acr repository show-manifests --name ${{ env.ACR_NAME }} --repository rfpo-api --query "[?contains(tags, '${{ github.sha }}')].digest | [0]" -o tsv)
+          ADMIN_DIGEST=$(az acr repository show-manifests --name ${{ env.ACR_NAME }} --repository rfpo-admin --query "[?contains(tags, '${{ github.sha }}')].digest | [0]" -o tsv)
+          USER_DIGEST=$(az acr repository show-manifests --name ${{ env.ACR_NAME }} --repository rfpo-user --query "[?contains(tags, '${{ github.sha }}')].digest | [0]" -o tsv)
+
+          echo "API_DIGEST=$API_DIGEST" && echo "ADMIN_DIGEST=$ADMIN_DIGEST" && echo "USER_DIGEST=$USER_DIGEST"
+
+          if [[ -z "$API_DIGEST" || -z "$ADMIN_DIGEST" || -z "$USER_DIGEST" ]]; then
+            echo "One or more digests could not be resolved; aborting update." >&2
+            exit 1
+          fi
+
+          # Update Container Apps pinned to image@digest for deterministic rollouts
           az containerapp update \
             --name rfpo-api \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-api:${{ github.sha }}
+            --image ${ACR}/rfpo-api@${API_DIGEST}
 
-          # Update Admin container app
           az containerapp update \
             --name rfpo-admin \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-admin:${{ github.sha }}
+            --image ${ACR}/rfpo-admin@${ADMIN_DIGEST}
 
-          # Update User App container app
           az containerapp update \
             --name rfpo-user \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ steps.acr-login-server.outputs.acr-login-server }}/rfpo-user:${{ github.sha }}
+            --image ${ACR}/rfpo-user@${USER_DIGEST}
 
       - name: Get application URLs
         id: get-urls

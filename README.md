@@ -337,3 +337,25 @@ For production deployment:
 
 
 **RFPO Application - Modern, Scalable, Containerized Purchase Order Management** 🚀
+
+## ✉️ Azure Communication Services (Email)
+
+You can send transactional emails via Azure Communication Services (ACS) with automatic SMTP fallback for local/dev.
+
+1. Provision ACS Email in Azure and connect a verified sender domain or use a sandbox sender.
+2. Add these environment variables (see `.env.example` for names):
+
+   ```bash
+   ACS_CONNECTION_STRING="endpoint=https://<your-acs>.communication.azure.com/;accesskey=<key>"
+   ACS_SENDER_EMAIL="no-reply@yourdomain.com"  # Must be a verified sender in ACS
+   ```
+
+3. Deploy updated secrets to Container Apps or set them in your local `.env`.
+4. Test delivery from the Admin Panel:
+   - Navigate to Tools → Email Test (route: `/tools/email-test`)
+   - Enter a recipient and subject/body; submit to send via ACS (or SMTP fallback if ACS is unavailable)
+
+Notes:
+
+- The email service automatically prefers ACS when `ACS_CONNECTION_STRING` is set; otherwise it falls back to SMTP using `GMAIL_USER` and `GMAIL_APP_PASSWORD`.
+- For production, keep `SESSION_COOKIE_SECURE=true`, use HTTPS, and rotate keys regularly (see `SECRETS.md`).

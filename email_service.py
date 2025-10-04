@@ -59,14 +59,49 @@ class EmailService:
     def __init__(self, config=None):
         """Initialize email service with configuration"""
         self.config = config or {}
+        # Last send diagnostics
+        self.last_provider: Optional[str] = None  # 'ACS' | 'SMTP' | None
+        self.last_error: Optional[str] = None
+        self.last_status: Optional[str] = None
+        self.last_sender: Optional[str] = None
+        self.last_recipients: List[str] = []
 
-        # SMTP Configuration from environment variables
-        self.smtp_server = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
-        self.smtp_port = int(os.environ.get("MAIL_PORT", 587))
-        self.use_tls = os.environ.get("MAIL_USE_TLS", "True").lower() == "true"
-        self.username = os.environ.get("MAIL_USERNAME")
-        self.password = os.environ.get("MAIL_PASSWORD")
-        self.default_sender = os.environ.get("MAIL_DEFAULT_SENDER", self.username)
+        # SMTP Configuration from environment variables (support multiple naming schemes)
+        # Preferred MAIL_*; fall back to SMTP_*; then GMAIL_*
+        self.smtp_server = (
+            os.environ.get("MAIL_SERVER")
+            or os.environ.get("SMTP_SERVER")
+            or "smtp.gmail.com"
+        )
+        self.smtp_port = int(
+            os.environ.get("MAIL_PORT")
+            or os.environ.get("SMTP_PORT")
+            or 587
+        )
+        use_tls_raw = (
+            os.environ.get("MAIL_USE_TLS")
+            or os.environ.get("SMTP_USE_TLS")
+            or "True"
+        )
+        self.use_tls = str(use_tls_raw).lower() == "true"
+
+        # Credentials
+        self.username = (
+            os.environ.get("MAIL_USERNAME")
+            or os.environ.get("SMTP_USERNAME")
+            or os.environ.get("GMAIL_USER")
+        )
+        self.password = (
+            os.environ.get("MAIL_PASSWORD")
+            or os.environ.get("SMTP_PASSWORD")
+            or os.environ.get("GMAIL_APP_PASSWORD")
+        )
+        # Sender
+        self.default_sender = (
+            os.environ.get("MAIL_DEFAULT_SENDER")
+            or os.environ.get("SMTP_DEFAULT_SENDER")
+            or self.username
+        )
 
         # Azure Communication Services Email configuration
         self.acs_connection_string = os.environ.get("ACS_CONNECTION_STRING")
@@ -85,16 +120,33 @@ class EmailService:
         # Validate configuration
         self._validate_config()
 
+    def _reset_last_result(self):
+        self.last_provider = None
+        self.last_error = None
+        self.last_status = None
+        self.last_sender = None
+        self.last_recipients = []
+
+    def get_last_send_result(self) -> Dict[str, Any]:
+        return {
+            "provider": self.last_provider,
+            "error": self.last_error,
+            "status": self.last_status,
+            "sender": self.last_sender,
+            "recipients": list(self.last_recipients) if self.last_recipients else [],
+        }
+
     def _validate_config(self):
         """Validate email configuration"""
-        # If ACS is configured, consider email service functional
+        # If ACS is configured and client available, consider service functional
         if self.acs_connection_string and self.acs_sender_email and EmailClient:
             return True
 
         # Otherwise, require SMTP configuration
         if not self.username or not self.password:
             logger.warning(
-                "Email credentials not configured. Email service will not " "function."
+                "Email credentials not configured (MAIL_/SMTP_/GMAIL_). "
+                "Email service will not function."
             )
             return False
 
@@ -106,7 +158,7 @@ class EmailService:
 
         return True
 
-    def _get_acs_client(self) -> Optional["EmailClient"]:
+    def _get_acs_client(self) -> Optional[Any]:
         """Create or return ACS EmailClient if configured."""
         if not (self.acs_connection_string and EmailClient):
             return None
@@ -141,12 +193,12 @@ class EmailService:
         self,
         to_emails: List[str],
         subject: str,
-        body_text: str = None,
-        body_html: str = None,
-        from_email: str = None,
-        cc_emails: List[str] = None,
-        bcc_emails: List[str] = None,
-        attachments: List[Dict[str, Any]] = None,
+        body_text: Optional[str] = None,
+        body_html: Optional[str] = None,
+        from_email: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> bool:
         """
         Send email with optional HTML content and attachments
@@ -166,9 +218,11 @@ class EmailService:
             bool: True if email sent successfully, False otherwise
         """
         try:
+            self._reset_last_result()
             # Validate inputs
             if not to_emails:
                 logger.error("No recipient emails provided")
+                self.last_error = "No recipient emails provided"
                 return False
 
             if not subject:
@@ -179,17 +233,29 @@ class EmailService:
                 logger.error("No email body provided")
                 return False
 
-            # Use default sender if not provided
-            sender_email = from_email or self.acs_sender_email or self.default_sender
+            # Use default sender if not provided; prefer ACS sender when using ACS
+            sender_email = (
+                from_email
+                or self.acs_sender_email
+                or self.default_sender
+                or ""
+            )
+            self.last_sender = sender_email
+            self.last_recipients = list(to_emails)
 
             # If ACS is configured, attempt to send with ACS first
             acs_client = self._get_acs_client()
             if acs_client and self.acs_sender_email:
                 try:
+                    self.last_provider = "ACS"
                     # Build recipients list for ACS
-                    acs_recipients = {"to": [{"address": addr} for addr in to_emails]}
+                    acs_recipients = {
+                        "to": [{"address": addr} for addr in to_emails]
+                    }
                     if cc_emails:
-                        acs_recipients["cc"] = [{"address": addr} for addr in cc_emails]
+                        acs_recipients["cc"] = [
+                            {"address": addr} for addr in cc_emails
+                        ]
                     if bcc_emails:
                         acs_recipients["bcc"] = [
                             {"address": addr} for addr in bcc_emails
@@ -218,6 +284,7 @@ class EmailService:
                         "success",
                         "completed",
                     ):
+                        self.last_status = str(result["status"]) or "success"
                         logger.info(
                             "ACS email queued/sent to %d recipients: %s",
                             len(to_emails),
@@ -225,14 +292,20 @@ class EmailService:
                         )
                         return True
                     else:
+                        self.last_status = str(result.get("status", "unknown"))
                         logger.warning(
                             "ACS email send returned status: %s, "
                             "falling back to SMTP",
                             result["status"],
                         )
                 except AzureError as e:
-                    logger.error("ACS email send failed: %s. Falling back to SMTP.", e)
+                    self.last_error = f"ACS error: {e}"
+                    logger.error(
+                        "ACS email send failed: %s. Falling back to SMTP.",
+                        e,
+                    )
                 except Exception as e:
+                    self.last_error = f"ACS unexpected error: {e}"
                     logger.error(
                         "Unexpected error sending via ACS: %s. "
                         "Falling back to SMTP.",
@@ -240,6 +313,16 @@ class EmailService:
                     )
 
             # Fallback to SMTP
+            self.last_provider = "SMTP"
+            if not (self.username and self.password):
+                logger.error(
+                    "SMTP fallback unavailable: missing credentials. "
+                    "Set MAIL_USERNAME/MAIL_PASSWORD or "
+                    "SMTP_USERNAME/SMTP_PASSWORD "
+                    "(or GMAIL_USER/GMAIL_APP_PASSWORD)."
+                )
+                self.last_error = "Missing SMTP credentials"
+                return False
             # Create message
             msg = MIMEMultipart("alternative")
             msg["From"] = sender_email
@@ -287,9 +370,11 @@ class EmailService:
                 len(all_recipients),
                 subject,
             )
+            self.last_status = "sent"
             return True
 
         except Exception as e:
+            self.last_error = str(e)
             logger.error(f"Failed to send email: {str(e)}")
             return False
 
@@ -297,11 +382,11 @@ class EmailService:
         self,
         to_emails: List[str],
         template_name: str,
-        template_data: Dict[str, Any] = None,
-        subject: str = None,
-        from_email: str = None,
-        cc_emails: List[str] = None,
-        bcc_emails: List[str] = None,
+        template_data: Optional[Dict[str, Any]] = None,
+        subject: Optional[str] = None,
+        from_email: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
     ) -> bool:
         """
         Send email using Jinja2 template

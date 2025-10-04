@@ -939,10 +939,15 @@ def create_app():
             ok = email_service.send_email(
                 to_emails=[to_email], subject=subject, body_text=message
             )
+            diag = email_service.get_last_send_result() if hasattr(email_service, 'get_last_send_result') else {}
             if ok:
-                flash("✅ Test email sent.", "success")
+                prov = diag.get("provider") or "unknown"
+                sndr = diag.get("sender") or "(no sender)"
+                flash(f"✅ Test email sent via {prov} from {sndr}.", "success")
             else:
-                flash("❌ Failed to send test email.", "error")
+                err = diag.get("error") or "unknown error"
+                prov = diag.get("provider") or "unknown"
+                flash(f"❌ Failed to send test email via {prov}: {err}", "error")
             return redirect(url_for("email_test_tool"))
 
         return render_template("admin/tools/email_test.html")

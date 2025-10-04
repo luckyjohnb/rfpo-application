@@ -951,7 +951,11 @@ def create_app():
             ok = email_service.send_email(
                 to_emails=[to_email], subject=subject, body_text=message
             )
-            diag = email_service.get_last_send_result() if hasattr(email_service, 'get_last_send_result') else {}
+            diag = (
+                email_service.get_last_send_result()
+                if hasattr(email_service, "get_last_send_result")
+                else {}
+            )
             if ok:
                 prov = diag.get("provider") or "unknown"
                 sndr = diag.get("sender") or "(no sender)"

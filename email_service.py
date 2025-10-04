@@ -74,14 +74,10 @@ class EmailService:
             or "smtp.gmail.com"
         )
         self.smtp_port = int(
-            os.environ.get("MAIL_PORT")
-            or os.environ.get("SMTP_PORT")
-            or 587
+            os.environ.get("MAIL_PORT") or os.environ.get("SMTP_PORT") or 587
         )
         use_tls_raw = (
-            os.environ.get("MAIL_USE_TLS")
-            or os.environ.get("SMTP_USE_TLS")
-            or "True"
+            os.environ.get("MAIL_USE_TLS") or os.environ.get("SMTP_USE_TLS") or "True"
         )
         self.use_tls = str(use_tls_raw).lower() == "true"
 
@@ -164,7 +160,18 @@ class EmailService:
             return None
         if self._acs_client is None:
             try:
-                self._acs_client = EmailClient(self.acs_connection_string)
+                # The EmailClient constructor expects (endpoint, credential).
+                # Use SDK helper to build client from full connection string.
+                if hasattr(EmailClient, "from_connection_string"):
+                    self._acs_client = EmailClient.from_connection_string(
+                        self.acs_connection_string
+                    )
+                else:
+                    # Fallback: unexpected SDK shape – attempt direct init may
+                    # fail, but try to provide a clear error if it does.
+                    self._acs_client = EmailClient(
+                        self.acs_connection_string
+                    )  # type: ignore[arg-type]
             except Exception as e:
                 logger.error(f"Failed to create ACS EmailClient: {e}")
                 self._acs_client = None
@@ -233,7 +240,8 @@ class EmailService:
                 logger.error("No email body provided")
                 return False
 
-            # Use default sender if not provided; prefer ACS sender when using ACS
+            # Use default sender if not provided; prefer ACS sender when using
+            # ACS
             sender_email = (
                 from_email
                 or self.acs_sender_email
@@ -276,27 +284,63 @@ class EmailService:
 
                     # Attachments support with ACS can be added if needed
                     # (requires proper file specs)
+                    # Start send and wait for initial result
+                    # (poller completes when request is accepted)
                     operation = acs_client.begin_send(message)
                     result = operation.result()
-                    if str(result["status"]).lower() in (
+
+                    # Result can be an object (SendEmailResult) or a dict
+                    # depending on SDK version
+                    message_id = None
+                    if hasattr(result, "message_id"):
+                        message_id = getattr(result, "message_id", None)
+                    elif isinstance(result, dict):
+                        message_id = (
+                            result.get("messageId") or result.get("id")
+                        )
+
+                    # Try to fetch status if supported, otherwise assume queued
+                    status_value = None
+                    try:
+                        has_get = hasattr(acs_client, "get_send_status")
+                        if message_id and has_get:
+                            status_obj = acs_client.get_send_status(message_id)
+                            if hasattr(status_obj, "status"):
+                                status_value = getattr(
+                                    status_obj, "status", None
+                                )
+                            elif isinstance(status_obj, dict):
+                                status_value = status_obj.get("status")
+                    except Exception:  # Non-fatal; treat as queued
+                        status_value = None
+
+                    normalized_status = str(status_value or "queued").lower()
+                    self.last_status = normalized_status
+
+                    if normalized_status in (
                         "queued",
                         "succeeded",
                         "success",
                         "completed",
                     ):
-                        self.last_status = str(result["status"]) or "success"
                         logger.info(
-                            "ACS email queued/sent to %d recipients: %s",
+                            (
+                                "ACS email queued/sent to %d recipients: %s "
+                                "(message_id=%s)"
+                            ),
                             len(to_emails),
                             subject,
+                            message_id,
                         )
                         return True
                     else:
-                        self.last_status = str(result.get("status", "unknown"))
                         logger.warning(
-                            "ACS email send returned status: %s, "
-                            "falling back to SMTP",
-                            result["status"],
+                            (
+                                "ACS email send returned status: %s "
+                                "(message_id=%s), falling back to SMTP"
+                            ),
+                            normalized_status,
+                            message_id,
                         )
                 except AzureError as e:
                     self.last_error = f"ACS error: {e}"
@@ -435,7 +479,7 @@ class EmailService:
             # Send email
             return self.send_email(
                 to_emails=to_emails,
-                subject=subject,
+                subject=str(subject or ""),
                 body_text=text_content,
                 body_html=html_content,
                 from_email=from_email,
@@ -468,8 +512,12 @@ class EmailService:
             "user_name": user_name,
             "user_email": user_email,
             "temp_password": temp_password,
-            "login_url": os.environ.get("APP_URL", "http://localhost:5000") + "/login",
-            "support_email": os.environ.get("SUPPORT_EMAIL", "support@rfpo.com"),
+            "login_url": (
+                os.environ.get("APP_URL", "http://localhost:5000") + "/login"
+            ),
+            "support_email": os.environ.get(
+                "SUPPORT_EMAIL", "support@rfpo.com"
+            ),
             "subject": "Welcome to RFPO Application - Your Account is Ready",
         }
 
@@ -501,13 +549,21 @@ class EmailService:
             "user_name": user_name,
             "user_email": user_email,
             "change_ip": change_ip,
-            "change_timestamp": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
+            "change_timestamp": datetime.now().strftime(
+                "%B %d, %Y at %I:%M %p"
+            ),
             "current_date": datetime.now().strftime("%B %d, %Y"),
             "current_time": datetime.now().strftime("%I:%M %p"),
             "current_year": datetime.now().year,
-            "login_url": os.environ.get("APP_URL", "http://localhost:5000") + "/login",
-            "support_email": os.environ.get("SUPPORT_EMAIL", "support@rfpo.com"),
-            "subject": ("Password Changed - RFPO Application Security Notification"),
+            "login_url": (
+                os.environ.get("APP_URL", "http://localhost:5000") + "/login"
+            ),
+            "support_email": os.environ.get(
+                "SUPPORT_EMAIL", "support@rfpo.com"
+            ),
+            "subject": (
+                "Password Changed - RFPO Application Security Notification"
+            ),
         }
 
         return self.send_templated_email(
@@ -620,7 +676,9 @@ def send_welcome_email(
     temp_password: Optional[str] = None,
 ) -> bool:
     """Send welcome email to new user"""
-    return email_service.send_welcome_email(user_email, user_name, temp_password)
+    return email_service.send_welcome_email(
+        user_email, user_name, temp_password
+    )
 
 
 def send_password_changed_email(
@@ -629,7 +687,9 @@ def send_password_changed_email(
     change_ip: Optional[str] = None,
 ) -> bool:
     """Send password change notification email"""
-    return email_service.send_password_changed_email(user_email, user_name, change_ip)
+    return email_service.send_password_changed_email(
+        user_email, user_name, change_ip
+    )
 
 
 def send_approval_notification(

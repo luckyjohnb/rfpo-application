@@ -55,6 +55,21 @@
                         <div class="mt-1">
                             <span class="badge bg-dark">Build {{ APP_BUILD_SHA_SHORT or 'dev' }}</span>
                         </div>
+                        <div class="mt-1">
+                            {% if ADMIN_EMAIL_SENDER_MODE == 'ACS' %}
+                                <span class="badge bg-success" title="Email via Azure Communication Services">
+                                    <i class="fas fa-envelope"></i> {{ ADMIN_EMAIL_SENDER_LABEL }}
+                                </span>
+                            {% elif ADMIN_EMAIL_SENDER_MODE == 'SMTP' %}
+                                <span class="badge bg-info" title="Email via SMTP">
+                                    <i class="fas fa-envelope"></i> {{ ADMIN_EMAIL_SENDER_LABEL }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary" title="Email sending not configured">
+                                    <i class="fas fa-envelope"></i> Email disabled
+                                </span>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <ul class="nav flex-column">

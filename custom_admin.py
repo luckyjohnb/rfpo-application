@@ -472,9 +472,25 @@ def create_app():
     def inject_build_info():
         build_sha = os.environ.get("APP_BUILD_SHA", "")
         short_sha = build_sha[:7] if build_sha else ""
+        # Determine email sender info (ACS vs SMTP) for display
+        acs_conn = os.environ.get("ACS_CONNECTION_STRING", "").strip()
+        acs_sender = os.environ.get("ACS_SENDER_EMAIL", "").strip()
+        gmail_user = os.environ.get("GMAIL_USER", "").strip()
+
+        if acs_conn and acs_sender:
+            sender_mode = "ACS"
+            sender_label = f"ACS: {acs_sender}"
+        elif gmail_user:
+            sender_mode = "SMTP"
+            sender_label = f"SMTP: {gmail_user}"
+        else:
+            sender_mode = "Email: disabled"
+            sender_label = "Email: disabled"
         return {
             "APP_BUILD_SHA": build_sha,
             "APP_BUILD_SHA_SHORT": short_sha,
+            "ADMIN_EMAIL_SENDER_MODE": sender_mode,
+            "ADMIN_EMAIL_SENDER_LABEL": sender_label,
         }
 
     @login_manager.user_loader

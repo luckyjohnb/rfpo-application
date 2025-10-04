@@ -959,7 +959,12 @@ def create_app():
             if ok:
                 prov = diag.get("provider") or "unknown"
                 sndr = diag.get("sender") or "(no sender)"
-                flash(f"✅ Test email sent via {prov} from {sndr}.", "success")
+                status = diag.get("status") or "unknown"
+                msg_id = diag.get("message_id") or "(n/a)"
+                flash(
+                    f"✅ Test email sent via {prov} from {sndr}. Status: {status}. Message ID: {msg_id}",
+                    "success",
+                )
             else:
                 err = diag.get("error") or "unknown error"
                 prov = diag.get("provider") or "unknown"

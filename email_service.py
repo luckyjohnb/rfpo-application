@@ -19,6 +19,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 try:
     from azure.communication.email import EmailClient
     from azure.core.exceptions import AzureError
+
     try:  # Azure credentials helper (used for manual client construction)
         from azure.core.credentials import AzureKeyCredential  # type: ignore
     except Exception:  # pragma: no cover - optional dependency
@@ -70,6 +71,7 @@ class EmailService:
         self.last_status: Optional[str] = None
         self.last_sender: Optional[str] = None
         self.last_recipients: List[str] = []
+        self.last_message_id: Optional[str] = None
 
         # SMTP Configuration from environment variables (support multiple naming schemes)
         # Preferred MAIL_*; fall back to SMTP_*; then GMAIL_*
@@ -127,6 +129,7 @@ class EmailService:
         self.last_status = None
         self.last_sender = None
         self.last_recipients = []
+        self.last_message_id = None
 
     def get_last_send_result(self) -> Dict[str, Any]:
         return {
@@ -135,6 +138,7 @@ class EmailService:
             "status": self.last_status,
             "sender": self.last_sender,
             "recipients": list(self.last_recipients) if self.last_recipients else [],
+            "message_id": self.last_message_id,
         }
 
     def _validate_config(self):
@@ -209,7 +213,9 @@ class EmailService:
             parts[k.strip().lower()] = v.strip()
 
         endpoint = parts.get("endpoint") or parts.get("endpoints") or ""
-        access_key = parts.get("accesskey") or parts.get("access_key") or parts.get("key") or ""
+        access_key = (
+            parts.get("accesskey") or parts.get("access_key") or parts.get("key") or ""
+        )
 
         if not endpoint or not access_key:
             raise ValueError(
@@ -330,6 +336,7 @@ class EmailService:
                         message_id = getattr(result, "message_id", None)
                     elif isinstance(result, dict):
                         message_id = result.get("messageId") or result.get("id")
+                    self.last_message_id = message_id
 
                     # Try to fetch status if supported, otherwise assume queued
                     status_value = None

@@ -102,11 +102,16 @@ Looking for where uploaded documents live locally and in Azure (and how to acces
 
 ## �🔧 Configuration
 
+### Secrets
+
+For a complete overview of how secrets are managed locally and in Azure (per-app secret names, storage mounts, rotation, and verification), see SECRETS.md.
+
 ### Environment Variables Setup
 
 All configuration is managed via a `.env` file. **Never commit this file to version control!**
 
 1. **Create .env file from template:**
+
    ```bash
    cp .env.example .env
    ```
@@ -146,7 +151,7 @@ All configuration is managed via a `.env` file. **Never commit this file to vers
    ```
 
 3. **Validate configuration:**
-   
+
    ```bash
    python -c "from env_config import validate_configuration; validate_configuration(); print('✅ Configuration valid')"
    ```
@@ -230,6 +235,7 @@ The application includes comprehensive error handling and structured logging:
 **Error Handlers** (`error_handlers.py`):
 
 **Viewing Logs:**
+
 ```bash
 # View application logs
 tail -f logs/admin.log      # Admin panel logs

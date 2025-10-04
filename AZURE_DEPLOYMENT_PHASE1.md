@@ -2,6 +2,10 @@
 
 This guide explains how to deploy the Phase 1 security and error handling improvements to your Azure Container Apps environment.
 
+## Secrets
+
+For how secrets are managed locally and in Azure (per-app secret names, storage mounts, rotation, and verification), see SECRETS.md.
+
 ## What's Being Deployed
 
 ### Phase 1 Activity 1: Environment Configuration

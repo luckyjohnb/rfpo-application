@@ -243,10 +243,7 @@ class EmailService:
             # Use default sender if not provided; prefer ACS sender when using
             # ACS
             sender_email = (
-                from_email
-                or self.acs_sender_email
-                or self.default_sender
-                or ""
+                from_email or self.acs_sender_email or self.default_sender or ""
             )
             self.last_sender = sender_email
             self.last_recipients = list(to_emails)
@@ -257,13 +254,9 @@ class EmailService:
                 try:
                     self.last_provider = "ACS"
                     # Build recipients list for ACS
-                    acs_recipients = {
-                        "to": [{"address": addr} for addr in to_emails]
-                    }
+                    acs_recipients = {"to": [{"address": addr} for addr in to_emails]}
                     if cc_emails:
-                        acs_recipients["cc"] = [
-                            {"address": addr} for addr in cc_emails
-                        ]
+                        acs_recipients["cc"] = [{"address": addr} for addr in cc_emails]
                     if bcc_emails:
                         acs_recipients["bcc"] = [
                             {"address": addr} for addr in bcc_emails
@@ -295,9 +288,7 @@ class EmailService:
                     if hasattr(result, "message_id"):
                         message_id = getattr(result, "message_id", None)
                     elif isinstance(result, dict):
-                        message_id = (
-                            result.get("messageId") or result.get("id")
-                        )
+                        message_id = result.get("messageId") or result.get("id")
 
                     # Try to fetch status if supported, otherwise assume queued
                     status_value = None
@@ -306,9 +297,7 @@ class EmailService:
                         if message_id and has_get:
                             status_obj = acs_client.get_send_status(message_id)
                             if hasattr(status_obj, "status"):
-                                status_value = getattr(
-                                    status_obj, "status", None
-                                )
+                                status_value = getattr(status_obj, "status", None)
                             elif isinstance(status_obj, dict):
                                 status_value = status_obj.get("status")
                     except Exception:  # Non-fatal; treat as queued
@@ -470,10 +459,20 @@ class EmailService:
                     "subject", f"RFPO Application - {template_name.title()}"
                 )
 
-            # Create plain text version (basic HTML stripping)
+            # Create plain text version
+            # Preserve hyperlinks by converting <a href="URL">Text</a> to
+            # "Text (URL)" before stripping remaining tags.
             import re
 
-            text_content = re.sub("<[^<]+?>", "", html_content)
+            # Replace anchor tags with "text (url)"
+            anchor_pattern = re.compile(
+                r"<a\s+[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            interim = anchor_pattern.sub(r"\2 (\1)", html_content)
+
+            # Strip remaining HTML tags
+            text_content = re.sub("<[^<]+?>", "", interim)
             text_content = re.sub(r"\n\s*\n", "\n\n", text_content)
 
             # Send email
@@ -513,11 +512,12 @@ class EmailService:
             "user_email": user_email,
             "temp_password": temp_password,
             "login_url": (
-                os.environ.get("APP_URL", "http://localhost:5000") + "/login"
-            ),
-            "support_email": os.environ.get(
-                "SUPPORT_EMAIL", "support@rfpo.com"
-            ),
+                os.environ.get("USER_APP_URL")
+                or os.environ.get("APP_URL")
+                or "http://localhost:5000"
+            )
+            + "/login",
+            "support_email": os.environ.get("SUPPORT_EMAIL", "support@rfpo.com"),
             "subject": "Welcome to RFPO Application - Your Account is Ready",
         }
 
@@ -549,21 +549,18 @@ class EmailService:
             "user_name": user_name,
             "user_email": user_email,
             "change_ip": change_ip,
-            "change_timestamp": datetime.now().strftime(
-                "%B %d, %Y at %I:%M %p"
-            ),
+            "change_timestamp": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
             "current_date": datetime.now().strftime("%B %d, %Y"),
             "current_time": datetime.now().strftime("%I:%M %p"),
             "current_year": datetime.now().year,
             "login_url": (
-                os.environ.get("APP_URL", "http://localhost:5000") + "/login"
-            ),
-            "support_email": os.environ.get(
-                "SUPPORT_EMAIL", "support@rfpo.com"
-            ),
-            "subject": (
-                "Password Changed - RFPO Application Security Notification"
-            ),
+                os.environ.get("USER_APP_URL")
+                or os.environ.get("APP_URL")
+                or "http://localhost:5000"
+            )
+            + "/login",
+            "support_email": os.environ.get("SUPPORT_EMAIL", "support@rfpo.com"),
+            "subject": ("Password Changed - RFPO Application Security Notification"),
         }
 
         return self.send_templated_email(
@@ -596,7 +593,11 @@ class EmailService:
             "user_name": user_name,
             "rfpo_id": rfpo_id,
             "approval_type": approval_type,
-            "rfpo_url": os.environ.get("APP_URL", "http://localhost:5000")
+            "rfpo_url": (
+                os.environ.get("ADMIN_APP_URL")
+                or os.environ.get("APP_URL")
+                or "http://localhost:5111"
+            )
             + f"/admin/rfpo/{rfpo_id}/edit",
             "subject": f"RFPO Approval Required - {rfpo_id}",
         }
@@ -631,7 +632,11 @@ class EmailService:
             "user_name": user_name,
             "project_name": project_name,
             "role": role,
-            "projects_url": os.environ.get("APP_URL", "http://localhost:5000")
+            "projects_url": (
+                os.environ.get("ADMIN_APP_URL")
+                or os.environ.get("APP_URL")
+                or "http://localhost:5111"
+            )
             + "/admin/projects",
             "subject": f"Added to Project: {project_name}",
         }
@@ -676,9 +681,7 @@ def send_welcome_email(
     temp_password: Optional[str] = None,
 ) -> bool:
     """Send welcome email to new user"""
-    return email_service.send_welcome_email(
-        user_email, user_name, temp_password
-    )
+    return email_service.send_welcome_email(user_email, user_name, temp_password)
 
 
 def send_password_changed_email(
@@ -687,9 +690,7 @@ def send_password_changed_email(
     change_ip: Optional[str] = None,
 ) -> bool:
     """Send password change notification email"""
-    return email_service.send_password_changed_email(
-        user_email, user_name, change_ip
-    )
+    return email_service.send_password_changed_email(user_email, user_name, change_ip)
 
 
 def send_approval_notification(

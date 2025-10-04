@@ -178,6 +178,47 @@ az communication email domain initiate-verification \
 
 1. Create a sender username on your verified domain and set `ACS_SENDER_EMAIL` to the new From address. Re-run `./update-azure-env-vars.sh` to apply.
 
+### Current deployment: uscar.org DNS records (CustomerManaged)
+
+We created a CustomerManaged ACS Email domain for `uscar.org`. Please add these
+DNS records at your DNS provider to complete verification. Do NOT create a second
+SPF record if one already exists for `uscar.org`.
+
+Required
+
+- TXT (domain verification)
+  - Host/Name: @ (root)
+  - Type: TXT
+  - TTL: 3600
+  - Value: `ms-domain-verification=a5695984-4dc7-4841-abd3-25c71f092ee7`
+
+- CNAME (DKIM selector 1)
+  - Host/Name: `selector1-azurecomm-prod-net._domainkey`
+  - Type: CNAME
+  - TTL: 3600
+  - Target: `selector1-azurecomm-prod-net._domainkey.azurecomm.net`
+
+- CNAME (DKIM selector 2)
+  - Host/Name: `selector2-azurecomm-prod-net._domainkey`
+  - Type: CNAME
+  - TTL: 3600
+  - Target: `selector2-azurecomm-prod-net._domainkey.azurecomm.net`
+
+Optional (recommended)
+
+- DMARC TXT
+  - Host/Name: `_dmarc`
+  - Type: TXT
+  - TTL: 3600
+  - Value: `v=DMARC1; p=none; rua=mailto:dmarc@uscar.org; fo=1`
+
+Cutover plan after DNS verifies
+
+1. Link `uscar.org` to the Communication Service (add to `rfpo-acs` linkedDomains)
+2. Create sender username: `rfpo` (address `rfpo@uscar.org`)
+3. Update app env: `ACS_SENDER_EMAIL=rfpo@uscar.org` on `rfpo-admin`
+4. Admin → Tools → Email Test: send a validation email and check headers
+
 
 ## 4) SMTP fallback (iCloud/Gmail/other)
 

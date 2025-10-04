@@ -234,3 +234,5 @@ fetch('/api/users/sync-approver-status', {
 - Only authenticated users can access their own approver status via API
 - Admin users can view all users' approver status in the admin panel
 - Approver status is automatically maintained - no manual intervention required
+
+<!-- DNS TODOs moved to DNS_RECORDS_USCAR_ORG.md and EMAIL_SERVICES.md -->

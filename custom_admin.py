@@ -907,6 +907,30 @@ def create_app():
             }
         )
 
+    # Simple email test form (admin-only)
+    @app.route("/tools/email-test", methods=["GET", "POST"])
+    @login_required
+    def email_test_tool():
+        from email_service import email_service
+
+        if request.method == "POST":
+            to_email = request.form.get("to_email")
+            subject = request.form.get("subject") or "Test Email from RFPO"
+            message = request.form.get("message") or (
+                "This is a test email from RFPO Admin."
+            )
+
+            ok = email_service.send_email(
+                to_emails=[to_email], subject=subject, body_text=message
+            )
+            if ok:
+                flash("✅ Test email sent.", "success")
+            else:
+                flash("❌ Failed to send test email.", "error")
+            return redirect(url_for("email_test_tool"))
+
+        return render_template("admin/tools/email_test.html")
+
     # Test route for API integration (safe - doesn't break anything)
     @app.route("/api-test")
     @login_required

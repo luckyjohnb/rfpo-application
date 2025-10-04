@@ -41,3 +41,6 @@ pymupdf==1.23.14
 
 # OpenAI integration
 requests>=2.25.1
+
+# Azure Communication Services (Email)
+azure-communication-email>=1.0.0,<2.0.0

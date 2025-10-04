@@ -48,26 +48,155 @@ Each app also has non-secret envs:
 ## How secrets are deployed
 
 - Secrets are created/updated in ACA per app. Example (names only; values handled securely):
-  - `az containerapp secret list --name <app> --resource-group rg-rfpo-e108977f`
+
+  ```bash
+  az containerapp secret list --name <app> --resource-group rg-rfpo-e108977f
+  ```
+
 - Containers read secrets via env variables with `secretRef` in the container template.
 - The deploy script builds images in ACR, pins by digest, updates ACA, and injects non-secret `APP_BUILD_SHA`. It does not overwrite secrets.
 
 ## Rotation and updates
 
 - Rotate a secret:
-  1. Update the secret in ACA (per app): `az containerapp secret set --name <app> --resource-group rg-rfpo-e108977f --secrets <name>=<newValue>`
+  1. Update the secret in ACA (per app):
+
+     ```bash
+     az containerapp secret set --name <app> --resource-group rg-rfpo-e108977f --secrets <name>=<newValue>
+     ```
+
   2. Restart or re-deploy the container app.
 - Rotate database credentials: update `database-url` in each app using the same command; ensure connection string includes `sslmode=require` for PostgreSQL.
 - Rotate storage credentials: update the storage on the container app env or the specific container app storage binding (ACA stores the key); restart apps that mount it.
 
+## Rotation checklists (per app)
+
+Use these minimal, repeatable steps to rotate secrets safely. Replace placeholders in angle brackets.
+
+### rfpo-admin
+
+1. Plan the change
+   - Identify which secret(s) to rotate: `admin-secret`, `database-url`.
+   - If rotating `database-url`, ensure the target DB is reachable and credentials are valid.
+2. Rotate in Azure
+   - Set new value(s):
+
+     ```bash
+     az containerapp secret set --name rfpo-admin --resource-group rg-rfpo-e108977f --secrets admin-secret=<NEW_RANDOM_64_HEX>
+     az containerapp secret set --name rfpo-admin --resource-group rg-rfpo-e108977f --secrets database-url='<NEW_PG_URL_WITH_sslmode=require>'
+     ```
+
+3. Restart
+
+   ```bash
+   az containerapp revision restart --name rfpo-admin --resource-group rg-rfpo-e108977f
+   ```
+
+4. Verify
+   - Health:
+
+     ```bash
+     curl -fsSL https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io/health
+     ```
+
+   - Logs:
+
+     ```bash
+     az containerapp logs show --name rfpo-admin --resource-group rg-rfpo-e108977f --tail 50
+     ```
+
+   - Admin login and dashboard load
+
+### rfpo-api
+
+1. Plan
+   - Identify secret(s): `jwt-secret`, `api-secret`, `database-url`.
+   - Consider token invalidation impact when rotating `jwt-secret`.
+2. Rotate
+
+   ```bash
+   az containerapp secret set --name rfpo-api --resource-group rg-rfpo-e108977f --secrets jwt-secret=<NEW_RANDOM_64_HEX>
+   az containerapp secret set --name rfpo-api --resource-group rg-rfpo-e108977f --secrets api-secret=<NEW_RANDOM_64_HEX>
+   az containerapp secret set --name rfpo-api --resource-group rg-rfpo-e108977f --secrets database-url='<NEW_PG_URL_WITH_sslmode=require>'
+   ```
+
+3. Restart
+
+   ```bash
+   az containerapp revision restart --name rfpo-api --resource-group rg-rfpo-e108977f
+   ```
+
+4. Verify
+   - Health:
+
+     ```bash
+     curl -fsSL https://rfpo-api.livelyforest-d06a98a0.eastus.azurecontainerapps.io/api/health
+     ```
+
+   - Basic auth flow with a test JWT if applicable
+   - Logs for DB connectivity and auth
+
+### rfpo-user
+
+1. Plan
+   - Identify secret(s): `user-app-secret`, optionally `database-url` if used.
+2. Rotate
+
+   ```bash
+   az containerapp secret set --name rfpo-user --resource-group rg-rfpo-e108977f --secrets user-app-secret=<NEW_RANDOM_64_HEX>
+   # If present
+   az containerapp secret set --name rfpo-user --resource-group rg-rfpo-e108977f --secrets database-url='<NEW_PG_URL_WITH_sslmode=require>'
+   ```
+
+3. Restart
+
+   ```bash
+   az containerapp revision restart --name rfpo-user --resource-group rg-rfpo-e108977f
+   ```
+
+4. Verify
+   - Open the user app homepage and ensure sessions work
+
+### Storage (Azure Files)
+
+1. Plan
+   - Rotating storage keys or regenerating SAS for `rfpo-storage`.
+2. Rotate
+   - Update the Container App storage binding or env’s storage reference so that `storageName: rfpo-storage` uses the new credentials.
+   - Update all apps that mount it (rfpo-admin, rfpo-api).
+3. Restart apps that mount storage
+4. Verify read/write to `/app/uploads` (admin) and `/app/data`
+
 ## Verification (safe)
 
 - Show env wiring (no values revealed; `secretRef` only):
-  - `az containerapp show --name <app> --resource-group rg-rfpo-e108977f --query "properties.template.containers[0].env" -o table`
+
+  ```bash
+  az containerapp show --name <app> --resource-group rg-rfpo-e108977f --query "properties.template.containers[0].env" -o table
+  ```
+
 - List secret names:
-  - `az containerapp secret list --name <app> --resource-group rg-rfpo-e108977f -o table`
+
+  ```bash
+  az containerapp secret list --name <app> --resource-group rg-rfpo-e108977f -o table
+  ```
+
 - Check volumes/mounts:
-  - `az containerapp show --name <app> --resource-group rg-rfpo-e108977f --query "{volumes:properties.template.volumes, mounts:properties.template.containers[0].volumeMounts}" -o json`
+
+  ```bash
+  az containerapp show --name <app> --resource-group rg-rfpo-e108977f --query "{volumes:properties.template.volumes, mounts:properties.template.containers[0].volumeMounts}" -o json
+  ```
+
+## CI/CD: Avoid leaking secrets in logs (GitHub Actions)
+
+- Never echo secrets directly. Use GitHub’s masking and env scoping:
+  - Ensure org/repo secrets are configured; reference as `${{ secrets.MY_SECRET }}`.
+  - Avoid `set -x` which prints commands and arguments.
+  - Redact values in script output (use placeholders when printing).
+- Prefer Azure login via OIDC (federated credentials) so you don’t store cloud keys in Actions:
+  - Use `azure/login@v2` with `permissions: id-token: write`.
+- Pass secrets to steps as env variables, not as command-line args (CLI history/logging risk).
+- Validate that Action logs do not contain sensitive substrings (simple `grep -i` checks).
 
 ## Notes
 

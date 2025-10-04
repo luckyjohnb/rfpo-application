@@ -13,6 +13,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Mask common secrets in logs
+        run: |
+          echo "::add-mask::${{ secrets.AZURE_CREDENTIALS }}"
+          echo "::add-mask::${{ secrets.DATABASE_URL }}"
+          echo "::add-mask::${{ secrets.FLASK_SECRET_KEY }}"
+          echo "::add-mask::${{ secrets.JWT_SECRET }}"
+          echo "::add-mask::${{ secrets.API_SECRET }}"
+          echo "::add-mask::${{ secrets.USER_APP_SECRET }}"
+          echo "::add-mask::${{ secrets.ADMIN_PASSWORD }}"
+          echo "::add-mask::${{ secrets.SMTP_PASSWORD }}"
+          echo "::add-mask::${{ secrets.ACR_PASSWORD }}"
+          echo "::add-mask::${{ secrets.POSTGRES_PASSWORD }}"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

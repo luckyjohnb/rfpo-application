@@ -2,112 +2,155 @@
 Email Service Module
 Handles email sending functionality with template support
 """
+
+import logging
 import os
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
-from typing import List, Optional, Dict, Any
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-import logging
 from datetime import datetime
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Any, Dict, List, Optional
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+# Optional Azure Communication Services Email client
+try:
+    from azure.communication.email import EmailClient
+    from azure.core.exceptions import AzureError
+except Exception:  # pragma: no cover - optional dependency
+    EmailClient = None
+    AzureError = Exception
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-def load_env_file(env_file='.env'):
+
+def load_env_file(env_file=".env"):
     """Load environment variables from .env file"""
     if os.path.exists(env_file):
-        with open(env_file, 'r') as f:
+        with open(env_file, "r") as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
                     key = key.strip()
                     value = value.strip()
-                    
+
                     # Remove quotes if present
                     if value.startswith('"') and value.endswith('"'):
                         value = value[1:-1]
                     elif value.startswith("'") and value.endswith("'"):
                         value = value[1:-1]
-                    
+
                     # Set environment variable if not already set
                     if key not in os.environ:
                         os.environ[key] = value
 
+
 # Load .env file automatically
 load_env_file()
 
+
 class EmailService:
     """Email service for sending templated emails"""
-    
+
     def __init__(self, config=None):
         """Initialize email service with configuration"""
         self.config = config or {}
-        
+
         # SMTP Configuration from environment variables
-        self.smtp_server = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
-        self.smtp_port = int(os.environ.get('MAIL_PORT', 587))
-        self.use_tls = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
-        self.username = os.environ.get('MAIL_USERNAME')
-        self.password = os.environ.get('MAIL_PASSWORD')
-        self.default_sender = os.environ.get('MAIL_DEFAULT_SENDER', self.username)
-        
+        self.smtp_server = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
+        self.smtp_port = int(os.environ.get("MAIL_PORT", 587))
+        self.use_tls = os.environ.get("MAIL_USE_TLS", "True").lower() == "true"
+        self.username = os.environ.get("MAIL_USERNAME")
+        self.password = os.environ.get("MAIL_PASSWORD")
+        self.default_sender = os.environ.get("MAIL_DEFAULT_SENDER", self.username)
+
+        # Azure Communication Services Email configuration
+        self.acs_connection_string = os.environ.get("ACS_CONNECTION_STRING")
+        self.acs_sender_email = os.environ.get("ACS_SENDER_EMAIL")
+        self._acs_client = None
+
         # Template configuration
-        self.template_dir = os.path.join(os.path.dirname(__file__), 'templates', 'email')
+        self.template_dir = os.path.join(
+            os.path.dirname(__file__), "templates", "email"
+        )
         self.jinja_env = Environment(
             loader=FileSystemLoader(self.template_dir),
-            autoescape=select_autoescape(['html', 'xml'])
+            autoescape=select_autoescape(["html", "xml"]),
         )
-        
+
         # Validate configuration
         self._validate_config()
-    
+
     def _validate_config(self):
         """Validate email configuration"""
+        # If ACS is configured, consider email service functional
+        if self.acs_connection_string and self.acs_sender_email and EmailClient:
+            return True
+
+        # Otherwise, require SMTP configuration
         if not self.username or not self.password:
-            logger.warning("Email credentials not configured. Email service will not function.")
+            logger.warning(
+                "Email credentials not configured. Email service will not " "function."
+            )
             return False
-        
+
         if not self.smtp_server:
-            logger.warning("SMTP server not configured. Email service will not function.")
+            logger.warning(
+                "SMTP server not configured. Email service will not function."
+            )
             return False
-            
+
         return True
-    
+
+    def _get_acs_client(self) -> Optional["EmailClient"]:
+        """Create or return ACS EmailClient if configured."""
+        if not (self.acs_connection_string and EmailClient):
+            return None
+        if self._acs_client is None:
+            try:
+                self._acs_client = EmailClient(self.acs_connection_string)
+            except Exception as e:
+                logger.error(f"Failed to create ACS EmailClient: {e}")
+                self._acs_client = None
+        return self._acs_client
+
     def _create_smtp_connection(self):
         """Create and configure SMTP connection"""
         try:
             # Create SMTP connection
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            
+
             # Enable TLS if configured
             if self.use_tls:
                 server.starttls()
-            
+
             # Login with credentials
             if self.username and self.password:
                 server.login(self.username, self.password)
-            
+
             return server
         except Exception as e:
             logger.error(f"Failed to create SMTP connection: {str(e)}")
             raise
-    
-    def send_email(self, 
-                   to_emails: List[str], 
-                   subject: str, 
-                   body_text: str = None,
-                   body_html: str = None,
-                   from_email: str = None,
-                   cc_emails: List[str] = None,
-                   bcc_emails: List[str] = None,
-                   attachments: List[Dict[str, Any]] = None) -> bool:
+
+    def send_email(
+        self,
+        to_emails: List[str],
+        subject: str,
+        body_text: str = None,
+        body_html: str = None,
+        from_email: str = None,
+        cc_emails: List[str] = None,
+        bcc_emails: List[str] = None,
+        attachments: List[Dict[str, Any]] = None,
+    ) -> bool:
         """
         Send email with optional HTML content and attachments
-        
+
         Args:
             to_emails: List of recipient email addresses
             subject: Email subject line
@@ -116,8 +159,9 @@ class EmailService:
             from_email: Sender email (defaults to configured sender)
             cc_emails: List of CC recipients (optional)
             bcc_emails: List of BCC recipients (optional)
-            attachments: List of attachment dicts with 'filename' and 'content' keys
-            
+            attachments: List of attachment dicts with 'filename' and
+                'content' keys
+
         Returns:
             bool: True if email sent successfully, False otherwise
         """
@@ -126,85 +170,142 @@ class EmailService:
             if not to_emails:
                 logger.error("No recipient emails provided")
                 return False
-            
+
             if not subject:
                 logger.error("No email subject provided")
                 return False
-            
+
             if not body_text and not body_html:
                 logger.error("No email body provided")
                 return False
-            
+
             # Use default sender if not provided
-            sender_email = from_email or self.default_sender
-            
+            sender_email = from_email or self.acs_sender_email or self.default_sender
+
+            # If ACS is configured, attempt to send with ACS first
+            acs_client = self._get_acs_client()
+            if acs_client and self.acs_sender_email:
+                try:
+                    # Build recipients list for ACS
+                    acs_recipients = {"to": [{"address": addr} for addr in to_emails]}
+                    if cc_emails:
+                        acs_recipients["cc"] = [{"address": addr} for addr in cc_emails]
+                    if bcc_emails:
+                        acs_recipients["bcc"] = [
+                            {"address": addr} for addr in bcc_emails
+                        ]
+
+                    # Prepare content
+                    content = {"subject": subject}
+                    if body_text:
+                        content["plainText"] = body_text
+                    if body_html:
+                        content["html"] = body_html
+
+                    message = {
+                        "senderAddress": self.acs_sender_email,
+                        "recipients": acs_recipients,
+                        "content": content,
+                    }
+
+                    # Attachments support with ACS can be added if needed
+                    # (requires proper file specs)
+                    operation = acs_client.begin_send(message)
+                    result = operation.result()
+                    if str(result["status"]).lower() in (
+                        "queued",
+                        "succeeded",
+                        "success",
+                        "completed",
+                    ):
+                        logger.info(
+                            "ACS email queued/sent to %d recipients: %s",
+                            len(to_emails),
+                            subject,
+                        )
+                        return True
+                    else:
+                        logger.warning(
+                            "ACS email send returned status: %s, "
+                            "falling back to SMTP",
+                            result["status"],
+                        )
+                except AzureError as e:
+                    logger.error("ACS email send failed: %s. Falling back to SMTP.", e)
+                except Exception as e:
+                    logger.error(
+                        "Unexpected error sending via ACS: %s. "
+                        "Falling back to SMTP.",
+                        e,
+                    )
+
+            # Fallback to SMTP
             # Create message
-            msg = MIMEMultipart('alternative')
-            msg['From'] = sender_email
-            msg['To'] = ', '.join(to_emails)
-            msg['Subject'] = subject
-            
-            # Add CC and BCC if provided
+            msg = MIMEMultipart("alternative")
+            msg["From"] = sender_email
+            msg["To"] = ", ".join(to_emails)
+            msg["Subject"] = subject
+
             if cc_emails:
-                msg['Cc'] = ', '.join(cc_emails)
+                msg["Cc"] = ", ".join(cc_emails)
             if bcc_emails:
-                msg['Bcc'] = ', '.join(bcc_emails)
-            
-            # Add plain text part
+                msg["Bcc"] = ", ".join(bcc_emails)
+
             if body_text:
-                text_part = MIMEText(body_text, 'plain', 'utf-8')
+                text_part = MIMEText(body_text, "plain", "utf-8")
                 msg.attach(text_part)
-            
-            # Add HTML part
             if body_html:
-                html_part = MIMEText(body_html, 'html', 'utf-8')
+                html_part = MIMEText(body_html, "html", "utf-8")
                 msg.attach(html_part)
-            
-            # Add attachments if provided
+
             if attachments:
                 for attachment in attachments:
-                    if 'filename' in attachment and 'content' in attachment:
-                        part = MIMEBase('application', 'octet-stream')
-                        part.set_payload(attachment['content'])
+                    if "filename" in attachment and "content" in attachment:
+                        part = MIMEBase("application", "octet-stream")
+                        part.set_payload(attachment["content"])
                         encoders.encode_base64(part)
                         part.add_header(
-                            'Content-Disposition',
-                            f'attachment; filename= {attachment["filename"]}'
+                            "Content-Disposition",
+                            f'attachment; filename= {attachment["filename"]}',
                         )
                         msg.attach(part)
-            
-            # Get all recipients
+
             all_recipients = to_emails.copy()
             if cc_emails:
                 all_recipients.extend(cc_emails)
             if bcc_emails:
                 all_recipients.extend(bcc_emails)
-            
-            # Send email
+
             server = self._create_smtp_connection()
             try:
                 server.send_message(msg, to_addrs=all_recipients)
             finally:
                 server.quit()
-            
-            logger.info(f"Email sent successfully to {len(all_recipients)} recipients: {subject}")
+
+            logger.info(
+                "SMTP email sent successfully to %d recipients: %s",
+                len(all_recipients),
+                subject,
+            )
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to send email: {str(e)}")
             return False
-    
-    def send_templated_email(self,
-                           to_emails: List[str],
-                           template_name: str,
-                           template_data: Dict[str, Any] = None,
-                           subject: str = None,
-                           from_email: str = None,
-                           cc_emails: List[str] = None,
-                           bcc_emails: List[str] = None) -> bool:
+
+    def send_templated_email(
+        self,
+        to_emails: List[str],
+        template_name: str,
+        template_data: Dict[str, Any] = None,
+        subject: str = None,
+        from_email: str = None,
+        cc_emails: List[str] = None,
+        bcc_emails: List[str] = None,
+    ) -> bool:
         """
         Send email using Jinja2 template
-        
+
         Args:
             to_emails: List of recipient email addresses
             template_name: Name of template file (without .html extension)
@@ -213,34 +314,39 @@ class EmailService:
             from_email: Sender email (defaults to configured sender)
             cc_emails: List of CC recipients (optional)
             bcc_emails: List of BCC recipients (optional)
-            
+
         Returns:
             bool: True if email sent successfully, False otherwise
         """
         try:
             # Load template
             template = self.jinja_env.get_template(f"{template_name}.html")
-            
+
             # Prepare template data
             data = template_data or {}
-            data.update({
-                'current_date': datetime.now().strftime('%Y-%m-%d'),
-                'current_year': datetime.now().year
-            })
-            
+            data.update(
+                {
+                    "current_date": datetime.now().strftime("%Y-%m-%d"),
+                    "current_year": datetime.now().year,
+                }
+            )
+
             # Render template
             html_content = template.render(**data)
-            
+
             # Extract subject from template if not provided
             if not subject:
                 # Try to extract subject from template data or use default
-                subject = data.get('subject', f'RFPO Application - {template_name.title()}')
-            
+                subject = data.get(
+                    "subject", f"RFPO Application - {template_name.title()}"
+                )
+
             # Create plain text version (basic HTML stripping)
             import re
-            text_content = re.sub('<[^<]+?>', '', html_content)
-            text_content = re.sub(r'\n\s*\n', '\n\n', text_content)
-            
+
+            text_content = re.sub("<[^<]+?>", "", html_content)
+            text_content = re.sub(r"\n\s*\n", "\n\n", text_content)
+
             # Send email
             return self.send_email(
                 to_emails=to_emails,
@@ -249,133 +355,157 @@ class EmailService:
                 body_html=html_content,
                 from_email=from_email,
                 cc_emails=cc_emails,
-                bcc_emails=bcc_emails
+                bcc_emails=bcc_emails,
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to send templated email: {str(e)}")
             return False
-    
-    def send_welcome_email(self, user_email: str, user_name: str, temp_password: str = None) -> bool:
+
+    def send_welcome_email(
+        self,
+        user_email: str,
+        user_name: str,
+        temp_password: Optional[str] = None,
+    ) -> bool:
         """
         Send welcome email to new user
-        
+
         Args:
             user_email: User's email address
             user_name: User's display name
             temp_password: Temporary password (optional)
-            
+
         Returns:
             bool: True if email sent successfully, False otherwise
         """
         template_data = {
-            'user_name': user_name,
-            'user_email': user_email,
-            'temp_password': temp_password,
-            'login_url': os.environ.get('APP_URL', 'http://localhost:5000') + '/login',
-            'support_email': os.environ.get('SUPPORT_EMAIL', 'support@rfpo.com'),
-            'subject': 'Welcome to RFPO Application - Your Account is Ready'
+            "user_name": user_name,
+            "user_email": user_email,
+            "temp_password": temp_password,
+            "login_url": os.environ.get("APP_URL", "http://localhost:5000") + "/login",
+            "support_email": os.environ.get("SUPPORT_EMAIL", "support@rfpo.com"),
+            "subject": "Welcome to RFPO Application - Your Account is Ready",
         }
-        
+
         return self.send_templated_email(
             to_emails=[user_email],
-            template_name='welcome',
+            template_name="welcome",
             template_data=template_data,
-            subject=template_data['subject']
+            subject=template_data["subject"],
         )
-    
-    def send_password_changed_email(self, user_email: str, user_name: str, change_ip: str = None) -> bool:
+
+    def send_password_changed_email(
+        self,
+        user_email: str,
+        user_name: str,
+        change_ip: Optional[str] = None,
+    ) -> bool:
         """
         Send password change notification email
-        
+
         Args:
             user_email: User's email address
             user_name: User's display name
             change_ip: IP address where password was changed (optional)
-            
+
         Returns:
             bool: True if email sent successfully, False otherwise
         """
         template_data = {
-            'user_name': user_name,
-            'user_email': user_email,
-            'change_ip': change_ip,
-            'change_timestamp': datetime.now().strftime('%B %d, %Y at %I:%M %p'),
-            'current_date': datetime.now().strftime('%B %d, %Y'),
-            'current_time': datetime.now().strftime('%I:%M %p'),
-            'current_year': datetime.now().year,
-            'login_url': os.environ.get('APP_URL', 'http://localhost:5000') + '/login',
-            'support_email': os.environ.get('SUPPORT_EMAIL', 'support@rfpo.com'),
-            'subject': 'Password Changed - RFPO Application Security Notification'
+            "user_name": user_name,
+            "user_email": user_email,
+            "change_ip": change_ip,
+            "change_timestamp": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
+            "current_date": datetime.now().strftime("%B %d, %Y"),
+            "current_time": datetime.now().strftime("%I:%M %p"),
+            "current_year": datetime.now().year,
+            "login_url": os.environ.get("APP_URL", "http://localhost:5000") + "/login",
+            "support_email": os.environ.get("SUPPORT_EMAIL", "support@rfpo.com"),
+            "subject": ("Password Changed - RFPO Application Security Notification"),
         }
-        
+
         return self.send_templated_email(
             to_emails=[user_email],
-            template_name='password_changed',
+            template_name="password_changed",
             template_data=template_data,
-            subject=template_data['subject']
+            subject=template_data["subject"],
         )
-    
-    def send_approval_notification(self, user_email: str, user_name: str, rfpo_id: str, approval_type: str) -> bool:
+
+    def send_approval_notification(
+        self,
+        user_email: str,
+        user_name: str,
+        rfpo_id: str,
+        approval_type: str,
+    ) -> bool:
         """
         Send approval notification email
-        
+
         Args:
             user_email: User's email address
             user_name: User's display name
             rfpo_id: RFPO ID requiring approval
             approval_type: Type of approval needed
-            
+
         Returns:
             bool: True if email sent successfully, False otherwise
         """
         template_data = {
-            'user_name': user_name,
-            'rfpo_id': rfpo_id,
-            'approval_type': approval_type,
-            'rfpo_url': os.environ.get('APP_URL', 'http://localhost:5000') + f'/admin/rfpo/{rfpo_id}/edit',
-            'subject': f'RFPO Approval Required - {rfpo_id}'
+            "user_name": user_name,
+            "rfpo_id": rfpo_id,
+            "approval_type": approval_type,
+            "rfpo_url": os.environ.get("APP_URL", "http://localhost:5000")
+            + f"/admin/rfpo/{rfpo_id}/edit",
+            "subject": f"RFPO Approval Required - {rfpo_id}",
         }
-        
+
         return self.send_templated_email(
             to_emails=[user_email],
-            template_name='approval_notification',
+            template_name="approval_notification",
             template_data=template_data,
-            subject=template_data['subject']
+            subject=template_data["subject"],
         )
-    
-    def send_user_added_to_project_email(self, user_email: str, user_name: str, project_name: str, role: str) -> bool:
+
+    def send_user_added_to_project_email(
+        self,
+        user_email: str,
+        user_name: str,
+        project_name: str,
+        role: str,
+    ) -> bool:
         """
         Send notification when user is added to a project
-        
+
         Args:
             user_email: User's email address
             user_name: User's display name
             project_name: Name of the project
             role: User's role in the project
-            
+
         Returns:
             bool: True if email sent successfully, False otherwise
         """
         template_data = {
-            'user_name': user_name,
-            'project_name': project_name,
-            'role': role,
-            'projects_url': os.environ.get('APP_URL', 'http://localhost:5000') + '/admin/projects',
-            'subject': f'Added to Project: {project_name}'
+            "user_name": user_name,
+            "project_name": project_name,
+            "role": role,
+            "projects_url": os.environ.get("APP_URL", "http://localhost:5000")
+            + "/admin/projects",
+            "subject": f"Added to Project: {project_name}",
         }
-        
+
         return self.send_templated_email(
             to_emails=[user_email],
-            template_name='user_added_to_project',
+            template_name="user_added_to_project",
             template_data=template_data,
-            subject=template_data['subject']
+            subject=template_data["subject"],
         )
-    
+
     def test_connection(self) -> bool:
         """
         Test email service connection
-        
+
         Returns:
             bool: True if connection successful, False otherwise
         """
@@ -391,25 +521,55 @@ class EmailService:
             logger.error(f"Email connection test failed: {str(e)}")
             return False
 
+
 # Global email service instance
 email_service = EmailService()
 
+
 # Convenience functions
-def send_welcome_email(user_email: str, user_name: str, temp_password: str = None) -> bool:
+
+
+def send_welcome_email(
+    user_email: str,
+    user_name: str,
+    temp_password: Optional[str] = None,
+) -> bool:
     """Send welcome email to new user"""
     return email_service.send_welcome_email(user_email, user_name, temp_password)
 
-def send_password_changed_email(user_email: str, user_name: str, change_ip: str = None) -> bool:
+
+def send_password_changed_email(
+    user_email: str,
+    user_name: str,
+    change_ip: Optional[str] = None,
+) -> bool:
     """Send password change notification email"""
     return email_service.send_password_changed_email(user_email, user_name, change_ip)
 
-def send_approval_notification(user_email: str, user_name: str, rfpo_id: str, approval_type: str) -> bool:
-    """Send approval notification email"""
-    return email_service.send_approval_notification(user_email, user_name, rfpo_id, approval_type)
 
-def send_user_added_to_project_email(user_email: str, user_name: str, project_name: str, role: str) -> bool:
+def send_approval_notification(
+    user_email: str,
+    user_name: str,
+    rfpo_id: str,
+    approval_type: str,
+) -> bool:
+    """Send approval notification email"""
+    return email_service.send_approval_notification(
+        user_email, user_name, rfpo_id, approval_type
+    )
+
+
+def send_user_added_to_project_email(
+    user_email: str,
+    user_name: str,
+    project_name: str,
+    role: str,
+) -> bool:
     """Send notification when user is added to a project"""
-    return email_service.send_user_added_to_project_email(user_email, user_name, project_name, role)
+    return email_service.send_user_added_to_project_email(
+        user_email, user_name, project_name, role
+    )
+
 
 def test_email_connection() -> bool:
     """Test email service connection"""

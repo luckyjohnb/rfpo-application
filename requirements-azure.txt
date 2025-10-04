@@ -43,3 +43,6 @@ pymupdf==1.23.14
 
 # Env loader
 python-dotenv==1.0.1
+
+# Azure Communication Services (Email)
+azure-communication-email>=1.0.0,<2.0.0

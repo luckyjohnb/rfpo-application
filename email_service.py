@@ -19,9 +19,14 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 try:
     from azure.communication.email import EmailClient
     from azure.core.exceptions import AzureError
+    try:  # Azure credentials helper (used for manual client construction)
+        from azure.core.credentials import AzureKeyCredential  # type: ignore
+    except Exception:  # pragma: no cover - optional dependency
+        AzureKeyCredential = None  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     EmailClient = None
     AzureError = Exception
+    AzureKeyCredential = None  # type: ignore
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -167,15 +172,51 @@ class EmailService:
                         self.acs_connection_string
                     )
                 else:
-                    # Fallback: unexpected SDK shape – attempt direct init may
-                    # fail, but try to provide a clear error if it does.
-                    self._acs_client = EmailClient(
+                    # Robust fallback: parse connection string and construct
+                    # client with explicit endpoint and AzureKeyCredential.
+                    endpoint, access_key = self._parse_acs_connection_string(
                         self.acs_connection_string
-                    )  # type: ignore[arg-type]
+                    )
+                    if not AzureKeyCredential:
+                        raise RuntimeError(
+                            "AzureKeyCredential unavailable; upgrade azure-core package"
+                        )
+                    self._acs_client = EmailClient(
+                        endpoint, AzureKeyCredential(access_key)
+                    )
             except Exception as e:
                 logger.error(f"Failed to create ACS EmailClient: {e}")
                 self._acs_client = None
         return self._acs_client
+
+    @staticmethod
+    def _parse_acs_connection_string(conn_str: str) -> tuple[str, str]:
+        """Parse ACS connection string into (endpoint, access_key).
+
+        Expected formats (case-insensitive keys):
+            endpoint=https://<resource>.communication.azure.com/;accesskey=<key>
+            endpoint=https://...;accessKey=<key>
+        """
+        # Split by semicolons and then by the first '=' per segment
+        parts = {}
+        for segment in conn_str.split(";"):
+            segment = segment.strip()
+            if not segment:
+                continue
+            if "=" not in segment:
+                continue
+            k, v = segment.split("=", 1)
+            parts[k.strip().lower()] = v.strip()
+
+        endpoint = parts.get("endpoint") or parts.get("endpoints") or ""
+        access_key = parts.get("accesskey") or parts.get("access_key") or parts.get("key") or ""
+
+        if not endpoint or not access_key:
+            raise ValueError(
+                "Invalid ACS connection string: missing endpoint or access key"
+            )
+
+        return endpoint, access_key
 
     def _create_smtp_connection(self):
         """Create and configure SMTP connection"""

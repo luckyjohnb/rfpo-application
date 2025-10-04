@@ -146,39 +146,73 @@ echo -e "${GREEN}✅ Environment: $ENV_NAME${NC}"
 
 ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer --output tsv)
 
-# Update API Container App
-echo -e "${YELLOW}Updating rfpo-api container app...${NC}"
-az containerapp update \
-    --name rfpo-api \
-    --resource-group "$RESOURCE_GROUP" \
-    --image "$ACR_LOGIN_SERVER/rfpo-api@${rfpo_api_DIGEST}" \
-    --set-env-vars APP_BUILD_SHA="${rfpo_api_GIT_HEAD}" \
-    --revision-suffix "api-${rfpo_api_GIT_SHORT}" \
-    --output none
+update_app_with_suffix_retry() {
+    local app_name="$1"; shift
+    local image_ref="$1"; shift
+    local build_sha="$1"; shift
+    local base_suffix="$1"; shift
 
-echo -e "${GREEN}✅ rfpo-api updated${NC}"
+    echo -e "${YELLOW}Updating ${app_name} container app...${NC}"
+    set +e
+    az containerapp update \
+        --name "${app_name}" \
+        --resource-group "${RESOURCE_GROUP}" \
+        --image "${image_ref}" \
+        --set-env-vars APP_BUILD_SHA="${build_sha}" \
+        --revision-suffix "${base_suffix}" \
+        --output none
+    local rc=$?
+    if [ $rc -ne 0 ]; then
+        echo -e "${YELLOW}⚠️  Revision suffix '${base_suffix}' collided. Retrying with unique suffix...${NC}"
+        local unique_suffix="${base_suffix}-$(date +%H%M%S)"
+        az containerapp update \
+            --name "${app_name}" \
+            --resource-group "${RESOURCE_GROUP}" \
+            --image "${image_ref}" \
+            --set-env-vars APP_BUILD_SHA="${build_sha}" \
+            --revision-suffix "${unique_suffix}" \
+            --output none
+        rc=$?
+        if [ $rc -ne 0 ]; then
+            echo -e "${YELLOW}⚠️  Retry with unique suffix failed. Retrying without specifying revision suffix...${NC}"
+            az containerapp update \
+                --name "${app_name}" \
+                --resource-group "${RESOURCE_GROUP}" \
+                --image "${image_ref}" \
+                --set-env-vars APP_BUILD_SHA="${build_sha}" \
+                --output none
+            rc=$?
+            if [ $rc -ne 0 ]; then
+                set -e
+                echo -e "${RED}❌ Failed to update ${app_name}. Please check logs and try again.${NC}"
+                exit 1
+            fi
+        fi
+    fi
+    set -e
+    echo -e "${GREEN}✅ ${app_name} updated${NC}"
+}
 
-# Update Admin Container App
-echo -e "${YELLOW}Updating rfpo-admin container app...${NC}"
-az containerapp update \
-    --name rfpo-admin \
-    --resource-group "$RESOURCE_GROUP" \
-    --image "$ACR_LOGIN_SERVER/rfpo-admin@${rfpo_admin_DIGEST}" \
-    --set-env-vars APP_BUILD_SHA="${rfpo_admin_GIT_HEAD}" \
-    --revision-suffix "admin-${rfpo_admin_GIT_SHORT}" \
-    --output none
+# Update API Container App (with retry on suffix collision)
+update_app_with_suffix_retry \
+    "rfpo-api" \
+    "$ACR_LOGIN_SERVER/rfpo-api@${rfpo_api_DIGEST}" \
+    "${rfpo_api_GIT_HEAD}" \
+    "api-${rfpo_api_GIT_SHORT}"
 
-echo -e "${GREEN}✅ rfpo-admin updated${NC}"
+# Update Admin Container App (with retry on suffix collision)
+update_app_with_suffix_retry \
+    "rfpo-admin" \
+    "$ACR_LOGIN_SERVER/rfpo-admin@${rfpo_admin_DIGEST}" \
+    "${rfpo_admin_GIT_HEAD}" \
+    "admin-${rfpo_admin_GIT_SHORT}"
 
-# Update User Container App
-echo -e "${YELLOW}Updating rfpo-user container app...${NC}"
-az containerapp update \
-    --name rfpo-user \
-    --resource-group "$RESOURCE_GROUP" \
-        --image "$ACR_LOGIN_SERVER/rfpo-user@${rfpo_user_DIGEST}" \
-        --set-env-vars APP_BUILD_SHA="${rfpo_user_GIT_HEAD}" \
-        --revision-suffix "user-${rfpo_user_GIT_SHORT}" \
-    --output none
+# Update User Container App (with retry on suffix collision)
+update_app_with_suffix_retry \
+    "rfpo-user" \
+    "$ACR_LOGIN_SERVER/rfpo-user@${rfpo_user_DIGEST}" \
+    "${rfpo_user_GIT_HEAD}" \
+    "user-${rfpo_user_GIT_SHORT}"
 
 # Quick health checks
 echo ""

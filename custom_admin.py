@@ -9,6 +9,8 @@ import mimetypes
 import os
 import uuid
 from datetime import datetime
+import io
+import secrets
 
 from flask import (
     Flask,
@@ -59,6 +61,12 @@ from models import (
     VendorSite,
     db,
 )
+
+# Optional heavy deps used for import/export
+try:
+    import pandas as pd
+except Exception:  # pragma: no cover - optional in runtime
+    pd = None
 from pdf_generator import RFPOPDFGenerator
 
 
@@ -1604,6 +1612,232 @@ def create_app():
         return render_template(
             "admin/users.html", users=users, format_json=format_json_field
         )
+
+    @app.route("/users/export")
+    @login_required
+    def users_export():
+        """Export users as JSON or Excel"""
+        export_format = request.args.get("format", "xlsx").lower()
+
+        # Build export data (keep only non-sensitive fields)
+        users = User.query.order_by(User.id).all()
+        rows = []
+        for u in users:
+            try:
+                permissions = u.get_permissions() or []
+            except Exception:
+                permissions = []
+            rows.append(
+                {
+                    "record_id": u.record_id,
+                    "fullname": u.fullname,
+                    "email": u.email,
+                    "company": u.company,
+                    "position": u.position,
+                    "permissions": permissions,
+                    "active": bool(u.active),
+                }
+            )
+
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+
+        if export_format == "json":
+            payload = json.dumps(rows, indent=2)
+            return Response(
+                payload,
+                mimetype="application/json",
+                headers={
+                    "Content-Disposition": f"attachment; filename=users-{timestamp}.json"
+                },
+            )
+
+        # Default to Excel
+        if pd is None:
+            flash(
+                "❌ Excel export requires pandas to be installed.",
+                "error",
+            )
+            return redirect(url_for("users"))
+
+        # Normalize permissions to comma-separated for Excel
+        excel_rows = []
+        for r in rows:
+            excel_rows.append({
+                **r,
+                "permissions": ", ".join(r.get("permissions") or []),
+            })
+
+        df = pd.DataFrame(excel_rows)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Users", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"users-{timestamp}.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/users/export/template")
+    @login_required
+    def users_export_template():
+        """Download an Excel template for user import"""
+        if pd is None:
+            flash(
+                "❌ Excel export requires pandas to be installed.",
+                "error",
+            )
+            return redirect(url_for("users"))
+
+        columns = [
+            "record_id",
+            "fullname",
+            "email",
+            "company",
+            "position",
+            "permissions",  # comma-separated, e.g., "RFPO_USER, RFPO_ADMIN"
+            "active",  # TRUE/FALSE
+        ]
+        df = pd.DataFrame(columns=columns)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Users", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="users-template.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/users/import", methods=["POST"])
+    @login_required
+    def users_import():
+        """Import users from uploaded JSON or Excel file"""
+        file = request.files.get("import_file")
+        if not file or file.filename == "":
+            flash("❌ Please choose a file to import.", "error")
+            return redirect(url_for("users"))
+
+        filename = secure_filename(file.filename)
+        ext = os.path.splitext(filename)[1].lower()
+
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        try:
+            records = []
+            if ext in (".json",):
+                try:
+                    payload = json.load(file.stream)
+                    if isinstance(payload, dict):
+                        # Support single-object
+                        records = [payload]
+                    elif isinstance(payload, list):
+                        records = payload
+                    else:
+                        raise ValueError("JSON must be an object or array")
+                except Exception as e:
+                    flash(f"❌ Invalid JSON: {str(e)}", "error")
+                    return redirect(url_for("users"))
+            elif ext in (".xlsx", ".xls"):
+                if pd is None:
+                    flash(
+                        "❌ Excel import requires pandas to be installed.",
+                        "error",
+                    )
+                    return redirect(url_for("users"))
+                try:
+                    df = pd.read_excel(file.stream)
+                    records = df.to_dict(orient="records")
+                except Exception as e:
+                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
+                    return redirect(url_for("users"))
+            else:
+                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
+                return redirect(url_for("users"))
+
+            from werkzeug.security import generate_password_hash
+
+            for idx, rec in enumerate(records, start=1):
+                try:
+                    email = (rec.get("email") or "").strip()
+                    fullname = (rec.get("fullname") or "").strip()
+                    if not email or not fullname:
+                        skipped += 1
+                        errors.append(f"Row {idx}: missing email or fullname")
+                        continue
+
+                    existing = User.query.filter_by(email=email).first()
+
+                    # Normalize permissions
+                    perms = rec.get("permissions")
+                    if isinstance(perms, str):
+                        permissions = [p.strip() for p in perms.split(",") if p.strip()]
+                    elif isinstance(perms, list):
+                        permissions = [str(p).strip() for p in perms if str(p).strip()]
+                    else:
+                        permissions = []
+
+                    active_val = rec.get("active")
+                    if isinstance(active_val, str):
+                        active = active_val.strip().lower() in ("1", "true", "yes")
+                    else:
+                        active = bool(active_val) if active_val is not None else True
+
+                    if existing:
+                        # Update basic fields
+                        existing.fullname = fullname
+                        existing.company = rec.get("company") or existing.company
+                        existing.position = rec.get("position") or existing.position
+                        existing.active = active
+                        existing.set_permissions(permissions)
+                        existing.updated_by = current_user.email
+                        updated += 1
+                    else:
+                        # Create new user with random secure password
+                        record_id = (
+                            (rec.get("record_id") or "").strip()
+                            or generate_next_id(User, "record_id", "", 8)
+                        )
+                        temp_password = secrets.token_urlsafe(12)
+                        user = User(
+                            record_id=record_id,
+                            fullname=fullname,
+                            email=email,
+                            password_hash=generate_password_hash(temp_password),
+                            company=rec.get("company"),
+                            position=rec.get("position"),
+                            active=active,
+                            created_by=current_user.email,
+                            updated_by=current_user.email,
+                        )
+                        user.set_permissions(permissions)
+                        db.session.add(user)
+                        created += 1
+                except Exception as row_err:
+                    skipped += 1
+                    errors.append(f"Row {idx}: {str(row_err)}")
+
+            db.session.commit()
+
+            # Summarize
+            summary = f"✅ Import complete. Created: {created}, Updated: {updated}, Skipped: {skipped}."
+            flash(summary, "success")
+            if errors:
+                flash("\n".join(["⚠️ Issues:"] + errors[:10]), "warning")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"❌ Import failed: {str(e)}", "error")
+
+        return redirect(url_for("users"))
 
     @app.route("/user/new", methods=["GET", "POST"])
     @login_required

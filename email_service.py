@@ -543,6 +543,8 @@ class EmailService:
         user_email: str,
         user_name: str,
         temp_password: Optional[str] = None,
+        show_user_link: Optional[bool] = None,
+        show_admin_link: Optional[bool] = None,
     ) -> bool:
         """
         Send welcome email to new user
@@ -555,16 +557,33 @@ class EmailService:
         Returns:
             bool: True if email sent successfully, False otherwise
         """
+        # Resolve app login URLs
+        user_login_url = (
+            os.environ.get("USER_APP_URL")
+            or os.environ.get("APP_URL")
+            or "http://localhost:5000"
+        ) + "/login"
+        admin_login_url = (
+            os.environ.get("ADMIN_APP_URL")
+            or os.environ.get("APP_URL")
+            or "http://localhost:5111"
+        ) + "/login"
+
+        # Defaults: previous behavior shows only user link if not specified
+        show_user = True if show_user_link is None else bool(show_user_link)
+        show_admin = False if show_admin_link is None else bool(show_admin_link)
+
         template_data = {
             "user_name": user_name,
             "user_email": user_email,
             "temp_password": temp_password,
-            "login_url": (
-                os.environ.get("USER_APP_URL")
-                or os.environ.get("APP_URL")
-                or "http://localhost:5000"
-            )
-            + "/login",
+            # Back-compat single login_url retained (user app)
+            "login_url": user_login_url,
+            # New: explicit URLs and flags for role-based buttons
+            "user_login_url": user_login_url,
+            "admin_login_url": admin_login_url,
+            "show_user_link": show_user,
+            "show_admin_link": show_admin,
             "support_email": os.environ.get("SUPPORT_EMAIL", "support@rfpo.com"),
             "subject": "Welcome to RFPO Application - Your Account is Ready",
         }
@@ -727,9 +746,22 @@ def send_welcome_email(
     user_email: str,
     user_name: str,
     temp_password: Optional[str] = None,
+    show_user_link: Optional[bool] = None,
+    show_admin_link: Optional[bool] = None,
 ) -> bool:
-    """Send welcome email to new user"""
-    return email_service.send_welcome_email(user_email, user_name, temp_password)
+    """
+    Send welcome email to new user, optionally controlling which links show.
+
+    When flags are None, defaults match prior behavior:
+    show user link only.
+    """
+    return email_service.send_welcome_email(
+        user_email,
+        user_name,
+        temp_password,
+        show_user_link,
+        show_admin_link,
+    )
 
 
 def send_password_changed_email(

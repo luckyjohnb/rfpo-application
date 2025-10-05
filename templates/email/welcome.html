@@ -159,9 +159,17 @@
             </div>
             {% endif %}
 
-            <!-- Login Button -->
+            <!-- Login Buttons (role-based) -->
             <div style="text-align: center; margin: 30px 0;">
-                <a href="{{ login_url }}" class="button">Login to Your Account</a>
+                {% if show_user_link %}
+                    <a href="{{ user_login_url or login_url }}" class="button" style="margin-right: 10px;">Open RFPO User</a>
+                {% endif %}
+                {% if show_admin_link %}
+                    <a href="{{ admin_login_url }}" class="button" style="background-color:#8e44ad;">Open RFPO Admin</a>
+                {% endif %}
+                {% if not show_user_link and not show_admin_link %}
+                    <a href="{{ login_url }}" class="button">Login to Your Account</a>
+                {% endif %}
             </div>
 
             <div class="info-box">

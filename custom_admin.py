@@ -1614,7 +1614,7 @@ def create_app():
                 from werkzeug.security import generate_password_hash
 
                 try:
-                    from email_service import send_welcome_email
+                    from email_service import email_service, send_welcome_email
 
                     EMAIL_SERVICE_AVAILABLE = True
                 except ImportError:
@@ -1693,19 +1693,43 @@ def create_app():
                 # Send welcome email
                 try:
                     if user_email and user_fullname and EMAIL_SERVICE_AVAILABLE:
+                        # Determine which app links to include
+                        perms_set = set(permissions or [])
+                        show_user_link = "RFPO_USER" in perms_set
+                        show_admin_link = ("RFPO_ADMIN" in perms_set) or (
+                            "GOD" in perms_set
+                        )
+                        # Super Admin (GOD) -> both; RFPO_ADMIN -> admin; RFPO_USER -> user
+                        if "GOD" in perms_set:
+                            show_user_link = True
+                            show_admin_link = True
+
                         email_sent = send_welcome_email(
                             user_email=user_email,
                             user_name=user_fullname,
                             temp_password=user_password,
+                            show_user_link=show_user_link,
+                            show_admin_link=show_admin_link,
+                        )
+                        diag = (
+                            email_service.get_last_send_result()
+                            if hasattr(email_service, "get_last_send_result")
+                            else {}
                         )
                         if email_sent:
+                            prov = diag.get("provider") or "unknown"
+                            status = diag.get("status") or "unknown"
+                            msg_id = diag.get("message_id") or "(n/a)"
+                            sndr = diag.get("sender") or "(no sender)"
                             flash(
-                                "✅ User created successfully and welcome email sent!",
+                                f"✅ User created and welcome email sent via {prov} from {sndr}. Status: {status}. Message ID: {msg_id}",
                                 "success",
                             )
                         else:
+                            prov = diag.get("provider") or "unknown"
+                            err = diag.get("error") or "unknown error"
                             flash(
-                                "✅ User created successfully, but welcome email could not be sent. Please check email configuration.",
+                                f"✅ User created, but welcome email failed via {prov}: {err}",
                                 "warning",
                             )
                     else:

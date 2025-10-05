@@ -6,9 +6,29 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">👤 Users</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <a href="{{ url_for('user_new') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> New User
-        </a>
+        <div class="btn-group me-2">
+            <a href="{{ url_for('user_new') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> New User
+            </a>
+        </div>
+        <div class="btn-group">
+            <a class="btn btn-outline-secondary" title="Export to Excel"
+               href="{{ url_for('users_export', format='xlsx') }}">
+                <i class="fas fa-file-export"></i>
+            </a>
+            <a class="btn btn-outline-secondary" title="Export to JSON"
+               href="{{ url_for('users_export', format='json') }}">
+                <i class="fas fa-code"></i>
+            </a>
+            <a class="btn btn-outline-secondary" title="Download Import Template"
+               href="{{ url_for('users_export_template') }}">
+                <i class="fas fa-file-download"></i>
+            </a>
+            <button type="button" class="btn btn-outline-secondary" title="Import Users"
+                    data-bs-toggle="modal" data-bs-target="#importUsersModal">
+                <i class="fas fa-file-import"></i>
+            </button>
+        </div>
     </div>
 </div>
 
@@ -76,6 +96,35 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Import Users Modal -->
+<div class="modal fade" id="importUsersModal" tabindex="-1" aria-labelledby="importUsersLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importUsersLabel">Import Users (Excel or JSON)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('users_import') }}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="importFile" class="form-label">Choose file</label>
+                        <input class="form-control" type="file" id="importFile" name="import_file"
+                                     accept=".json,.xlsx,.xls" required>
+                        <div class="form-text">
+                            • Excel: columns [record_id, fullname, email, company, position, permissions, active]<br>
+                            • JSON: array of user objects; permissions may be a list or comma-separated string.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    </div>
 
 <!-- Delete Confirmation Modal -->
 <div class="modal fade" id="deleteModal" tabindex="-1">

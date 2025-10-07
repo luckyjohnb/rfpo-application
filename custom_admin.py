@@ -36,14 +36,12 @@ from werkzeug.utils import secure_filename
 
 # Import error handling
 from error_handlers import register_error_handlers
-from exceptions import AuthenticationException, DatabaseException
-from logging_config import log_authentication, log_exception, setup_logging
+from logging_config import setup_logging
 
 # Import your models
 from models import (
     RFPO,
     Consortium,
-    DocumentChunk,
     List,
     PDFPositioning,
     Project,
@@ -528,7 +526,7 @@ def create_app():
             else:
                 data = value
             return ", ".join(data) if isinstance(data, list) else str(data)
-        except:
+        except Exception:
             return str(value)
 
     def parse_comma_list(value):
@@ -577,7 +575,7 @@ def create_app():
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             return f"{prefix}{timestamp}" if prefix else timestamp
 
-        except Exception as e:
+        except Exception:
             # Fallback to timestamp-based ID
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             return f"{prefix}{timestamp}" if prefix else timestamp
@@ -607,12 +605,14 @@ def create_app():
         return None
 
     def _process_vendor_site_id(vendor_site_id_str):
-        """Process vendor_site_id which could be a regular ID or special 'vendor_X' format"""
+        # Process vendor_site_id which could be a regular ID
+        # or special 'vendor_X' format
         if not vendor_site_id_str:
             return None
 
         # If it's the special vendor primary contact format (vendor_123),
-        # we'll store None since the vendor's primary contact info is already in the vendor record
+        # store None since the vendor's primary contact info
+        # is already in the vendor record
         if vendor_site_id_str.startswith("vendor_"):
             return None
 
@@ -818,9 +818,14 @@ def create_app():
                         # Add summary warnings for document issues
                         if document_validation["missing_documents"]:
                             # Missing required documents should be an error, not a warning
-                            validation_result["errors"].append(
-                                f"{workflow_type.title()}: Missing {len(document_validation['missing_documents'])} required documents"
+                            missing_count = len(
+                                document_validation["missing_documents"]
                             )
+                            msg = (
+                                f"{workflow_type.title()}: Missing {missing_count} "
+                                "required documents"
+                            )
+                            validation_result["errors"].append(msg)
                             validation_result["is_valid"] = False
 
                     # Create workflow phase info
@@ -876,7 +881,7 @@ def create_app():
     def validate_stage_documents(rfpo, stage):
         """Validate documents for a specific stage"""
         required_doc_type_keys = stage.get_required_document_types()
-        required_doc_names = stage.get_required_document_names()
+    # Note: names can be derived from types if needed in the future
 
         document_validation = {
             "required_documents": [],
@@ -1007,7 +1012,7 @@ def create_app():
         api_auth_status = "not_tested"
         if current_user and hasattr(current_user, "email"):
             try:
-                api_auth_result = app.api_helper.authenticate_admin(
+                _ = app.api_helper.authenticate_admin(
                     current_user.email, "test"
                 )
                 api_auth_status = "tested_but_no_password"
@@ -1105,10 +1110,12 @@ def create_app():
         # Calculate counts for each consortium
         for consortium in consortiums:
             # Count projects associated with this consortium
-            consortium.project_count = Project.query.filter(
-                Project.consortium_ids.like(f"%{consortium.consort_id}%"),
-                Project.active == True,
-            ).count()
+            consortium.project_count = (
+                Project.query.filter(
+                    Project.consortium_ids.like(f"%{consortium.consort_id}%"),
+                    Project.active.is_(True),
+                ).count()
+            )
 
             # Count RFPOs through teams associated with this consortium
             consortium.rfpo_count = (
@@ -1472,6 +1479,249 @@ def create_app():
             "admin/teams.html", teams=teams, format_json=format_json_field
         )
 
+    @app.route("/teams/export")
+    @login_required
+    def teams_export():
+        """Export teams as JSON or Excel"""
+        export_format = request.args.get("format", "xlsx").lower()
+
+        all_teams = Team.query.order_by(Team.id).all()
+        rows = []
+        for t in all_teams:
+            rows.append(
+                {
+                    "record_id": t.record_id,
+                    "name": t.name,
+                    "abbrev": t.abbrev,
+                    "description": t.description,
+                    "consortium_consort_id": t.consortium_consort_id,
+                    "rfpo_viewer_user_ids": t.get_rfpo_viewer_users(),
+                    "rfpo_admin_user_ids": t.get_rfpo_admin_users(),
+                    "active": bool(t.active),
+                }
+            )
+
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+
+        if export_format == "json":
+            payload = json.dumps(rows, indent=2)
+            return Response(
+                payload,
+                mimetype="application/json",
+                headers={
+                    "Content-Disposition": (
+                        f"attachment; filename=teams-{timestamp}.json"
+                    )
+                },
+            )
+
+        if pd is None:
+            flash("❌ Excel export requires pandas to be installed.", "error")
+            return redirect(url_for("teams"))
+
+        # Normalize JSON lists to comma-separated strings for Excel
+        excel_rows = []
+        for r in rows:
+            excel_rows.append(
+                {
+                    **r,
+                    "rfpo_viewer_user_ids": ", ".join(
+                        r.get("rfpo_viewer_user_ids") or []
+                    ),
+                    "rfpo_admin_user_ids": ", ".join(
+                        r.get("rfpo_admin_user_ids") or []
+                    ),
+                }
+            )
+
+        df = pd.DataFrame(excel_rows)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Teams", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"teams-{timestamp}.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/teams/export/template")
+    @login_required
+    def teams_export_template():
+        """Download an Excel template for team import"""
+        if pd is None:
+            flash("❌ Excel export requires pandas to be installed.", "error")
+            return redirect(url_for("teams"))
+
+        columns = [
+            "record_id",
+            "name",
+            "abbrev",
+            "description",
+            "consortium_consort_id",
+            "rfpo_viewer_user_ids",  # comma-separated user record_ids
+            "rfpo_admin_user_ids",   # comma-separated user record_ids
+            "active",                # TRUE/FALSE
+        ]
+        df = pd.DataFrame(columns=columns)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Teams", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="teams-template.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/teams/import", methods=["POST"])
+    @login_required
+    def teams_import():
+        """Import teams from JSON/Excel (upsert by record_id or abbrev)"""
+        file = request.files.get("import_file")
+        if not file or file.filename == "":
+            flash("❌ Please choose a file to import.", "error")
+            return redirect(url_for("teams"))
+
+        filename = secure_filename(file.filename)
+        ext = os.path.splitext(filename)[1].lower()
+
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        def _parse_bool(val, default=True):
+            if val is None:
+                return default
+            if isinstance(val, bool):
+                return val
+            s = str(val).strip().lower()
+            return s in ("1", "true", "yes", "y", "t")
+
+        def _parse_list(val):
+            if val is None:
+                return []
+            if isinstance(val, list):
+                return [str(x).strip() for x in val if str(x).strip()]
+            if isinstance(val, str):
+                return [p.strip() for p in val.split(",") if p.strip()]
+            return []
+
+        try:
+            records = []
+            if ext in (".json",):
+                try:
+                    payload = json.load(file.stream)
+                    records = (
+                        payload if isinstance(payload, list) else [payload]
+                    )
+                except Exception as e:
+                    flash(f"❌ Invalid JSON: {str(e)}", "error")
+                    return redirect(url_for("teams"))
+            elif ext in (".xlsx", ".xls"):
+                if pd is None:
+                    flash(
+                        "❌ Excel import requires pandas to be installed.",
+                        "error",
+                    )
+                    return redirect(url_for("teams"))
+                try:
+                    df = pd.read_excel(file.stream)
+                    records = df.to_dict(orient="records")
+                except Exception as e:
+                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
+                    return redirect(url_for("teams"))
+            else:
+                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
+                return redirect(url_for("teams"))
+
+            for idx, rec in enumerate(records, start=1):
+                try:
+                    name = (rec.get("name") or "").strip()
+                    abbrev = (rec.get("abbrev") or "").strip()
+                    if not name or not abbrev:
+                        skipped += 1
+                        errors.append(f"Row {idx}: missing name or abbrev")
+                        continue
+
+                    record_id = (rec.get("record_id") or "").strip()
+                    existing = None
+                    if record_id:
+                        existing = (
+                            Team.query.filter_by(record_id=record_id).first()
+                        )
+                    if not existing and abbrev:
+                        existing = Team.query.filter_by(abbrev=abbrev).first()
+
+                    viewer_ids = _parse_list(rec.get("rfpo_viewer_user_ids"))
+                    admin_ids = _parse_list(rec.get("rfpo_admin_user_ids"))
+                    active = _parse_bool(rec.get("active"), True)
+
+                    if existing:
+                        existing.name = name
+                        existing.abbrev = abbrev or existing.abbrev
+                        existing.description = (
+                            rec.get("description") or existing.description
+                        )
+                        existing.consortium_consort_id = (
+                            rec.get("consortium_consort_id")
+                            or existing.consortium_consort_id
+                        )
+                        existing.active = active
+                        existing.set_rfpo_viewer_users(viewer_ids)
+                        existing.set_rfpo_admin_users(admin_ids)
+                        existing.updated_by = current_user.email
+                        updated += 1
+                    else:
+                        # Auto-generate record_id if missing
+                        if not record_id:
+                            record_id = generate_next_id(
+                                Team, "record_id", "", 8
+                            )
+                        team = Team(
+                            record_id=record_id,
+                            name=name,
+                            abbrev=abbrev,
+                            description=rec.get("description"),
+                            consortium_consort_id=(
+                                rec.get("consortium_consort_id") or None
+                            ),
+                            active=active,
+                            created_by=current_user.email,
+                            updated_by=current_user.email,
+                        )
+                        team.set_rfpo_viewer_users(viewer_ids)
+                        team.set_rfpo_admin_users(admin_ids)
+                        db.session.add(team)
+                        created += 1
+                except Exception as row_err:
+                    skipped += 1
+                    errors.append(f"Row {idx}: {str(row_err)}")
+
+            db.session.commit()
+
+            summary = (
+                "✅ Import complete. Created: "
+                f"{created}, Updated: {updated}, Skipped: {skipped}."
+            )
+            flash(summary, "success")
+            if errors:
+                flash("\n".join(["⚠️ Issues:"] + errors[:10]), "warning")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"❌ Import failed: {str(e)}", "error")
+
+        return redirect(url_for("teams"))
+
     @app.route("/team/new", methods=["GET", "POST"])
     @login_required
     def team_new():
@@ -1575,17 +1825,21 @@ def create_app():
         workflow_count = RFPOApprovalWorkflow.query.filter_by(team_id=team.id).count()
 
         if rfpo_count > 0:
-            flash(
-                f"❌ Cannot delete team: {rfpo_count} RFPOs are associated with this team. Please reassign or delete the RFPOs first.",
-                "error",
+            msg = (
+                "❌ Cannot delete team: "
+                f"{rfpo_count} RFPOs are associated with this team."
             )
+            msg += " Please reassign or delete the RFPOs first."
+            flash(msg, "error")
             return redirect(url_for("teams"))
 
         if workflow_count > 0:
-            flash(
-                f"❌ Cannot delete team: {workflow_count} approval workflows are associated with this team. Please delete the workflows first.",
-                "error",
+            msg = (
+                "❌ Cannot delete team: "
+                f"{workflow_count} approval workflows are associated with this team."
             )
+            msg += " Please delete the workflows first."
+            flash(msg, "error")
             return redirect(url_for("teams"))
 
         try:
@@ -1955,10 +2209,11 @@ def create_app():
                             status = diag.get("status") or "unknown"
                             msg_id = diag.get("message_id") or "(n/a)"
                             sndr = diag.get("sender") or "(no sender)"
-                            flash(
-                                f"✅ User created and welcome email sent via {prov} from {sndr}. Status: {status}. Message ID: {msg_id}",
-                                "success",
+                            msg = (
+                                f"✅ User created and welcome email sent via {prov} from {sndr}. "
+                                f"Status: {status}. Message ID: {msg_id}"
                             )
+                            flash(msg, "success")
                         else:
                             prov = diag.get("provider") or "unknown"
                             err = diag.get("error") or "unknown error"
@@ -2857,10 +3112,13 @@ Southfield, MI  48075""",
             rfpo_id=rfpo.id
         ).first()
         if approval_instance and not approval_instance.is_complete():
-            flash(
-                f"❌ Cannot delete RFPO: It has an active approval workflow (Instance: {approval_instance.instance_id}, Status: {approval_instance.overall_status}). Please complete or cancel the approval process first.",
-                "error",
+            msg = (
+                "❌ Cannot delete RFPO: It has an active approval workflow "
+                f"(Instance: {approval_instance.instance_id}, "
+                f"Status: {approval_instance.overall_status}). "
+                "Please complete or cancel the approval process first."
             )
+            flash(msg, "error")
             return redirect(url_for("rfpos"))
 
         try:
@@ -2917,6 +3175,253 @@ Southfield, MI  48075""",
         return render_template(
             "admin/projects.html", projects=projects, format_json=format_json_field
         )
+
+    @app.route("/projects/export")
+    @login_required
+    def projects_export():
+        """Export projects as JSON or Excel"""
+        export_format = request.args.get("format", "xlsx").lower()
+
+        all_projects = Project.query.order_by(Project.id).all()
+        rows = []
+        for p in all_projects:
+            rows.append(
+                {
+                    "project_id": p.project_id,
+                    "ref": p.ref,
+                    "name": p.name,
+                    "description": p.description,
+                    "consortium_ids": p.get_consortium_ids(),
+                    "team_record_id": p.team_record_id,
+                    "rfpo_viewer_user_ids": p.get_rfpo_viewer_users(),
+                    "gov_funded": bool(p.gov_funded),
+                    "uni_project": bool(p.uni_project),
+                    "active": bool(p.active),
+                }
+            )
+
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+
+        if export_format == "json":
+            payload = json.dumps(rows, indent=2)
+            return Response(
+                payload,
+                mimetype="application/json",
+                headers={
+                    "Content-Disposition": (
+                        f"attachment; filename=projects-{timestamp}.json"
+                    )
+                },
+            )
+
+        if pd is None:
+            flash("❌ Excel export requires pandas to be installed.", "error")
+            return redirect(url_for("projects"))
+
+        excel_rows = []
+        for r in rows:
+            excel_rows.append(
+                {
+                    **r,
+                    "consortium_ids": ", ".join(r.get("consortium_ids") or []),
+                    "rfpo_viewer_user_ids": ", ".join(
+                        r.get("rfpo_viewer_user_ids") or []
+                    ),
+                }
+            )
+
+        df = pd.DataFrame(excel_rows)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Projects", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"projects-{timestamp}.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/projects/export/template")
+    @login_required
+    def projects_export_template():
+        """Download an Excel template for project import"""
+        if pd is None:
+            flash("❌ Excel export requires pandas to be installed.", "error")
+            return redirect(url_for("projects"))
+
+        columns = [
+            "project_id",
+            "ref",
+            "name",
+            "description",
+            "consortium_ids",        # comma-separated consort_ids
+            "team_record_id",
+            "rfpo_viewer_user_ids",  # comma-separated user record_ids
+            "gov_funded",            # TRUE/FALSE
+            "uni_project",           # TRUE/FALSE
+            "active",                # TRUE/FALSE
+        ]
+        df = pd.DataFrame(columns=columns)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Projects", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="projects-template.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/projects/import", methods=["POST"])
+    @login_required
+    def projects_import():
+        """Import projects from JSON/Excel (upsert by project_id or ref)"""
+        file = request.files.get("import_file")
+        if not file or file.filename == "":
+            flash("❌ Please choose a file to import.", "error")
+            return redirect(url_for("projects"))
+
+        filename = secure_filename(file.filename or "upload")
+        ext = os.path.splitext(filename)[1].lower()
+
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        def _parse_bool(val, default=True):
+            if val is None:
+                return default
+            if isinstance(val, bool):
+                return val
+            s = str(val).strip().lower()
+            return s in ("1", "true", "yes", "y", "t")
+
+        def _parse_list(val):
+            if val is None:
+                return []
+            if isinstance(val, list):
+                return [str(x).strip() for x in val if str(x).strip()]
+            if isinstance(val, str):
+                return [p.strip() for p in val.split(",") if p.strip()]
+            return []
+
+        try:
+            records = []
+            if ext in (".json",):
+                try:
+                    payload = json.load(file.stream)
+                    records = (
+                        payload if isinstance(payload, list) else [payload]
+                    )
+                except Exception as e:
+                    flash(f"❌ Invalid JSON: {str(e)}", "error")
+                    return redirect(url_for("projects"))
+            elif ext in (".xlsx", ".xls"):
+                if pd is None:
+                    flash(
+                        "❌ Excel import requires pandas to be installed.",
+                        "error",
+                    )
+                    return redirect(url_for("projects"))
+                try:
+                    df = pd.read_excel(file.stream)
+                    records = df.to_dict(orient="records")
+                except Exception as e:
+                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
+                    return redirect(url_for("projects"))
+            else:
+                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
+                return redirect(url_for("projects"))
+
+            for idx, rec in enumerate(records, start=1):
+                try:
+                    name = (rec.get("name") or "").strip()
+                    ref = (rec.get("ref") or "").strip()
+                    if not name or not ref:
+                        skipped += 1
+                        errors.append("Row {}: missing name or ref".format(idx))
+                        continue
+
+                    project_id = (rec.get("project_id") or "").strip()
+                    existing = None
+                    if project_id:
+                        existing = (
+                            Project.query.filter_by(project_id=project_id).first()
+                        )
+                    if not existing and ref:
+                        existing = Project.query.filter_by(ref=ref).first()
+
+                    cons_ids = _parse_list(rec.get("consortium_ids"))
+                    viewer_ids = _parse_list(rec.get("rfpo_viewer_user_ids"))
+                    gov_funded = _parse_bool(rec.get("gov_funded"), True)
+                    uni_project = _parse_bool(rec.get("uni_project"), False)
+                    active = _parse_bool(rec.get("active"), True)
+
+                    if existing:
+                        existing.ref = ref or existing.ref
+                        existing.name = name
+                        existing.description = (
+                            rec.get("description") or existing.description
+                        )
+                        existing.team_record_id = (
+                            rec.get("team_record_id") or existing.team_record_id
+                        )
+                        existing.gov_funded = gov_funded
+                        existing.uni_project = uni_project
+                        existing.active = active
+                        existing.set_consortium_ids(cons_ids)
+                        existing.set_rfpo_viewer_users(viewer_ids)
+                        existing.updated_by = current_user.email
+                        updated += 1
+                    else:
+                        # Auto-generate project_id if missing
+                        if not project_id:
+                            project_id = generate_next_id(
+                                Project, "project_id", "", 8
+                            )
+                        project = Project(
+                            project_id=project_id,
+                            ref=ref,
+                            name=name,
+                            description=rec.get("description"),
+                            team_record_id=rec.get("team_record_id") or None,
+                            gov_funded=gov_funded,
+                            uni_project=uni_project,
+                            active=active,
+                            created_by=current_user.email,
+                            updated_by=current_user.email,
+                        )
+                        project.set_consortium_ids(cons_ids)
+                        project.set_rfpo_viewer_users(viewer_ids)
+                        db.session.add(project)
+                        created += 1
+                except Exception as row_err:
+                    skipped += 1
+                    errors.append(f"Row {idx}: {str(row_err)}")
+
+            db.session.commit()
+
+            summary = (
+                "✅ Import complete. Created: "
+                f"{created}, Updated: {updated}, Skipped: {skipped}."
+            )
+            flash(summary, "success")
+            if errors:
+                flash("\n".join(["⚠️ Issues:"] + errors[:10]), "warning")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"❌ Import failed: {str(e)}", "error")
+
+        return redirect(url_for("projects"))
 
     @app.route("/project/new", methods=["GET", "POST"])
     @login_required
@@ -3062,6 +3567,645 @@ Southfield, MI  48075""",
         return render_template(
             "admin/vendors.html", vendors=vendors, format_json=format_json_field
         )
+
+    @app.route("/vendors/export")
+    @login_required
+    def vendors_export():
+        """Export vendors as JSON or Excel"""
+        export_format = request.args.get("format", "xlsx").lower()
+
+        all_vendors = Vendor.query.order_by(Vendor.id).all()
+        rows = []
+        for v in all_vendors:
+            rows.append(
+                {
+                    "vendor_id": v.vendor_id,
+                    "company_name": v.company_name,
+                    "status": v.status,
+                    "vendor_type": v.vendor_type,
+                    "certs_reps": bool(v.certs_reps),
+                    "cert_date": (
+                        v.cert_date.strftime("%Y-%m-%d")
+                        if v.cert_date
+                        else None
+                    ),
+                    "cert_expire_date": (
+                        v.cert_expire_date.strftime("%Y-%m-%d")
+                        if v.cert_expire_date
+                        else None
+                    ),
+                    "is_university": bool(v.is_university),
+                    "approved_consortiums": v.get_approved_consortiums(),
+                    "onetime_project_id": v.onetime_project_id,
+                    "contact_name": v.contact_name,
+                    "contact_dept": v.contact_dept,
+                    "contact_tel": v.contact_tel,
+                    "contact_fax": v.contact_fax,
+                    "contact_address": v.contact_address,
+                    "contact_city": v.contact_city,
+                    "contact_state": v.contact_state,
+                    "contact_zip": v.contact_zip,
+                    "contact_country": v.contact_country,
+                    "active": bool(v.active),
+                }
+            )
+
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+
+        if export_format == "json":
+            payload = json.dumps(rows, indent=2)
+            return Response(
+                payload,
+                mimetype="application/json",
+                headers={
+                    "Content-Disposition": (
+                        f"attachment; filename=vendors-{timestamp}.json"
+                    )
+                },
+            )
+
+        if pd is None:
+            flash("❌ Excel export requires pandas to be installed.", "error")
+            return redirect(url_for("vendors"))
+
+        excel_rows = []
+        for r in rows:
+            excel_rows.append(
+                {
+                    **r,
+                    "approved_consortiums": ", ".join(
+                        r.get("approved_consortiums") or []
+                    ),
+                }
+            )
+
+        df = pd.DataFrame(excel_rows)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Vendors", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"vendors-{timestamp}.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/vendors/export/template")
+    @login_required
+    def vendors_export_template():
+        """Download an Excel template for vendor import"""
+        if pd is None:
+            flash("❌ Excel export requires pandas to be installed.", "error")
+            return redirect(url_for("vendors"))
+
+        columns = [
+            "vendor_id",
+            "company_name",
+            "status",
+            "vendor_type",
+            "certs_reps",
+            "cert_date",
+            "cert_expire_date",
+            "is_university",
+            "approved_consortiums",  # comma-separated consortium abbrevs
+            "onetime_project_id",
+            "contact_name",
+            "contact_dept",
+            "contact_tel",
+            "contact_fax",
+            "contact_address",
+            "contact_city",
+            "contact_state",
+            "contact_zip",
+            "contact_country",
+            "active",
+        ]
+        df = pd.DataFrame(columns=columns)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Vendors", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="vendors-template.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/vendors/import", methods=["POST"])
+    @login_required
+    def vendors_import():
+        # Import vendors from JSON/Excel (upsert by id or company name)
+        file = request.files.get("import_file")
+        if not file or file.filename == "":
+            flash("❌ Please choose a file to import.", "error")
+            return redirect(url_for("vendors"))
+
+        filename = secure_filename(file.filename or "upload")
+        ext = os.path.splitext(filename)[1].lower()
+
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        def _parse_bool(val, default=True):
+            if val is None:
+                return default
+            if isinstance(val, bool):
+                return val
+            s = str(val).strip().lower()
+            return s in ("1", "true", "yes", "y", "t")
+
+        def _parse_int(val, default=0):
+            try:
+                return int(val)
+            except Exception:
+                return default
+
+        def _parse_date(val):
+            if not val:
+                return None
+            try:
+                if isinstance(val, str):
+                    return datetime.strptime(val, "%Y-%m-%d").date()
+                # pandas may give Timestamp
+                return val.date() if hasattr(val, "date") else None
+            except Exception:
+                return None
+
+        def _parse_list(val):
+            if val is None:
+                return []
+            if isinstance(val, list):
+                return [str(x).strip() for x in val if str(x).strip()]
+            if isinstance(val, str):
+                return [p.strip() for p in val.split(",") if p.strip()]
+            return []
+
+        try:
+            records = []
+            if ext in (".json",):
+                try:
+                    payload = json.load(file.stream)
+                    records = (
+                        payload if isinstance(payload, list) else [payload]
+                    )
+                except Exception as e:
+                    flash(f"❌ Invalid JSON: {str(e)}", "error")
+                    return redirect(url_for("vendors"))
+            elif ext in (".xlsx", ".xls"):
+                if pd is None:
+                    flash(
+                        "❌ Excel import requires pandas to be installed.",
+                        "error",
+                    )
+                    return redirect(url_for("vendors"))
+                try:
+                    df = pd.read_excel(file.stream)
+                    records = df.to_dict(orient="records")
+                except Exception as e:
+                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
+                    return redirect(url_for("vendors"))
+            else:
+                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
+                return redirect(url_for("vendors"))
+
+            for idx, rec in enumerate(records, start=1):
+                try:
+                    company_name = (rec.get("company_name") or "").strip()
+                    if not company_name:
+                        skipped += 1
+                        errors.append(f"Row {idx}: missing company_name")
+                        continue
+
+                    vendor_id = (rec.get("vendor_id") or "").strip()
+                    existing = None
+                    if vendor_id:
+                        existing = (
+                            Vendor.query.filter_by(vendor_id=vendor_id).first()
+                        )
+                    if not existing and company_name:
+                        existing = Vendor.query.filter_by(
+                            company_name=company_name
+                        ).first()
+
+                    approved = _parse_list(rec.get("approved_consortiums"))
+
+                    # parse fields
+                    status = (rec.get("status") or "live").strip()
+                    vtype = _parse_int(rec.get("vendor_type"), 0)
+                    certs_reps = _parse_bool(rec.get("certs_reps"), False)
+                    cert_date = _parse_date(rec.get("cert_date"))
+                    cert_expire_date = _parse_date(rec.get("cert_expire_date"))
+                    is_university = _parse_bool(
+                        rec.get("is_university"), False
+                    )
+                    active = _parse_bool(rec.get("active"), True)
+
+                    if existing:
+                        existing.company_name = company_name
+                        existing.status = status or existing.status
+                        existing.vendor_type = vtype
+                        existing.certs_reps = certs_reps
+                        existing.cert_date = cert_date
+                        existing.cert_expire_date = cert_expire_date
+                        existing.is_university = is_university
+                        existing.onetime_project_id = (
+                            rec.get("onetime_project_id")
+                            or existing.onetime_project_id
+                        )
+                        existing.contact_name = (
+                            rec.get("contact_name") or existing.contact_name
+                        )
+                        existing.contact_dept = (
+                            rec.get("contact_dept") or existing.contact_dept
+                        )
+                        existing.contact_tel = (
+                            rec.get("contact_tel") or existing.contact_tel
+                        )
+                        existing.contact_fax = (
+                            rec.get("contact_fax") or existing.contact_fax
+                        )
+                        existing.contact_address = (
+                            rec.get("contact_address")
+                            or existing.contact_address
+                        )
+                        existing.contact_city = (
+                            rec.get("contact_city") or existing.contact_city
+                        )
+                        existing.contact_state = (
+                            rec.get("contact_state") or existing.contact_state
+                        )
+                        existing.contact_zip = (
+                            rec.get("contact_zip") or existing.contact_zip
+                        )
+                        existing.contact_country = (
+                            rec.get("contact_country")
+                            or existing.contact_country
+                        )
+                        existing.active = active
+                        existing.set_approved_consortiums(approved)
+                        existing.updated_by = current_user.email
+                        updated += 1
+                    else:
+                        if not vendor_id:
+                            vendor_id = generate_next_id(
+                                Vendor, "vendor_id", "", 8
+                            )
+                        vendor = Vendor(
+                            vendor_id=vendor_id,
+                            company_name=company_name,
+                            status=status,
+                            vendor_type=vtype,
+                            certs_reps=certs_reps,
+                            cert_date=cert_date,
+                            cert_expire_date=cert_expire_date,
+                            is_university=is_university,
+                            onetime_project_id=(
+                                rec.get("onetime_project_id") or None
+                            ),
+                            contact_name=rec.get("contact_name"),
+                            contact_dept=rec.get("contact_dept"),
+                            contact_tel=rec.get("contact_tel"),
+                            contact_fax=rec.get("contact_fax"),
+                            contact_address=rec.get("contact_address"),
+                            contact_city=rec.get("contact_city"),
+                            contact_state=rec.get("contact_state"),
+                            contact_zip=rec.get("contact_zip"),
+                            contact_country=rec.get("contact_country"),
+                            active=active,
+                            created_by=current_user.email,
+                            updated_by=current_user.email,
+                        )
+                        vendor.set_approved_consortiums(approved)
+                        db.session.add(vendor)
+                        created += 1
+                except Exception as row_err:
+                    skipped += 1
+                    errors.append(f"Row {idx}: {str(row_err)}")
+
+            db.session.commit()
+
+            summary = (
+                "✅ Import complete. Created: "
+                f"{created}, Updated: {updated}, Skipped: {skipped}."
+            )
+            flash(summary, "success")
+            if errors:
+                flash("\n".join(["⚠️ Issues:"] + errors[:10]), "warning")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"❌ Import failed: {str(e)}", "error")
+
+        return redirect(url_for("vendors"))
+
+    @app.route("/consortiums/export")
+    @login_required
+    def consortiums_export():
+        """Export consortiums as JSON or Excel"""
+        export_format = request.args.get("format", "xlsx").lower()
+
+        all_consortiums = Consortium.query.order_by(Consortium.id).all()
+        rows = []
+        for c in all_consortiums:
+            rows.append(
+                {
+                    "consort_id": c.consort_id,
+                    "name": c.name,
+                    "abbrev": c.abbrev,
+                    "require_approved_vendors": bool(
+                        c.require_approved_vendors
+                    ),
+                    "non_government_project_id": c.non_government_project_id,
+                    "rfpo_viewer_user_ids": c.get_rfpo_viewer_users(),
+                    "rfpo_admin_user_ids": c.get_rfpo_admin_users(),
+                    "invoicing_address": c.invoicing_address,
+                    "doc_fax_name": c.doc_fax_name,
+                    "doc_fax_number": c.doc_fax_number,
+                    "doc_email_name": c.doc_email_name,
+                    "doc_email_address": c.doc_email_address,
+                    "doc_post_name": c.doc_post_name,
+                    "doc_post_address": c.doc_post_address,
+                    "po_email": c.po_email,
+                    "active": bool(c.active),
+                }
+            )
+
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+
+        if export_format == "json":
+            payload = json.dumps(rows, indent=2)
+            return Response(
+                payload,
+                mimetype="application/json",
+                headers={
+                    "Content-Disposition": (
+                        f"attachment; filename=consortiums-{timestamp}.json"
+                    )
+                },
+            )
+
+        if pd is None:
+            flash("❌ Excel export requires pandas to be installed.", "error")
+            return redirect(url_for("consortiums"))
+
+        excel_rows = []
+        for r in rows:
+            excel_rows.append(
+                {
+                    **r,
+                    "rfpo_viewer_user_ids": ", ".join(
+                        r.get("rfpo_viewer_user_ids") or []
+                    ),
+                    "rfpo_admin_user_ids": ", ".join(
+                        r.get("rfpo_admin_user_ids") or []
+                    ),
+                }
+            )
+
+        df = pd.DataFrame(excel_rows)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Consortiums", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"consortiums-{timestamp}.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/consortiums/export/template")
+    @login_required
+    def consortiums_export_template():
+        """Download an Excel template for consortium import"""
+        if pd is None:
+            flash("❌ Excel export requires pandas to be installed.", "error")
+            return redirect(url_for("consortiums"))
+
+        columns = [
+            "consort_id",
+            "name",
+            "abbrev",
+            "require_approved_vendors",
+            "non_government_project_id",
+            "rfpo_viewer_user_ids",  # comma-separated user record_ids
+            "rfpo_admin_user_ids",   # comma-separated user record_ids
+            "invoicing_address",
+            "doc_fax_name",
+            "doc_fax_number",
+            "doc_email_name",
+            "doc_email_address",
+            "doc_post_name",
+            "doc_post_address",
+            "po_email",
+            "active",
+        ]
+        df = pd.DataFrame(columns=columns)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Consortiums", index=False)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="consortiums-template.xlsx",
+            mimetype=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+    @app.route("/consortiums/import", methods=["POST"])
+    @login_required
+    def consortiums_import():
+        # Import consortiums from JSON/Excel (upsert by id or abbrev)
+        file = request.files.get("import_file")
+        if not file or file.filename == "":
+            flash("❌ Please choose a file to import.", "error")
+            return redirect(url_for("consortiums"))
+
+        filename = secure_filename(file.filename or "upload")
+        ext = os.path.splitext(filename)[1].lower()
+
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        def _parse_bool(val, default=True):
+            if val is None:
+                return default
+            if isinstance(val, bool):
+                return val
+            s = str(val).strip().lower()
+            return s in ("1", "true", "yes", "y", "t")
+
+        def _parse_list(val):
+            if val is None:
+                return []
+            if isinstance(val, list):
+                return [str(x).strip() for x in val if str(x).strip()]
+            if isinstance(val, str):
+                return [p.strip() for p in val.split(",") if p.strip()]
+            return []
+
+        try:
+            records = []
+            if ext in (".json",):
+                try:
+                    payload = json.load(file.stream)
+                    records = (
+                        payload if isinstance(payload, list) else [payload]
+                    )
+                except Exception as e:
+                    flash(f"❌ Invalid JSON: {str(e)}", "error")
+                    return redirect(url_for("consortiums"))
+            elif ext in (".xlsx", ".xls"):
+                if pd is None:
+                    flash(
+                        "❌ Excel import requires pandas to be installed.",
+                        "error",
+                    )
+                    return redirect(url_for("consortiums"))
+                try:
+                    df = pd.read_excel(file.stream)
+                    records = df.to_dict(orient="records")
+                except Exception as e:
+                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
+                    return redirect(url_for("consortiums"))
+            else:
+                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
+                return redirect(url_for("consortiums"))
+
+            for idx, rec in enumerate(records, start=1):
+                try:
+                    name = (rec.get("name") or "").strip()
+                    abbrev = (rec.get("abbrev") or "").strip()
+                    if not name or not abbrev:
+                        skipped += 1
+                        errors.append(f"Row {idx}: missing name or abbrev")
+                        continue
+
+                    consort_id = (rec.get("consort_id") or "").strip()
+                    existing = None
+                    if consort_id:
+                        existing = Consortium.query.filter_by(
+                            consort_id=consort_id
+                        ).first()
+                    if not existing and abbrev:
+                        existing = Consortium.query.filter_by(
+                            abbrev=abbrev
+                        ).first()
+
+                    viewer_ids = _parse_list(rec.get("rfpo_viewer_user_ids"))
+                    admin_ids = _parse_list(rec.get("rfpo_admin_user_ids"))
+                    require_approved = _parse_bool(
+                        rec.get("require_approved_vendors"), True
+                    )
+                    active = _parse_bool(rec.get("active"), True)
+
+                    if existing:
+                        existing.name = name
+                        existing.abbrev = abbrev or existing.abbrev
+                        existing.require_approved_vendors = require_approved
+                        existing.non_government_project_id = (
+                            rec.get("non_government_project_id")
+                            or existing.non_government_project_id
+                        )
+                        existing.invoicing_address = (
+                            rec.get("invoicing_address")
+                            or existing.invoicing_address
+                        )
+                        existing.doc_fax_name = (
+                            rec.get("doc_fax_name") or existing.doc_fax_name
+                        )
+                        existing.doc_fax_number = (
+                            rec.get("doc_fax_number")
+                            or existing.doc_fax_number
+                        )
+                        existing.doc_email_name = (
+                            rec.get("doc_email_name")
+                            or existing.doc_email_name
+                        )
+                        existing.doc_email_address = (
+                            rec.get("doc_email_address")
+                            or existing.doc_email_address
+                        )
+                        existing.doc_post_name = (
+                            rec.get("doc_post_name") or existing.doc_post_name
+                        )
+                        existing.doc_post_address = (
+                            rec.get("doc_post_address")
+                            or existing.doc_post_address
+                        )
+                        existing.po_email = rec.get("po_email") or existing.po_email
+                        existing.active = active
+                        existing.set_rfpo_viewer_users(viewer_ids)
+                        existing.set_rfpo_admin_users(admin_ids)
+                        existing.updated_by = current_user.email
+                        updated += 1
+                    else:
+                        if not consort_id:
+                            consort_id = generate_next_id(
+                                Consortium, "consort_id", "", 8
+                            )
+                        consortium = Consortium(
+                            consort_id=consort_id,
+                            name=name,
+                            abbrev=abbrev,
+                            require_approved_vendors=require_approved,
+                            non_government_project_id=rec.get(
+                                "non_government_project_id"
+                            )
+                            or None,
+                            rfpo_viewer_user_ids=None,
+                            rfpo_admin_user_ids=None,
+                            invoicing_address=rec.get("invoicing_address"),
+                            doc_fax_name=rec.get("doc_fax_name"),
+                            doc_fax_number=rec.get("doc_fax_number"),
+                            doc_email_name=rec.get("doc_email_name"),
+                            doc_email_address=rec.get("doc_email_address"),
+                            doc_post_name=rec.get("doc_post_name"),
+                            doc_post_address=rec.get("doc_post_address"),
+                            po_email=rec.get("po_email"),
+                            active=active,
+                            created_by=current_user.email,
+                            updated_by=current_user.email,
+                        )
+                        consortium.set_rfpo_viewer_users(viewer_ids)
+                        consortium.set_rfpo_admin_users(admin_ids)
+                        db.session.add(consortium)
+                        created += 1
+                except Exception as row_err:
+                    skipped += 1
+                    errors.append(f"Row {idx}: {str(row_err)}")
+
+            db.session.commit()
+
+            summary = (
+                "✅ Import complete. Created: "
+                f"{created}, Updated: {updated}, Skipped: {skipped}."
+            )
+            flash(summary, "success")
+            if errors:
+                flash("\n".join(["⚠️ Issues:"] + errors[:10]), "warning")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"❌ Import failed: {str(e)}", "error")
+
+        return redirect(url_for("consortiums"))
 
     @app.route("/vendor/new", methods=["GET", "POST"])
     @login_required
@@ -4695,10 +5839,12 @@ Southfield, MI  48075""",
 
         try:
             instance_id = instance.instance_id
-            rfpo_id = instance.rfpo_id
 
             # Reset RFPO status if it was set by this approval workflow
-            if instance.rfpo and instance.rfpo.status in ["Approved", "Refused"]:
+            if (
+                instance.rfpo
+                and instance.rfpo.status in ["Approved", "Refused"]
+            ):
                 instance.rfpo.status = "Draft"
                 instance.rfpo.updated_by = current_user.get_display_name()
 
@@ -4706,10 +5852,10 @@ Southfield, MI  48075""",
             db.session.delete(instance)
             db.session.commit()
 
-            flash(
-                f'✅ Approval instance "{instance_id}" deleted successfully! RFPO reset to Draft status.',
-                "success",
+            msg = (
+                f'✅ Approval instance "{instance_id}" deleted successfully!'
             )
+            flash(msg + " RFPO reset to Draft status.", "success")
 
         except Exception as e:
             db.session.rollback()
@@ -4796,7 +5942,7 @@ Southfield, MI  48075""",
             all_actions = []
 
             # Use timestamp-based action ID generation to ensure uniqueness
-            import time
+            # Removed unused 'time' import; using datetime-based timestamps
 
             action_id_counter = 0
 
@@ -4811,7 +5957,10 @@ Southfield, MI  48075""",
                         jsonify(
                             {
                                 "success": False,
-                                "error": f"No appropriate approval stage found for Phase {phase_number} ({workflow_type}) workflow",
+                                "error": (
+                                    "No appropriate approval stage found for "
+                                    f"Phase {phase_number} ({workflow_type}) workflow"
+                                ),
                             }
                         ),
                         400,
@@ -4997,7 +6146,8 @@ Southfield, MI  48075""",
     def api_projects_for_consortium(consortium_id):
         """Get projects for a specific consortium"""
         projects = Project.query.filter(
-            Project.consortium_ids.like(f"%{consortium_id}%"), Project.active == True
+            Project.consortium_ids.like(f"%{consortium_id}%"),
+            Project.active.is_(True)
         ).all()
 
         project_data = []
@@ -5366,14 +6516,14 @@ Southfield, MI  48075""",
     @app.route("/api/pdf-template-image/<template_name>")
     def pdf_template_image(template_name):
         """Convert PDF template to image for background display"""
-        print(f"🖼️ PDF Template Image Route Called:")
+        print("🖼️ PDF Template Image Route Called:")
         print(f"  - template_name: {template_name}")
 
         try:
             import io
             import os
 
-            from flask import Response, current_app
+            from flask import Response
 
             # Try to import pdf2image, fall back to placeholder if not available
             try:
@@ -5455,7 +6605,7 @@ Southfield, MI  48075""",
                         anchor="mm",
                         font=font,
                     )
-                except:
+                except Exception:
                     pass
 
                 # Convert to PNG bytes
@@ -5504,13 +6654,13 @@ Southfield, MI  48075""",
     @login_required
     def pdf_positioning_editor(consortium_id, template_name):
         """Visual PDF positioning editor"""
-        print(f"🔍 PDF Editor Route Called:")
+        print("🔍 PDF Editor Route Called:")
         print(f"  - consortium_id: {consortium_id}")
         print(f"  - template_name: {template_name}")
 
         # Debug: List all consortiums
         all_consortiums = Consortium.query.all()
-        print(f"  - Available consortiums:")
+        print("  - Available consortiums:")
         for c in all_consortiums:
             print(f"    * ID: {c.id}, consort_id: {c.consort_id}, name: {c.name}")
 
@@ -5518,7 +6668,10 @@ Southfield, MI  48075""",
         if not consortium:
             print(f"❌ No consortium found with consort_id='{consortium_id}'")
             return (
-                f"No consortium found with consort_id='{consortium_id}'. Available: {[c.consort_id for c in all_consortiums]}",
+                (
+                    f"No consortium found with consort_id='{consortium_id}'. "
+                    f"Available: {[c.consort_id for c in all_consortiums]}"
+                ),
                 404,
             )
 

@@ -6,9 +6,29 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">🏪 Vendors</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <a href="{{ url_for('vendor_new') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> New Vendor
-        </a>
+        <div class="btn-group me-2">
+            <a href="{{ url_for('vendor_new') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> New Vendor
+            </a>
+        </div>
+        <div class="btn-group">
+            <a class="btn btn-outline-secondary" title="Export to Excel"
+               href="{{ url_for('vendors_export', format='xlsx') }}">
+                <i class="fas fa-file-export"></i>
+            </a>
+            <a class="btn btn-outline-secondary" title="Export to JSON"
+               href="{{ url_for('vendors_export', format='json') }}">
+                <i class="fas fa-code"></i>
+            </a>
+            <a class="btn btn-outline-secondary" title="Download Import Template"
+               href="{{ url_for('vendors_export_template') }}">
+                <i class="fas fa-file-download"></i>
+            </a>
+            <button type="button" class="btn btn-outline-secondary" title="Import Vendors"
+                    data-bs-toggle="modal" data-bs-target="#importVendorsModal">
+                <i class="fas fa-file-import"></i>
+            </button>
+        </div>
     </div>
 </div>
 
@@ -100,6 +120,35 @@
                 </a>
             </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Import Vendors Modal -->
+<div class="modal fade" id="importVendorsModal" tabindex="-1" aria-labelledby="importVendorsLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importVendorsLabel">Import Vendors (Excel or JSON)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('vendors_import') }}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="importVendorsFile" class="form-label">Choose file</label>
+                        <input class="form-control" type="file" id="importVendorsFile" name="import_file"
+                               accept=".json,.xlsx,.xls" required>
+                        <div class="form-text">
+                            • Excel: columns [vendor_id, company_name, status, vendor_type, certs_reps, cert_date, cert_expire_date, is_university, approved_consortiums, onetime_project_id, contact_name, contact_dept, contact_tel, contact_fax, contact_address, contact_city, contact_state, contact_zip, contact_country, active]<br>
+                            • JSON: array of vendor objects; list fields may be lists or comma-separated strings; dates as YYYY-MM-DD.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Import</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 

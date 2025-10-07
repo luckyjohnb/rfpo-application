@@ -4,13 +4,13 @@ Custom RFPO Admin Panel - NO Flask-Admin Dependencies
 Built from scratch to avoid WTForms compatibility issues.
 """
 
+import io
 import json
 import mimetypes
 import os
+import secrets
 import uuid
 from datetime import datetime
-import io
-import secrets
 
 from flask import (
     Flask,
@@ -881,7 +881,7 @@ def create_app():
     def validate_stage_documents(rfpo, stage):
         """Validate documents for a specific stage"""
         required_doc_type_keys = stage.get_required_document_types()
-    # Note: names can be derived from types if needed in the future
+        # Note: names can be derived from types if needed in the future
 
         document_validation = {
             "required_documents": [],
@@ -1012,9 +1012,7 @@ def create_app():
         api_auth_status = "not_tested"
         if current_user and hasattr(current_user, "email"):
             try:
-                _ = app.api_helper.authenticate_admin(
-                    current_user.email, "test"
-                )
+                _ = app.api_helper.authenticate_admin(current_user.email, "test")
                 api_auth_status = "tested_but_no_password"
             except Exception as e:
                 api_auth_status = f"auth_error_{str(e)[:30]}"
@@ -1110,12 +1108,10 @@ def create_app():
         # Calculate counts for each consortium
         for consortium in consortiums:
             # Count projects associated with this consortium
-            consortium.project_count = (
-                Project.query.filter(
-                    Project.consortium_ids.like(f"%{consortium.consort_id}%"),
-                    Project.active.is_(True),
-                ).count()
-            )
+            consortium.project_count = Project.query.filter(
+                Project.consortium_ids.like(f"%{consortium.consort_id}%"),
+                Project.active.is_(True),
+            ).count()
 
             # Count RFPOs through teams associated with this consortium
             consortium.rfpo_count = (
@@ -1544,8 +1540,7 @@ def create_app():
             as_attachment=True,
             download_name=f"teams-{timestamp}.xlsx",
             mimetype=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/vnd.openxmlformats-" "officedocument.spreadsheetml.sheet"
             ),
         )
 
@@ -1564,8 +1559,8 @@ def create_app():
             "description",
             "consortium_consort_id",
             "rfpo_viewer_user_ids",  # comma-separated user record_ids
-            "rfpo_admin_user_ids",   # comma-separated user record_ids
-            "active",                # TRUE/FALSE
+            "rfpo_admin_user_ids",  # comma-separated user record_ids
+            "active",  # TRUE/FALSE
         ]
         df = pd.DataFrame(columns=columns)
         output = io.BytesIO()
@@ -1577,8 +1572,7 @@ def create_app():
             as_attachment=True,
             download_name="teams-template.xlsx",
             mimetype=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/vnd.openxmlformats-" "officedocument.spreadsheetml.sheet"
             ),
         )
 
@@ -1621,9 +1615,7 @@ def create_app():
             if ext in (".json",):
                 try:
                     payload = json.load(file.stream)
-                    records = (
-                        payload if isinstance(payload, list) else [payload]
-                    )
+                    records = payload if isinstance(payload, list) else [payload]
                 except Exception as e:
                     flash(f"❌ Invalid JSON: {str(e)}", "error")
                     return redirect(url_for("teams"))
@@ -1656,9 +1648,7 @@ def create_app():
                     record_id = (rec.get("record_id") or "").strip()
                     existing = None
                     if record_id:
-                        existing = (
-                            Team.query.filter_by(record_id=record_id).first()
-                        )
+                        existing = Team.query.filter_by(record_id=record_id).first()
                     if not existing and abbrev:
                         existing = Team.query.filter_by(abbrev=abbrev).first()
 
@@ -1684,9 +1674,7 @@ def create_app():
                     else:
                         # Auto-generate record_id if missing
                         if not record_id:
-                            record_id = generate_next_id(
-                                Team, "record_id", "", 8
-                            )
+                            record_id = generate_next_id(Team, "record_id", "", 8)
                         team = Team(
                             record_id=record_id,
                             name=name,
@@ -1916,10 +1904,12 @@ def create_app():
         # Normalize permissions to comma-separated for Excel
         excel_rows = []
         for r in rows:
-            excel_rows.append({
-                **r,
-                "permissions": ", ".join(r.get("permissions") or []),
-            })
+            excel_rows.append(
+                {
+                    **r,
+                    "permissions": ", ".join(r.get("permissions") or []),
+                }
+            )
 
         df = pd.DataFrame(excel_rows)
         output = io.BytesIO()
@@ -2020,10 +2010,54 @@ def create_app():
 
             from werkzeug.security import generate_password_hash
 
+            # Helpers to normalize Excel/JSON values
+            def _is_nan(v):
+                try:
+                    return pd is not None and pd.isna(v)
+                except Exception:
+                    return False
+
+            def _norm_str(v):
+                if v is None or _is_nan(v):
+                    return ""
+                try:
+                    s = str(v)
+                except Exception:
+                    return ""
+                return s.strip()
+
+            def _parse_permissions(v):
+                if v is None or _is_nan(v):
+                    return []
+                if isinstance(v, list):
+                    return [str(p).strip() for p in v if str(p).strip()]
+                # Treat everything else as string and split by comma
+                s = _norm_str(v)
+                if not s:
+                    return []
+                return [p.strip() for p in s.split(",") if p.strip()]
+
+            def _parse_bool(v, default=True):
+                if v is None or _is_nan(v):
+                    return default
+                if isinstance(v, bool):
+                    return v
+                if isinstance(v, (int, float)):
+                    try:
+                        return int(v) == 1
+                    except Exception:
+                        return default
+                s = _norm_str(v).lower()
+                if s in ("1", "true", "yes", "y", "t"):  # common truthy strings
+                    return True
+                if s in ("0", "false", "no", "n", "f"):
+                    return False
+                return default
+
             for idx, rec in enumerate(records, start=1):
                 try:
-                    email = (rec.get("email") or "").strip()
-                    fullname = (rec.get("fullname") or "").strip()
+                    email = _norm_str(rec.get("email"))
+                    fullname = _norm_str(rec.get("fullname"))
                     if not email or not fullname:
                         skipped += 1
                         errors.append(f"Row {idx}: missing email or fullname")
@@ -2031,35 +2065,25 @@ def create_app():
 
                     existing = User.query.filter_by(email=email).first()
 
-                    # Normalize permissions
-                    perms = rec.get("permissions")
-                    if isinstance(perms, str):
-                        permissions = [p.strip() for p in perms.split(",") if p.strip()]
-                    elif isinstance(perms, list):
-                        permissions = [str(p).strip() for p in perms if str(p).strip()]
-                    else:
-                        permissions = []
-
-                    active_val = rec.get("active")
-                    if isinstance(active_val, str):
-                        active = active_val.strip().lower() in ("1", "true", "yes")
-                    else:
-                        active = bool(active_val) if active_val is not None else True
+                    # Normalize permissions and active flag
+                    permissions = _parse_permissions(rec.get("permissions"))
+                    active = _parse_bool(rec.get("active"), default=True)
 
                     if existing:
                         # Update basic fields
                         existing.fullname = fullname
-                        existing.company = rec.get("company") or existing.company
-                        existing.position = rec.get("position") or existing.position
+                        company = _norm_str(rec.get("company"))
+                        position = _norm_str(rec.get("position"))
+                        existing.company = company or existing.company
+                        existing.position = position or existing.position
                         existing.active = active
                         existing.set_permissions(permissions)
                         existing.updated_by = current_user.email
                         updated += 1
                     else:
                         # Create new user with random secure password
-                        record_id = (
-                            (rec.get("record_id") or "").strip()
-                            or generate_next_id(User, "record_id", "", 8)
+                        record_id = _norm_str(rec.get("record_id")) or generate_next_id(
+                            User, "record_id", "", 8
                         )
                         temp_password = secrets.token_urlsafe(12)
                         user = User(
@@ -2067,8 +2091,8 @@ def create_app():
                             fullname=fullname,
                             email=email,
                             password_hash=generate_password_hash(temp_password),
-                            company=rec.get("company"),
-                            position=rec.get("position"),
+                            company=_norm_str(rec.get("company")) or None,
+                            position=_norm_str(rec.get("position")) or None,
                             active=active,
                             created_by=current_user.email,
                             updated_by=current_user.email,
@@ -3240,8 +3264,7 @@ Southfield, MI  48075""",
             as_attachment=True,
             download_name=f"projects-{timestamp}.xlsx",
             mimetype=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/vnd.openxmlformats-" "officedocument.spreadsheetml.sheet"
             ),
         )
 
@@ -3258,12 +3281,12 @@ Southfield, MI  48075""",
             "ref",
             "name",
             "description",
-            "consortium_ids",        # comma-separated consort_ids
+            "consortium_ids",  # comma-separated consort_ids
             "team_record_id",
             "rfpo_viewer_user_ids",  # comma-separated user record_ids
-            "gov_funded",            # TRUE/FALSE
-            "uni_project",           # TRUE/FALSE
-            "active",                # TRUE/FALSE
+            "gov_funded",  # TRUE/FALSE
+            "uni_project",  # TRUE/FALSE
+            "active",  # TRUE/FALSE
         ]
         df = pd.DataFrame(columns=columns)
         output = io.BytesIO()
@@ -3275,8 +3298,7 @@ Southfield, MI  48075""",
             as_attachment=True,
             download_name="projects-template.xlsx",
             mimetype=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/vnd.openxmlformats-" "officedocument.spreadsheetml.sheet"
             ),
         )
 
@@ -3319,9 +3341,7 @@ Southfield, MI  48075""",
             if ext in (".json",):
                 try:
                     payload = json.load(file.stream)
-                    records = (
-                        payload if isinstance(payload, list) else [payload]
-                    )
+                    records = payload if isinstance(payload, list) else [payload]
                 except Exception as e:
                     flash(f"❌ Invalid JSON: {str(e)}", "error")
                     return redirect(url_for("projects"))
@@ -3354,9 +3374,9 @@ Southfield, MI  48075""",
                     project_id = (rec.get("project_id") or "").strip()
                     existing = None
                     if project_id:
-                        existing = (
-                            Project.query.filter_by(project_id=project_id).first()
-                        )
+                        existing = Project.query.filter_by(
+                            project_id=project_id
+                        ).first()
                     if not existing and ref:
                         existing = Project.query.filter_by(ref=ref).first()
 
@@ -3385,9 +3405,7 @@ Southfield, MI  48075""",
                     else:
                         # Auto-generate project_id if missing
                         if not project_id:
-                            project_id = generate_next_id(
-                                Project, "project_id", "", 8
-                            )
+                            project_id = generate_next_id(Project, "project_id", "", 8)
                         project = Project(
                             project_id=project_id,
                             ref=ref,
@@ -3585,9 +3603,7 @@ Southfield, MI  48075""",
                     "vendor_type": v.vendor_type,
                     "certs_reps": bool(v.certs_reps),
                     "cert_date": (
-                        v.cert_date.strftime("%Y-%m-%d")
-                        if v.cert_date
-                        else None
+                        v.cert_date.strftime("%Y-%m-%d") if v.cert_date else None
                     ),
                     "cert_expire_date": (
                         v.cert_expire_date.strftime("%Y-%m-%d")
@@ -3649,8 +3665,7 @@ Southfield, MI  48075""",
             as_attachment=True,
             download_name=f"vendors-{timestamp}.xlsx",
             mimetype=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/vnd.openxmlformats-" "officedocument.spreadsheetml.sheet"
             ),
         )
 
@@ -3694,8 +3709,7 @@ Southfield, MI  48075""",
             as_attachment=True,
             download_name="vendors-template.xlsx",
             mimetype=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/vnd.openxmlformats-" "officedocument.spreadsheetml.sheet"
             ),
         )
 
@@ -3755,9 +3769,7 @@ Southfield, MI  48075""",
             if ext in (".json",):
                 try:
                     payload = json.load(file.stream)
-                    records = (
-                        payload if isinstance(payload, list) else [payload]
-                    )
+                    records = payload if isinstance(payload, list) else [payload]
                 except Exception as e:
                     flash(f"❌ Invalid JSON: {str(e)}", "error")
                     return redirect(url_for("vendors"))
@@ -3789,9 +3801,7 @@ Southfield, MI  48075""",
                     vendor_id = (rec.get("vendor_id") or "").strip()
                     existing = None
                     if vendor_id:
-                        existing = (
-                            Vendor.query.filter_by(vendor_id=vendor_id).first()
-                        )
+                        existing = Vendor.query.filter_by(vendor_id=vendor_id).first()
                     if not existing and company_name:
                         existing = Vendor.query.filter_by(
                             company_name=company_name
@@ -3805,9 +3815,7 @@ Southfield, MI  48075""",
                     certs_reps = _parse_bool(rec.get("certs_reps"), False)
                     cert_date = _parse_date(rec.get("cert_date"))
                     cert_expire_date = _parse_date(rec.get("cert_expire_date"))
-                    is_university = _parse_bool(
-                        rec.get("is_university"), False
-                    )
+                    is_university = _parse_bool(rec.get("is_university"), False)
                     active = _parse_bool(rec.get("active"), True)
 
                     if existing:
@@ -3819,8 +3827,7 @@ Southfield, MI  48075""",
                         existing.cert_expire_date = cert_expire_date
                         existing.is_university = is_university
                         existing.onetime_project_id = (
-                            rec.get("onetime_project_id")
-                            or existing.onetime_project_id
+                            rec.get("onetime_project_id") or existing.onetime_project_id
                         )
                         existing.contact_name = (
                             rec.get("contact_name") or existing.contact_name
@@ -3835,8 +3842,7 @@ Southfield, MI  48075""",
                             rec.get("contact_fax") or existing.contact_fax
                         )
                         existing.contact_address = (
-                            rec.get("contact_address")
-                            or existing.contact_address
+                            rec.get("contact_address") or existing.contact_address
                         )
                         existing.contact_city = (
                             rec.get("contact_city") or existing.contact_city
@@ -3848,8 +3854,7 @@ Southfield, MI  48075""",
                             rec.get("contact_zip") or existing.contact_zip
                         )
                         existing.contact_country = (
-                            rec.get("contact_country")
-                            or existing.contact_country
+                            rec.get("contact_country") or existing.contact_country
                         )
                         existing.active = active
                         existing.set_approved_consortiums(approved)
@@ -3857,9 +3862,7 @@ Southfield, MI  48075""",
                         updated += 1
                     else:
                         if not vendor_id:
-                            vendor_id = generate_next_id(
-                                Vendor, "vendor_id", "", 8
-                            )
+                            vendor_id = generate_next_id(Vendor, "vendor_id", "", 8)
                         vendor = Vendor(
                             vendor_id=vendor_id,
                             company_name=company_name,
@@ -3869,9 +3872,7 @@ Southfield, MI  48075""",
                             cert_date=cert_date,
                             cert_expire_date=cert_expire_date,
                             is_university=is_university,
-                            onetime_project_id=(
-                                rec.get("onetime_project_id") or None
-                            ),
+                            onetime_project_id=(rec.get("onetime_project_id") or None),
                             contact_name=rec.get("contact_name"),
                             contact_dept=rec.get("contact_dept"),
                             contact_tel=rec.get("contact_tel"),
@@ -3921,9 +3922,7 @@ Southfield, MI  48075""",
                     "consort_id": c.consort_id,
                     "name": c.name,
                     "abbrev": c.abbrev,
-                    "require_approved_vendors": bool(
-                        c.require_approved_vendors
-                    ),
+                    "require_approved_vendors": bool(c.require_approved_vendors),
                     "non_government_project_id": c.non_government_project_id,
                     "rfpo_viewer_user_ids": c.get_rfpo_viewer_users(),
                     "rfpo_admin_user_ids": c.get_rfpo_admin_users(),
@@ -3981,8 +3980,7 @@ Southfield, MI  48075""",
             as_attachment=True,
             download_name=f"consortiums-{timestamp}.xlsx",
             mimetype=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/vnd.openxmlformats-" "officedocument.spreadsheetml.sheet"
             ),
         )
 
@@ -4001,7 +3999,7 @@ Southfield, MI  48075""",
             "require_approved_vendors",
             "non_government_project_id",
             "rfpo_viewer_user_ids",  # comma-separated user record_ids
-            "rfpo_admin_user_ids",   # comma-separated user record_ids
+            "rfpo_admin_user_ids",  # comma-separated user record_ids
             "invoicing_address",
             "doc_fax_name",
             "doc_fax_number",
@@ -4022,8 +4020,7 @@ Southfield, MI  48075""",
             as_attachment=True,
             download_name="consortiums-template.xlsx",
             mimetype=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/vnd.openxmlformats-" "officedocument.spreadsheetml.sheet"
             ),
         )
 
@@ -4066,9 +4063,7 @@ Southfield, MI  48075""",
             if ext in (".json",):
                 try:
                     payload = json.load(file.stream)
-                    records = (
-                        payload if isinstance(payload, list) else [payload]
-                    )
+                    records = payload if isinstance(payload, list) else [payload]
                 except Exception as e:
                     flash(f"❌ Invalid JSON: {str(e)}", "error")
                     return redirect(url_for("consortiums"))
@@ -4105,9 +4100,7 @@ Southfield, MI  48075""",
                             consort_id=consort_id
                         ).first()
                     if not existing and abbrev:
-                        existing = Consortium.query.filter_by(
-                            abbrev=abbrev
-                        ).first()
+                        existing = Consortium.query.filter_by(abbrev=abbrev).first()
 
                     viewer_ids = _parse_list(rec.get("rfpo_viewer_user_ids"))
                     admin_ids = _parse_list(rec.get("rfpo_admin_user_ids"))
@@ -4125,30 +4118,25 @@ Southfield, MI  48075""",
                             or existing.non_government_project_id
                         )
                         existing.invoicing_address = (
-                            rec.get("invoicing_address")
-                            or existing.invoicing_address
+                            rec.get("invoicing_address") or existing.invoicing_address
                         )
                         existing.doc_fax_name = (
                             rec.get("doc_fax_name") or existing.doc_fax_name
                         )
                         existing.doc_fax_number = (
-                            rec.get("doc_fax_number")
-                            or existing.doc_fax_number
+                            rec.get("doc_fax_number") or existing.doc_fax_number
                         )
                         existing.doc_email_name = (
-                            rec.get("doc_email_name")
-                            or existing.doc_email_name
+                            rec.get("doc_email_name") or existing.doc_email_name
                         )
                         existing.doc_email_address = (
-                            rec.get("doc_email_address")
-                            or existing.doc_email_address
+                            rec.get("doc_email_address") or existing.doc_email_address
                         )
                         existing.doc_post_name = (
                             rec.get("doc_post_name") or existing.doc_post_name
                         )
                         existing.doc_post_address = (
-                            rec.get("doc_post_address")
-                            or existing.doc_post_address
+                            rec.get("doc_post_address") or existing.doc_post_address
                         )
                         existing.po_email = rec.get("po_email") or existing.po_email
                         existing.active = active
@@ -5841,10 +5829,7 @@ Southfield, MI  48075""",
             instance_id = instance.instance_id
 
             # Reset RFPO status if it was set by this approval workflow
-            if (
-                instance.rfpo
-                and instance.rfpo.status in ["Approved", "Refused"]
-            ):
+            if instance.rfpo and instance.rfpo.status in ["Approved", "Refused"]:
                 instance.rfpo.status = "Draft"
                 instance.rfpo.updated_by = current_user.get_display_name()
 
@@ -5852,9 +5837,7 @@ Southfield, MI  48075""",
             db.session.delete(instance)
             db.session.commit()
 
-            msg = (
-                f'✅ Approval instance "{instance_id}" deleted successfully!'
-            )
+            msg = f'✅ Approval instance "{instance_id}" deleted successfully!'
             flash(msg + " RFPO reset to Draft status.", "success")
 
         except Exception as e:
@@ -6146,8 +6129,7 @@ Southfield, MI  48075""",
     def api_projects_for_consortium(consortium_id):
         """Get projects for a specific consortium"""
         projects = Project.query.filter(
-            Project.consortium_ids.like(f"%{consortium_id}%"),
-            Project.active.is_(True)
+            Project.consortium_ids.like(f"%{consortium_id}%"), Project.active.is_(True)
         ).all()
 
         project_data = []

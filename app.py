@@ -9,11 +9,11 @@ from flask_cors import CORS
 import os
 import requests
 from datetime import datetime
-import json
 
 # Import error handling
 from error_handlers import register_error_handlers
 from logging_config import setup_logging
+
 
 def create_user_app():
     """Create user-facing Flask application"""
@@ -443,12 +443,12 @@ def create_user_app():
     @app.route('/health')
     def health_check():
         """Health check endpoint"""
+        # Keep this lightweight and non-blocking: do not call external services here
         return jsonify({
             'status': 'healthy',
             'service': 'RFPO User App',
             'timestamp': datetime.utcnow().isoformat(),
-            'version': '1.0.0',
-            'api_connection': 'connected' if make_api_request('/health').get('status') == 'healthy' else 'disconnected'
+            'version': '1.0.0'
         })
     
     # Error handlers

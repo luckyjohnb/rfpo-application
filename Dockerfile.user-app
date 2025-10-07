@@ -17,6 +17,12 @@ COPY app.py .
 COPY templates/ ./templates/
 COPY static/ ./static/
 
+# Copy shared modules required by the user app
+COPY error_handlers.py ./
+COPY logging_config.py ./
+COPY exceptions.py ./
+COPY env_config.py ./
+
 # Expose port
 EXPOSE 5000
 

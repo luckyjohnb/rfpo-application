@@ -305,6 +305,7 @@ The custom admin panel provides:
 - **Vendors**: Manage vendor companies and their contact information
 - **RFPOs**: Create and manage Request for Purchase Orders
 - **Users**: Manage user accounts and permissions
+   - Company Code ↔ Company Name auto-fill: Selecting a Company Code will auto-populate the Company Name from the option label (text to the right of the closing bracket). Typing a Company Name that matches a known option will auto-select the corresponding Company Code. Extra spaces and common separators (dashes, pipes, bullets, colons) are trimmed automatically. Live syncing uses a small debounce to avoid jitter while typing.
 - **Lists**: Configuration management for dropdowns and settings
 - **PDF Positioning**: Visual editor for PDF template positioning
 

@@ -67,8 +67,8 @@
                             <td>
                                 {% if vendor.consortium_info %}
                                     {% for consortium in vendor.consortium_info %}
-                                    <span class="badge bg-primary me-1 consortium-badge" 
-                                          data-bs-toggle="tooltip" 
+                                    <span class="badge bg-primary me-1 consortium-badge"
+                                          data-bs-toggle="tooltip"
                                           title="{{ consortium.name }}">
                                         {{ consortium.abbrev }}
                                     </span>
@@ -95,11 +95,11 @@
                             <td><small>{{ vendor.created_at.strftime('%Y-%m-%d') if vendor.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{{ url_for('vendor_edit', id=vendor.id) }}" 
+                                    <a href="{{ url_for('vendor_edit', id=vendor.id) }}"
                                        class="btn btn-outline-primary btn-sm">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
                                             onclick="deleteVendor({{ vendor.id }}, '{{ vendor.company_name }}')">
                                         <i class="fas fa-trash"></i>
                                     </button>

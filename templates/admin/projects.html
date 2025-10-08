@@ -89,8 +89,8 @@
                             <td>
                                 {% if project.consortium_info %}
                                     {% for consortium in project.consortium_info %}
-                                    <span class="badge bg-primary me-1 consortium-badge" 
-                                          data-bs-toggle="tooltip" 
+                                    <span class="badge bg-primary me-1 consortium-badge"
+                                          data-bs-toggle="tooltip"
                                           title="{{ consortium.name }}">
                                         {{ consortium.abbrev }}
                                     </span>
@@ -101,8 +101,8 @@
                             </td>
                             <td>
                                 {% if project.team_info %}
-                                    <span class="badge bg-info team-badge" 
-                                          data-bs-toggle="tooltip" 
+                                    <span class="badge bg-info team-badge"
+                                          data-bs-toggle="tooltip"
                                           title="{{ project.team_info.name }}">
                                         {{ project.team_info.abbrev }}
                                     </span>
@@ -134,11 +134,11 @@
                             <td><small>{{ project.created_at.strftime('%Y-%m-%d') if project.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{{ url_for('project_edit', id=project.id) }}" 
+                                    <a href="{{ url_for('project_edit', id=project.id) }}"
                                        class="btn btn-outline-primary btn-sm">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
                                             onclick="deleteProject({{ project.id }}, '{{ project.name }}')">
                                         <i class="fas fa-trash"></i>
                                     </button>

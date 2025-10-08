@@ -1,0 +1,20 @@
+[
+    {
+        "record_id": "U99990001",
+        "fullname": "Smoke Test Admin",
+        "email": "smoke-admin@example.com",
+        "company": "RFPO",
+        "position": "QA",
+        "permissions": [
+            "RFPO_ADMIN",
+            "RFPO_USER"
+        ],
+        "active": true
+    },
+    {
+        "fullname": "Smoke Test User",
+        "email": "smoke-user@example.com",
+        "permissions": "RFPO_USER",
+        "active": "TRUE"
+    }
+]

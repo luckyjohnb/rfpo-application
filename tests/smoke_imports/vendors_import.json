@@ -1,0 +1,18 @@
+[
+    {
+        "vendor_id": "V99990001",
+        "company_name": "Smoke Vendor LLC",
+        "status": "live",
+        "vendor_type": 1,
+        "certs_reps": true,
+        "cert_date": "2024-01-01",
+        "cert_expire_date": "2026-01-01",
+        "is_university": false,
+        "approved_consortiums": [
+            "RFPO"
+        ],
+        "contact_name": "Test Contact",
+        "contact_tel": "555-0101",
+        "active": true
+    }
+]

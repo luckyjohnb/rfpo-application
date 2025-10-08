@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendors - RFPO Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+        }
+        .sidebar .nav-link {
+            color: #ecf0f1;
+            border-radius: 5px;
+            margin: 2px 0;
+        }
+        .sidebar .nav-link:hover {
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+        }
+        .sidebar .nav-link.active {
+            background-color: #3498db;
+            color: white;
+        }
+        .main-content {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+        }
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+        .table th {
+            background-color: #f8f9fa;
+            border-top: none;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h4 class="text-white">🔧 RFPO Admin</h4>
+                        <small class="text-light">USCAR</small>
+                        <div class="mt-1">
+                            <span class="badge bg-dark">Build 6caa246</span>
+                        </div>
+                        <div class="mt-1">
+                            
+                                <span class="badge bg-success" title="Email via Azure Communication Services">
+                                    <i class="fas fa-envelope"></i> ACS: rfpo@ed7a060f-ca70-49f3-9958-1539096f14da.azurecomm.net
+                                </span>
+                            
+                        </div>
+                    </div>
+
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Core</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/consortiums">
+                                <i class="fas fa-building"></i> Consortiums
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teams">
+                                <i class="fas fa-users"></i> Teams
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/rfpos">
+                                <i class="fas fa-file-contract"></i> RFPOs
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Management</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/users">
+                                <i class="fas fa-user"></i> Users
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/projects">
+                                <i class="fas fa-project-diagram"></i> Projects
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/vendors">
+                                <i class="fas fa-store"></i> Vendors
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/lists">
+                                <i class="fas fa-cog"></i> Configuration Lists
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Approval System</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/approval-workflows">
+                                <i class="fas fa-route"></i> Approval Workflows
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/approval-instances">
+                                <i class="fas fa-clipboard-list"></i> Approval Instances
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Tools</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/pdf-positioning">
+                                <i class="fas fa-file-pdf"></i> PDF Positioning
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/tools/email-test">
+                                <i class="fas fa-envelope"></i> Email Test
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-4">
+                            <a class="nav-link text-warning" href="/logout">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div class="mt-4 px-3">
+                        <small class="text-light">
+                            Logged in as:<br>
+                            <strong>System Administrator</strong>
+                        </small>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="pt-3">
+                    
+                        
+                            
+                                <div class="alert alert-success alert-dismissible fade show" role="alert" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: 500px;">
+                                    ✅ Import complete. Created: 1, Updated: 0, Skipped: 0.
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            
+                        
+                    
+
+                    
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">🏪 Vendors</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="/vendor/new" class="btn btn-primary">
+                <i class="fas fa-plus"></i> New Vendor
+            </a>
+        </div>
+        <div class="btn-group">
+            <a class="btn btn-outline-secondary" title="Export to Excel"
+               href="/vendors/export?format=xlsx">
+                <i class="fas fa-file-export"></i>
+            </a>
+            <a class="btn btn-outline-secondary" title="Export to JSON"
+               href="/vendors/export?format=json">
+                <i class="fas fa-code"></i>
+            </a>
+            <a class="btn btn-outline-secondary" title="Download Import Template"
+               href="/vendors/export/template">
+                <i class="fas fa-file-download"></i>
+            </a>
+            <button type="button" class="btn btn-outline-secondary" title="Import Vendors"
+                    data-bs-toggle="modal" data-bs-target="#importVendorsModal">
+                <i class="fas fa-file-import"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Vendor ID</th>
+                            <th>Company Name</th>
+                            <th>Status</th>
+                            <th>Type</th>
+                            <th>Approved Consortiums</th>
+                            <th>Contact</th>
+                            <th>Certs & Reps</th>
+                            <th>Active</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td><strong>V99990001</strong></td>
+                            <td>Smoke Vendor LLC</td>
+                            <td>
+                                
+                                    <span class="badge bg-success">Live</span>
+                                
+                            </td>
+                            <td>University</td>
+                            <td>
+                                
+                                    
+                                    <span class="badge bg-primary me-1 consortium-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          title="RFPO">
+                                        RFPO
+                                    </span>
+                                    
+                                
+                            </td>
+                            <td>Test Contact</td>
+                            <td>
+                                
+                                    <span class="badge bg-success">✓</span>
+                                
+                            </td>
+                            <td>
+                                
+                                    <span class="badge bg-success">Active</span>
+                                
+                            </td>
+                            <td><small>2025-10-08</small></td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="/vendor/1/edit" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteVendor(1, 'Smoke Vendor LLC')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        
+    </div>
+</div>
+
+<!-- Import Vendors Modal -->
+<div class="modal fade" id="importVendorsModal" tabindex="-1" aria-labelledby="importVendorsLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importVendorsLabel">Import Vendors (Excel or JSON)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/vendors/import" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="importVendorsFile" class="form-label">Choose file</label>
+                        <input class="form-control" type="file" id="importVendorsFile" name="import_file"
+                               accept=".json,.xlsx,.xls" required>
+                        <div class="form-text">
+                            • Excel: columns [vendor_id, company_name, status, vendor_type, certs_reps, cert_date, cert_expire_date, is_university, approved_consortiums, onetime_project_id, contact_name, contact_dept, contact_tel, contact_fax, contact_address, contact_city, contact_state, contact_zip, contact_country, active]<br>
+                            • JSON: array of vendor objects; list fields may be lists or comma-separated strings; dates as YYYY-MM-DD.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete vendor <strong id="vendorName"></strong>?</p>
+                <p class="text-muted">This action cannot be undone and will also delete all associated contacts.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <footer class="text-center text-muted py-2">
+        <small>RFPO Admin • Build 6caa246</small>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+<script>
+// Initialize tooltips for consortium badges
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+function deleteVendor(id, name) {
+    document.getElementById('vendorName').textContent = name;
+    document.getElementById('deleteForm').action = '/vendor/' + id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+
+</body>
+</html>

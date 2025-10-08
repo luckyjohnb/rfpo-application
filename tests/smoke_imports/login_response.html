@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - RFPO Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+        }
+        .sidebar .nav-link {
+            color: #ecf0f1;
+            border-radius: 5px;
+            margin: 2px 0;
+        }
+        .sidebar .nav-link:hover {
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+        }
+        .sidebar .nav-link.active {
+            background-color: #3498db;
+            color: white;
+        }
+        .main-content {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+        }
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+        .table th {
+            background-color: #f8f9fa;
+            border-top: none;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h4 class="text-white">🔧 RFPO Admin</h4>
+                        <small class="text-light">USCAR</small>
+                        <div class="mt-1">
+                            <span class="badge bg-dark">Build 6caa246</span>
+                        </div>
+                        <div class="mt-1">
+                            
+                                <span class="badge bg-success" title="Email via Azure Communication Services">
+                                    <i class="fas fa-envelope"></i> ACS: rfpo@ed7a060f-ca70-49f3-9958-1539096f14da.azurecomm.net
+                                </span>
+                            
+                        </div>
+                    </div>
+
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Core</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/consortiums">
+                                <i class="fas fa-building"></i> Consortiums
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teams">
+                                <i class="fas fa-users"></i> Teams
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/rfpos">
+                                <i class="fas fa-file-contract"></i> RFPOs
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Management</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/users">
+                                <i class="fas fa-user"></i> Users
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/projects">
+                                <i class="fas fa-project-diagram"></i> Projects
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/vendors">
+                                <i class="fas fa-store"></i> Vendors
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/lists">
+                                <i class="fas fa-cog"></i> Configuration Lists
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Approval System</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/approval-workflows">
+                                <i class="fas fa-route"></i> Approval Workflows
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/approval-instances">
+                                <i class="fas fa-clipboard-list"></i> Approval Instances
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Tools</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/pdf-positioning">
+                                <i class="fas fa-file-pdf"></i> PDF Positioning
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/tools/email-test">
+                                <i class="fas fa-envelope"></i> Email Test
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-4">
+                            <a class="nav-link text-warning" href="/logout">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div class="mt-4 px-3">
+                        <small class="text-light">
+                            Logged in as:<br>
+                            <strong>System Administrator</strong>
+                        </small>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="pt-3">
+                    
+                        
+                            
+                                <div class="alert alert-success alert-dismissible fade show" role="alert" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: 500px;">
+                                    Welcome System Administrator! 🎉
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            
+                        
+                    
+
+                    
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📊 Dashboard</h1>
+</div>
+
+<!-- New Project Confirm Modal -->
+<div class="modal fade" id="newProjectConfirmModal" tabindex="-1" aria-labelledby="newProjectConfirmLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newProjectConfirmLabel">Create New Project</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to create a new project? You can edit all details after creation.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="/project/new" class="btn btn-dark">Yes, create project</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Vendor Confirm Modal -->
+<div class="modal fade" id="newVendorConfirmModal" tabindex="-1" aria-labelledby="newVendorConfirmLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newVendorConfirmLabel">Create New Vendor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to create a new vendor? You can edit all details after creation.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="/vendor/new" class="btn btn-dark">Yes, create vendor</a>
+            </div>
+        </div>
+    </div>
+    </div>
+
+
+
+<script>
+    // Initialize Bootstrap tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+
+        // Wire up New Project button to open confirmation modal
+        const newProjectBtn = document.getElementById('btnNewProject');
+        if (newProjectBtn) {
+            newProjectBtn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('newProjectConfirmModal'));
+                modal.show();
+            });
+        }
+
+        // Wire up New Vendor button to open confirmation modal
+        const newVendorBtn = document.getElementById('btnNewVendor');
+        if (newVendorBtn) {
+            newVendorBtn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('newVendorConfirmModal'));
+                modal.show();
+            });
+        }
+    });
+</script>
+
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-primary border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-primary text-uppercase mb-1">Consortiums</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">1</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-building fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-success border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-success text-uppercase mb-1">Teams</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">1</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-info border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-info text-uppercase mb-1">RFPOs</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">1</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-file-contract fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-warning border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-warning text-uppercase mb-1">Users</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">6</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-user fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approval System Statistics -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-secondary border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-secondary text-uppercase mb-1">Active Workflows</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">0</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-route fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-info border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-info text-uppercase mb-1">Approval Instances</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">0</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-warning border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-warning text-uppercase mb-1">Pending Approvals</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">0</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-hourglass-half fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-danger border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-danger text-uppercase mb-1">Total Files</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">1</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-file-upload fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🚀 Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <a href="/consortium/new" class="btn btn-primary w-100">
+                            <i class="fas fa-plus"></i> New Consortium
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="/team/new" class="btn btn-success w-100">
+                            <i class="fas fa-plus"></i> New Team
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <button type="button" class="btn btn-dark w-100" data-bs-toggle="tooltip" title="Create a new project" id="btnNewProject">
+                            <i class="fas fa-plus"></i> New Project
+                        </button>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="/rfpo/new" class="btn btn-info w-100">
+                            <i class="fas fa-plus"></i> New RFPO
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="/user/new" class="btn btn-warning w-100">
+                            <i class="fas fa-plus"></i> New User
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <button type="button" class="btn btn-secondary w-100" data-bs-toggle="tooltip" title="Create a new vendor" id="btnNewVendor">
+                            <i class="fas fa-plus"></i> New Vendor
+                        </button>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <a href="/projects" class="btn btn-outline-dark w-100" data-bs-toggle="tooltip" title="View all projects">
+                            <i class="fas fa-project-diagram"></i> View Projects
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="/approval-workflow/new" class="btn btn-secondary w-100">
+                            <i class="fas fa-route"></i> New Workflow
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="/approval-workflows" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-list"></i> View Workflows
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="/approval-instances" class="btn btn-outline-info w-100">
+                            <i class="fas fa-clipboard-list"></i> View Instances
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="/lists" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-cog"></i> Configuration
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0 text-primary">📋 Recent RFPOs</h6>
+            </div>
+            <div class="card-body">
+                
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>RFPO ID</th>
+                                    <th>Title</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr>
+                                    <td><small><strong>RFPO-Proj3024-01-2025-10-03-N01</strong></small></td>
+                                    <td><small>Test RFPO</small></td>
+                                    <td><span class="badge bg-primary">Draft</span></td>
+                                    <td><small>2025-10-03</small></td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0 text-success">📁 Recent File Uploads</h6>
+            </div>
+            <div class="card-body">
+                
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Filename</th>
+                                    <th>Status</th>
+                                    <th>Size</th>
+                                    <th>Uploaded</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr>
+                                    <td><small>azure_devops_erd_clean2.p...</small></td>
+                                    <td>
+                                        
+                                            <span class="badge bg-success">completed</span>
+                                        
+                                    </td>
+                                    <td><small>237.8 KB</small></td>
+                                    <td><small>2025-10-03</small></td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.text-gray-300 { color: #dee2e6 !important; }
+.text-gray-800 { color: #343a40 !important; }
+</style>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <footer class="text-center text-muted py-2">
+        <small>RFPO Admin • Build 6caa246</small>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+
+<script>
+    // Initialize Bootstrap tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+
+        // Wire up New Project button to open confirmation modal
+        const newProjectBtn = document.getElementById('btnNewProject');
+        if (newProjectBtn) {
+            newProjectBtn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('newProjectConfirmModal'));
+                modal.show();
+            });
+        }
+
+        // Wire up New Vendor button to open confirmation modal
+        const newVendorBtn = document.getElementById('btnNewVendor');
+        if (newVendorBtn) {
+            newVendorBtn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('newVendorConfirmModal'));
+                modal.show();
+            });
+        }
+    });
+</script>
+
+</body>
+</html>

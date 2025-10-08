@@ -146,41 +146,77 @@ echo -e "${GREEN}✅ Environment: $ENV_NAME${NC}"
 
 ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer --output tsv)
 
+# Resolve current FQDNs to set correct API URLs for rfpo-user
+API_FQDN=$(az containerapp show --name rfpo-api --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+ADMIN_FQDN=$(az containerapp show --name rfpo-admin --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+USER_EXTRA_ENV="API_BASE_URL=https://${API_FQDN}/api ADMIN_API_URL=https://${ADMIN_FQDN}/api"
+
 update_app_with_suffix_retry() {
     local app_name="$1"; shift
     local image_ref="$1"; shift
     local build_sha="$1"; shift
     local base_suffix="$1"; shift
+    # Optional additional envs (e.g., for rfpo-user)
+    local extra_env="$1"; shift || true
 
     echo -e "${YELLOW}Updating ${app_name} container app...${NC}"
     set +e
-    az containerapp update \
+    if [ -n "$extra_env" ]; then
+        az containerapp update \
+        --name "${app_name}" \
+        --resource-group "${RESOURCE_GROUP}" \
+        --image "${image_ref}" \
+        --set-env-vars ${extra_env} APP_BUILD_SHA="${build_sha}" \
+        --revision-suffix "${base_suffix}" \
+        --output none
+    else
+        az containerapp update \
         --name "${app_name}" \
         --resource-group "${RESOURCE_GROUP}" \
         --image "${image_ref}" \
         --set-env-vars APP_BUILD_SHA="${build_sha}" \
         --revision-suffix "${base_suffix}" \
         --output none
+    fi
     local rc=$?
     if [ $rc -ne 0 ]; then
         echo -e "${YELLOW}⚠️  Revision suffix '${base_suffix}' collided. Retrying with unique suffix...${NC}"
         local unique_suffix="${base_suffix}-$(date +%H%M%S)"
-        az containerapp update \
+        if [ -n "$extra_env" ]; then
+            az containerapp update \
+            --name "${app_name}" \
+            --resource-group "${RESOURCE_GROUP}" \
+            --image "${image_ref}" \
+            --set-env-vars ${extra_env} APP_BUILD_SHA="${build_sha}" \
+            --revision-suffix "${unique_suffix}" \
+            --output none
+        else
+            az containerapp update \
             --name "${app_name}" \
             --resource-group "${RESOURCE_GROUP}" \
             --image "${image_ref}" \
             --set-env-vars APP_BUILD_SHA="${build_sha}" \
             --revision-suffix "${unique_suffix}" \
             --output none
+        fi
         rc=$?
         if [ $rc -ne 0 ]; then
             echo -e "${YELLOW}⚠️  Retry with unique suffix failed. Retrying without specifying revision suffix...${NC}"
-            az containerapp update \
+            if [ -n "$extra_env" ]; then
+                az containerapp update \
+                --name "${app_name}" \
+                --resource-group "${RESOURCE_GROUP}" \
+                --image "${image_ref}" \
+                --set-env-vars ${extra_env} APP_BUILD_SHA="${build_sha}" \
+                --output none
+            else
+                az containerapp update \
                 --name "${app_name}" \
                 --resource-group "${RESOURCE_GROUP}" \
                 --image "${image_ref}" \
                 --set-env-vars APP_BUILD_SHA="${build_sha}" \
                 --output none
+            fi
             rc=$?
             if [ $rc -ne 0 ]; then
                 set -e
@@ -212,7 +248,8 @@ update_app_with_suffix_retry \
     "rfpo-user" \
     "$ACR_LOGIN_SERVER/rfpo-user@${rfpo_user_DIGEST}" \
     "${rfpo_user_GIT_HEAD}" \
-    "user-${rfpo_user_GIT_SHORT}"
+    "user-${rfpo_user_GIT_SHORT}" \
+    "${USER_EXTRA_ENV}"
 
 # Quick health checks
 echo ""

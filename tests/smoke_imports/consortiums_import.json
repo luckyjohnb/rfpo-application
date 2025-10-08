@@ -1,0 +1,12 @@
+[
+    {
+        "consort_id": "C99990001",
+        "name": "Smoke Consortium",
+        "abbrev": "SMOKE",
+        "require_approved_vendors": true,
+        "rfpo_viewer_user_ids": [],
+        "rfpo_admin_user_ids": [],
+        "po_email": "po-smoke@example.com",
+        "active": true
+    }
+]

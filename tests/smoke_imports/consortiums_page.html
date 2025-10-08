@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consortiums - RFPO Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+        }
+        .sidebar .nav-link {
+            color: #ecf0f1;
+            border-radius: 5px;
+            margin: 2px 0;
+        }
+        .sidebar .nav-link:hover {
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+        }
+        .sidebar .nav-link.active {
+            background-color: #3498db;
+            color: white;
+        }
+        .main-content {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+        }
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+        .table th {
+            background-color: #f8f9fa;
+            border-top: none;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h4 class="text-white">🔧 RFPO Admin</h4>
+                        <small class="text-light">USCAR</small>
+                        <div class="mt-1">
+                            <span class="badge bg-dark">Build 6caa246</span>
+                        </div>
+                        <div class="mt-1">
+                            
+                                <span class="badge bg-success" title="Email via Azure Communication Services">
+                                    <i class="fas fa-envelope"></i> ACS: rfpo@ed7a060f-ca70-49f3-9958-1539096f14da.azurecomm.net
+                                </span>
+                            
+                        </div>
+                    </div>
+
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Core</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/consortiums">
+                                <i class="fas fa-building"></i> Consortiums
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teams">
+                                <i class="fas fa-users"></i> Teams
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/rfpos">
+                                <i class="fas fa-file-contract"></i> RFPOs
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Management</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/users">
+                                <i class="fas fa-user"></i> Users
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/projects">
+                                <i class="fas fa-project-diagram"></i> Projects
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/vendors">
+                                <i class="fas fa-store"></i> Vendors
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/lists">
+                                <i class="fas fa-cog"></i> Configuration Lists
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Approval System</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/approval-workflows">
+                                <i class="fas fa-route"></i> Approval Workflows
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/approval-instances">
+                                <i class="fas fa-clipboard-list"></i> Approval Instances
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading text-muted px-3">Tools</h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/pdf-positioning">
+                                <i class="fas fa-file-pdf"></i> PDF Positioning
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/tools/email-test">
+                                <i class="fas fa-envelope"></i> Email Test
+                            </a>
+                        </li>
+
+                        <li class="nav-item mt-4">
+                            <a class="nav-link text-warning" href="/logout">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div class="mt-4 px-3">
+                        <small class="text-light">
+                            Logged in as:<br>
+                            <strong>System Administrator</strong>
+                        </small>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="pt-3">
+                    
+                        
+                    
+
+                    
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">🏢 Consortiums</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="/consortium/new" class="btn btn-primary">
+                <i class="fas fa-plus"></i> New Consortium
+            </a>
+        </div>
+        <div class="btn-group">
+            <a class="btn btn-outline-secondary" title="Export to Excel"
+               href="/consortiums/export?format=xlsx">
+                <i class="fas fa-file-export"></i>
+            </a>
+            <a class="btn btn-outline-secondary" title="Export to JSON"
+               href="/consortiums/export?format=json">
+                <i class="fas fa-code"></i>
+            </a>
+            <a class="btn btn-outline-secondary" title="Download Import Template"
+               href="/consortiums/export/template">
+                <i class="fas fa-file-download"></i>
+            </a>
+            <button type="button" class="btn btn-outline-secondary" title="Import Consortiums"
+                    data-bs-toggle="modal" data-bs-target="#importConsortiumsModal">
+                <i class="fas fa-file-import"></i>
+            </button>
+        </div>
+        <div class="btn-group ms-2">
+            <form method="POST" action="/seed-consortiums" style="display: inline;">
+                <button type="submit" class="btn btn-success" onclick="return confirm('Seed standard consortium data? This will add all standard USCAR consortiums.')">
+                    <i class="fas fa-seedling"></i> Seed Standard Consortiums
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Consortium ID</th>
+                            <th>Name</th>
+                            <th>Abbreviation</th>
+                            <th>Terms PDF</th>
+                            <th>Approved Vendors</th>
+                            <th>Projects</th>
+                            <th>RFPOs</th>
+                            <th>Viewers</th>
+                            <th>Admins</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td><strong>00000001</strong></td>
+                            <td>USCar</td>
+                            <td><span class="badge bg-secondary">USCar</span></td>
+                            <td>
+                                
+                                    <span class="badge bg-warning">No Terms</span>
+                                
+                            </td>
+                            <td>
+                                
+                                    <span class="badge bg-warning">✗ Not Required</span>
+                                
+                            </td>
+                            <td>1</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>
+                                
+                                    <span class="badge bg-success">Active</span>
+                                
+                            </td>
+                            <td><small>2025-10-01</small></td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="/consortium/1/edit" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteConsortium(1, 'USCar')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td><strong>C99990001</strong></td>
+                            <td>Smoke Consortium</td>
+                            <td><span class="badge bg-secondary">SMOKE</span></td>
+                            <td>
+                                
+                                    <span class="badge bg-warning">No Terms</span>
+                                
+                            </td>
+                            <td>
+                                
+                                    <span class="badge bg-success">✓ Required</span>
+                                
+                            </td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>
+                                
+                                    <span class="badge bg-success">Active</span>
+                                
+                            </td>
+                            <td><small>2025-10-08</small></td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="/consortium/2/edit" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteConsortium(2, 'Smoke Consortium')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        
+    </div>
+</div>
+
+<!-- Import Consortiums Modal -->
+<div class="modal fade" id="importConsortiumsModal" tabindex="-1" aria-labelledby="importConsortiumsLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importConsortiumsLabel">Import Consortiums (Excel or JSON)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/consortiums/import" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="importConsortiumsFile" class="form-label">Choose file</label>
+                        <input class="form-control" type="file" id="importConsortiumsFile" name="import_file"
+                               accept=".json,.xlsx,.xls" required>
+                        <div class="form-text">
+                            • Excel: columns [consort_id, name, abbrev, require_approved_vendors, non_government_project_id, rfpo_viewer_user_ids, rfpo_admin_user_ids, invoicing_address, doc_fax_name, doc_fax_number, doc_email_name, doc_email_address, doc_post_name, doc_post_address, po_email, active]<br>
+                            • JSON: array of consortium objects; list fields may be lists or comma-separated strings.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete consortium <strong id="consortiumName"></strong>?</p>
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <footer class="text-center text-muted py-2">
+        <small>RFPO Admin • Build 6caa246</small>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+<script>
+function deleteConsortium(id, name) {
+    document.getElementById('consortiumName').textContent = name;
+    document.getElementById('deleteForm').action = '/consortium/' + id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+
+</body>
+</html>

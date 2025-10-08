@@ -328,11 +328,11 @@
     .access-branches {
         flex-direction: column;
     }
-    
+
     .associations-grid {
         justify-content: center;
     }
-    
+
     .permissions-badges {
         justify-content: center;
     }
@@ -362,11 +362,11 @@
                 <div class="card-body">
                     <!-- Basic Information Section -->
                     <h6 class="mb-3 text-primary">📋 Basic Information</h6>
-                    
+
                     {% if user %}
                     <div class="mb-3">
                         <label for="record_id" class="form-label">User ID</label>
-                        <input type="text" class="form-control form-control-sm" id="record_id" name="record_id" 
+                        <input type="text" class="form-control form-control-sm" id="record_id" name="record_id"
                                value="{{ user.record_id }}" readonly>
                         <div class="form-text">Auto-generated unique identifier</div>
                     </div>
@@ -375,12 +375,12 @@
                         <i class="fas fa-info-circle"></i> <strong>User ID</strong> will be auto-generated when you save
                     </div>
                     {% endif %}
-                    
+
                     <div class="row">
                         <div class="col-md-8">
                             <div class="mb-3">
                                 <label for="fullname" class="form-label">Full Name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control form-control-sm" id="fullname" name="fullname" 
+                                <input type="text" class="form-control form-control-sm" id="fullname" name="fullname"
                                        value="{{ user.fullname if user else '' }}" required
                                        placeholder="Full name">
                             </div>
@@ -396,26 +396,26 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
-                        <input type="email" class="form-control form-control-sm" id="email" name="email" 
+                        <input type="email" class="form-control form-control-sm" id="email" name="email"
                                value="{{ user.email if user else '' }}" required
                                placeholder="user@company.com">
                     </div>
-                    
+
                     {% if not user %}
                     <div class="mb-3">
                         <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
-                        <input type="password" class="form-control form-control-sm" id="password" name="password" 
+                        <input type="password" class="form-control form-control-sm" id="password" name="password"
                                placeholder="Enter password" required>
                         <div class="form-text">Minimum 8 characters recommended</div>
                     </div>
                     {% endif %}
-                    
+
                     <!-- Company Information Section -->
                     <h6 class="mb-3 text-primary mt-4">🏢 Company Information</h6>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -440,25 +440,25 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="phone" class="form-label">Phone</label>
-                                <input type="text" class="form-control form-control-sm" id="phone" name="phone" 
+                                <input type="text" class="form-control form-control-sm" id="phone" name="phone"
                                        value="{{ user.phone if user else '' }}"
                                        placeholder="Phone number">
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="company" class="form-label">Company Name</label>
-                        <input type="text" class="form-control form-control-sm" id="company" name="company" 
+                        <input type="text" class="form-control form-control-sm" id="company" name="company"
                                value="{{ user.company if user else '' }}"
                                placeholder="Full company name">
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="position" class="form-label">Position</label>
-                                <input type="text" class="form-control form-control-sm" id="position" name="position" 
+                                <input type="text" class="form-control form-control-sm" id="position" name="position"
                                        value="{{ user.position if user else '' }}"
                                        placeholder="Job title">
                             </div>
@@ -466,19 +466,19 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="department" class="form-label">Department</label>
-                                <input type="text" class="form-control form-control-sm" id="department" name="department" 
+                                <input type="text" class="form-control form-control-sm" id="department" name="department"
                                        value="{{ user.department if user else '' }}"
                                        placeholder="Department">
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Account Settings Section -->
                     <h6 class="mb-3 text-primary mt-4">⚙️ Account Settings</h6>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="agreed_to_terms" 
+                                <input class="form-check-input" type="checkbox" id="agreed_to_terms"
                                        name="agreed_to_terms" value="1"
                                        {{ 'checked' if user and user.agreed_to_terms else '' }}>
                                 <label class="form-check-label" for="agreed_to_terms">
@@ -488,7 +488,7 @@
                         </div>
                         <div class="col-md-6">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="active" 
+                                <input class="form-check-input" type="checkbox" id="active"
                                        name="active" value="1"
                                        {{ 'checked' if not user or user.active else '' }}>
                                 <label class="form-check-label" for="active">
@@ -497,7 +497,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- System Permissions Section -->
                     <h6 class="mb-3 text-primary mt-4">🔐 System Permissions</h6>
                     <div class="mb-3">
@@ -506,7 +506,7 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_GOD" 
+                                        <input class="form-check-input" type="checkbox" id="perm_GOD"
                                                name="permissions" value="GOD"
                                                {{ 'checked' if user and 'GOD' in user.get_permissions() else '' }}>
                                         <label class="form-check-label" for="perm_GOD">
@@ -515,7 +515,7 @@
                                         </label>
                                     </div>
                                     <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_RFPO_ADMIN" 
+                                        <input class="form-check-input" type="checkbox" id="perm_RFPO_ADMIN"
                                                name="permissions" value="RFPO_ADMIN"
                                                {{ 'checked' if user and 'RFPO_ADMIN' in user.get_permissions() else '' }}>
                                         <label class="form-check-label" for="perm_RFPO_ADMIN">
@@ -524,7 +524,7 @@
                                         </label>
                                     </div>
                                     <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_RFPO_USER" 
+                                        <input class="form-check-input" type="checkbox" id="perm_RFPO_USER"
                                                name="permissions" value="RFPO_USER"
                                                {{ 'checked' if user and 'RFPO_USER' in user.get_permissions() else '' }}>
                                         <label class="form-check-label" for="perm_RFPO_USER">
@@ -535,7 +535,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_CAL_MEET_USER" 
+                                        <input class="form-check-input" type="checkbox" id="perm_CAL_MEET_USER"
                                                name="permissions" value="CAL_MEET_USER" disabled
                                                {{ 'checked' if user and 'CAL_MEET_USER' in user.get_permissions() else '' }}>
                                         <label class="form-check-label text-muted" for="perm_CAL_MEET_USER">
@@ -544,7 +544,7 @@
                                         </label>
                                     </div>
                                     <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_VROOM_ADMIN" 
+                                        <input class="form-check-input" type="checkbox" id="perm_VROOM_ADMIN"
                                                name="permissions" value="VROOM_ADMIN" disabled
                                                {{ 'checked' if user and 'VROOM_ADMIN' in user.get_permissions() else '' }}>
                                         <label class="form-check-label text-muted" for="perm_VROOM_ADMIN">
@@ -553,7 +553,7 @@
                                         </label>
                                     </div>
                                     <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="perm_VROOM_USER" 
+                                        <input class="form-check-input" type="checkbox" id="perm_VROOM_USER"
                                                name="permissions" value="VROOM_USER" disabled
                                                {{ 'checked' if user and 'VROOM_USER' in user.get_permissions() else '' }}>
                                         <label class="form-check-label text-muted" for="perm_VROOM_USER">
@@ -569,7 +569,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Right Column: User Access -->
         <div class="col-lg-6">
             {% if user %}
@@ -605,7 +605,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Row 2: Admin Panel Card | User App Card -->
                         <div class="col-md-6">
                             <div class="card border-primary">
@@ -659,7 +659,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Row 3: Approver Status (Full Width) -->
                         <div class="col-12">
                             {% if user %}
@@ -693,7 +693,7 @@
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     <!-- Approver Details (initially hidden) -->
                                     <div id="approverDetails" class="mt-3" style="display: none;">
                                         <hr>
@@ -778,7 +778,7 @@
                             </div>
                             {% endif %}
                         </div>
-                        
+
                         <!-- Row 4: Entity Associations (Full Width) -->
                         <div class="col-12">
                             {% if user_mindmap.associations.teams.count > 0 or user_mindmap.associations.consortiums.count > 0 or user_mindmap.associations.projects.count > 0 %}
@@ -806,7 +806,7 @@
                                             </div>
                                             {% endfor %}
                                         {% endif %}
-                                        
+
                                         <!-- Consortiums -->
                                         {% if user_mindmap.associations.consortiums.count > 0 %}
                                             {% for consortium in user_mindmap.associations.consortiums.list %}
@@ -822,7 +822,7 @@
                                             </div>
                                             {% endfor %}
                                         {% endif %}
-                                        
+
                                         <!-- Projects (Consolidated) -->
                                         {% if user_mindmap.associations.projects.count > 0 %}
                                             <div class="entity-node project-node clickable" onclick="showProjectsModal()">
@@ -892,7 +892,7 @@
             {% endif %}
         </div>
     </div>
-    
+
     <!-- Form Actions Row -->
     <div class="row mt-4">
         <div class="col-12">
@@ -943,7 +943,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead class="table-light">
@@ -1003,7 +1003,7 @@ function showProjectsModal() {
 function showApproverDetails() {
     const detailsDiv = document.getElementById('approverDetails');
     const button = event.target.closest('button');
-    
+
     if (detailsDiv.style.display === 'none') {
         detailsDiv.style.display = 'block';
         button.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Details';
@@ -1017,10 +1017,113 @@ function showApproverDetails() {
 
 <!-- Always include approver details JavaScript -->
 <script>
+// Auto-populate company name from company code selection, and auto-sync code from name
+document.addEventListener('DOMContentLoaded', function() {
+    const companyCodeEl = document.getElementById('company_code');
+    const companyNameEl = document.getElementById('company');
+    let programmaticSync = false; // prevent event feedback loops
+
+    function extractCompanyNameFromOption(optionEl) {
+        if (!optionEl) return '';
+        // Expect formats like: "[BP] BP" or "[CHEV] Chevron"
+        const text = (optionEl.textContent || '').trim();
+        // Find closing bracket and take the remainder right of it
+        const closeIdx = text.indexOf(']');
+        let namePart = closeIdx >= 0 ? text.substring(closeIdx + 1) : text;
+        // Trim leading separators like dashes, pipes, bullets, colons and whitespace
+        namePart = namePart.replace(/^[\s\-:|–—·•]+/, '');
+        // Collapse multiple spaces and trim ends
+        namePart = namePart.replace(/\s+/g, ' ').trim();
+        return namePart;
+    }
+
+    function normalizeName(str) {
+        return (str || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function findOptionByCompanyName(name) {
+        const target = normalizeName(name);
+        if (!companyCodeEl) return null;
+        for (let i = 0; i < companyCodeEl.options.length; i++) {
+            const opt = companyCodeEl.options[i];
+            if (!opt.value) continue; // skip placeholder
+            const derived = extractCompanyNameFromOption(opt);
+            if (normalizeName(derived) === target) {
+                return opt;
+            }
+        }
+        return null;
+    }
+
+    function syncCompanyNameFromCode() {
+        if (!companyCodeEl || !companyNameEl) return;
+        const selected = companyCodeEl.options[companyCodeEl.selectedIndex];
+        // Don't auto-fill when placeholder is selected
+        if (!selected || (selected.value || '') === '') {
+            return;
+        }
+        const derivedName = extractCompanyNameFromOption(selected);
+        if (derivedName) {
+            // Only overwrite if empty or matches one of the known names to prevent clobbering custom edits
+            const currentVal = (companyNameEl.value || '').trim();
+            if (!currentVal || currentVal === '' || currentVal === derivedName) {
+                programmaticSync = true;
+                companyNameEl.value = derivedName;
+                programmaticSync = false;
+            }
+        }
+        // Always trim surrounding spaces if any
+        companyNameEl.value = (companyNameEl.value || '').trim();
+    }
+
+    function syncCompanyCodeFromName() {
+        if (!companyCodeEl || !companyNameEl) return;
+        if (programmaticSync) return; // skip if we're in a code-driven update
+        const typed = (companyNameEl.value || '').replace(/\s+/g, ' ').trim();
+        if (!typed) return;
+        const matchedOpt = findOptionByCompanyName(typed);
+        if (matchedOpt && companyCodeEl.value !== matchedOpt.value) {
+            companyCodeEl.value = matchedOpt.value;
+            // Normalize the company name to the exact label-derived value
+            const derivedName = extractCompanyNameFromOption(matchedOpt);
+            programmaticSync = true;
+            companyNameEl.value = derivedName;
+            programmaticSync = false;
+        }
+        // Final trim
+        companyNameEl.value = (companyNameEl.value || '').trim();
+    }
+
+    // Debounce helper to avoid jitter while typing
+    function debounce(fn, wait) {
+        let t;
+        return function(...args) {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, args), wait);
+        };
+    }
+
+    if (companyCodeEl) {
+        companyCodeEl.addEventListener('change', syncCompanyNameFromCode);
+        // Initial sync on load for preselected values when editing
+        syncCompanyNameFromCode();
+    }
+    if (companyNameEl) {
+        // Sync on change and when input loses focus; avoids overly aggressive typing-time changes
+        companyNameEl.addEventListener('change', syncCompanyCodeFromName);
+        companyNameEl.addEventListener('blur', syncCompanyCodeFromName);
+        // Also live-sync while typing with a small debounce
+        companyNameEl.addEventListener('input', debounce(syncCompanyCodeFromName, 250));
+    }
+});
+
 function showApproverDetails() {
     const detailsDiv = document.getElementById('approverDetails');
     const button = event.target.closest('button');
-    
+
     if (detailsDiv.style.display === 'none') {
         detailsDiv.style.display = 'block';
         button.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Details';
@@ -1033,11 +1136,11 @@ function showApproverDetails() {
 function syncApproverStatus(userId) {
     const button = event.target;
     const originalHtml = button.innerHTML;
-    
+
     // Show loading state
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
     button.disabled = true;
-    
+
     // Call the admin panel sync endpoint
     fetch('/api/sync-approver-status/' + userId, {
         method: 'POST',
@@ -1051,7 +1154,7 @@ function syncApproverStatus(userId) {
             // Show success and reload page after a brief delay
             button.innerHTML = '<i class="fas fa-check"></i> Synced!';
             button.className = 'btn btn-success btn-sm';
-            
+
             setTimeout(() => {
                 location.reload();
             }, 1500);
@@ -1060,7 +1163,7 @@ function syncApproverStatus(userId) {
             button.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
             button.className = 'btn btn-danger btn-sm';
             console.error('Sync failed:', data.message);
-            
+
             setTimeout(() => {
                 button.innerHTML = originalHtml;
                 button.className = 'btn btn-outline-warning btn-sm';
@@ -1072,7 +1175,7 @@ function syncApproverStatus(userId) {
         console.error('Sync error:', error);
         button.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
         button.className = 'btn btn-danger btn-sm';
-        
+
         setTimeout(() => {
             button.innerHTML = originalHtml;
             button.className = 'btn btn-outline-warning btn-sm';

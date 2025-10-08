@@ -90,8 +90,8 @@
                             <td><span class="badge bg-info">{{ team.abbrev }}</span></td>
                             <td>
                                 {% if team.consortium_consort_id %}
-                                    <span class="badge bg-secondary consortium-badge" 
-                                          data-bs-toggle="tooltip" 
+                                    <span class="badge bg-secondary consortium-badge"
+                                          data-bs-toggle="tooltip"
                                           title="{{ team.consortium_name }}">
                                         {{ team.consortium_abbrev }}
                                     </span>
@@ -127,19 +127,19 @@
                             <td><small>{{ team.created_at.strftime('%Y-%m-%d') if team.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{{ url_for('team_edit', id=team.id) }}" 
+                                    <a href="{{ url_for('team_edit', id=team.id) }}"
                                        class="btn btn-outline-primary btn-sm">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     {% if team.can_delete %}
-                                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
                                                 onclick="deleteTeam({{ team.id }}, '{{ team.name }}')">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     {% else %}
-                                        <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                        <button type="button" class="btn btn-outline-secondary btn-sm"
                                                 disabled
-                                                data-bs-toggle="tooltip" 
+                                                data-bs-toggle="tooltip"
                                                 title="Cannot delete: Team has {{ team.rfpo_count }} RFPOs{% if team.workflow_count > 0 %} and {{ team.workflow_count }} workflows{% endif %}">
                                             <i class="fas fa-trash"></i>
                                         </button>
@@ -204,13 +204,13 @@ document.addEventListener('DOMContentLoaded', function() {
 function deleteTeam(id, name) {
     document.getElementById('teamName').textContent = name;
     document.getElementById('deleteForm').action = '/team/' + id + '/delete';
-    
+
     // Reset dependency warning
     const dependencyWarning = document.getElementById('dependencyWarning');
     const dependencyList = document.getElementById('dependencyList');
     dependencyWarning.classList.add('d-none');
     dependencyList.innerHTML = '';
-    
+
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 </script>

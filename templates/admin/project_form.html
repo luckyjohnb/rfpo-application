@@ -193,6 +193,22 @@ document.addEventListener('DOMContentLoaded', function() {
     if (existingUsers) {
         selectedUsers = existingUsers.split(',').map(s => s.trim()).filter(s => s);
     }
+
+    // If opened with a prefill consortium id (e.g., from Stage 1 modal), pre-select it
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const prefill = params.get('prefill_consortium_id');
+        if (prefill && !selectedConsortiums.includes(prefill)) {
+            selectedConsortiums.push(prefill);
+            const hidden = document.getElementById('consortium_ids');
+            hidden.value = selectedConsortiums.join(', ');
+            // If lists already loaded, refresh; otherwise they'll reflect on first render
+            displayAvailableConsortiums?.();
+            displaySelectedConsortiums?.();
+        }
+    } catch (e) {
+        console.warn('Unable to apply prefill consortium id:', e);
+    }
 });
 
 function loadConsortiums() {

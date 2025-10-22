@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Created</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; margin: 2rem; }
+    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem; }
+    .success { color: #155724; background: #d4edda; border: 1px solid #c3e6cb; padding: .75rem 1rem; border-radius: 6px; }
+    .muted { color: #6b7280; }
+    .btn { display: inline-block; padding: .5rem .75rem; border-radius: 6px; border: 1px solid #d1d5db; background: #f9fafb; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="success">
+      ✅ Project created successfully
+    </div>
+    <p>
+      <strong>Project:</strong>
+      [{{ project.ref }}] {{ project.name }} (ID: {{ project.id }})
+    </p>
+    {% if consortium_ids and consortium_ids|length > 0 %}
+    <p><strong>Consortium (first):</strong> {{ consortium_ids[0] }}</p>
+    {% else %}
+    <p class="muted">No consortiums were associated with this project.</p>
+    {% endif %}
+    <p class="muted">You can close this window. The parent form will update automatically.</p>
+    <button class="btn" onclick="window.close?.()">Close</button>
+  </div>
+
+  <script>
+    // Post the created project back to the parent window
+    (function(){
+      try {
+        const payload = {
+          type: 'projectCreated',
+          project: { id: {{ project.id }}, ref: {{ project.ref|tojson }}, name: {{ project.name|tojson }} },
+          consortium_ids: {{ consortium_ids|tojson }}
+        };
+        // Send to parent; parent script validates origin
+        window.parent?.postMessage(payload, '*');
+      } catch (e) {
+        console.error('Failed to notify parent about created project:', e);
+      }
+    })();
+  </script>
+</body>
+</html>

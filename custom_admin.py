@@ -3501,6 +3501,19 @@ Southfield, MI  48075""",
                 db.session.commit()
 
                 flash("✅ Project created successfully!", "success")
+
+                # If opened inside a modal, return a minimal page that posts a message to the parent
+                if request.args.get("modal") == "1":
+                    try:
+                        consortium_ids = project.get_consortium_ids()
+                    except Exception:
+                        consortium_ids = []
+                    return render_template(
+                        "admin/project_created_modal.html",
+                        project=project,
+                        consortium_ids=consortium_ids,
+                    )
+
                 return redirect(url_for("projects"))
 
             except Exception as e:

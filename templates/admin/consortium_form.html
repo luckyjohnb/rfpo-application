@@ -180,9 +180,9 @@
                 
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="po_email" class="form-label">PO Email</label>
-                        <input type="email" class="form-control" id="po_email" name="po_email" 
-                               value="{{ consortium.po_email if consortium else '' }}"
+               <label for="po_email" class="form-label">PO Email</label>
+               <input type="email" class="form-control" id="po_email" name="po_email" 
+                   value="{{ (consortium.po_email or '') if consortium else '' }}"
                                placeholder="po@consortium.com">
                     </div>
                     
@@ -258,9 +258,9 @@
                                value="{{ consortium.doc_email_name if consortium else '' }}">
                     </div>
                     <div class="mb-3">
-                        <label for="doc_email_address" class="form-label">Email Address</label>
-                        <input type="email" class="form-control" id="doc_email_address" name="doc_email_address" 
-                               value="{{ consortium.doc_email_address if consortium else '' }}">
+               <label for="doc_email_address" class="form-label">Email Address</label>
+               <input type="email" class="form-control" id="doc_email_address" name="doc_email_address" 
+                   value="{{ (consortium.doc_email_address or '') if consortium else '' }}">
                     </div>
                 </div>
                 
@@ -290,7 +290,7 @@
                             <i class="fas fa-times"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} Consortium
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save Consortium{% else %}Create Consortium{% endif %}
                         </button>
                     </div>
                 </div>

@@ -306,9 +306,7 @@
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
                             <thead>
-                                <tr class="table-row-clickable" role="button" tabindex="0"
-                                    onclick="window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'"
-                                    onkeydown="if(event.key==='Enter'||event.keyCode===13||event.keyCode===32){window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'}">
+                                <tr>
                                     <th>RFPO ID</th>
                                     <th>Title</th>
                                     <th>Status</th>
@@ -317,7 +315,9 @@
                             </thead>
                             <tbody>
                                 {% for rfpo in recent_rfpos %}
-                                <tr>
+                                <tr class="table-row-clickable" role="button" tabindex="0"
+                                    onclick="window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'"
+                                    onkeydown="if(event.key==='Enter'||event.keyCode===13||event.keyCode===32){window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'}">
                                     <td>
                                         <small>
                                             <strong>

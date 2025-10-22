@@ -306,7 +306,9 @@
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
                             <thead>
-                                <tr>
+                                <tr class="table-row-clickable" role="button" tabindex="0"
+                                    onclick="window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'"
+                                    onkeydown="if(event.key==='Enter'||event.keyCode===13||event.keyCode===32){window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'}">
                                     <th>RFPO ID</th>
                                     <th>Title</th>
                                     <th>Status</th>
@@ -398,5 +400,8 @@
 <style>
 .text-gray-300 { color: #dee2e6 !important; }
 .text-gray-800 { color: #343a40 !important; }
+/* Clickable table rows */
+.table-row-clickable { cursor: pointer; }
+.table-row-clickable:hover { background-color: #f8f9fa; }
 </style>
 {% endblock %}

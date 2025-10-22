@@ -78,6 +78,8 @@
 
 <!-- Statistics Cards -->
 <div class="row mb-4">
+    {# Hidden per request: Consortiums summary card #}
+    {#
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-primary border-4">
             <div class="card-body">
@@ -93,7 +95,10 @@
             </div>
         </div>
     </div>
+    #}
 
+    {# Hidden per request: Teams summary card #}
+    {#
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-success border-4">
             <div class="card-body">
@@ -109,10 +114,11 @@
             </div>
         </div>
     </div>
+    #}
 
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-info border-4">
-            <div class="card-body">
+            <div class="card-body position-relative">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
                         <div class="small fw-bold text-info text-uppercase mb-1">RFPOs</div>
@@ -122,10 +128,13 @@
                         <i class="fas fa-file-contract fa-2x text-gray-300"></i>
                     </div>
                 </div>
+                <a href="{{ url_for('rfpos') }}" class="stretched-link" aria-label="View RFPOs"></a>
             </div>
         </div>
     </div>
 
+    {# Hidden per request: Users summary card #}
+    {#
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-warning border-4">
             <div class="card-body">
@@ -141,10 +150,13 @@
             </div>
         </div>
     </div>
+    #}
 </div>
 
 <!-- Approval System Statistics -->
 <div class="row mb-4">
+    {# Hidden per request: Active Workflows summary card #}
+    {#
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-secondary border-4">
             <div class="card-body">
@@ -160,7 +172,10 @@
             </div>
         </div>
     </div>
+    #}
 
+    {# Hidden per request: Approval Instances summary card #}
+    {#
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-info border-4">
             <div class="card-body">
@@ -176,6 +191,7 @@
             </div>
         </div>
     </div>
+    #}
 
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-warning border-4">
@@ -193,6 +209,8 @@
         </div>
     </div>
 
+    {# Hidden per request: Total Files summary card #}
+    {#
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-start border-danger border-4">
             <div class="card-body">
@@ -208,6 +226,7 @@
             </div>
         </div>
     </div>
+    #}
 </div>
 
 <!-- Quick Actions -->
@@ -284,7 +303,7 @@
 
 <!-- Recent Activity -->
 <div class="row">
-    <div class="col-lg-6 mb-4">
+    <div class="col-lg-12 mb-4">
         <div class="card">
             <div class="card-header">
                 <h6 class="mb-0 text-primary">📋 Recent RFPOs</h6>
@@ -303,9 +322,25 @@
                             </thead>
                             <tbody>
                                 {% for rfpo in recent_rfpos %}
-                                <tr>
-                                    <td><small><strong>{{ rfpo.rfpo_id }}</strong></small></td>
-                                    <td><small>{{ rfpo.title[:30] }}{% if rfpo.title|length > 30 %}...{% endif %}</small></td>
+                                <tr class="table-row-clickable" role="button" tabindex="0"
+                                    onclick="window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'"
+                                    onkeydown="if(event.key==='Enter'||event.keyCode===13||event.keyCode===32){window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'}">
+                                    <td>
+                                        <small>
+                                            <strong>
+                                                <a href="{{ url_for('rfpo_edit', id=rfpo.id) }}" class="text-decoration-none">
+                                                    {{ rfpo.rfpo_id }}
+                                                </a>
+                                            </strong>
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small>
+                                            <a href="{{ url_for('rfpo_edit', id=rfpo.id) }}" class="text-decoration-none">
+                                                {{ rfpo.title[:30] }}{% if rfpo.title|length > 30 %}...{% endif %}
+                                            </a>
+                                        </small>
+                                    </td>
                                     <td><span class="badge bg-primary">{{ rfpo.status }}</span></td>
                                     <td><small>{{ rfpo.created_at.strftime('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
                                 </tr>
@@ -320,6 +355,7 @@
         </div>
     </div>
 
+    {# Hidden per request: Recent File Uploads widget
     <div class="col-lg-6 mb-4">
         <div class="card">
             <div class="card-header">
@@ -365,10 +401,14 @@
             </div>
         </div>
     </div>
+    #}
 </div>
 
 <style>
 .text-gray-300 { color: #dee2e6 !important; }
 .text-gray-800 { color: #343a40 !important; }
+/* Clickable table rows */
+.table-row-clickable { cursor: pointer; }
+.table-row-clickable:hover { background-color: #f8f9fa; }
 </style>
 {% endblock %}

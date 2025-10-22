@@ -11,6 +11,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime
+import re
 
 from flask import (
     Flask,
@@ -66,6 +67,29 @@ try:
 except Exception:  # pragma: no cover - optional in runtime
     pd = None
 from pdf_generator import RFPOPDFGenerator
+
+
+def _parse_budget_amount(value):
+    """Parse a numeric amount from various bracket value formats.
+
+    Supports plain numbers like '5000' and textual ranges like 'Under $1,000' or '$1,000 - $5,000'.
+    Returns a float amount; returns 0.0 if nothing can be parsed.
+    """
+    if value is None:
+        return 0.0
+    try:
+        # Already numeric-like
+        return float(value)
+    except Exception:
+        s = str(value)
+        nums = re.findall(r"[\d,]+(?:\.\d+)?", s)
+        if nums:
+            try:
+                # Use the maximum number found in the string as the bracket ceiling
+                return max(float(n.replace(",", "")) for n in nums)
+            except Exception:
+                return 0.0
+        return 0.0
 
 
 def sync_all_users_approver_status(updated_by=None):
@@ -4982,8 +5006,9 @@ Southfield, MI  48075""",
                 flash(f"❌ Error updating approval workflow: {str(e)}", "error")
 
         consortiums = Consortium.query.filter_by(active=True).all()
-        budget_brackets = List.get_by_type("rfpo_brack")
-        approval_types = List.get_by_type("rfpo_appro")
+        # Case-insensitive lookups to support RFPO_BRACK / RFPO_APPRO
+        budget_brackets = List.get_by_type_ci("RFPO_BRACK")
+        approval_types = List.get_by_type_ci("RFPO_APPRO")
         document_types = List.get_by_type("doc_types")
         users = User.query.filter_by(active=True).all()
 
@@ -5015,12 +5040,10 @@ Southfield, MI  48075""",
             # Auto-generate stage ID
             stage_id = generate_next_id(RFPOApprovalStage, "stage_id", "STG-", 8)
 
-            # Get budget bracket info
+            # Get budget bracket info (case-insensitive type + robust parsing)
             bracket_key = request.form.get("budget_bracket_key")
-            bracket_item = List.query.filter_by(
-                type="rfpo_brack", key=bracket_key
-            ).first()
-            bracket_amount = float(bracket_item.value) if bracket_item else 0.00
+            bracket_item = List.get_item_ci("RFPO_BRACK", bracket_key)
+            bracket_amount = _parse_budget_amount(bracket_item.value) if bracket_item else 0.00
 
             # Generate stage name from budget bracket
             stage_name = (
@@ -5099,9 +5122,7 @@ Southfield, MI  48075""",
 
             # Get approval type info
             approval_key = request.form.get("approval_type_key")
-            approval_item = List.query.filter_by(
-                type="rfpo_appro", key=approval_key
-            ).first()
+            approval_item = List.get_item_ci("RFPO_APPRO", approval_key)
             approval_name = approval_item.value if approval_item else approval_key
 
             # Use approval type name as step name
@@ -5357,12 +5378,10 @@ Southfield, MI  48075""",
             return redirect(url_for("approval_workflow_edit", id=workflow_id))
 
         try:
-            # Get budget bracket info
+            # Get budget bracket info (case-insensitive type + robust parsing)
             bracket_key = request.form.get("budget_bracket_key")
-            bracket_item = List.query.filter_by(
-                type="rfpo_brack", key=bracket_key
-            ).first()
-            bracket_amount = float(bracket_item.value) if bracket_item else 0.00
+            bracket_item = List.get_item_ci("RFPO_BRACK", bracket_key)
+            bracket_amount = _parse_budget_amount(bracket_item.value) if bracket_item else 0.00
 
             # Generate stage name from budget bracket
             stage_name = (
@@ -5408,22 +5427,23 @@ Southfield, MI  48075""",
         workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
 
         try:
-            # Get all budget brackets
-            all_brackets = List.get_by_type("rfpo_brack")
+            # Get all budget brackets (case-insensitive)
+            all_brackets = List.get_by_type_ci("RFPO_BRACK")
 
             # Get used budget bracket keys in this workflow
             used_bracket_keys = [stage.budget_bracket_key for stage in workflow.stages]
 
             # Filter out used brackets
-            available_brackets = [
-                {
+            available_brackets = []
+            for bracket in all_brackets:
+                if bracket.key in used_bracket_keys:
+                    continue
+                amount = _parse_budget_amount(bracket.value)
+                available_brackets.append({
                     "key": bracket.key,
                     "value": bracket.value,
-                    "amount": float(bracket.value),
-                }
-                for bracket in all_brackets
-                if bracket.key not in used_bracket_keys
-            ]
+                    "amount": amount,
+                })
 
             return jsonify({"success": True, "brackets": available_brackets})
 
@@ -5439,8 +5459,8 @@ Southfield, MI  48075""",
         workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
 
         try:
-            # Get all budget brackets
-            all_brackets = List.get_by_type("rfpo_brack")
+            # Get all budget brackets (case-insensitive)
+            all_brackets = List.get_by_type_ci("RFPO_BRACK")
 
             # Get used budget bracket keys in this workflow, excluding the stage being edited
             used_bracket_keys = [
@@ -5450,15 +5470,16 @@ Southfield, MI  48075""",
             ]
 
             # Filter out used brackets (but allow current stage's bracket)
-            available_brackets = [
-                {
+            available_brackets = []
+            for bracket in all_brackets:
+                if bracket.key in used_bracket_keys:
+                    continue
+                amount = _parse_budget_amount(bracket.value)
+                available_brackets.append({
                     "key": bracket.key,
                     "value": bracket.value,
-                    "amount": float(bracket.value),
-                }
-                for bracket in all_brackets
-                if bracket.key not in used_bracket_keys
-            ]
+                    "amount": amount,
+                })
 
             return jsonify({"success": True, "brackets": available_brackets})
 
@@ -5548,9 +5569,7 @@ Southfield, MI  48075""",
         try:
             # Get approval type info
             approval_key = request.form.get("approval_type_key")
-            approval_item = List.query.filter_by(
-                type="rfpo_appro", key=approval_key
-            ).first()
+            approval_item = List.get_item_ci("RFPO_APPRO", approval_key)
             approval_name = approval_item.value if approval_item else approval_key
 
             # Update step with new values

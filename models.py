@@ -1252,10 +1252,31 @@ class List(db.Model):
         return cls.query.filter_by(type=list_type, active=True).all()
     
     @classmethod
+    def get_by_type_ci(cls, list_type):
+        """Get all list items of a specific type (case-insensitive)."""
+        # Include items where active is True or NULL, to be tolerant of legacy rows
+        return (
+            cls.query
+            .filter(db.func.lower(cls.type) == list_type.lower())
+            .filter((cls.active == True) | (cls.active.is_(None)))  # noqa: E712
+            .all()
+        )
+    
+    @classmethod
     def get_value_by_key(cls, list_type, key):
         """Get the value for a specific type-key combination"""
         list_item = cls.query.filter_by(type=list_type, key=key, active=True).first()
         return list_item.value if list_item else None
+    
+    @classmethod
+    def get_item_ci(cls, list_type, key):
+        """Get a single list item by type (case-insensitive) and key."""
+        return (
+            cls.query
+            .filter(db.func.lower(cls.type) == list_type.lower(), cls.key == key)
+            .filter((cls.active == True) | (cls.active.is_(None)))  # noqa: E712
+            .first()
+        )
     
     @classmethod
     def get_key_value_pairs(cls, list_type):

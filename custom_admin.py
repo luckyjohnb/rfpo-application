@@ -8,10 +8,10 @@ import io
 import json
 import mimetypes
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime
-import re
 
 from flask import (
     Flask,
@@ -5043,7 +5043,9 @@ Southfield, MI  48075""",
             # Get budget bracket info (case-insensitive type + robust parsing)
             bracket_key = request.form.get("budget_bracket_key")
             bracket_item = List.get_item_ci("RFPO_BRACK", bracket_key)
-            bracket_amount = _parse_budget_amount(bracket_item.value) if bracket_item else 0.00
+            bracket_amount = (
+                _parse_budget_amount(bracket_item.value) if bracket_item else 0.00
+            )
 
             # Generate stage name from budget bracket
             stage_name = (
@@ -5381,7 +5383,9 @@ Southfield, MI  48075""",
             # Get budget bracket info (case-insensitive type + robust parsing)
             bracket_key = request.form.get("budget_bracket_key")
             bracket_item = List.get_item_ci("RFPO_BRACK", bracket_key)
-            bracket_amount = _parse_budget_amount(bracket_item.value) if bracket_item else 0.00
+            bracket_amount = (
+                _parse_budget_amount(bracket_item.value) if bracket_item else 0.00
+            )
 
             # Generate stage name from budget bracket
             stage_name = (
@@ -5439,11 +5443,13 @@ Southfield, MI  48075""",
                 if bracket.key in used_bracket_keys:
                     continue
                 amount = _parse_budget_amount(bracket.value)
-                available_brackets.append({
-                    "key": bracket.key,
-                    "value": bracket.value,
-                    "amount": amount,
-                })
+                available_brackets.append(
+                    {
+                        "key": bracket.key,
+                        "value": bracket.value,
+                        "amount": amount,
+                    }
+                )
 
             return jsonify({"success": True, "brackets": available_brackets})
 
@@ -5475,11 +5481,13 @@ Southfield, MI  48075""",
                 if bracket.key in used_bracket_keys:
                     continue
                 amount = _parse_budget_amount(bracket.value)
-                available_brackets.append({
-                    "key": bracket.key,
-                    "value": bracket.value,
-                    "amount": amount,
-                })
+                available_brackets.append(
+                    {
+                        "key": bracket.key,
+                        "value": bracket.value,
+                        "amount": amount,
+                    }
+                )
 
             return jsonify({"success": True, "brackets": available_brackets})
 

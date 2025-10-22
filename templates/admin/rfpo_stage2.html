@@ -117,51 +117,54 @@
                     <h5 class="mb-3 mt-4">🚚 Delivery Information</h5>
                     
                     <div class="mb-3">
-                        <label for="delivery_date" class="form-label">Delivery Date</label>
+                        <label for="delivery_date" class="form-label">PO Expiration Date</label>
                         <input type="date" class="form-control" id="delivery_date" name="delivery_date">
                     </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="delivery_type" class="form-label">Delivery Type <span class="text-danger">*</span></label>
-                                <select class="form-select" id="delivery_type" name="delivery_type" required>
-                                    <option value="">-- Select type --</option>
-                                    <option value="FOB Seller's Plant">FOB Seller's Plant</option>
-                                    <option value="FOB Destination" selected>FOB Destination</option>
-                                </select>
+
+                    <!-- Hidden per request: hide all other Delivery Information fields except the date label above -->
+                    <div class="d-none">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="delivery_type" class="form-label">Delivery Type <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="delivery_type" name="delivery_type" required>
+                                        <option value="">-- Select type --</option>
+                                        <option value="FOB Seller's Plant">FOB Seller's Plant</option>
+                                        <option value="FOB Destination" selected>FOB Destination</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="delivery_payment" class="form-label">Payment <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="delivery_payment" name="delivery_payment" required>
+                                        <option value="">-- Select payment --</option>
+                                        <option value="Collect">Collect</option>
+                                        <option value="Prepaid" selected>Prepaid</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="delivery_payment" class="form-label">Payment <span class="text-danger">*</span></label>
-                                <select class="form-select" id="delivery_payment" name="delivery_payment" required>
-                                    <option value="">-- Select payment --</option>
-                                    <option value="Collect">Collect</option>
-                                    <option value="Prepaid" selected>Prepaid</option>
-                                </select>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="delivery_routing" class="form-label">Routing <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="delivery_routing" name="delivery_routing" required>
+                                        <option value="">-- Select routing --</option>
+                                        <option value="Buyer's traffic" selected>Buyer's traffic</option>
+                                        <option value="Seller's traffic">Seller's traffic</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="delivery_routing" class="form-label">Routing <span class="text-danger">*</span></label>
-                                <select class="form-select" id="delivery_routing" name="delivery_routing" required>
-                                    <option value="">-- Select routing --</option>
-                                    <option value="Buyer's traffic" selected>Buyer's traffic</option>
-                                    <option value="Seller's traffic">Seller's traffic</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="payment_terms" class="form-label">Payment Terms</label>
-                                <select class="form-select" id="payment_terms" name="payment_terms">
-                                    <option value="Net 30" selected>Net 30</option>
-                                    <option value="Net 30th Prox">Net 30th Prox</option>
-                                </select>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="payment_terms" class="form-label">Payment Terms</label>
+                                    <select class="form-select" id="payment_terms" name="payment_terms">
+                                        <option value="Net 30" selected>Net 30</option>
+                                        <option value="Net 30th Prox">Net 30th Prox</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>

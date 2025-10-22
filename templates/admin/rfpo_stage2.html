@@ -54,68 +54,68 @@
                 <!-- Left Column: Basic RFPO Info -->
                 <div class="col-md-6">
                     <h5 class="mb-3">📋 RFPO Information</h5>
-                    
+
                     <div class="mb-3">
                         <label for="title" class="form-label">RFPO Title <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="title" name="title" required
                                placeholder="Brief description of the purchase">
                         <div class="form-text">Clear, concise title for this purchase order</div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="3"
                                   placeholder="Detailed description of the purchase"></textarea>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="government_agreement_number" class="form-label">Government Agreement Number</label>
                         <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number">
                         <div class="form-text">If applicable, reference number for government agreements</div>
                     </div>
-                    
+
                     <h5 class="mb-3 mt-4">📞 Requestor Information</h5>
-                    
+
                     <div class="mb-3">
                         <label class="form-label">Requestor</label>
                         <input type="text" class="form-control" value="{{ current_user.get_display_name() }}" readonly>
                         <div class="form-text">Current logged-in user</div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="requestor_tel" class="form-label">Requestor Phone <span class="text-danger">*</span></label>
                         <input type="tel" class="form-control" id="requestor_tel" name="requestor_tel" required
                                value="{{ current_user_data.requestor_tel }}">
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="requestor_location" class="form-label">Requestor Location <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="requestor_location" name="requestor_location" rows="2" required>{{ current_user_data.requestor_location }}</textarea>
                     </div>
                 </div>
-                
+
                 <!-- Right Column: Shipping & Delivery -->
                 <div class="col-md-6">
                     <h5 class="mb-3">📦 Shipping Information</h5>
-                    
+
                     <div class="mb-3">
                         <label for="shipto_name" class="form-label">Ship to Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="shipto_name" name="shipto_name" required
                                value="{{ current_user_data.shipto_name }}">
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="shipto_tel" class="form-label">Ship to Phone <span class="text-danger">*</span></label>
                         <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" required>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="shipto_address" class="form-label">Ship to Address <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="shipto_address" name="shipto_address" rows="3" required>{{ current_user_data.shipto_address }}</textarea>
                     </div>
-                    
+
                     <h5 class="mb-3 mt-4">🚚 Delivery Information</h5>
-                    
+
                     <div class="mb-3">
                         <label for="delivery_date" class="form-label">PO Expiration Date</label>
                         <input type="date" class="form-control" id="delivery_date" name="delivery_date">
@@ -145,7 +145,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
@@ -170,13 +170,13 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Vendor Selection (Optional) -->
             <div class="row mt-4">
                 <div class="col-12">
                     <h5 class="mb-3">🏢 Vendor Selection (Optional)</h5>
                     <p class="text-muted">You can select a vendor now or add it later when editing the RFPO.</p>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -200,7 +200,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="row mt-4">
                 <div class="col-12">
                     <div class="d-flex justify-content-between">
@@ -221,34 +221,34 @@
 function loadVendorSites() {
     const vendorSelect = document.getElementById('vendor_id');
     const siteSelect = document.getElementById('vendor_site_id');
-    
+
     const vendorId = vendorSelect.value;
-    
+
     if (!vendorId) {
         siteSelect.disabled = true;
         siteSelect.innerHTML = '<option value="">-- Select vendor first --</option>';
         return;
     }
-    
+
     // Show loading
     siteSelect.disabled = true;
     siteSelect.innerHTML = '<option value="">Loading contacts...</option>';
-    
+
     // Fetch sites for the selected vendor
     fetch(`/api/vendor-sites/${vendorId}`)
         .then(response => response.json())
         .then(sites => {
             siteSelect.innerHTML = '<option value="">-- Select contact/site (optional) --</option>';
-            
+
             sites.forEach(site => {
                 const option = document.createElement('option');
                 option.value = site.id;
                 option.textContent = `${site.contact_name} - ${site.contact_city}, ${site.contact_state}`;
                 siteSelect.appendChild(option);
             });
-            
+
             siteSelect.disabled = false;
-            
+
             if (sites.length === 0) {
                 siteSelect.innerHTML = '<option value="">No contacts available for this vendor</option>';
             }

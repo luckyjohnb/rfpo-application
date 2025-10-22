@@ -33,7 +33,7 @@
             <div class="row">
                 <div class="col-md-6">
                     <h5 class="mb-3">🏢 Select Consortium</h5>
-                    
+
                     <div class="mb-3">
                         <label for="consortium_id" class="form-label">Consortium <span class="text-danger">*</span></label>
                         <select class="form-select" id="consortium_id" name="consortium_id" required onchange="loadProjects()">
@@ -47,12 +47,12 @@
                         <div class="form-text">The consortium that will finance this purchase order</div>
                     </div>
                 </div>
-                
+
                 <div class="col-md-6">
                     <h5 class="mb-3 d-flex align-items-center justify-content-between">
                         <span>📂 Select Project</span>
                     </h5>
-                    
+
                     <div class="mb-3">
                         <label for="project_id" class="form-label">Project <span class="text-danger">*</span></label>
                         <div class="d-flex gap-2">
@@ -65,7 +65,7 @@
                         </div>
                         <div class="form-text">The project this RFPO belongs to</div>
                     </div>
-                    
+
                     <div id="project_details" class="alert alert-info d-none">
                         <strong>Project Details:</strong>
                         <div id="project_description"></div>
@@ -73,7 +73,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="row mt-4">
                 <div class="col-12">
                     <div class="d-flex justify-content-between">
@@ -136,26 +136,26 @@ function loadProjects() {
     const consortiumSelect = document.getElementById('consortium_id');
     const projectSelect = document.getElementById('project_id');
     const projectDetails = document.getElementById('project_details');
-    
+
     const consortiumId = consortiumSelect.value;
-    
+
     if (!consortiumId) {
         projectSelect.disabled = true;
         projectSelect.innerHTML = '<option value="">-- Select a consortium first --</option>';
         projectDetails.classList.add('d-none');
         return;
     }
-    
+
     // Show loading
     projectSelect.disabled = true;
     projectSelect.innerHTML = '<option value="">Loading projects...</option>';
-    
+
     // Fetch projects for the selected consortium
     fetch(`/api/projects/${consortiumId}`)
         .then(response => response.json())
         .then(projects => {
             projectSelect.innerHTML = '<option value="">-- Select the project for this RFPO --</option>';
-            
+
             projects.forEach(project => {
                 const option = document.createElement('option');
                 option.value = project.id;
@@ -165,16 +165,16 @@ function loadProjects() {
                 option.dataset.uniProject = project.uni_project;
                 projectSelect.appendChild(option);
             });
-            
+
             projectSelect.disabled = false;
-            
+
             // If we have a pending project to select (created via modal), set it now
             if (pendingProjectId) {
                 projectSelect.value = pendingProjectId;
                 pendingProjectId = null;
                 projectSelect.dispatchEvent(new Event('change'));
             }
-            
+
             if (projects.length === 0) {
                 projectSelect.innerHTML = '<option value="">No projects available for this consortium</option>';
             }
@@ -190,10 +190,10 @@ document.getElementById('project_id').addEventListener('change', function() {
     const projectDetails = document.getElementById('project_details');
     const projectDescription = document.getElementById('project_description');
     const projectFlags = document.getElementById('project_flags');
-    
+
     if (this.value && selectedOption.dataset.description) {
         projectDescription.textContent = selectedOption.dataset.description;
-        
+
         const flags = [];
         if (selectedOption.dataset.govFunded === 'true') {
             flags.push('<span class="badge bg-primary">Government Funded</span>');
@@ -201,7 +201,7 @@ document.getElementById('project_id').addEventListener('change', function() {
         if (selectedOption.dataset.uniProject === 'true') {
             flags.push('<span class="badge bg-info">University Project</span>');
         }
-        
+
         projectFlags.innerHTML = flags.length > 0 ? '<br>' + flags.join(' ') : '';
         projectDetails.classList.remove('d-none');
     } else {

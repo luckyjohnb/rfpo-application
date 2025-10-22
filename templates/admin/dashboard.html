@@ -316,8 +316,22 @@
                             <tbody>
                                 {% for rfpo in recent_rfpos %}
                                 <tr>
-                                    <td><small><strong>{{ rfpo.rfpo_id }}</strong></small></td>
-                                    <td><small>{{ rfpo.title[:30] }}{% if rfpo.title|length > 30 %}...{% endif %}</small></td>
+                                    <td>
+                                        <small>
+                                            <strong>
+                                                <a href="{{ url_for('rfpo_edit', id=rfpo.id) }}" class="text-decoration-none">
+                                                    {{ rfpo.rfpo_id }}
+                                                </a>
+                                            </strong>
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small>
+                                            <a href="{{ url_for('rfpo_edit', id=rfpo.id) }}" class="text-decoration-none">
+                                                {{ rfpo.title[:30] }}{% if rfpo.title|length > 30 %}...{% endif %}
+                                            </a>
+                                        </small>
+                                    </td>
                                     <td><span class="badge bg-primary">{{ rfpo.status }}</span></td>
                                     <td><small>{{ rfpo.created_at.strftime('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
                                 </tr>

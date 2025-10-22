@@ -19,11 +19,11 @@
                 <!-- Basic Information -->
                 <div class="col-md-6">
                     <h5 class="mb-3">📋 Basic Information</h5>
-                    
+
                     {% if consortium %}
                     <div class="mb-3">
                         <label for="consort_id" class="form-label">Consortium ID</label>
-                        <input type="text" class="form-control" id="consort_id" name="consort_id" 
+                        <input type="text" class="form-control" id="consort_id" name="consort_id"
                                value="{{ consortium.consort_id }}" readonly>
                         <div class="form-text">Auto-generated unique identifier</div>
                     </div>
@@ -32,43 +32,43 @@
                         <i class="fas fa-info-circle"></i> <strong>Consortium ID</strong> will be auto-generated when you save
                     </div>
                     {% endif %}
-                    
+
                     <div class="mb-3">
                         <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name" 
+                        <input type="text" class="form-control" id="name" name="name"
                                value="{{ consortium.name if consortium else '' }}" required
                                placeholder="e.g., Automotive Research Consortium">
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="abbrev" class="form-label">Abbreviation <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="abbrev" name="abbrev" 
+                        <input type="text" class="form-control" id="abbrev" name="abbrev"
                                value="{{ consortium.abbrev if consortium else '' }}" required
                                placeholder="e.g., ARC" maxlength="20">
                     </div>
-                    
+
                     <!-- Logo Upload -->
                     <div class="mb-3">
                         <label for="logo_file" class="form-label">Logo</label>
                         {% if consortium and consortium.logo %}
                         <div class="mb-2">
-                            <img src="/uploads/logos/{{ consortium.logo }}" alt="Current Logo" 
+                            <img src="/uploads/logos/{{ consortium.logo }}" alt="Current Logo"
                                  class="img-thumbnail" style="max-width: 150px; max-height: 100px;">
                             <div class="form-text">Current logo: {{ consortium.logo }}</div>
                         </div>
                         {% endif %}
-                        <input type="file" class="form-control" id="logo_file" name="logo_file" 
+                        <input type="file" class="form-control" id="logo_file" name="logo_file"
                                accept="image/*">
                         <div class="form-text">Upload PNG, JPG, or GIF logo (max 2MB)</div>
                     </div>
-                    
+
                     <!-- Terms PDF Upload -->
                     <div class="mb-3">
                         <label for="terms_pdf_file" class="form-label">Terms & Conditions PDF</label>
                         {% if consortium and consortium.terms_pdf %}
                         <div class="mb-2">
                             <div class="alert alert-info">
-                                <i class="fas fa-file-pdf text-danger"></i> 
+                                <i class="fas fa-file-pdf text-danger"></i>
                                 <strong>Current terms:</strong> {{ consortium.terms_pdf }}
                                 <br>
                                 <a href="/uploads/terms/{{ consortium.terms_pdf }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
@@ -77,14 +77,14 @@
                             </div>
                         </div>
                         {% endif %}
-                        <input type="file" class="form-control" id="terms_pdf_file" name="terms_pdf_file" 
+                        <input type="file" class="form-control" id="terms_pdf_file" name="terms_pdf_file"
                                accept="application/pdf,.pdf">
                         <div class="form-text">Upload PDF file with Terms & Conditions (max 10MB). This will be appended to all POs for this consortium.</div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="require_approved_vendors" 
+                            <input class="form-check-input" type="checkbox" id="require_approved_vendors"
                                    name="require_approved_vendors" value="1"
                                    {{ 'checked' if consortium and consortium.require_approved_vendors else '' }}>
                             <label class="form-check-label" for="require_approved_vendors">
@@ -92,10 +92,10 @@
                             </label>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="active" 
+                            <input class="form-check-input" type="checkbox" id="active"
                                    name="active" value="1"
                                    {{ 'checked' if not consortium or consortium.active else '' }}>
                             <label class="form-check-label" for="active">
@@ -103,14 +103,14 @@
                             </label>
                         </div>
                     </div>
-                    
+
                     <!-- Non-Government Project Selection -->
                     <div class="mb-3">
                         <label for="non_government_project_id" class="form-label">Non-Government Project</label>
                         <select class="form-control" id="non_government_project_id" name="non_government_project_id">
                             <option value="">None</option>
                             {% for project in non_gov_projects %}
-                            <option value="{{ project.project_id }}" 
+                            <option value="{{ project.project_id }}"
                                     {{ 'selected' if consortium and consortium.non_government_project_id == project.project_id else '' }}>
                                 [{{ project.ref }}] {{ project.name }}
                             </option>
@@ -119,16 +119,16 @@
                         <div class="form-text">Select associated non-government project</div>
                     </div>
                 </div>
-                
+
                 <!-- User Permissions -->
                 <div class="col-md-6">
                     <h5 class="mb-3">👥 User Permissions</h5>
-                    
+
                     <!-- RFPO Viewer Users -->
                     <div class="mb-4">
                         <label class="form-label">RFPO Viewer Users</label>
                         <input type="text" class="form-control mb-2" id="viewerSearch" placeholder="🔍 Search users by name..." onkeyup="filterUsers('viewer')">
-                        
+
                         <div class="row">
                             <div class="col-6">
                                 <h6 class="text-muted">👥 Available Users</h6>
@@ -146,12 +146,12 @@
                         <input type="hidden" id="rfpo_viewer_user_ids" name="rfpo_viewer_user_ids" value="{{ consortium.rfpo_viewer_user_ids_display if consortium else '' }}">
                         <div class="form-text mt-2">Select users who can view RFPOs for this consortium</div>
                     </div>
-                    
+
                     <!-- RFPO Admin Users -->
                     <div class="mb-4">
                         <label class="form-label">RFPO Admin Users</label>
                         <input type="text" class="form-control mb-2" id="adminSearch" placeholder="🔍 Search users by name..." onkeyup="filterUsers('admin')">
-                        
+
                         <div class="row">
                             <div class="col-6">
                                 <h6 class="text-muted">👥 Available Users</h6>
@@ -171,33 +171,33 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Contact Information -->
             <div class="row mt-4">
                 <div class="col-12">
                     <h5 class="mb-3">📧 Contact Information</h5>
                 </div>
-                
+
                 <div class="col-md-6">
                     <div class="mb-3">
                <label for="po_email" class="form-label">PO Email</label>
-               <input type="email" class="form-control" id="po_email" name="po_email" 
+               <input type="email" class="form-control" id="po_email" name="po_email"
                    value="{{ (consortium.po_email or '') if consortium else '' }}"
                                placeholder="po@consortium.com">
                     </div>
-                    
+
                     <h6 class="text-muted mb-3">📍 Invoicing Address</h6>
                     <div class="mb-3">
                         <label for="invoicing_street" class="form-label">Street Address</label>
-                        <textarea class="form-control" id="invoicing_street" name="invoicing_street" 
+                        <textarea class="form-control" id="invoicing_street" name="invoicing_street"
                                   rows="2" placeholder="Street address">{{ consortium.invoicing_street if consortium else '' }}</textarea>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="invoicing_city" class="form-label">City</label>
-                                <input type="text" class="form-control" id="invoicing_city" name="invoicing_city" 
+                                <input type="text" class="form-control" id="invoicing_city" name="invoicing_city"
                                        value="{{ consortium.invoicing_city if consortium else '' }}"
                                        placeholder="City">
                             </div>
@@ -205,7 +205,7 @@
                         <div class="col-md-3">
                             <div class="mb-3">
                                 <label for="invoicing_state" class="form-label">State</label>
-                                <input type="text" class="form-control" id="invoicing_state" name="invoicing_state" 
+                                <input type="text" class="form-control" id="invoicing_state" name="invoicing_state"
                                        value="{{ consortium.invoicing_state if consortium else '' }}"
                                        placeholder="CA" maxlength="2">
                             </div>
@@ -213,74 +213,74 @@
                         <div class="col-md-3">
                             <div class="mb-3">
                                 <label for="invoicing_zip" class="form-label">ZIP</label>
-                                <input type="text" class="form-control" id="invoicing_zip" name="invoicing_zip" 
+                                <input type="text" class="form-control" id="invoicing_zip" name="invoicing_zip"
                                        value="{{ consortium.invoicing_zip if consortium else '' }}"
                                        placeholder="12345">
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="invoicing_country" class="form-label">Country</label>
-                        <input type="text" class="form-control" id="invoicing_country" name="invoicing_country" 
+                        <input type="text" class="form-control" id="invoicing_country" name="invoicing_country"
                                value="{{ consortium.invoicing_country if consortium else 'United States' }}"
                                placeholder="United States">
                     </div>
                 </div>
             </div>
-            
+
             <!-- Document Delivery Information -->
             <div class="row mt-4">
                 <div class="col-12">
                     <h5 class="mb-3">📄 Document Delivery Information</h5>
                 </div>
-                
+
                 <div class="col-md-4">
                     <h6 class="text-muted">📠 Fax Information</h6>
                     <div class="mb-3">
                         <label for="doc_fax_name" class="form-label">Fax Contact Name</label>
-                        <input type="text" class="form-control" id="doc_fax_name" name="doc_fax_name" 
+                        <input type="text" class="form-control" id="doc_fax_name" name="doc_fax_name"
                                value="{{ consortium.doc_fax_name if consortium else '' }}">
                     </div>
                     <div class="mb-3">
                         <label for="doc_fax_number" class="form-label">Fax Number</label>
-                        <input type="text" class="form-control" id="doc_fax_number" name="doc_fax_number" 
+                        <input type="text" class="form-control" id="doc_fax_number" name="doc_fax_number"
                                value="{{ consortium.doc_fax_number if consortium else '' }}"
                                placeholder="555-123-4567">
                     </div>
                 </div>
-                
+
                 <div class="col-md-4">
                     <h6 class="text-muted">📧 Email Information</h6>
                     <div class="mb-3">
                         <label for="doc_email_name" class="form-label">Email Contact Name</label>
-                        <input type="text" class="form-control" id="doc_email_name" name="doc_email_name" 
+                        <input type="text" class="form-control" id="doc_email_name" name="doc_email_name"
                                value="{{ consortium.doc_email_name if consortium else '' }}">
                     </div>
                     <div class="mb-3">
                <label for="doc_email_address" class="form-label">Email Address</label>
-               <input type="email" class="form-control" id="doc_email_address" name="doc_email_address" 
+               <input type="email" class="form-control" id="doc_email_address" name="doc_email_address"
                    value="{{ (consortium.doc_email_address or '') if consortium else '' }}">
                     </div>
                 </div>
-                
+
                 <div class="col-md-4">
                     <h6 class="text-muted">📮 Postal Information</h6>
                     <div class="mb-3">
                         <label for="doc_post_name" class="form-label">Postal Contact Name</label>
-                        <input type="text" class="form-control" id="doc_post_name" name="doc_post_name" 
+                        <input type="text" class="form-control" id="doc_post_name" name="doc_post_name"
                                value="{{ consortium.doc_post_name if consortium else '' }}">
                     </div>
                     <div class="mb-3">
                         <label for="doc_post_address" class="form-label">Postal Address</label>
-                        <textarea class="form-control" id="doc_post_address" name="doc_post_address" 
+                        <textarea class="form-control" id="doc_post_address" name="doc_post_address"
                                   rows="3">{{ consortium.doc_post_address if consortium else '' }}</textarea>
                     </div>
                 </div>
             </div>
-            
 
-            
+
+
             <!-- Action Buttons -->
             <div class="row mt-4">
                 <div class="col-12">
@@ -309,11 +309,11 @@ let selectedAdmins = [];
 // Load all users when page loads
 document.addEventListener('DOMContentLoaded', function() {
     loadUsers();
-    
+
     // Parse existing selections if editing
     const existingViewers = document.getElementById('rfpo_viewer_user_ids').value;
     const existingAdmins = document.getElementById('rfpo_admin_user_ids').value;
-    
+
     if (existingViewers) {
         selectedViewers = existingViewers.split(',').map(s => s.trim()).filter(s => s);
     }
@@ -348,20 +348,20 @@ function displayAvailableUsers(type) {
     const searchTerm = document.getElementById(searchInput).value.toLowerCase();
     const selectedList = type === 'viewer' ? selectedViewers : selectedAdmins;
     const listId = type === 'viewer' ? 'availableViewerUsers' : 'availableAdminUsers';
-    
+
     // Filter users: not selected and matching search term
-    const availableUsers = allUsers.filter(user => 
+    const availableUsers = allUsers.filter(user =>
         !selectedList.includes(user.id) &&
-        (user.name.toLowerCase().includes(searchTerm) || 
+        (user.name.toLowerCase().includes(searchTerm) ||
          user.email.toLowerCase().includes(searchTerm) ||
          user.id.toLowerCase().includes(searchTerm))
     );
-    
+
     if (availableUsers.length === 0) {
         document.getElementById(listId).innerHTML = '<div class="text-muted p-2">No available users</div>';
         return;
     }
-    
+
     let html = '';
     availableUsers.forEach(user => {
         html += `
@@ -376,19 +376,19 @@ function displayAvailableUsers(type) {
             </div>
         `;
     });
-    
+
     document.getElementById(listId).innerHTML = html;
 }
 
 function displaySelectedUsers(type) {
     const selectedList = type === 'viewer' ? selectedViewers : selectedAdmins;
     const listId = type === 'viewer' ? 'selectedViewerUsers' : 'selectedAdminUsers';
-    
+
     if (selectedList.length === 0) {
         document.getElementById(listId).innerHTML = '<div class="text-muted p-2">No users selected</div>';
         return;
     }
-    
+
     let html = '';
     selectedList.forEach(userId => {
         const user = allUsers.find(u => u.id === userId);
@@ -406,18 +406,18 @@ function displaySelectedUsers(type) {
             `;
         }
     });
-    
+
     document.getElementById(listId).innerHTML = html;
 }
 
 function addUser(type, userId) {
     const selectedList = type === 'viewer' ? selectedViewers : selectedAdmins;
     const hiddenInputId = type === 'viewer' ? 'rfpo_viewer_user_ids' : 'rfpo_admin_user_ids';
-    
+
     if (!selectedList.includes(userId)) {
         selectedList.push(userId);
         document.getElementById(hiddenInputId).value = selectedList.join(', ');
-        
+
         // Refresh both lists
         displayAvailableUsers(type);
         displaySelectedUsers(type);
@@ -427,12 +427,12 @@ function addUser(type, userId) {
 function removeUser(type, userId) {
     const selectedList = type === 'viewer' ? selectedViewers : selectedAdmins;
     const hiddenInputId = type === 'viewer' ? 'rfpo_viewer_user_ids' : 'rfpo_admin_user_ids';
-    
+
     const index = selectedList.indexOf(userId);
     if (index > -1) {
         selectedList.splice(index, 1);
         document.getElementById(hiddenInputId).value = selectedList.join(', ');
-        
+
         // Refresh both lists
         displayAvailableUsers(type);
         displaySelectedUsers(type);

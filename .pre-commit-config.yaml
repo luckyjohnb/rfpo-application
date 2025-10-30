@@ -8,13 +8,30 @@ repos:
       - id: mixed-line-ending
       - id: check-yaml
       - id: check-json
+      - id: check-added-large-files
+      - id: debug-statements
+
   - repo: https://github.com/psf/black
     rev: 24.8.0
     hooks:
       - id: black
         language_version: python3
+
   - repo: https://github.com/PyCQA/flake8
     rev: 7.1.1
     hooks:
       - id: flake8
-        additional_dependencies: []
+        args: [--max-line-length=120, --extend-ignore=E203,W503]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ['-r', '.', '-x', 'tests']
+        exclude: ^tests/

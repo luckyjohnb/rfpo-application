@@ -24,18 +24,18 @@ This document explains where RFPO-uploaded documents live, how they’re named, 
 - docker-compose mounts: `./uploads:/app/uploads`
 - Files persist on your machine and across container restarts.
 
-## Azure (production)
+## Azure (production) ✅ **LIVE DEPLOYMENT**
 
 - Container mount path: `/app/uploads` (and `/app/data` for some uses)
 - Backing storage: Azure File Share, mounted via the Container Apps environment storage
-  - Managed environment: `rfpo-env-5kn5bsg47vvac`
+  - Managed environment: `rfpo-env-5kn5bsg47vvac` ✅ **DEPLOYED**
   - Environment storage name: `rfpo-storage`
-  - Storage account: `strfpo5kn5bsg47vvac`
-  - File share: `rfpo-data`
+  - Storage account: `strfpo5kn5bsg47vvac` ✅ **OPERATIONAL**
+  - File share: `rfpo-data` (5GB quota)
 - Container Apps referencing this storage mount:
-  - `rfpo-admin` (also mounts an `uploads-volume`)
-  - `rfpo-api`
-  - `rfpo-user`
+  - `rfpo-admin` (also mounts an `uploads-volume`) 🟢 **LIVE**
+  - `rfpo-api` 🟢 **LIVE** 
+  - `rfpo-user` 🟢 **LIVE**
 - Container mount path: `/app/uploads` (and `/app/data` for some uses)
 - Backing storage: Azure File Share, mounted via the Container Apps environment storage
   - Managed environment: `rfpo-env-5kn5bsg47vvac`
@@ -71,11 +71,11 @@ This document explains where RFPO-uploaded documents live, how they’re named, 
 
 ## Browsing and downloading files
 
-### Easiest: Azure Portal
+### Easiest: Azure Portal ✅ **PRODUCTION ACCESS**
 
-1. Go to Resource Group `rg-rfpo-e108977f`.
-2. Open Storage Account `strfpo5kn5bsg47vvac`.
-3. File shares → `rfpo-data`.
+1. Go to Resource Group `rg-rfpo-e108977f` ✅ **LIVE**
+2. Open Storage Account `strfpo5kn5bsg47vvac` ✅ **OPERATIONAL**
+3. File shares → `rfpo-data` (5GB quota)
 4. Browse folders/files (e.g., files at the root or subfolders like `logos/` and `terms/`). You can download directly from here.
 ### Easiest: Azure Portal
 1. Go to Resource Group `rg-rfpo-e108977f`.

@@ -1,6 +1,22 @@
 # RFPO Application - Admin Setup Guide
 
-This guide will help you get the RFPO application running with proper database and admin user setup.
+This guide covers both local development setup and accessing the production Azure deployment.
+
+## 🌍 **Production Access (Azure)**
+
+**The RFPO application is LIVE on Azure Container Apps:**
+
+- **Admin Panel**: <https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io>
+- **User App**: <https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io>
+- **Login**: admin@rfpo.com / admin123
+
+For production administration, use the Azure-hosted admin panel directly. The sections below are for local development only.
+
+---
+
+# Local Development Setup
+
+This guide will help you get the RFPO application running locally with proper database and admin user setup.
 
 ## 🚀 Quick Setup (3 Steps)
 

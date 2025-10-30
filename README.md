@@ -9,7 +9,15 @@ The RFPO application consists of three containerized services:
 ```text
 ┌─────────────────────────────────────────────────────────┐
 │                    RFPO Application                     │
-├─────────────────┬─────────────────┬─────────────────────┤
+├─────────────────┬─────────────────┬───────**Azure specifics:**
+- **Status**: ✅ **DEPLOYED TO PRODUCTION**
+- Subscription ID: `e108977f-44ed-4400-9580-f7a0bc1d3630`
+- Resource Group: `rg-rfpo-e108977f`
+- Location: `East US`
+- ACR: `acrrfpoe108977f.azurecr.io`
+- Container Apps Environment: `rfpo-env-5kn5bsg47vvac`
+- **Container platform: linux/amd64** (NOT arm64/Mac)
+- Always use `sslmode=require` for PostgreSQL connections─────────┤
 │   User App      │   Admin Panel   │      API Layer      │
 │   Port: 5000    │   Port: 5111    │     Port: 5002      │
 │                 │                 │                     │
@@ -123,7 +131,12 @@ All configuration is managed via a `.env` file. **Never commit this file to vers
    # For local development (SQLite):
    DATABASE_URL=sqlite:///instance/rfpo_admin.db
    # For production (PostgreSQL on Azure):
-   DATABASE_URL=postgresql://username:password@server:5432/database?sslmode=require
+   **Azure PostgreSQL connection string format (in .env file):**
+```
+DATABASE_URL=postgresql://rfpoadmin:PASSWORD@rfpo-db-{unique}.postgres.database.azure.com:5432/rfpodb?sslmode=require
+```
+
+**Current Production Database:** `rfpo-db-{unique}.postgres.database.azure.com` (SSL enabled, 32GB storage)
 
    # Application Secrets (MUST CHANGE FOR PRODUCTION!)
    # Generate secure keys with: python -c "import secrets; print(secrets.token_hex(32))"
@@ -325,16 +338,239 @@ For issues or questions:
 3. Test individual services: Use health check endpoints
 4. Database issues: Check `instance/rfpo_admin.db` permissions
 
+## ☁️ Azure Deployment
+
+The RFPO application is **production-ready on Azure Container Apps** with automatic CI/CD, PostgreSQL database, and secure secret management.
+
+### Azure Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Azure Container Apps                         │
+├──────────────────┬──────────────────┬─────────────────────────────────┤
+│   RFPO User      │   RFPO Admin     │        RFPO API                 │
+│   (Port 5000)    │   (Port 5111)    │      (Port 5002)               │
+│                  │                  │                                 │
+│ • Public Access  │ • Admin Access   │ • Authentication                │
+│ • Dashboard      │ • User Mgmt      │ • RESTful API                   │
+│ • RFPO Views     │ • Team Mgmt      │ • Database Access               │
+│ • API Calls      │ • Reports        │ • JWT Tokens                    │
+└──────────────────┴──────────────────┴─────────────────────────────────┤
+│          Azure PostgreSQL Flexible Server (Production DB)            │
+├─────────────────────────────────────────────────────────────────────┤
+│  Azure Container Registry (ACR) • Azure Files • Key Vault • ACS     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 🚀 Quick Deploy to Azure
+
+**Prerequisites:**
+- Azure subscription
+- Azure CLI installed and logged in
+- Docker (for local builds)
+
+**One-Command Deployment:**
+
+```bash
+# Deploy everything to Azure Container Apps
+./redeploy-phase1.sh
+```
+
+This script:
+- Builds Docker images for linux/amd64 platform (required for Azure)
+- Pushes to Azure Container Registry (ACR)
+- Updates Container Apps with new images
+- Runs health checks
+
+### Azure Resources ✅ **DEPLOYED**
+
+The application uses these Azure services:
+
+| Resource | Purpose | Configuration | Status |
+|----------|---------|---------------|--------|
+| **Container Apps Environment** | Hosts all 3 microservices | `rfpo-env-5kn5bsg47vvac` | 🟢 **Active** |
+| **Container Apps** | Application hosting | `rfpo-api`, `rfpo-admin`, `rfpo-user` | 🟢 **Running** |
+| **Container Registry** | Docker image storage | `acrrfpoe108977f.azurecr.io` | 🟢 **Active** |
+| **PostgreSQL Flexible Server** | Production database | `rfpo-db-{unique}` - SSL required | 🟢 **Running** |
+| **Azure Files** | File upload storage | Mounted to `/app/uploads`, `/app/data` | 🟢 **Mounted** |
+| **Log Analytics** | Monitoring & logs | Application insights and health | 🟢 **Collecting** |
+
+### 🔧 Azure Configuration ✅ **PRODUCTION READY**
+
+- **Resource Group:** `rg-rfpo-e108977f`  
+- **Location:** `East US`  
+- **Subscription:** `e108977f-44ed-4400-9580-f7a0bc1d3630`
+- **Environment:** `rfpo-env-5kn5bsg47vvac.eastus.azurecontainerapps.io`
+- **Domain:** `livelyforest-d06a98a0.eastus.azurecontainerapps.io`
+
+### Production URLs ✅ **LIVE & DEPLOYED**
+
+| Service | URL | Purpose | Status |
+|---------|-----|---------|--------|
+| **Admin Panel** | <https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io> | User/Team/RFPO management | 🟢 **LIVE** |
+| **User App** | <https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io> | End-user dashboard | 🟢 **LIVE** |
+| **API Health** | <https://rfpo-api.livelyforest-d06a98a0.eastus.azurecontainerapps.io/api/health> | Health check endpoint | 🟢 **LIVE** |
+
+**Login Credentials (Production):**
+- Admin Email: `admin@rfpo.com`
+- Admin Password: `admin123`
+
+### 🔐 Production Security
+
+**Container Apps Security:**
+- HTTPS enforced (automatic certificates)
+- Environment variables for secrets
+- Private networking between services
+- Azure-managed identity for ACR access
+
+**Database Security:**
+- PostgreSQL with SSL required
+- Connection string in environment variables
+- Private endpoints (optional)
+- Automated backups
+
+**Secret Management:**
+```bash
+# Secrets are stored as Container App environment variables:
+DATABASE_URL=postgresql://rfpoadmin:PASSWORD@rfpo-db-{unique}.postgres.database.azure.com:5432/rfpodb?sslmode=require
+FLASK_SECRET_KEY=<64-char-secure-key>
+JWT_SECRET_KEY=<64-char-secure-key>
+ACS_CONNECTION_STRING=<azure-communication-services-connection>
+```
+
+### 📊 Monitoring & Health
+
+**Health Endpoints:**
+- API: `/api/health` (JSON status)
+- Admin: `/health` (basic check)  
+- User: `/health` (basic check)
+
+**Azure Monitor Integration:**
+```bash
+# Check app status
+az containerapp list --resource-group rg-rfpo-e108977f --output table
+
+# View logs
+az containerapp logs show --name rfpo-admin --resource-group rg-rfpo-e108977f --follow
+az containerapp logs show --name rfpo-api --resource-group rg-rfpo-e108977f --follow
+az containerapp logs show --name rfpo-user --resource-group rg-rfpo-e108977f --follow
+```
+
+### 🛠️ Development to Production Workflow
+
+**Local Development:**
+1. Code changes in VS Code
+2. Test with `docker-compose up -d` (SQLite database)
+3. Commit to main branch
+
+**Azure Deployment:**
+1. **Automatic CI/CD**: GitHub Actions trigger on push to main
+2. **Manual Deploy**: Run `./redeploy-phase1.sh` for immediate deployment
+3. **Health Check**: Verify all services via production URLs
+
+**Database Migration:**
+```bash
+# Initialize Azure PostgreSQL database
+python sqlalchemy_db_init.py  # Uses DATABASE_URL from .env
+```
+
+### 🔄 CI/CD Pipeline
+
+**GitHub Actions** (`.github/workflows/deploy-azure.yml`):
+- Triggers on push to `main` branch
+- Builds Docker images with `--platform linux/amd64`
+- Pushes to Azure Container Registry
+- Updates Container Apps with new images
+- Runs health checks
+
+**Manual Deployment Script** (`redeploy-phase1.sh`):
+- One-command deployment for immediate updates
+- Builds all 3 services simultaneously
+- Updates Container Apps with digest-pinned images
+- Provides deployment status and URLs
+
+### 📦 Container Images
+
+All images are built for **linux/amd64** platform and stored in ACR:
+
+```bash
+# Latest images in production:
+acrrfpoe108977f.azurecr.io/rfpo-api:latest
+acrrfpoe108977f.azurecr.io/rfpo-admin:latest  
+acrrfpoe108977f.azurecr.io/rfpo-user:latest
+```
+
+**Build Process:**
+- Source: GitHub main branch
+- Platform: linux/amd64 (Azure Container Apps requirement)
+- Registry: Azure Container Registry with managed identity
+- Deployment: Digest-pinned for consistent deployments
+
+### 🗃️ Database Differences: Local vs Azure
+
+| Aspect | Local (SQLite) | Azure (PostgreSQL) |
+|--------|---------------|-------------------|
+| **File** | `instance/rfpo_admin.db` | Azure PostgreSQL Flexible Server |
+| **Connection** | `sqlite:///instance/rfpo_admin.db` | `postgresql://user:pass@server:5432/db?sslmode=require` |
+| **Initialization** | `python sqlalchemy_db_init.py` | Same command with Azure `DATABASE_URL` |
+| **Backup** | Copy SQLite file | Azure automated backups + manual exports |
+| **Performance** | Limited by filesystem | Scalable, managed service |
+| **SSL** | Not applicable | Required (`sslmode=require`) |
+
+### 🚨 Troubleshooting Azure Deployment
+
+**Common Issues:**
+
+1. **Build Failures**: Ensure `--platform linux/amd64` in Docker builds
+2. **Database Connections**: Verify PostgreSQL connection string and SSL
+3. **Secret Errors**: Check Container App environment variables
+4. **Image Pull Issues**: Verify ACR permissions and image digests
+
+**Debug Commands:**
+```bash
+# Check Container App status
+az containerapp show --name rfpo-admin --resource-group rg-rfpo-e108977f
+
+# View recent logs  
+az containerapp logs show --name rfpo-admin --resource-group rg-rfpo-e108977f --tail 50
+
+# Test health endpoints
+curl https://rfpo-api.livelyforest-d06a98a0.eastus.azurecontainerapps.io/api/health
+```
+
+**Deployment Verification:**
+1. All Container Apps show "Running" status
+2. Health endpoints return 200 OK
+3. Admin login works with test credentials
+4. Database connections successful
+
+### 💰 Azure Costs & Scaling
+
+**Container Apps Pricing:**
+- Pay-per-use model (CPU/memory/requests)
+- Auto-scale from 0 to N instances
+- Free tier available for development
+
+**Cost Optimization:**
+- Set minimum replicas to 0 for non-production
+- Use appropriate resource limits
+- Monitor usage via Azure Cost Management
+
 ## 🎯 Production Deployment
 
-For production deployment:
+**Azure Container Apps** (Recommended - Production Ready):
+- Automatic CI/CD via GitHub Actions
+- Managed PostgreSQL database
+- HTTPS with automatic certificates  
+- Built-in monitoring and scaling
+- One-command deployment: `./redeploy-phase1.sh`
 
+**Self-Hosted** (Alternative):
 1. **Update secrets**: Change all default passwords and keys
-2. **Configure email**: Set up proper SMTP credentials
-3. **Database backup**: Implement regular backups of `rfpo_admin.db`
+2. **Configure email**: Set up proper SMTP credentials  
+3. **Database backup**: Implement regular backups of database
 4. **Reverse proxy**: Use nginx or similar for SSL termination
 5. **Monitoring**: Set up log aggregation and monitoring
-
 
 **RFPO Application - Modern, Scalable, Containerized Purchase Order Management** 🚀
 

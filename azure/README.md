@@ -357,16 +357,24 @@ For deployment issues or questions:
 
 ---
 
-## Default Application Access
+## ✅ **LIVE Production Application Access**
 
-After deployment, access your RFPO application:
+**Status**: 🟢 **DEPLOYED & OPERATIONAL**
 
-- **Admin Panel**: https://rfpo-admin.{region}.azurecontainerapps.io
-- **User App**: https://rfpo-user.{region}.azurecontainerapps.io
-- **API**: https://rfpo-api.{region}.azurecontainerapps.io
+Access your RFPO application (production):
 
-**Default Login:**
+- **Admin Panel**: <https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io>
+- **User App**: <https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io>  
+- **API**: <https://rfpo-api.livelyforest-d06a98a0.eastus.azurecontainerapps.io/api/health>
+
+**Production Login:**
 - Email: `admin@rfpo.com`
 - Password: `admin123`
+
+**Resource Details:**
+- Resource Group: `rg-rfpo-e108977f`
+- Environment: `rfpo-env-5kn5bsg47vvac`
+- Registry: `acrrfpoe108977f.azurecr.io`
+- Storage: `strfpo{unique}` with file share `rfpo-data`
 
 > **Note**: Change the default password immediately after first login!

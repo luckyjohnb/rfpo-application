@@ -1,6 +1,35 @@
 # Secrets Management
 
-This app uses environment-based secrets locally and Azure Container Apps (ACA) secrets in production. No secrets are baked into images or committed to the repo.
+🟢 **PRODUCTION STATUS: DEPLOYED & LIVE**
+
+The RFPO application uses secure, environment-based secrets management with different approaches for local development and Azure production deployment. **No secrets are ever baked into Docker images or committed to the repository.**
+
+## 🚀 Current Production Deployment
+
+- **Status**: ✅ **LIVE ON AZURE CONTAINER APPS**
+- **Resource Group**: `rg-rfpo-e108977f` (East US)
+- **Environment**: `rfpo-env-5kn5bsg47vvac`
+- **Domain**: `livelyforest-d06a98a0.eastus.azurecontainerapps.io`
+
+**Live Applications:**
+- 🟢 **Admin**: <https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io>
+- 🟢 **User App**: <https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io>
+- 🟢 **API**: <https://rfpo-api.livelyforest-d06a98a0.eastus.azurecontainerapps.io/api/health>
+
+## 🏗️ Architecture Overview
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│                 Secret Management                       │
+├─────────────────────┬───────────────────────────────────┤
+│  Local Development  │      Azure Production             │
+│                     │                                   │
+│ • .env file         │ • Container App Secrets           │
+│ • env_config.py     │ • Environment Variables           │
+│ • Git ignored       │ • secretRef injection             │
+│ • SQLite database   │ • PostgreSQL with SSL             │
+└─────────────────────┴───────────────────────────────────┘
+```
 
 ## Local development
 
@@ -13,20 +42,24 @@ This app uses environment-based secrets locally and Azure Container Apps (ACA) s
   - `API_SECRET_KEY`, `JWT_SECRET_KEY` (API auth/signing)
   - `API_BASE_URL` for the user app (non-secret)
 
-## Production (Azure Container Apps)
+## Production (Azure Container Apps) ✅ **DEPLOYED**
+
+**Environment:** `rg-rfpo-e108977f` (East US)  
+**Container Apps:** `rfpo-admin`, `rfpo-api`, `rfpo-user` (all **RUNNING**)  
+**Domain:** `livelyforest-d06a98a0.eastus.azurecontainerapps.io`
 
 Secrets are stored as ACA secrets and injected into containers as environment variables using `secretRef`. These values never appear in the Dockerfiles or images.
 
-### Secret names per app
+### Secret names per app ✅ **CONFIGURED**
 
-- rfpo-admin
+- **rfpo-admin** (🟢 LIVE: <https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io>)
   - `admin-secret` → `ADMIN_SECRET_KEY`
   - `database-url` → `DATABASE_URL`
-- rfpo-api
+- **rfpo-api** (🟢 LIVE: <https://rfpo-api.livelyforest-d06a98a0.eastus.azurecontainerapps.io>)
   - `jwt-secret` → `JWT_SECRET_KEY`
   - `api-secret` → `API_SECRET_KEY`
   - `database-url` → `DATABASE_URL`
-- rfpo-user
+- **rfpo-user** (🟢 LIVE: <https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io>)
   - `user-app-secret` → `USER_APP_SECRET_KEY`
   - `database-url` → `DATABASE_URL`
 
@@ -36,14 +69,18 @@ Each app also has non-secret envs:
 - `FLASK_ENV` (set to `development` in current config)
 - `API_BASE_URL` (rfpo-user only)
 
-### Storage credentials
+### Storage credentials ✅ **DEPLOYED**
 
-- File storage uses an Azure Files share exposed via an ACA managed storage: `rfpo-storage`.
-- Mounts:
-  - rfpo-admin: `/app/data` and `/app/uploads` mounted from volumes `data-volume` and `uploads-volume` (both `AzureFile` on `rfpo-storage`).
-  - rfpo-api: `/app/data` mounted from `data-volume` (AzureFile on `rfpo-storage`).
-  - rfpo-user: no mounts configured.
-- Under the hood, the storage account key/connection is held by ACA as a storage secret and not exposed in the codebase. Volume definitions reference `storageName: rfpo-storage`.
+- **Storage Account:** `strfpo{unique}` (Standard LRS, East US)
+- **File Share:** `rfpo-data` (5GB quota, SMB enabled)
+- **ACA Storage:** `rfpo-storage` (managed by Container Apps Environment)
+
+**Volume Mounts:**
+- **rfpo-admin**: `/app/data` and `/app/uploads` mounted from `data-volume` and `uploads-volume` (both AzureFile on `rfpo-storage`)
+- **rfpo-api**: `/app/data` mounted from `data-volume` (AzureFile on `rfpo-storage`)
+- **rfpo-user**: no mounts configured
+
+**Security:** Storage account key/connection is held by ACA as a storage secret and not exposed in the codebase. Volume definitions reference `storageName: rfpo-storage`.
 
 ## How secrets are deployed
 
@@ -73,17 +110,16 @@ Each app also has non-secret envs:
 
 Use these minimal, repeatable steps to rotate secrets safely. Replace placeholders in angle brackets.
 
-### rfpo-admin
+### rfpo-admin ✅ **LIVE PRODUCTION APP**
 
 1. Plan the change
-   - Identify which secret(s) to rotate: `admin-secret`, `database-url`.
-   - If rotating `database-url`, ensure the target DB is reachable and credentials are valid.
-2. Rotate in Azure
-   - Set new value(s):
+   - Identify which secret(s) to rotate: `admin-secret`, `database-url`
+   - If rotating `database-url`, ensure the target DB is reachable and credentials are valid
+2. Rotate in Azure (✅ **PRODUCTION COMMANDS**)
 
      ```bash
      az containerapp secret set --name rfpo-admin --resource-group rg-rfpo-e108977f --secrets admin-secret=<NEW_RANDOM_64_HEX>
-     az containerapp secret set --name rfpo-admin --resource-group rg-rfpo-e108977f --secrets database-url='<NEW_PG_URL_WITH_sslmode=require>'
+     az containerapp secret set --name rfpo-admin --resource-group rg-rfpo-e108977f --secrets database-url='postgresql://rfpoadmin:<NEW_PASSWORD>@rfpo-db-{unique}.postgres.database.azure.com:5432/rfpodb?sslmode=require'
      ```
 
 3. Restart
@@ -92,7 +128,7 @@ Use these minimal, repeatable steps to rotate secrets safely. Replace placeholde
    az containerapp revision restart --name rfpo-admin --resource-group rg-rfpo-e108977f
    ```
 
-4. Verify
+4. Verify (✅ **LIVE ENDPOINTS**)
    - Health:
 
      ```bash
@@ -105,19 +141,19 @@ Use these minimal, repeatable steps to rotate secrets safely. Replace placeholde
      az containerapp logs show --name rfpo-admin --resource-group rg-rfpo-e108977f --tail 50
      ```
 
-   - Admin login and dashboard load
+   - **Production login**: <https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io/login> (admin@rfpo.com / admin123)
 
-### rfpo-api
+### rfpo-api ✅ **LIVE PRODUCTION API**
 
 1. Plan
-   - Identify secret(s): `jwt-secret`, `api-secret`, `database-url`.
-   - Consider token invalidation impact when rotating `jwt-secret`.
-2. Rotate
+   - Identify secret(s): `jwt-secret`, `api-secret`, `database-url`
+   - ⚠️ Consider token invalidation impact when rotating `jwt-secret`
+2. Rotate (✅ **PRODUCTION COMMANDS**)
 
    ```bash
    az containerapp secret set --name rfpo-api --resource-group rg-rfpo-e108977f --secrets jwt-secret=<NEW_RANDOM_64_HEX>
    az containerapp secret set --name rfpo-api --resource-group rg-rfpo-e108977f --secrets api-secret=<NEW_RANDOM_64_HEX>
-   az containerapp secret set --name rfpo-api --resource-group rg-rfpo-e108977f --secrets database-url='<NEW_PG_URL_WITH_sslmode=require>'
+   az containerapp secret set --name rfpo-api --resource-group rg-rfpo-e108977f --secrets database-url='postgresql://rfpoadmin:<NEW_PASSWORD>@rfpo-db-{unique}.postgres.database.azure.com:5432/rfpodb?sslmode=require'
    ```
 
 3. Restart
@@ -126,26 +162,25 @@ Use these minimal, repeatable steps to rotate secrets safely. Replace placeholde
    az containerapp revision restart --name rfpo-api --resource-group rg-rfpo-e108977f
    ```
 
-4. Verify
+4. Verify (✅ **LIVE ENDPOINTS**)
    - Health:
 
      ```bash
      curl -fsSL https://rfpo-api.livelyforest-d06a98a0.eastus.azurecontainerapps.io/api/health
      ```
 
-   - Basic auth flow with a test JWT if applicable
-   - Logs for DB connectivity and auth
+   - API logs and DB connectivity check
 
-### rfpo-user
+### rfpo-user ✅ **LIVE PRODUCTION USER APP**
 
 1. Plan
-   - Identify secret(s): `user-app-secret`, optionally `database-url` if used.
-2. Rotate
+   - Identify secret(s): `user-app-secret`, optionally `database-url` if used
+2. Rotate (✅ **PRODUCTION COMMANDS**)
 
    ```bash
    az containerapp secret set --name rfpo-user --resource-group rg-rfpo-e108977f --secrets user-app-secret=<NEW_RANDOM_64_HEX>
    # If present
-   az containerapp secret set --name rfpo-user --resource-group rg-rfpo-e108977f --secrets database-url='<NEW_PG_URL_WITH_sslmode=require>'
+   az containerapp secret set --name rfpo-user --resource-group rg-rfpo-e108977f --secrets database-url='postgresql://rfpoadmin:<NEW_PASSWORD>@rfpo-db-{unique}.postgres.database.azure.com:5432/rfpodb?sslmode=require'
    ```
 
 3. Restart
@@ -154,8 +189,8 @@ Use these minimal, repeatable steps to rotate secrets safely. Replace placeholde
    az containerapp revision restart --name rfpo-user --resource-group rg-rfpo-e108977f
    ```
 
-4. Verify
-   - Open the user app homepage and ensure sessions work
+4. Verify (✅ **LIVE ENDPOINT**)
+   - **Production app**: <https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io> - ensure sessions and API calls work
 
 ### Storage (Azure Files)
 

@@ -1,0 +1,76 @@
+services:
+  # RFPO API Service (Port 5002) - Connected to Azure Database
+  rfpo-api:
+    container_name: rfpo-api-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "5002:5002"
+    env_file:
+      - .env.local
+    # Remove local instance volume since we're using Azure database
+    # volumes:
+    #   - ./instance:/app/instance
+    networks:
+      - rfpo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # RFPO Admin Panel (Port 5111) - Connected to Azure Database
+  rfpo-admin:
+    container_name: rfpo-admin-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    ports:
+      - "5111:5111"
+    env_file:
+      - .env.local
+    volumes:
+      # Keep local uploads for development (easier file management)
+      - ./uploads:/app/uploads
+      - ./static:/app/static
+      # Remove instance volume since we're using Azure database
+      # - ./instance:/app/instance
+    networks:
+      - rfpo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5111/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # RFPO User App (Port 5001) - Uses API for all data
+  rfpo-user-app:
+    container_name: rfpo-user-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.user-app
+    ports:
+      - "5001:5000"
+    env_file:
+      - .env.local
+    environment:
+      # Use local API container for user app
+      - API_BASE_URL=http://rfpo-api:5002/api
+    depends_on:
+      rfpo-api:
+        condition: service_healthy
+    networks:
+      - rfpo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  rfpo-network:
+    driver: bridge

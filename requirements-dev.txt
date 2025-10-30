@@ -1,3 +1,16 @@
+# Include all production requirements
+-r requirements.txt
+
+# Development and testing tools
 pre-commit==3.8.0
 black==24.8.0
 flake8==7.1.1
+pytest>=7.0.0
+pytest-flask>=1.2.0
+pytest-cov>=4.0.0
+mypy>=1.0.0
+
+# Additional development utilities
+isort>=5.12.0
+bandit>=1.7.0
+safety>=2.3.0

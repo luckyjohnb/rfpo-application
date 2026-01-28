@@ -644,7 +644,7 @@
                 <h5 class="modal-title">➕ Add Line Item</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('rfpo_add_line_item', rfpo_id=rfpo.id) }}" id="addLineItemForm">
+            <form method="POST" action="{{ url_for('rfpo_add_line_item', rfpo_id=rfpo.id) }}" id="addLineItemForm" novalidate>
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6">
@@ -887,23 +887,60 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('submitLineItemBtn');
     if (submitBtn) {
         submitBtn.addEventListener('click', function(e) {
+            e.preventDefault(); // Prevent default form submission
+            e.stopPropagation();
+            
             // Get the form
             const form = document.getElementById('addLineItemForm');
             if (!form) return;
             
-            // Get all currency inputs in this form
-            const currencyInputs = form.querySelectorAll('.currency-input');
+            // Validate required fields
+            const quantity = document.getElementById('quantity');
+            const description = document.getElementById('description');
+            const unitPrice = document.getElementById('unit_price');
             
-            // Clean all currency values BEFORE HTML5 validation
-            currencyInputs.forEach(input => {
-                const cleanValue = cleanCurrencyValue(input.value);
-                if (cleanValue && !isNaN(parseFloat(cleanValue))) {
-                    input.value = cleanValue; // Set to clean numeric value
-                }
-            });
+            let isValid = true;
             
-            // Now let the form submit normally (HTML5 validation will run on clean values)
-            // Note: We do NOT prevent default here - we let the normal form submission proceed
+            // Check quantity
+            if (!quantity.value || quantity.value <= 0) {
+                quantity.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                quantity.classList.remove('is-invalid');
+            }
+            
+            // Check description
+            if (!description.value.trim()) {
+                description.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                description.classList.remove('is-invalid');
+            }
+            
+            // Check and clean unit price
+            let cleanUnitPrice = cleanCurrencyValue(unitPrice.value);
+            if (!cleanUnitPrice || isNaN(parseFloat(cleanUnitPrice)) || parseFloat(cleanUnitPrice) <= 0) {
+                unitPrice.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                unitPrice.classList.remove('is-invalid');
+                unitPrice.value = cleanUnitPrice; // Set to clean value
+            }
+            
+            // If validation passed, submit the form
+            if (isValid) {
+                // Clean all currency values before submission
+                const currencyInputs = form.querySelectorAll('.currency-input');
+                currencyInputs.forEach(input => {
+                    const cleanValue = cleanCurrencyValue(input.value);
+                    if (cleanValue && !isNaN(parseFloat(cleanValue))) {
+                        input.value = cleanValue;
+                    }
+                });
+                
+                // Submit the form programmatically
+                form.submit();
+            }
         });
     }
     

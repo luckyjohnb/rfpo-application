@@ -886,11 +886,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add submit button handler for the Add Line Item modal form
     const submitBtn = document.getElementById('submitLineItemBtn');
     if (submitBtn) {
+        console.log('Submit button found, adding click handler');
         submitBtn.addEventListener('click', function(e) {
-            e.preventDefault(); // Prevent default form submission
+            console.log('Submit button click event fired');
+            e.preventDefault();
             e.stopPropagation();
-            
-            console.log('Submit button clicked');
             
             // Get the form
             const form = document.getElementById('addLineItemForm');
@@ -901,83 +901,42 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('Form found:', form);
             
-            // Validate required fields
+            // Get form fields
             const quantity = document.getElementById('quantity');
             const description = document.getElementById('description');
             const unitPrice = document.getElementById('unit_price');
             
-            console.log('Form fields found:', { quantity, description, unitPrice });
-            console.log('Field values:', {
-                quantity: quantity?.value,
-                description: description?.value,
-                unitPrice: unitPrice?.value
-            });
-            
-            let isValid = true;
-            
-            // Check quantity
-            if (!quantity || !quantity.value || quantity.value <= 0) {
-                console.log('Quantity validation failed');
-                if (quantity) quantity.classList.add('is-invalid');
-                isValid = false;
-            } else {
-                if (quantity) quantity.classList.remove('is-invalid');
-                console.log('Quantity valid:', quantity.value);
+            // Simple validation - just check if fields have values
+            if (!quantity || !quantity.value) {
+                alert('Please enter a quantity');
+                return;
             }
             
-            // Check description
             if (!description || !description.value.trim()) {
-                console.log('Description validation failed');
-                if (description) description.classList.add('is-invalid');
-                isValid = false;
-            } else {
-                if (description) description.classList.remove('is-invalid');
-                console.log('Description valid:', description.value);
+                alert('Please enter a description');
+                return;
             }
             
-            // Check and clean unit price
-            if (!unitPrice) {
-                console.error('Unit price field not found');
-                isValid = false;
-            } else {
-                let cleanUnitPrice = cleanCurrencyValue(unitPrice.value);
-                console.log('Unit price input:', unitPrice.value, '-> clean:', cleanUnitPrice);
-                
-                if (!cleanUnitPrice || isNaN(parseFloat(cleanUnitPrice)) || parseFloat(cleanUnitPrice) <= 0) {
-                    console.log('Unit price validation failed');
-                    unitPrice.classList.add('is-invalid');
-                    isValid = false;
-                } else {
-                    unitPrice.classList.remove('is-invalid');
-                    unitPrice.value = cleanUnitPrice; // Set to clean value
-                    console.log('Unit price valid:', cleanUnitPrice);
-                }
+            if (!unitPrice || !unitPrice.value) {
+                alert('Please enter a unit price');
+                return;
             }
             
-            console.log('Overall validation result:', isValid);
-            
-            // If validation passed, submit the form
-            if (isValid) {
-                console.log('Validation passed, cleaning and submitting form');
-                // Clean all currency values before submission
-                const currencyInputs = form.querySelectorAll('.currency-input');
-                currencyInputs.forEach(input => {
-                    const cleanValue = cleanCurrencyValue(input.value);
-                    if (cleanValue && !isNaN(parseFloat(cleanValue))) {
-                        input.value = cleanValue;
-                        console.log('Cleaned currency input:', input.name, '=', cleanValue);
-                    }
-                });
-                
-                // Submit the form programmatically
-                console.log('Submitting form');
-                form.submit();
-            } else {
-                console.log('Validation failed, not submitting');
+            // Clean the unit price
+            const cleanPrice = cleanCurrencyValue(unitPrice.value);
+            if (!cleanPrice || isNaN(parseFloat(cleanPrice))) {
+                alert('Please enter a valid price');
+                return;
             }
+            
+            console.log('All validation passed, submitting form');
+            unitPrice.value = cleanPrice;
+            
+            // Submit the form
+            form.submit();
         });
     } else {
-        console.error('Submit button not found');
+        console.error('Submit button NOT found');
     }
     
     // Handle form submission - ensure values are clean

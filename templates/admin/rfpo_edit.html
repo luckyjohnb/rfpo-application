@@ -661,7 +661,10 @@
                             
                             <div class="mb-3">
                                 <label for="unit_price" class="form-label">Unit Price ($) <span class="text-danger">*</span></label>
-                                <input type="number" step="0.01" class="form-control" id="unit_price" name="unit_price" min="0" required>
+                                <input type="text" class="form-control currency-input" id="unit_price" name="unit_price" 
+                                       placeholder="e.g., 1000.50 or 1,000.50" required
+                                       data-clean-value="">
+                                <small class="form-text text-muted">Enter amount with or without commas (e.g., 1000 or 1,000.50)</small>
                             </div>
                         </div>
                         
@@ -715,7 +718,10 @@
                                 
                                 <div class="mb-3">
                                     <label for="capital_acquisition_cost" class="form-label">Acquisition Cost ($)</label>
-                                    <input type="number" step="0.01" class="form-control" id="capital_acquisition_cost" name="capital_acquisition_cost">
+                                    <input type="text" class="form-control currency-input" id="capital_acquisition_cost" name="capital_acquisition_cost"
+                                           placeholder="e.g., 5000.00 or 5,000.00"
+                                           data-clean-value="">
+                                    <small class="form-text text-muted">Enter amount with or without commas</small>
                                 </div>
                             </div>
                         </div>
@@ -819,5 +825,76 @@ function deleteFile(fileId, fileName) {
     document.getElementById('deleteFileForm').action = '/rfpo/{{ rfpo.id }}/file/' + fileId + '/delete';
     new bootstrap.Modal(document.getElementById('deleteFileModal')).show();
 }
+
+// Currency input formatting - accepts commas, displays with formatting, stores clean numeric
+function formatCurrencyDisplay(value) {
+    // Remove any non-numeric characters except decimal point
+    const cleanValue = value.replace(/[^\d.]/g, '');
+    if (!cleanValue) return '';
+    
+    // Parse the value
+    const numValue = parseFloat(cleanValue);
+    if (isNaN(numValue)) return '';
+    
+    // Format with comma separator and 2 decimal places
+    return numValue.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function cleanCurrencyValue(value) {
+    // Remove all commas and non-numeric characters except decimal point
+    return value.replace(/[^\d.]/g, '');
+}
+
+// Initialize currency inputs
+document.addEventListener('DOMContentLoaded', function() {
+    // Get all currency input fields
+    const currencyInputs = document.querySelectorAll('.currency-input');
+    
+    currencyInputs.forEach(input => {
+        // On focus: show clean value
+        input.addEventListener('focus', function() {
+            const cleanValue = cleanCurrencyValue(this.value);
+            this.value = cleanValue;
+        });
+        
+        // On input: allow user typing (don't format while typing)
+        input.addEventListener('input', function() {
+            // Just validate it's a valid number pattern
+            const cleanValue = cleanCurrencyValue(this.value);
+            // Store clean value in data attribute for submission
+            this.setAttribute('data-clean-value', cleanValue);
+        });
+        
+        // On blur: format for display
+        input.addEventListener('blur', function() {
+            if (this.value) {
+                const cleanValue = cleanCurrencyValue(this.value);
+                if (cleanValue && !isNaN(parseFloat(cleanValue))) {
+                    this.value = formatCurrencyDisplay(cleanValue);
+                    this.setAttribute('data-clean-value', cleanValue);
+                } else {
+                    this.value = '';
+                    this.setAttribute('data-clean-value', '');
+                }
+            }
+        });
+    });
+    
+    // Handle form submission - replace formatted values with clean numeric values
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const currencyInputs = this.querySelectorAll('.currency-input');
+            currencyInputs.forEach(input => {
+                // Replace the formatted value with clean numeric value before submission
+                const cleanValue = cleanCurrencyValue(input.value);
+                input.value = cleanValue;
+            });
+        });
+    });
+});
 </script>
 {% endblock %}

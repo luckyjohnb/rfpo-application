@@ -896,15 +896,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('addLineItemForm');
             if (!form) {
                 console.error('Form not found');
+                alert('Form not found');
                 return;
             }
             
             console.log('Form found:', form);
             
-            // Get form fields
-            const quantity = document.getElementById('quantity');
-            const description = document.getElementById('description');
-            const unitPrice = document.getElementById('unit_price');
+            // Get form fields - SEARCH WITHIN THE FORM to get the right ones
+            const quantity = form.querySelector('#quantity');
+            const description = form.querySelector('#description');
+            const unitPrice = form.querySelector('#unit_price');
+            
+            console.log('Form fields:', { 
+                quantity: quantity?.value, 
+                description: description?.value,
+                unitPrice: unitPrice?.value
+            });
             
             // Simple validation - just check if fields have values
             if (!quantity || !quantity.value) {
@@ -912,7 +919,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            if (!description || !description.value.trim()) {
+            if (!description || !description.value || description.value.trim() === '') {
+                console.log('Description validation failed:', {
+                    description,
+                    value: description?.value,
+                    trimmed: description?.value?.trim()
+                });
                 alert('Please enter a description');
                 return;
             }

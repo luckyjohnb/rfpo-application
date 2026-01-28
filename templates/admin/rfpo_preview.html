@@ -352,8 +352,8 @@
                 <td><p>{{ item.line_number }}</p></td>
                 <td><p>{{ item.quantity }}</p></td>
                 <td><p>{{ item.description }}{% if item.is_capital_equipment %}<br /><i>Capital Equipment</i>{% endif %}</p></td>
-                <td style="text-align:right"><p>${{ "%.2f"|format(item.unit_price) }}</p></td>
-                <td class="end" style="text-align:right"><p>${{ "%.2f"|format(item.total_price) }}</p></td>
+                <td style="text-align:right"><p>{{ item.unit_price|currency }}</p></td>
+                <td class="end" style="text-align:right"><p>{{ item.total_price|currency }}</p></td>
             </tr>
             {% endfor %}
 
@@ -364,7 +364,7 @@
             
             <tr class="totals">
                 <td colspan="4" class="none" style="text-align:right"><b>Gross purchase order:</b></td>
-                <td style="text-align:right">${{ "%.2f"|format(rfpo.subtotal or 0) }}</td>
+                <td style="text-align:right">{{ rfpo.subtotal|default(0)|currency }}</td>
             </tr>
             
             <tr class="totals">
@@ -375,12 +375,12 @@
                     <br /><i>({{ rfpo.cost_share_amount }}% of subtotal)</i>
                     {% endif %}
                 </td>
-                <td style="text-align:right">(${{ "%.2f"|format(rfpo.get_calculated_cost_share_amount()) }})</td>
+                <td style="text-align:right">({{ rfpo.get_calculated_cost_share_amount()|currency }})</td>
             </tr>
             
             <tr class="totals">
                 <td colspan="4" class="none" style="text-align:right"><b>Net purchase not to exceed:</b></td>
-                <td class="bold" style="text-align:right"><b>${{ "%.2f"|format(rfpo.get_calculated_total_amount()) }}</b></td>
+                <td class="bold" style="text-align:right"><b>{{ rfpo.get_calculated_total_amount()|currency }}</b></td>
             </tr>
 
             <tr>

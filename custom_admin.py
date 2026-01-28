@@ -539,6 +539,18 @@ def create_app():
     def load_user(user_id):
         return User.query.get(int(user_id))
 
+    # Custom Jinja2 filter for currency formatting
+    @app.template_filter('currency')
+    def format_currency(value):
+        """Format a number as currency with commas and 2 decimal places"""
+        if value is None:
+            return "$0.00"
+        try:
+            float_value = float(value)
+            return f"${float_value:,.2f}"
+        except (ValueError, TypeError):
+            return "$0.00"
+
     # Helper functions
     def format_json_field(value):
         """Format JSON field for display"""

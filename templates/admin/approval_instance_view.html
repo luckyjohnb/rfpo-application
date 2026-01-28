@@ -115,7 +115,7 @@
                     
                     <dt class="col-sm-4">Total Amount:</dt>
                     <dd class="col-sm-8">
-                        <strong>${{ "{:,.2f}".format(rfpo.total_amount or 0) }}</strong>
+                        <strong>{{ rfpo.total_amount|default(0)|currency }}</strong>
                     </dd>
                     
                     <dt class="col-sm-4">Status:</dt>

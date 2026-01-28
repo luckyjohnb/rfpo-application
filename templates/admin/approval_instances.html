@@ -34,7 +34,7 @@
                         </td>
                         <td>
                             <strong>{{ instance.rfpo_title }}</strong>
-                            <br><small class="text-muted">${{ "{:,.2f}".format(instance.rfpo_total) }}</small>
+                            <br><small class="text-muted">{{ instance.rfpo_total|currency }}</small>
                         </td>
                         <td>
                             <strong>{{ instance.workflow_name }}</strong>

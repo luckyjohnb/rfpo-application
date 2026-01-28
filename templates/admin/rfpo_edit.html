@@ -61,7 +61,7 @@
         <div class="card bg-light">
             <div class="card-body py-2">
                 <small class="text-muted">Total Amount:</small><br>
-                <strong class="text-success">${{ "%.2f"|format(rfpo.total_amount) }}</strong>
+                <strong class="text-success">{{ rfpo.total_amount|currency }}</strong>
             </div>
         </div>
     </div>
@@ -132,8 +132,8 @@
                                     <br><small class="text-info"><i class="fas fa-tools"></i> Capital Equipment</small>
                                     {% endif %}
                                 </td>
-                                <td>${{ "%.2f"|format(item.unit_price) }}</td>
-                                <td class="fw-bold">${{ "%.2f"|format(item.total_price) }}</td>
+                                <td>{{ item.unit_price|currency }}</td>
+                                <td class="fw-bold">{{ item.total_price|currency }}</td>
                                 <td>
                                     {% if item.is_capital_equipment %}
                                     <span class="badge bg-warning">YES</span>
@@ -155,7 +155,7 @@
                         <tfoot>
                             <tr class="table-info">
                                 <td colspan="4" class="text-end"><strong>Subtotal:</strong></td>
-                                <td class="fw-bold">${{ "%.2f"|format(rfpo.subtotal) }}</td>
+                                <td class="fw-bold">{{ rfpo.subtotal|currency }}</td>
                                 <td colspan="2"></td>
                             </tr>
                             {% if rfpo.cost_share_amount and rfpo.cost_share_amount > 0 %}
@@ -167,13 +167,13 @@
                                     <br><small class="text-muted">({{ rfpo.cost_share_amount }}% of subtotal)</small>
                                     {% endif %}
                                 </td>
-                                <td class="fw-bold">-${{ "%.2f"|format(rfpo.get_calculated_cost_share_amount()) }}</td>
+                                <td class="fw-bold">-{{ rfpo.get_calculated_cost_share_amount()|currency }}</td>
                                 <td colspan="2"></td>
                             </tr>
                             {% endif %}
                             <tr class="table-success">
                                 <td colspan="4" class="text-end"><strong>Net Total:</strong></td>
-                                <td class="fw-bold fs-5">${{ "%.2f"|format(rfpo.get_calculated_total_amount()) }}</td>
+                                <td class="fw-bold fs-5">{{ rfpo.get_calculated_total_amount()|currency }}</td>
                                 <td colspan="2"></td>
                             </tr>
                         </tfoot>

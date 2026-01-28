@@ -35,6 +35,18 @@ def create_user_app():
     # Enable CORS
     CORS(app, origins="*", allow_headers=["Content-Type", "Authorization"])
 
+    # Custom Jinja2 filter for currency formatting
+    @app.template_filter('currency')
+    def format_currency(value):
+        """Format a number as currency with commas and 2 decimal places"""
+        if value is None:
+            return "$0.00"
+        try:
+            float_value = float(value)
+            return f"${float_value:,.2f}"
+        except (ValueError, TypeError):
+            return "$0.00"
+
     # API Configuration
     API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:5003/api")
     ADMIN_API_URL = os.environ.get("ADMIN_API_URL", "http://127.0.0.1:5111/api")

@@ -729,7 +729,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="submitLineItemBtn">Add Line Item</button>
+                    <button type="button" class="btn btn-primary" id="submitLineItemBtn">Add Line Item</button>
                 </div>
             </form>
         </div>
@@ -890,58 +890,94 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault(); // Prevent default form submission
             e.stopPropagation();
             
+            console.log('Submit button clicked');
+            
             // Get the form
             const form = document.getElementById('addLineItemForm');
-            if (!form) return;
+            if (!form) {
+                console.error('Form not found');
+                return;
+            }
+            
+            console.log('Form found:', form);
             
             // Validate required fields
             const quantity = document.getElementById('quantity');
             const description = document.getElementById('description');
             const unitPrice = document.getElementById('unit_price');
             
+            console.log('Form fields found:', { quantity, description, unitPrice });
+            console.log('Field values:', {
+                quantity: quantity?.value,
+                description: description?.value,
+                unitPrice: unitPrice?.value
+            });
+            
             let isValid = true;
             
             // Check quantity
-            if (!quantity.value || quantity.value <= 0) {
-                quantity.classList.add('is-invalid');
+            if (!quantity || !quantity.value || quantity.value <= 0) {
+                console.log('Quantity validation failed');
+                if (quantity) quantity.classList.add('is-invalid');
                 isValid = false;
             } else {
-                quantity.classList.remove('is-invalid');
+                if (quantity) quantity.classList.remove('is-invalid');
+                console.log('Quantity valid:', quantity.value);
             }
             
             // Check description
-            if (!description.value.trim()) {
-                description.classList.add('is-invalid');
+            if (!description || !description.value.trim()) {
+                console.log('Description validation failed');
+                if (description) description.classList.add('is-invalid');
                 isValid = false;
             } else {
-                description.classList.remove('is-invalid');
+                if (description) description.classList.remove('is-invalid');
+                console.log('Description valid:', description.value);
             }
             
             // Check and clean unit price
-            let cleanUnitPrice = cleanCurrencyValue(unitPrice.value);
-            if (!cleanUnitPrice || isNaN(parseFloat(cleanUnitPrice)) || parseFloat(cleanUnitPrice) <= 0) {
-                unitPrice.classList.add('is-invalid');
+            if (!unitPrice) {
+                console.error('Unit price field not found');
                 isValid = false;
             } else {
-                unitPrice.classList.remove('is-invalid');
-                unitPrice.value = cleanUnitPrice; // Set to clean value
+                let cleanUnitPrice = cleanCurrencyValue(unitPrice.value);
+                console.log('Unit price input:', unitPrice.value, '-> clean:', cleanUnitPrice);
+                
+                if (!cleanUnitPrice || isNaN(parseFloat(cleanUnitPrice)) || parseFloat(cleanUnitPrice) <= 0) {
+                    console.log('Unit price validation failed');
+                    unitPrice.classList.add('is-invalid');
+                    isValid = false;
+                } else {
+                    unitPrice.classList.remove('is-invalid');
+                    unitPrice.value = cleanUnitPrice; // Set to clean value
+                    console.log('Unit price valid:', cleanUnitPrice);
+                }
             }
+            
+            console.log('Overall validation result:', isValid);
             
             // If validation passed, submit the form
             if (isValid) {
+                console.log('Validation passed, cleaning and submitting form');
                 // Clean all currency values before submission
                 const currencyInputs = form.querySelectorAll('.currency-input');
                 currencyInputs.forEach(input => {
                     const cleanValue = cleanCurrencyValue(input.value);
                     if (cleanValue && !isNaN(parseFloat(cleanValue))) {
                         input.value = cleanValue;
+                        console.log('Cleaned currency input:', input.name, '=', cleanValue);
                     }
                 });
                 
                 // Submit the form programmatically
+                console.log('Submitting form');
                 form.submit();
+            } else {
+                console.log('Validation failed, not submitting');
             }
         });
+    } else {
+        console.error('Submit button not found');
     }
     
     // Handle form submission - ensure values are clean

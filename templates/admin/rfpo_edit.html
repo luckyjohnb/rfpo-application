@@ -18,8 +18,9 @@
                 <i class="fas fa-file-pdf"></i> Generate PO Proof
             </a>
             <a href="{{ url_for('rfpo_generate_po', rfpo_id=rfpo.id) }}" 
-               class="btn btn-success" target="_blank"
-               title="Generate Purchase Order PDF">
+               class="btn btn-success d-none" target="_blank"
+               title="Generate Purchase Order PDF"
+               id="generatePoBtn">
                 <i class="fas fa-file-pdf"></i> Generate PO
             </a>
         </div>

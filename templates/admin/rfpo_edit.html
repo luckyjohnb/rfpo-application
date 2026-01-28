@@ -644,7 +644,7 @@
                 <h5 class="modal-title">➕ Add Line Item</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('rfpo_add_line_item', rfpo_id=rfpo.id) }}">
+            <form method="POST" action="{{ url_for('rfpo_add_line_item', rfpo_id=rfpo.id) }}" id="addLineItemForm">
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6">
@@ -729,7 +729,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Line Item</button>
+                    <button type="submit" class="btn btn-primary" id="submitLineItemBtn">Add Line Item</button>
                 </div>
             </form>
         </div>
@@ -883,7 +883,31 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Handle form submission - replace formatted values with clean numeric values
+    // Add submit button handler for the Add Line Item modal form
+    const submitBtn = document.getElementById('submitLineItemBtn');
+    if (submitBtn) {
+        submitBtn.addEventListener('click', function(e) {
+            // Get the form
+            const form = document.getElementById('addLineItemForm');
+            if (!form) return;
+            
+            // Get all currency inputs in this form
+            const currencyInputs = form.querySelectorAll('.currency-input');
+            
+            // Clean all currency values BEFORE HTML5 validation
+            currencyInputs.forEach(input => {
+                const cleanValue = cleanCurrencyValue(input.value);
+                if (cleanValue && !isNaN(parseFloat(cleanValue))) {
+                    input.value = cleanValue; // Set to clean numeric value
+                }
+            });
+            
+            // Now let the form submit normally (HTML5 validation will run on clean values)
+            // Note: We do NOT prevent default here - we let the normal form submission proceed
+        });
+    }
+    
+    // Handle form submission - ensure values are clean
     const forms = document.querySelectorAll('form');
     forms.forEach(form => {
         form.addEventListener('submit', function(e) {

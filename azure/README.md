@@ -2,6 +2,21 @@
 
 This guide walks you through deploying the RFPO (Request for Purchase Order) application to Azure Container Apps using Infrastructure as Code (Bicep) and automated CI/CD pipelines.
 
+## 📢 Latest Deployment Status
+
+✅ **Current Release**: JanuaryFixes (January 28, 2026)
+- **Branch**: `JanuaryFixes` (commit `0e7680c`)
+- **All 3 services deployed**: API ✅ | Admin ✅ | User App ✅
+- **Production URLs**: https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io
+
+**Latest Features:**
+- Currency formatting with thousand separators
+- Fixed form validation bugs
+- Improved UX with hidden Generate PO button
+- All services built for linux/amd64 platform
+
+See [CHANGELOG_2026.md](../CHANGELOG_2026.md) for release details.
+
 ## 🏗️ Architecture Overview
 
 The RFPO application is deployed as a 3-tier containerized application:

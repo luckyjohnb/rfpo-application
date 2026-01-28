@@ -2,6 +2,18 @@
 
 Containerized Request for Purchase Order (RFPO) management system with separated user and admin interfaces.
 
+## 📢 Latest Release: JanuaryFixes (January 28, 2026)
+
+✅ **Deployed to Production**
+
+**New Features:**
+- 💰 Currency formatting with thousand separators ($1,234,567.89)
+- 🐛 Fixed form validation field selector bug
+- 🙈 Generate PO button now hidden until approval criteria met
+- 🔐 Enhanced admin security
+
+**See [CHANGELOG_2026.md](./CHANGELOG_2026.md) for detailed release notes.**
+
 ## 🏗️ Architecture
 
 The RFPO application consists of three containerized services:

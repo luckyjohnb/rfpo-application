@@ -23,13 +23,13 @@
                 <dl class="row">
                     <dt class="col-sm-4">Instance ID:</dt>
                     <dd class="col-sm-8"><code>{{ instance.instance_id }}</code></dd>
-                    
+
                     <dt class="col-sm-4">Workflow:</dt>
                     <dd class="col-sm-8">
                         <strong>{{ instance.workflow_name }}</strong>
                         <br><small class="text-muted">Version {{ instance.workflow_version }}</small>
                     </dd>
-                    
+
                     <dt class="col-sm-4">Status:</dt>
                     <dd class="col-sm-8">
                         {% if instance.overall_status == 'draft' %}
@@ -44,7 +44,7 @@
                             <span class="badge bg-info">{{ instance.overall_status|title }}</span>
                         {% endif %}
                     </dd>
-                    
+
                     <dt class="col-sm-4">Current Stage:</dt>
                     <dd class="col-sm-8">
                         Stage {{ instance.current_stage_order or 'N/A' }}
@@ -52,7 +52,7 @@
                             , Step {{ instance.current_step_order }}
                         {% endif %}
                     </dd>
-                    
+
                     <dt class="col-sm-4">Progress:</dt>
                     <dd class="col-sm-8">
                         <div class="d-flex align-items-center">
@@ -67,7 +67,7 @@
                             <small class="ms-2">{{ progress|round(1) }}%</small>
                         </div>
                     </dd>
-                    
+
                     <dt class="col-sm-4">Submitted:</dt>
                     <dd class="col-sm-8">
                         {% if instance.submitted_at %}
@@ -76,7 +76,7 @@
                             <em class="text-muted">Not submitted</em>
                         {% endif %}
                     </dd>
-                    
+
                     <dt class="col-sm-4">Completed:</dt>
                     <dd class="col-sm-8">
                         {% if instance.completed_at %}
@@ -85,14 +85,14 @@
                             <em class="text-muted">In progress</em>
                         {% endif %}
                     </dd>
-                    
+
                     <dt class="col-sm-4">Created By:</dt>
                     <dd class="col-sm-8">{{ instance.created_by or 'System' }}</dd>
                 </dl>
             </div>
         </div>
     </div>
-    
+
     <!-- Right Column: RFPO Information -->
     <div class="col-lg-6">
         {% if rfpo %}
@@ -109,20 +109,20 @@
                             <i class="fas fa-edit"></i> Edit
                         </a>
                     </dd>
-                    
+
                     <dt class="col-sm-4">Title:</dt>
                     <dd class="col-sm-8"><strong>{{ rfpo.title }}</strong></dd>
-                    
+
                     <dt class="col-sm-4">Total Amount:</dt>
                     <dd class="col-sm-8">
                         <strong>{{ rfpo.total_amount|default(0)|currency }}</strong>
                     </dd>
-                    
+
                     <dt class="col-sm-4">Status:</dt>
                     <dd class="col-sm-8">
                         <span class="badge bg-info">{{ rfpo.status }}</span>
                     </dd>
-                    
+
                     {% if project %}
                     <dt class="col-sm-4">Project:</dt>
                     <dd class="col-sm-8">
@@ -130,7 +130,7 @@
                         <br><small class="text-muted">{{ project.ref }}</small>
                     </dd>
                     {% endif %}
-                    
+
                     {% if consortium %}
                     <dt class="col-sm-4">Consortium:</dt>
                     <dd class="col-sm-8">
@@ -138,10 +138,10 @@
                         <br><small class="text-muted">{{ consortium.abbrev }}</small>
                     </dd>
                     {% endif %}
-                    
+
                     <dt class="col-sm-4">Created:</dt>
                     <dd class="col-sm-8">{{ rfpo.created_at.strftime('%Y-%m-%d %H:%M:%S') if rfpo.created_at else 'Unknown' }}</dd>
-                    
+
                     <dt class="col-sm-4">Created By:</dt>
                     <dd class="col-sm-8">{{ rfpo.created_by or 'Unknown' }}</dd>
                 </dl>
@@ -236,11 +236,11 @@
                                 </td>
                                 <td>
                                     {% if action.status == 'pending' %}
-                                        <button type="button" class="btn btn-sm btn-success" 
+                                        <button type="button" class="btn btn-sm btn-success"
                                                 onclick="approveAction({{ instance.id }}, {{ action.id }}, 'approved')">
                                             <i class="fas fa-check"></i> Approve
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-danger" 
+                                        <button type="button" class="btn btn-sm btn-danger"
                                                 onclick="approveAction({{ instance.id }}, {{ action.id }}, 'refused')">
                                             <i class="fas fa-times"></i> Reject
                                         </button>
@@ -275,13 +275,13 @@
             <form id="approvalForm" method="POST">
                 <div class="modal-body">
                     <input type="hidden" id="actionStatus" name="status">
-                    
+
                     <div class="mb-3">
                         <label for="comments" class="form-label">Comments</label>
-                        <textarea class="form-control" id="comments" name="comments" rows="3" 
+                        <textarea class="form-control" id="comments" name="comments" rows="3"
                                   placeholder="Enter your comments for this approval action..."></textarea>
                     </div>
-                    
+
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -299,13 +299,13 @@ function approveAction(instanceId, actionId, status) {
     const statusInput = document.getElementById('actionStatus');
     const submitButton = document.getElementById('submitButton');
     const modalTitle = document.getElementById('approvalModalLabel');
-    
+
     // Set form action
     form.action = `/approval-instance/${instanceId}/action/${actionId}/approve`;
-    
+
     // Set status
     statusInput.value = status;
-    
+
     // Configure modal based on action type
     if (status === 'approved') {
         modalTitle.textContent = 'Approve Action';
@@ -316,10 +316,10 @@ function approveAction(instanceId, actionId, status) {
         submitButton.className = 'btn btn-danger';
         submitButton.innerHTML = '<i class="fas fa-times"></i> Reject';
     }
-    
+
     // Clear previous values
     document.getElementById('comments').value = '';
-    
+
     modal.show();
 }
 </script>

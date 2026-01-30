@@ -540,7 +540,7 @@ def create_app():
         return User.query.get(int(user_id))
 
     # Custom Jinja2 filter for currency formatting
-    @app.template_filter('currency')
+    @app.template_filter("currency")
     def format_currency(value):
         """Format a number as currency with commas and 2 decimal places"""
         if value is None:

@@ -36,7 +36,7 @@ def create_user_app():
     CORS(app, origins="*", allow_headers=["Content-Type", "Authorization"])
 
     # Custom Jinja2 filter for currency formatting
-    @app.template_filter('currency')
+    @app.template_filter("currency")
     def format_currency(value):
         """Format a number as currency with commas and 2 decimal places"""
         if value is None:

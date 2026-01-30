@@ -7,17 +7,17 @@
     <h1 class="h2">📄 Edit RFPO: {{ rfpo.rfpo_id }}</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
-            <a href="{{ url_for('rfpo_generate_rfpo', rfpo_id=rfpo.id) }}" 
+            <a href="{{ url_for('rfpo_generate_rfpo', rfpo_id=rfpo.id) }}"
                class="btn btn-primary" target="_blank"
                title="Generate Request for Purchase Order HTML">
                 <i class="fas fa-file-alt"></i> Generate RFPO
             </a>
-            <a href="{{ url_for('rfpo_generate_po_proof', rfpo_id=rfpo.id) }}" 
+            <a href="{{ url_for('rfpo_generate_po_proof', rfpo_id=rfpo.id) }}"
                class="btn btn-warning" target="_blank"
                title="Generate Purchase Order Proof PDF">
                 <i class="fas fa-file-pdf"></i> Generate PO Proof
             </a>
-            <a href="{{ url_for('rfpo_generate_po', rfpo_id=rfpo.id) }}" 
+            <a href="{{ url_for('rfpo_generate_po', rfpo_id=rfpo.id) }}"
                class="btn btn-success d-none" target="_blank"
                title="Generate Purchase Order PDF"
                id="generatePoBtn">
@@ -143,7 +143,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <form method="POST" action="{{ url_for('rfpo_delete_line_item', rfpo_id=rfpo.id, line_item_id=item.id) }}" 
+                                    <form method="POST" action="{{ url_for('rfpo_delete_line_item', rfpo_id=rfpo.id, line_item_id=item.id) }}"
                                           style="display: inline;" onsubmit="return confirm('Delete this line item?')">
                                         <button type="submit" class="btn btn-danger btn-sm">
                                             <i class="fas fa-trash"></i>
@@ -190,7 +190,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Basic Information Tab -->
     <div class="tab-pane fade" id="basic-info" role="tabpanel">
         <div class="card mt-3">
@@ -199,24 +199,24 @@
                     <div class="row">
                         <div class="col-md-6">
                             <h5 class="mb-3">📋 RFPO Information</h5>
-                            
+
                             <div class="mb-3">
                                 <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="title" name="title" 
+                                <input type="text" class="form-control" id="title" name="title"
                                        value="{{ rfpo.title }}" required>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="description" class="form-label">Description</label>
                                 <textarea class="form-control" id="description" name="description" rows="3">{{ rfpo.description or '' }}</textarea>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="government_agreement_number" class="form-label">Government Agreement Number</label>
-                                <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number" 
+                                <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number"
                                        value="{{ rfpo.government_agreement_number or '' }}">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="status" class="form-label">Status</label>
                                 <select class="form-select" id="status" name="status">
@@ -228,28 +228,28 @@
                                 </select>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <h5 class="mb-3">📞 Requestor Information</h5>
-                            
+
                             <div class="mb-3">
                                 <label for="requestor_tel" class="form-label">Requestor Phone</label>
-                                <input type="tel" class="form-control" id="requestor_tel" name="requestor_tel" 
+                                <input type="tel" class="form-control" id="requestor_tel" name="requestor_tel"
                                        value="{{ rfpo.requestor_tel or '' }}">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="requestor_location" class="form-label">Requestor Location</label>
                                 <textarea class="form-control" id="requestor_location" name="requestor_location" rows="2">{{ rfpo.requestor_location or '' }}</textarea>
                             </div>
-                            
+
                             <h5 class="mb-3 mt-4">💰 Cost Sharing</h5>
-                            
+
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label for="cost_share_amount" class="form-label">Cost Share Amount</label>
-                                        <input type="number" step="0.01" class="form-control" id="cost_share_amount" name="cost_share_amount" 
+                                        <input type="number" step="0.01" class="form-control" id="cost_share_amount" name="cost_share_amount"
                                                value="{{ rfpo.cost_share_amount or '' }}"
                                                placeholder="Enter dollar amount or percentage">
                                         <div class="form-text">Enter dollar amount (e.g., 1000) or percentage (e.g., 10 for 10%)</div>
@@ -265,22 +265,22 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="cost_share_description" class="form-label">Cost Share Description</label>
-                                <input type="text" class="form-control" id="cost_share_description" name="cost_share_description" 
+                                <input type="text" class="form-control" id="cost_share_description" name="cost_share_description"
                                        value="{{ rfpo.cost_share_description or '' }}" placeholder="e.g., Vendor contribution">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="comments" class="form-label">Optional Comments</label>
-                                <textarea class="form-control" id="comments" name="comments" rows="3" 
+                                <textarea class="form-control" id="comments" name="comments" rows="3"
                                           placeholder="Comments not included in RFPO">{{ rfpo.comments or '' }}</textarea>
                                 <div class="form-text">These comments are for internal use only and will not appear on the RFPO.</div>
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="row mt-3">
                         <div class="col-12">
                             <button type="submit" class="btn btn-primary">
@@ -292,7 +292,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Shipping Tab -->
     <div class="tab-pane fade" id="shipping" role="tabpanel">
         <div class="card mt-3">
@@ -301,34 +301,34 @@
                     <div class="row">
                         <div class="col-md-6">
                             <h5 class="mb-3">📦 Shipping Information</h5>
-                            
+
                             <div class="mb-3">
                                 <label for="shipto_name" class="form-label">Ship to Name</label>
-                                <input type="text" class="form-control" id="shipto_name" name="shipto_name" 
+                                <input type="text" class="form-control" id="shipto_name" name="shipto_name"
                                        value="{{ rfpo.shipto_name or '' }}">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="shipto_tel" class="form-label">Ship to Phone</label>
-                                <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" 
+                                <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel"
                                        value="{{ rfpo.shipto_tel or '' }}">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="shipto_address" class="form-label">Ship to Address</label>
                                 <textarea class="form-control" id="shipto_address" name="shipto_address" rows="3">{{ rfpo.shipto_address or '' }}</textarea>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <h5 class="mb-3">🚚 Delivery Information</h5>
-                            
+
                             <div class="mb-3">
                                 <label for="delivery_date" class="form-label">Delivery Date</label>
-                                <input type="date" class="form-control" id="delivery_date" name="delivery_date" 
+                                <input type="date" class="form-control" id="delivery_date" name="delivery_date"
                                        value="{{ rfpo.delivery_date.strftime('%Y-%m-%d') if rfpo.delivery_date else '' }}">
                             </div>
-                            
+
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
@@ -351,7 +351,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
@@ -375,7 +375,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="row mt-3">
                         <div class="col-12">
                             <button type="submit" class="btn btn-primary">
@@ -387,7 +387,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Vendor Tab -->
     <div class="tab-pane fade" id="vendor" role="tabpanel">
         <div class="card mt-3">
@@ -396,7 +396,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <h5 class="mb-3">🏢 Vendor Selection</h5>
-                            
+
                             <div class="mb-3">
                                 <label for="vendor_id" class="form-label">Vendor</label>
                                 <select class="form-select" id="vendor_id" name="vendor_id" onchange="loadVendorSites()">
@@ -408,7 +408,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="vendor_site_id" class="form-label">Vendor Contact/Site</label>
                                 <select class="form-select" id="vendor_site_id" name="vendor_site_id">
@@ -426,7 +426,7 @@
                                 </select>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             {% if rfpo.vendor %}
                             <h5 class="mb-3">📋 Current Vendor Information</h5>
@@ -466,7 +466,7 @@
                             {% endif %}
                         </div>
                     </div>
-                    
+
                     <div class="row mt-3">
                         <div class="col-12">
                             <button type="submit" class="btn btn-primary">
@@ -478,7 +478,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Files Tab -->
     <div class="tab-pane fade" id="files" role="tabpanel">
         <div class="card mt-3">
@@ -533,13 +533,13 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
-                                        <a href="{{ url_for('view_rfpo_file', rfpo_id=rfpo.id, file_id=file.file_id) }}" 
-                                           class="btn btn-outline-primary btn-sm" 
+                                        <a href="{{ url_for('view_rfpo_file', rfpo_id=rfpo.id, file_id=file.file_id) }}"
+                                           class="btn btn-outline-primary btn-sm"
                                            target="_blank"
                                            data-bs-toggle="tooltip" title="View File">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
                                                 onclick="deleteFile('{{ file.file_id }}', '{{ file.original_filename }}')"
                                                 data-bs-toggle="tooltip" title="Delete File">
                                             <i class="fas fa-trash"></i>
@@ -587,20 +587,20 @@
                             <option value="Other">Other</option>
                         </select>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="file" class="form-label">Select File <span class="text-danger">*</span></label>
-                        <input type="file" class="form-control" id="file" name="file" required 
+                        <input type="file" class="form-control" id="file" name="file" required
                                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif">
                         <div class="form-text">
                             Supported formats: PDF, Word, Excel, Text, Images (JPG, PNG, GIF)<br>
                             Maximum file size: 10 MB
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="description" class="form-label">Description (Optional)</label>
-                        <textarea class="form-control" id="description" name="description" rows="2" 
+                        <textarea class="form-control" id="description" name="description" rows="2"
                                   placeholder="Brief description of the file contents"></textarea>
                     </div>
                 </div>
@@ -653,26 +653,26 @@
                                 <label for="quantity" class="form-label">Quantity <span class="text-danger">*</span></label>
                                 <input type="number" class="form-control" id="quantity" name="quantity" min="1" value="1" required>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
                                 <textarea class="form-control" id="description" name="description" rows="3" required
                                           placeholder="Detailed description of the item or service"></textarea>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="unit_price" class="form-label">Unit Price ($) <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control currency-input" id="unit_price" name="unit_price" 
+                                <input type="text" class="form-control currency-input" id="unit_price" name="unit_price"
                                        placeholder="e.g., 1000.50 or 1,000.50" required
                                        data-clean-value="">
                                 <small class="form-text text-muted">Enter amount with or without commas (e.g., 1000 or 1,000.50)</small>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="is_capital_equipment" name="is_capital_equipment" 
+                                    <input class="form-check-input" type="checkbox" id="is_capital_equipment" name="is_capital_equipment"
                                            onchange="toggleCapitalFields()">
                                     <label class="form-check-label" for="is_capital_equipment">
                                         <strong>Capital Equipment</strong>
@@ -680,13 +680,13 @@
                                 </div>
                                 <small class="form-text text-muted">Check if this is capital equipment requiring tracking</small>
                             </div>
-                            
+
                             <div id="capitalFields" style="display: none;">
                                 <div class="mb-3">
                                     <label for="capital_description" class="form-label">Capital Description</label>
                                     <input type="text" class="form-control" id="capital_description" name="capital_description">
                                 </div>
-                                
+
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="mb-3">
@@ -701,7 +701,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="mb-3">
@@ -716,7 +716,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="mb-3">
                                     <label for="capital_acquisition_cost" class="form-label">Acquisition Cost ($)</label>
                                     <input type="text" class="form-control currency-input" id="capital_acquisition_cost" name="capital_acquisition_cost"
@@ -747,53 +747,53 @@ function toggleCapitalFields() {
 function loadVendorSites(preserveCurrentSelection = false) {
     const vendorSelect = document.getElementById('vendor_id');
     const siteSelect = document.getElementById('vendor_site_id');
-    
+
     const vendorId = vendorSelect.value;
     const currentSelection = siteSelect.value; // Preserve current selection
-    
+
     if (!vendorId) {
         siteSelect.disabled = true;
         siteSelect.innerHTML = '<option value="">-- Select vendor first --</option>';
         return;
     }
-    
+
     // Show loading
     siteSelect.disabled = true;
     siteSelect.innerHTML = '<option value="">Loading contacts...</option>';
-    
+
     // Fetch sites for the selected vendor
     fetch(`/api/vendor-sites/${vendorId}`)
         .then(response => response.json())
         .then(sites => {
             siteSelect.innerHTML = '<option value="">-- Select contact/site (optional) --</option>';
-            
+
             sites.forEach(site => {
                 const option = document.createElement('option');
                 option.value = site.id;
-                
+
                 // Show primary contact indicator
                 const primaryIndicator = site.is_primary ? ' [PRIMARY]' : '';
-                const location = site.contact_city && site.contact_state ? 
-                    `${site.contact_city}, ${site.contact_state}` : 
+                const location = site.contact_city && site.contact_state ?
+                    `${site.contact_city}, ${site.contact_state}` :
                     (site.contact_city || site.contact_state || 'No location');
-                
+
                 option.textContent = `${site.contact_name || 'No name'} - ${location}${primaryIndicator}`;
-                
+
                 // Add some styling for primary contact
                 if (site.is_primary) {
                     option.style.fontWeight = 'bold';
                 }
-                
+
                 // Restore selection if preserving
                 if (preserveCurrentSelection && site.id == currentSelection) {
                     option.selected = true;
                 }
-                
+
                 siteSelect.appendChild(option);
             });
-            
+
             siteSelect.disabled = false;
-            
+
             if (sites.length === 0) {
                 siteSelect.innerHTML = '<option value="">No contacts available for this vendor</option>';
             }
@@ -808,12 +808,12 @@ function loadVendorSites(preserveCurrentSelection = false) {
 document.addEventListener('DOMContentLoaded', function() {
     const vendorSelect = document.getElementById('vendor_id');
     const siteSelect = document.getElementById('vendor_site_id');
-    
+
     // If a vendor is already selected and there's either a vendor site or vendor primary selected
     if (vendorSelect.value && (siteSelect.value || {{ 'true' if rfpo.vendor_id and not rfpo.vendor_site_id else 'false' }})) {
         loadVendorSites(true);
     }
-    
+
     // Initialize tooltips for file actions
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
@@ -832,11 +832,11 @@ function formatCurrencyDisplay(value) {
     // Remove any non-numeric characters except decimal point
     const cleanValue = value.replace(/[^\d.]/g, '');
     if (!cleanValue) return '';
-    
+
     // Parse the value
     const numValue = parseFloat(cleanValue);
     if (isNaN(numValue)) return '';
-    
+
     // Format with comma separator and 2 decimal places
     return numValue.toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -853,14 +853,14 @@ function cleanCurrencyValue(value) {
 document.addEventListener('DOMContentLoaded', function() {
     // Get all currency input fields
     const currencyInputs = document.querySelectorAll('.currency-input');
-    
+
     currencyInputs.forEach(input => {
         // On focus: show clean value
         input.addEventListener('focus', function() {
             const cleanValue = cleanCurrencyValue(this.value);
             this.value = cleanValue;
         });
-        
+
         // On input: allow user typing (don't format while typing)
         input.addEventListener('input', function() {
             // Just validate it's a valid number pattern
@@ -868,7 +868,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Store clean value in data attribute for submission
             this.setAttribute('data-clean-value', cleanValue);
         });
-        
+
         // On blur: format for display
         input.addEventListener('blur', function() {
             if (this.value) {
@@ -883,7 +883,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-    
+
     // Add submit button handler for the Add Line Item modal form
     const submitBtn = document.getElementById('submitLineItemBtn');
     if (submitBtn) {
@@ -892,7 +892,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Submit button click event fired');
             e.preventDefault();
             e.stopPropagation();
-            
+
             // Get the form
             const form = document.getElementById('addLineItemForm');
             if (!form) {
@@ -900,26 +900,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Form not found');
                 return;
             }
-            
+
             console.log('Form found:', form);
-            
+
             // Get form fields - SEARCH WITHIN THE FORM to get the right ones
             const quantity = form.querySelector('#quantity');
             const description = form.querySelector('#description');
             const unitPrice = form.querySelector('#unit_price');
-            
-            console.log('Form fields:', { 
-                quantity: quantity?.value, 
+
+            console.log('Form fields:', {
+                quantity: quantity?.value,
                 description: description?.value,
                 unitPrice: unitPrice?.value
             });
-            
+
             // Simple validation - just check if fields have values
             if (!quantity || !quantity.value) {
                 alert('Please enter a quantity');
                 return;
             }
-            
+
             if (!description || !description.value || description.value.trim() === '') {
                 console.log('Description validation failed:', {
                     description,
@@ -929,29 +929,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Please enter a description');
                 return;
             }
-            
+
             if (!unitPrice || !unitPrice.value) {
                 alert('Please enter a unit price');
                 return;
             }
-            
+
             // Clean the unit price
             const cleanPrice = cleanCurrencyValue(unitPrice.value);
             if (!cleanPrice || isNaN(parseFloat(cleanPrice))) {
                 alert('Please enter a valid price');
                 return;
             }
-            
+
             console.log('All validation passed, submitting form');
             unitPrice.value = cleanPrice;
-            
+
             // Submit the form
             form.submit();
         });
     } else {
         console.error('Submit button NOT found');
     }
-    
+
     // Handle form submission - ensure values are clean
     const forms = document.querySelectorAll('form');
     forms.forEach(form => {

@@ -148,7 +148,7 @@ class RFPO(db.Model):
         db.String(32), nullable=False
     )  # Project ID this RFPO belongs to
     consortium_id = db.Column(db.String(32), nullable=False)  # Consortium ID
-    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)  # Team is optional
 
     # Government Agreement
     government_agreement_number = db.Column(db.String(255))

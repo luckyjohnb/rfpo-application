@@ -75,15 +75,16 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="team_id" class="form-label">Team <span class="text-danger">*</span></label>
-                        <select class="form-control" id="team_id" name="team_id" required>
-                            <option value="">Select a team...</option>
+                        <label for="team_id" class="form-label">Team</label>
+                        <select class="form-control" id="team_id" name="team_id">
+                            <option value="">No team (optional)</option>
                             {% for team in teams %}
                             <option value="{{ team.id }}" {{ 'selected' if rfpo and rfpo.team_id == team.id else '' }}>
                                 {{ team.name }} ({{ team.abbrev }})
                             </option>
                             {% endfor %}
                         </select>
+                        <div class="form-text">Optional - leave empty for no team assignment</div>
                     </div>
                 </div>
             </div>

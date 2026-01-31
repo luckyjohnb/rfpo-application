@@ -100,14 +100,16 @@ def create_rfpo():
     try:
         data = request.get_json()
         
-        # Validate required fields
-        if not data.get('title') or not data.get('team_id'):
-            return jsonify({'success': False, 'message': 'Title and team are required'}), 400
+        # Validate required fields - only title is required, team is optional
+        if not data.get('title'):
+            return jsonify({'success': False, 'message': 'Title is required'}), 400
         
-        # Verify team exists
-        team = Team.query.get(data['team_id'])
-        if not team:
-            return jsonify({'success': False, 'message': 'Team not found'}), 404
+        # Verify team exists if provided
+        team_id = data.get('team_id')
+        if team_id:
+            team = Team.query.get(team_id)
+            if not team:
+                return jsonify({'success': False, 'message': 'Team not found'}), 404
         
         # Generate RFPO ID
         rfpo_count = RFPO.query.count()
@@ -125,7 +127,7 @@ def create_rfpo():
             vendor=data.get('vendor', ''),
             due_date=datetime.fromisoformat(data['due_date']) if data.get('due_date') else None,
             status=data.get('status', 'Draft'),
-            team_id=data['team_id'],
+            team_id=team_id,  # Now optional - can be None
             created_by=request.current_user.username,
             updated_by=request.current_user.username,
             created_at=datetime.utcnow(),

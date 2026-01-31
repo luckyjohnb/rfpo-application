@@ -2495,31 +2495,15 @@ def create_app():
                 ).count()
                 rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
 
-                # Get team from project or create a default team if none exists
-                team = (
-                    Team.query.filter_by(record_id=project.team_record_id).first()
-                    if project.team_record_id
-                    else None
-                )
-                if not team:
-                    team = Team.query.filter_by(active=True).first()
-
-                # If no team exists, create a default "No Team" team
-                if not team:
-                    print("No teams found - creating default team for RFPO creation")
-                    default_team = Team(
-                        record_id=f"DEFAULT-{datetime.now().strftime('%Y%m%d')}",
-                        name="Default Team (No Team Assignment)",
-                        abbrev="DEFAULT",
-                        description="Auto-created default team for RFPOs without team assignment",
-                        consortium_consort_id=consortium_id,
-                        active=True,
-                        created_by=current_user.get_display_name(),
-                    )
-                    db.session.add(default_team)
-                    db.session.flush()  # Get the ID
-                    team = default_team
-                    flash("ℹ️ Created default team for RFPO creation.", "info")
+                # Get team from form selection or from project's default team
+                # Team is now optional - do not auto-assign if not selected
+                team_id_str = request.form.get("team_id")
+                team = None
+                if team_id_str:
+                    team = Team.query.get(int(team_id_str))
+                elif project.team_record_id:
+                    # Use project's default team if no team was explicitly selected
+                    team = Team.query.filter_by(record_id=project.team_record_id).first()
 
                 # Create RFPO with enhanced model
                 rfpo = RFPO(

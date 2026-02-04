@@ -13,9 +13,9 @@ When the user views the form, these values are pre-calculated to safe user time:
 | :--- | :--- | :--- |
 | **Ship to Name** | User's Name | `current_user.get_display_name()` |
 | **Requestor Phone** | User's Phone | `current_user.phone` |
-| **Requestor Location** | User's Location | `"{company}, {state}"` (Default: "USCAR, MI") |
+| **Requestor Location** | Consortium Invoice Address | `consortium.invoicing_address` **OR** `"{company}, {state}"` |
 | **Ship to Address** | Consortium Invoice Address | `consortium.invoicing_address` **OR** User's Location |
-| **Ship to Phone** | **None** | Left blank for manual entry |
+| **Ship to Phone** | User's Phone | `current_user.phone` |
 
 ### Stage 2 Creation - Save Logic
 When the form is submitted (`POST`), the following logic is applied:
@@ -25,7 +25,7 @@ When the form is submitted (`POST`), the following logic is applied:
 | **RFPO ID** | **Auto-Generated:** `RFPO-{ProjectRef}-{Date}-N{Sequence}` (e.g., `RFPO-PROJ-2026-02-04-N01`) |
 | **Requestor ID** | `current_user.record_id` |
 | **Requestor Phone** | Form Input **OR** `current_user.phone` |
-| **Requestor Location** | Form Input **OR** `"{company}, {state}"` (Default: "USCAR, MI") |
+| **Requestor Location** | Form Input **OR** `consortium.invoicing_address` **OR** `"{company}, {state}"` |
 | **Invoice Address** | `consortium.invoicing_address` **OR** Hardcoded USCAR Southfield Address |
 | **Payment Terms** | Form Input **OR** "Net 30" |
 | **Ship To Address** | Form Input | Pre-filled from Consortium Invoice Address in GET request |

@@ -2593,7 +2593,8 @@ Southfield, MI  48075""",
             "requestor_tel": current_user.phone or "",  # Don't show 'None'
             "requestor_location": f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
             "shipto_name": current_user.get_display_name(),
-            "shipto_address": f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
+            "shipto_address": consortium.invoicing_address
+            or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
         }
 
         return render_template(

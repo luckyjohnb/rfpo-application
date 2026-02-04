@@ -2485,6 +2485,15 @@ def create_app():
         consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
         project = Project.query.filter_by(project_id=project_id).first()
 
+        # Determine default team logic
+        default_team = (
+            Team.query.filter_by(record_id=project.team_record_id).first()
+            if project.team_record_id
+            else None
+        )
+        if not default_team:
+            default_team = Team.query.filter_by(active=True).first()
+
         if request.method == "POST":
             try:
                 # Generate RFPO ID based on project
@@ -2495,14 +2504,14 @@ def create_app():
                 ).count()
                 rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
 
-                # Get team from project or create a default team if none exists
-                team = (
-                    Team.query.filter_by(record_id=project.team_record_id).first()
-                    if project.team_record_id
-                    else None
-                )
+                # Determine team: Check form first, then default logic
+                team = None
+                if request.form.get("team_id"):
+                    team = Team.query.get(int(request.form.get("team_id")))
+
+                # Fallback to default logic if not in form or not found
                 if not team:
-                    team = Team.query.filter_by(active=True).first()
+                    team = default_team
 
                 # If no team exists, create a default "No Team" team
                 if not team:
@@ -2607,6 +2616,7 @@ Southfield, MI  48075""",
             teams=teams,
             vendors=vendors,
             current_user_data=current_user_data,
+            default_team=default_team,
         )
 
     @app.route("/rfpo/<int:id>/edit", methods=["GET", "POST"])

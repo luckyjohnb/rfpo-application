@@ -74,6 +74,16 @@
                         <div class="form-text">If applicable, reference number for government agreements</div>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="team_id" class="form-label">Team <span class="text-danger">*</span></label>
+                        <select class="form-select" id="team_id" name="team_id" required>
+                            {% for team in teams %}
+                            <option value="{{ team.id }}" {% if default_team and default_team.id == team.id %}selected{% endif %}>{{ team.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Team assignment determining approval workflow</div>
+                    </div>
+
                     <h5 class="mb-3 mt-4">📞 Requestor Information</h5>
 
                     <div class="mb-3">

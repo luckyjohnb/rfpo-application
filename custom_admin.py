@@ -2591,6 +2591,7 @@ Southfield, MI  48075""",
         # Pre-fill form with current user data
         current_user_data = {
             "requestor_tel": current_user.phone or "",  # Don't show 'None'
+            "shipto_tel": current_user.phone or "",  # Same as requestor phone
             "requestor_location": f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
             "shipto_name": current_user.get_display_name(),
             "shipto_address": consortium.invoicing_address

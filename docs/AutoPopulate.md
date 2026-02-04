@@ -28,6 +28,7 @@ When the form is submitted (`POST`), the following logic is applied:
 | **Requestor Location** | Form Input **OR** `"{company}, {state}"` (Default: "USCAR, MI") |
 | **Invoice Address** | `consortium.invoicing_address` **OR** Hardcoded USCAR Southfield Address |
 | **Payment Terms** | Form Input **OR** "Net 30" |
+| **Ship To Address** | Form Input | Pre-filled from Consortium Invoice Address in GET request |
 | **Created By** | `current_user.get_display_name()` |
 | **Team** | Form Input **OR** Auto-created "Default Team" if missing |
 
@@ -66,6 +67,6 @@ Even if application logic fails to set a value, the database model (`SQLAlchemy`
 
 ## Summary of Differences
 
-1.  **User Profile Data**: The **Admin Panel** aggressively uses the user's profile (Company, State, Phone) to fill in Requestor and Shipping fields. The **API** does not; it relies on the client to provide this data.
+1.  **User Profile Data**: The **Admin Panel** uses the user's profile to fill in Requestor fields. For **Ship To Address**, it prioritizes the **Consortium's Invoicing Address**, falling back to the user's location only if missing. The **API** does not auto-populate these fields.
 2.  **Invoice Address**: The **Admin Panel** has a hardcoded fallback address for USCAR. The **API** only falls back to the Consortium's invoice address.
 3.  **Team Assignment**: The **Admin Panel** will auto-create a "Default Team" if the selected Project has no team. The API creates the RFPO but does not seem to include this "auto-create team" logic (it validates `team_id` exists).

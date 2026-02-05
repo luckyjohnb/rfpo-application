@@ -7,19 +7,18 @@ import urllib.parse
 import json
 import sys
 
-
 def test_get_settings():
     """Test getting application settings"""
     try:
         req = urllib.request.Request(
-            "http://127.0.0.1:5000/api/settings",
+            'http://127.0.0.1:5000/api/settings',
             headers={
-                "Authorization": "Bearer test-token",  # Will fail, but test endpoint
-                "Content-Type": "application/json",
-            },
+                'Authorization': 'Bearer test-token',  # Will fail, but test endpoint
+                'Content-Type': 'application/json'
+            }
         )
         response = urllib.request.urlopen(req)
-        data = json.loads(response.read().decode("utf-8"))
+        data = json.loads(response.read().decode('utf-8'))
         print("✅ Settings API endpoint accessible")
         return True
     except urllib.error.HTTPError as e:
@@ -33,18 +32,17 @@ def test_get_settings():
         print(f"❌ Settings API connection error: {e}")
         return False
 
-
 def test_app_page():
     """Test main application page"""
     try:
-        response = urllib.request.urlopen("http://127.0.0.1:5000/app")
-        content = response.read().decode("utf-8")
+        response = urllib.request.urlopen('http://127.0.0.1:5000/app')
+        content = response.read().decode('utf-8')
 
         checks = [
-            ("ACME App", "Application name"),
-            ("Application Settings", "Settings menu"),
-            ("Configuration", "Config menu"),
-            ("loadApplicationSettings", "Settings JS function"),
+            ('ACME App', 'Application name'),
+            ('Application Settings', 'Settings menu'),
+            ('Configuration', 'Config menu'),
+            ('loadApplicationSettings', 'Settings JS function')
         ]
 
         results = []
@@ -59,12 +57,14 @@ def test_app_page():
         print(f"❌ App page error: {e}")
         return False
 
-
 def main():
     """Run all tests"""
     print("🧪 Testing Application Settings Implementation\n")
 
-    tests = [("Application Page", test_app_page), ("Settings API", test_get_settings)]
+    tests = [
+        ("Application Page", test_app_page),
+        ("Settings API", test_get_settings)
+    ]
 
     results = []
     for name, test_func in tests:
@@ -83,7 +83,6 @@ def main():
     else:
         print("⚠️ Some tests failed")
         return 1
-
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -5,11 +5,9 @@ Test full authentication flow with UserManager
 
 import sys
 import os
-
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from user_management import UserManager
-
 
 def test_full_authentication():
     """Test complete authentication flow"""
@@ -44,10 +42,8 @@ def test_full_authentication():
     except Exception as e:
         print(f"❌ Error during authentication: {e}")
         import traceback
-
         traceback.print_exc()
         return False
-
 
 if __name__ == "__main__":
     success = test_full_authentication()
@@ -57,4 +53,4 @@ if __name__ == "__main__":
         print("✅ Ready to test Flask login endpoint")
     else:
         print("💔 FULL AUTHENTICATION TEST FAILED")
-    print("=" * 60)
+    print("="*60)

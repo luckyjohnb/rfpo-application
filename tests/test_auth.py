@@ -11,7 +11,7 @@ result = um.create_user(
     password="Administrator123!",
     display_name="System Administrator",
     roles=["Administrator"],
-    status="active",
+    status="active"
 )
 
 print(f"Create result: {result}")

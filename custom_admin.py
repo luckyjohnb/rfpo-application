@@ -34,7 +34,6 @@ from flask_login import (
 from sqlalchemy import desc
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
-from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import error handling
 from error_handlers import register_error_handlers
@@ -468,13 +467,6 @@ class APIHelper:
 def create_app():
     """Create Flask application with custom admin panel"""
     app = Flask(__name__)
-
-    # Apply ProxyFix for correct URL generation behind Azure Load Balancer
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-
-    @app.route("/health")
-    def health():
-        return jsonify({"status": "healthy"}), 200
 
     # Configuration
     app.config["SECRET_KEY"] = os.environ.get(
@@ -2493,15 +2485,6 @@ def create_app():
         consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
         project = Project.query.filter_by(project_id=project_id).first()
 
-        # Determine default team logic
-        default_team = (
-            Team.query.filter_by(record_id=project.team_record_id).first()
-            if project.team_record_id
-            else None
-        )
-        if not default_team:
-            default_team = Team.query.filter_by(active=True).first()
-
         if request.method == "POST":
             try:
                 # Generate RFPO ID based on project
@@ -2512,16 +2495,32 @@ def create_app():
                 ).count()
                 rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
 
-                # Get team from form selection or from project's default team
-                # Team is now optional - do not auto-assign if not selected
-                team_id_str = request.form.get("team_id")
-                team = None
-                if team_id_str:
-                    team = Team.query.get(int(team_id_str))
-                elif project.team_record_id:
-                    # Use project's default team if no team was explicitly selected
-                    team = Team.query.filter_by(record_id=project.team_record_id).first()
-                
+                # Get team from project or create a default team if none exists
+                team = (
+                    Team.query.filter_by(record_id=project.team_record_id).first()
+                    if project.team_record_id
+                    else None
+                )
+                if not team:
+                    team = Team.query.filter_by(active=True).first()
+
+                # If no team exists, create a default "No Team" team
+                if not team:
+                    print("No teams found - creating default team for RFPO creation")
+                    default_team = Team(
+                        record_id=f"DEFAULT-{datetime.now().strftime('%Y%m%d')}",
+                        name="Default Team (No Team Assignment)",
+                        abbrev="DEFAULT",
+                        description="Auto-created default team for RFPOs without team assignment",
+                        consortium_consort_id=consortium_id,
+                        active=True,
+                        created_by=current_user.get_display_name(),
+                    )
+                    db.session.add(default_team)
+                    db.session.flush()  # Get the ID
+                    team = default_team
+                    flash("ℹ️ Created default team for RFPO creation.", "info")
+
                 # Create RFPO with enhanced model
                 rfpo = RFPO(
                     rfpo_id=rfpo_id,
@@ -2537,7 +2536,6 @@ def create_app():
                     requestor_tel=request.form.get("requestor_tel")
                     or current_user.phone,
                     requestor_location=request.form.get("requestor_location")
-                    or consortium.invoicing_address
                     or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
                     shipto_name=request.form.get("shipto_name"),
                     shipto_tel=request.form.get("shipto_tel"),
@@ -2593,12 +2591,9 @@ Southfield, MI  48075""",
         # Pre-fill form with current user data
         current_user_data = {
             "requestor_tel": current_user.phone or "",  # Don't show 'None'
-            "shipto_tel": current_user.phone or "",  # Same as requestor phone
-            "requestor_location": consortium.invoicing_address
-            or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
+            "requestor_location": f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
             "shipto_name": current_user.get_display_name(),
-            "shipto_address": consortium.invoicing_address
-            or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
+            "shipto_address": f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
         }
 
         return render_template(
@@ -2608,7 +2603,6 @@ Southfield, MI  48075""",
             teams=teams,
             vendors=vendors,
             current_user_data=current_user_data,
-            default_team=default_team,
         )
 
     @app.route("/rfpo/<int:id>/edit", methods=["GET", "POST"])

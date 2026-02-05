@@ -9,14 +9,13 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 
-
 def setup_driver():
     """Setup Chrome driver"""
     chrome_options = Options()
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1400,1000")
-
+    
     try:
         driver = webdriver.Chrome(options=chrome_options)
         return driver
@@ -24,36 +23,31 @@ def setup_driver():
         print(f"Error setting up Chrome driver: {e}")
         return None
 
-
 def debug_fields_loading():
     """Debug why Available Fields are not loading"""
     driver = setup_driver()
     if not driver:
         return
-
+    
     try:
         print("🔍 Debugging Available Fields Loading...")
-
+        
         # Login and navigate
         driver.get("http://localhost:5111/")
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.NAME, "email"))
-        )
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "email")))
         driver.find_element(By.NAME, "email").send_keys("admin@rfpo.com")
         driver.find_element(By.NAME, "password").send_keys("admin123")
         driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
         print("✅ Login successful")
-
+        
         # Navigate to PDF editor
         driver.get("http://localhost:5111/pdf-positioning/editor/00000014/po_template")
-        WebDriverWait(driver, 15).until(
-            EC.presence_of_element_located((By.ID, "pdf-canvas"))
-        )
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID, "pdf-canvas")))
         print("✅ PDF Editor loaded")
-
+        
         # Wait a bit for JavaScript to initialize
         time.sleep(3)
-
+        
         # Check if Available Fields container exists
         try:
             fields_container = driver.find_element(By.ID, "fields-list")
@@ -61,16 +55,13 @@ def debug_fields_loading():
         except:
             print("❌ fields-list container NOT found")
             return
-
+        
         # Check what's in the container
-        field_items = driver.find_elements(
-            By.CSS_SELECTOR, "#fields-list .list-group-item"
-        )
+        field_items = driver.find_elements(By.CSS_SELECTOR, "#fields-list .list-group-item")
         print(f"📊 Current field items: {len(field_items)}")
-
+        
         # Check JavaScript variables
-        js_debug = driver.execute_script(
-            """
+        js_debug = driver.execute_script("""
             return {
                 configId: typeof CONFIG_ID !== 'undefined' ? CONFIG_ID : 'undefined',
                 positioningData: typeof POSITIONING_DATA !== 'undefined' ? Object.keys(POSITIONING_DATA) : 'undefined',
@@ -78,24 +69,23 @@ def debug_fields_loading():
                 populateFunction: typeof populateFieldsList === 'function',
                 jsErrors: window.jsErrors || []
             };
-        """
-        )
-
+        """)
+        
         print(f"🔧 JavaScript Debug Info:")
         print(f"   CONFIG_ID: {js_debug['configId']}")
         print(f"   POSITIONING_DATA keys: {js_debug['positioningData']}")
         print(f"   FIELD_DESCRIPTIONS keys: {js_debug['fieldDescriptions']}")
         print(f"   populateFieldsList function exists: {js_debug['populateFunction']}")
         print(f"   JS Errors: {js_debug['jsErrors']}")
-
+        
         # Check if the page loaded properly
         page_title = driver.title
         print(f"📄 Page Title: {page_title}")
-
+        
         # Check for JavaScript errors in console
         try:
-            logs = driver.get_log("browser")
-            js_errors = [log for log in logs if log["level"] == "SEVERE"]
+            logs = driver.get_log('browser')
+            js_errors = [log for log in logs if log['level'] == 'SEVERE']
             if js_errors:
                 print(f"❌ JavaScript Errors found:")
                 for error in js_errors[:5]:  # Show first 5 errors
@@ -104,10 +94,9 @@ def debug_fields_loading():
                 print("✅ No severe JavaScript errors found")
         except:
             print("   Could not retrieve console logs")
-
+        
         # Check if template variables are being rendered
-        template_check = driver.execute_script(
-            """
+        template_check = driver.execute_script("""
             // Look for template syntax in the page source
             var pageSource = document.documentElement.outerHTML;
             return {
@@ -116,36 +105,30 @@ def debug_fields_loading():
                 hasFieldDescriptions: pageSource.includes('FIELD_DESCRIPTIONS'),
                 scriptTags: document.querySelectorAll('script').length
             };
-        """
-        )
-
+        """)
+        
         print(f"🔧 Template Check:")
         print(f"   Has unrendered template vars: {template_check['hasTemplateVars']}")
         print(f"   Has CONFIG_ID in page: {template_check['hasConfigObject']}")
-        print(
-            f"   Has FIELD_DESCRIPTIONS in page: {template_check['hasFieldDescriptions']}"
-        )
+        print(f"   Has FIELD_DESCRIPTIONS in page: {template_check['hasFieldDescriptions']}")
         print(f"   Number of script tags: {template_check['scriptTags']}")
-
+        
         # Try to manually fix the issue
-        if js_debug["fieldDescriptions"] == "undefined":
+        if js_debug['fieldDescriptions'] == 'undefined':
             print("\n🔧 FIELD_DESCRIPTIONS is undefined, trying to fix...")
-
+            
             # Check if we can get the config from the backend
-            config_data = driver.execute_script(
-                """
+            config_data = driver.execute_script("""
                 return fetch('/api/pdf-positioning/1')
                     .then(response => response.json())
                     .then(data => data)
                     .catch(error => ({error: error.message}));
-            """
-            )
-
+            """)
+            
             print(f"   Backend config fetch result: {config_data}")
-
+            
             # Define FIELD_DESCRIPTIONS manually and populate
-            driver.execute_script(
-                """
+            driver.execute_script("""
                 window.FIELD_DESCRIPTIONS = {
                     'po_number': 'Purchase Order Number',
                     'po_date': 'Purchase Order Date',
@@ -191,40 +174,35 @@ def debug_fields_loading():
                     
                     console.log('Manually populated', Object.keys(window.FIELD_DESCRIPTIONS).length, 'fields');
                 }
-            """
-            )
-
+            """)
+            
             time.sleep(1)
-
+            
             # Check if fields were created
-            field_items_after = driver.find_elements(
-                By.CSS_SELECTOR, "#fields-list .list-group-item"
-            )
+            field_items_after = driver.find_elements(By.CSS_SELECTOR, "#fields-list .list-group-item")
             print(f"✅ Fields after manual population: {len(field_items_after)}")
-
+            
             if len(field_items_after) > 0:
                 print("🎉 Successfully populated Available Fields!")
-
+                
                 # Show the first few fields
                 for i, item in enumerate(field_items_after[:3]):
-                    text = item.text.strip().replace("\n", " | ")
+                    text = item.text.strip().replace('\n', ' | ')
                     print(f"   {i+1}. {text}")
             else:
                 print("❌ Manual population failed")
-
+        
         print(f"\n👀 Keeping browser open for 60 seconds for manual inspection...")
         time.sleep(60)
-
+        
     except Exception as e:
         print(f"❌ Error during debug: {e}")
         import traceback
-
         traceback.print_exc()
-
+        
     finally:
         driver.quit()
         print("🔚 Debug completed")
-
 
 if __name__ == "__main__":
     debug_fields_loading()

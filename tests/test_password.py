@@ -6,18 +6,17 @@ Password verification test
 import bcrypt
 import json
 
-
 def test_password_hash():
     """Test if the stored password hash works with the expected password"""
 
     # Load users.json
-    with open("config/users.json", "r") as f:
+    with open('config/users.json', 'r') as f:
         data = json.load(f)
 
     # Get admin user
     admin_user = None
-    for user in data["users"]:
-        if user["username"] == "admin":
+    for user in data['users']:
+        if user['username'] == 'admin':
             admin_user = user
             break
 
@@ -35,9 +34,7 @@ def test_password_hash():
 
     try:
         # Verify using bcrypt
-        result = bcrypt.checkpw(
-            test_password.encode("utf-8"), admin_user["password_hash"].encode("utf-8")
-        )
+        result = bcrypt.checkpw(test_password.encode('utf-8'), admin_user['password_hash'].encode('utf-8'))
         print(f"Verification result: {result}")
 
         if result:
@@ -50,7 +47,6 @@ def test_password_hash():
     except Exception as e:
         print(f"❌ Error during verification: {e}")
         return False
-
 
 if __name__ == "__main__":
     test_password_hash()

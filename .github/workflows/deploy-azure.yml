@@ -103,14 +103,12 @@ jobs:
 
           echo "Deploying to environment: $ENVIRONMENT"
 
-          # SKIPPING Bicep deployment to avoid infrastructure conflicts
-          # The container apps are updated directly in the next step
-          echo "Skipping Bicep deployment. Proceeding to update container images..."
-          # az deployment group create \
-          #   --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          #   --template-file azure/main.bicep \
-          #   --parameters environmentType="$ENVIRONMENT" \
-          #   --name "rfpo-deployment-$(date +%Y%m%d-%H%M%S)"
+          # Deploy using Bicep template
+          az deployment group create \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --template-file azure/main.bicep \
+            --parameters environmentType="$ENVIRONMENT" \
+            --name "rfpo-deployment-$(date +%Y%m%d-%H%M%S)"
 
       - name: Update Container Apps with new images
         run: |

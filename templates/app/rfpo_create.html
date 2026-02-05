@@ -26,13 +26,14 @@
                             <input type="text" class="form-control" id="title" name="title" required>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="team_id" class="form-label">Team <span class="text-danger">*</span></label>
-                            <select class="form-select" id="team_id" name="team_id" required>
-                                <option value="">Select a team...</option>
+                            <label for="team_id" class="form-label">Team</label>
+                            <select class="form-select" id="team_id" name="team_id">
+                                <option value="">No team (optional)</option>
                                 {% for team in teams %}
                                 <option value="{{ team.id }}">{{ team.name }} ({{ team.abbrev }})</option>
                                 {% endfor %}
                             </select>
+                            <div class="form-text">Optional - leave empty to create RFPO without team assignment</div>
                         </div>
                     </div>
                     
@@ -89,7 +90,7 @@
                     <strong>Title:</strong> A descriptive name for your RFPO
                 </p>
                 <p class="small text-muted">
-                    <strong>Team:</strong> The team responsible for this RFPO
+                    <strong>Team:</strong> Optional - the team responsible for this RFPO
                 </p>
                 <p class="small text-muted">
                     <strong>Description:</strong> Additional details about the request
@@ -109,9 +110,10 @@
         e.preventDefault();
         
         const formData = new FormData(this);
+        const teamIdValue = formData.get('team_id');
         const rfpoData = {
             title: formData.get('title'),
-            team_id: parseInt(formData.get('team_id')),
+            team_id: teamIdValue ? parseInt(teamIdValue) : null,  // Team is optional
             description: formData.get('description'),
             vendor: formData.get('vendor'),
             due_date: formData.get('due_date'),

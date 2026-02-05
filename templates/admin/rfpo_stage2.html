@@ -106,7 +106,7 @@
 
                     <div class="mb-3">
                         <label for="shipto_tel" class="form-label">Ship to Phone <span class="text-danger">*</span></label>
-                        <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" required>
+                        <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" required value="{{ current_user_data.shipto_tel }}">
                     </div>
 
                     <div class="mb-3">
@@ -114,7 +114,7 @@
                         <textarea class="form-control" id="shipto_address" name="shipto_address" rows="3" required>{{ current_user_data.shipto_address }}</textarea>
                     </div>
 
-                    <h5 class="mb-3 mt-4">🚚 Delivery Information</h5>
+                    <h5 class="mb-3 mt-4">PO Expiration</h5>
 
                     <div class="mb-3">
                         <label for="delivery_date" class="form-label">PO Expiration Date</label>
@@ -171,11 +171,34 @@
                 </div>
             </div>
 
+            <!-- Team Selection (Optional) -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3">👥 Team Assignment (Optional)</h5>
+                    <p class="text-muted">You can optionally assign this RFPO to a team. If not selected, the RFPO will be created without a team assignment.</p>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="team_id" class="form-label">Team</label>
+                                <select class="form-select" id="team_id" name="team_id">
+                                    <option value="">-- No team (optional) --</option>
+                                    {% for team in teams %}
+                                    <option value="{{ team.id }}">{{ team.name }} ({{ team.abbrev }})</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Leave empty to create RFPO without team assignment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Vendor Selection (Optional) -->
             <div class="row mt-4">
                 <div class="col-12">
                     <h5 class="mb-3">🏢 Vendor Selection (Optional)</h5>
-                    <p class="text-muted">You can select a vendor now or add it later when editing the RFPO.</p>
+                    <p class="text-muted">You can select a vendor.</p>
 
                     <div class="row">
                         <div class="col-md-6">

@@ -2504,6 +2504,15 @@ def create_app():
                 ).count()
                 rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
 
+                # Get team from form selection or from project's default team
+                # Team is now optional - do not auto-assign if not selected
+                team_id_str = request.form.get("team_id")
+                team = None
+                if team_id_str:
+                    team = Team.query.get(int(team_id_str))
+                elif project.team_record_id:
+                    # Use project's default team if no team was explicitly selected
+                    team = Team.query.filter_by(record_id=project.team_record_id).first()
                 # Determine team: Check form first, then default logic
                 team = None
                 if request.form.get("team_id"):

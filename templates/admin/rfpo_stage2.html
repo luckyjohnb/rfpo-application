@@ -181,6 +181,29 @@
                 </div>
             </div>
 
+            <!-- Team Selection (Optional) -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3">👥 Team Assignment (Optional)</h5>
+                    <p class="text-muted">You can optionally assign this RFPO to a team. If not selected, the RFPO will be created without a team assignment.</p>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="team_id" class="form-label">Team</label>
+                                <select class="form-select" id="team_id" name="team_id">
+                                    <option value="">-- No team (optional) --</option>
+                                    {% for team in teams %}
+                                    <option value="{{ team.id }}">{{ team.name }} ({{ team.abbrev }})</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Leave empty to create RFPO without team assignment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Vendor Selection (Optional) -->
             <div class="row mt-4">
                 <div class="col-12">

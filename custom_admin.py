@@ -2513,32 +2513,7 @@ def create_app():
                 elif project.team_record_id:
                     # Use project's default team if no team was explicitly selected
                     team = Team.query.filter_by(record_id=project.team_record_id).first()
-                # Determine team: Check form first, then default logic
-                team = None
-                if request.form.get("team_id"):
-                    team = Team.query.get(int(request.form.get("team_id")))
-
-                # Fallback to default logic if not in form or not found
-                if not team:
-                    team = default_team
-
-                # If no team exists, create a default "No Team" team
-                if not team:
-                    print("No teams found - creating default team for RFPO creation")
-                    default_team = Team(
-                        record_id=f"DEFAULT-{datetime.now().strftime('%Y%m%d')}",
-                        name="Default Team (No Team Assignment)",
-                        abbrev="DEFAULT",
-                        description="Auto-created default team for RFPOs without team assignment",
-                        consortium_consort_id=consortium_id,
-                        active=True,
-                        created_by=current_user.get_display_name(),
-                    )
-                    db.session.add(default_team)
-                    db.session.flush()  # Get the ID
-                    team = default_team
-                    flash("ℹ️ Created default team for RFPO creation.", "info")
-
+                
                 # Create RFPO with enhanced model
                 rfpo = RFPO(
                     rfpo_id=rfpo_id,

@@ -9,12 +9,13 @@ import os
 # Add the current directory to the path so we can import from app_working
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+
 def test_user_loading():
     print("Testing user loading...")
-    
+
     # Test basic JSON loading
     try:
-        with open('config/users.json', 'r') as f:
+        with open("config/users.json", "r") as f:
             users_data = json.load(f)
         print(f"✅ JSON loaded successfully: {type(users_data)}")
         print(f"   Keys: {list(users_data.keys())}")
@@ -22,7 +23,7 @@ def test_user_loading():
     except Exception as e:
         print(f"❌ JSON loading failed: {e}")
         return
-    
+
     # Test converting to list
     try:
         users_list = list(users_data.values())
@@ -32,7 +33,7 @@ def test_user_loading():
     except Exception as e:
         print(f"❌ List conversion failed: {e}")
         return
-    
+
     # Test user processing
     try:
         for user in users_list:
@@ -43,10 +44,12 @@ def test_user_loading():
     except Exception as e:
         print(f"❌ User processing failed: {e}")
         import traceback
+
         traceback.print_exc()
         return
-    
+
     print("✅ All tests passed!")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     test_user_loading()

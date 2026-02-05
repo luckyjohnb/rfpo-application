@@ -6,16 +6,12 @@ Test authentication directly with requests module
 import requests
 import json
 
+
 def test_endpoints():
     """Test various endpoints to see which ones work"""
     base_url = "http://127.0.0.1:5000"
 
-    endpoints = [
-        "/hello",
-        "/test-auth",
-        "/app",
-        "/api/auth/login"
-    ]
+    endpoints = ["/hello", "/test-auth", "/app", "/api/auth/login"]
 
     print("=== ENDPOINT CONNECTIVITY TEST ===")
 
@@ -29,8 +25,8 @@ def test_endpoints():
                 response = requests.post(
                     url,
                     json={"username": "admin", "password": "admin"},
-                    headers={'Content-Type': 'application/json'},
-                    timeout=5
+                    headers={"Content-Type": "application/json"},
+                    timeout=5,
                 )
             else:
                 # GET request for other endpoints
@@ -53,6 +49,7 @@ def test_endpoints():
             print(f"❌ ERROR: {e}")
 
     print(f"\n{'='*50}")
+
 
 if __name__ == "__main__":
     test_endpoints()

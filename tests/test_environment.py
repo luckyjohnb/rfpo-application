@@ -17,14 +17,7 @@ print(f"Python Executable: {sys.executable}")
 print(f"Current Directory: {os.getcwd()}")
 
 # Test imports
-dependencies = [
-    'flask',
-    'bcrypt', 
-    'jwt',
-    'pandas',
-    'numpy',
-    'user_management'
-]
+dependencies = ["flask", "bcrypt", "jwt", "pandas", "numpy", "user_management"]
 
 for dep in dependencies:
     try:
@@ -34,14 +27,14 @@ for dep in dependencies:
         print(f"❌ {dep} - Not available: {e}")
 
 # Check if user data exists
-users_file = os.path.join('config', 'users.json')
+users_file = os.path.join("config", "users.json")
 if os.path.exists(users_file):
     print(f"✅ User data file exists: {users_file}")
 else:
     print(f"⚠️ User data file missing: {users_file}")
 
 # Check directories
-dirs = ['uploads', 'config', 'logs', 'templates', 'static']
+dirs = ["uploads", "config", "logs", "templates", "static"]
 for dir_name in dirs:
     if os.path.exists(dir_name):
         print(f"✅ Directory exists: {dir_name}")

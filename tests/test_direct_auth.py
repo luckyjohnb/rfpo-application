@@ -5,9 +5,11 @@ Direct authentication test - run this to test user authentication directly
 
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from user_management import UserManager
+
 
 def test_direct_authentication():
     """Test authentication directly without Flask"""
@@ -34,7 +36,7 @@ def test_direct_authentication():
     try:
         # Load users and check structure
         data = um._load_data()
-        users = {user['username']: user for user in data['users']}
+        users = {user["username"]: user for user in data["users"]}
         print(f"👥 Total users loaded: {len(users)}")
 
         if username in users:
@@ -66,8 +68,10 @@ def test_direct_authentication():
     except Exception as e:
         print(f"💥 Error during authentication: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 if __name__ == "__main__":
     success = test_direct_authentication()

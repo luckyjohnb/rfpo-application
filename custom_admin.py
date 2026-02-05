@@ -34,6 +34,7 @@ from flask_login import (
 from sqlalchemy import desc
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import error handling
 from error_handlers import register_error_handlers
@@ -467,6 +468,13 @@ class APIHelper:
 def create_app():
     """Create Flask application with custom admin panel"""
     app = Flask(__name__)
+
+    # Apply ProxyFix for correct URL generation behind Azure Load Balancer
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+    @app.route("/health")
+    def health():
+        return jsonify({"status": "healthy"}), 200
 
     # Configuration
     app.config["SECRET_KEY"] = os.environ.get(

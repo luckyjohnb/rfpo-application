@@ -2485,6 +2485,15 @@ def create_app():
         consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
         project = Project.query.filter_by(project_id=project_id).first()
 
+        # Determine default team logic
+        default_team = (
+            Team.query.filter_by(record_id=project.team_record_id).first()
+            if project.team_record_id
+            else None
+        )
+        if not default_team:
+            default_team = Team.query.filter_by(active=True).first()
+
         if request.method == "POST":
             try:
                 # Generate RFPO ID based on project
@@ -2504,6 +2513,31 @@ def create_app():
                 elif project.team_record_id:
                     # Use project's default team if no team was explicitly selected
                     team = Team.query.filter_by(record_id=project.team_record_id).first()
+                # Determine team: Check form first, then default logic
+                team = None
+                if request.form.get("team_id"):
+                    team = Team.query.get(int(request.form.get("team_id")))
+
+                # Fallback to default logic if not in form or not found
+                if not team:
+                    team = default_team
+
+                # If no team exists, create a default "No Team" team
+                if not team:
+                    print("No teams found - creating default team for RFPO creation")
+                    default_team = Team(
+                        record_id=f"DEFAULT-{datetime.now().strftime('%Y%m%d')}",
+                        name="Default Team (No Team Assignment)",
+                        abbrev="DEFAULT",
+                        description="Auto-created default team for RFPOs without team assignment",
+                        consortium_consort_id=consortium_id,
+                        active=True,
+                        created_by=current_user.get_display_name(),
+                    )
+                    db.session.add(default_team)
+                    db.session.flush()  # Get the ID
+                    team = default_team
+                    flash("ℹ️ Created default team for RFPO creation.", "info")
 
                 # Create RFPO with enhanced model
                 rfpo = RFPO(
@@ -2520,6 +2554,7 @@ def create_app():
                     requestor_tel=request.form.get("requestor_tel")
                     or current_user.phone,
                     requestor_location=request.form.get("requestor_location")
+                    or consortium.invoicing_address
                     or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
                     shipto_name=request.form.get("shipto_name"),
                     shipto_tel=request.form.get("shipto_tel"),
@@ -2575,9 +2610,12 @@ Southfield, MI  48075""",
         # Pre-fill form with current user data
         current_user_data = {
             "requestor_tel": current_user.phone or "",  # Don't show 'None'
-            "requestor_location": f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
+            "shipto_tel": current_user.phone or "",  # Same as requestor phone
+            "requestor_location": consortium.invoicing_address
+            or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
             "shipto_name": current_user.get_display_name(),
-            "shipto_address": f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
+            "shipto_address": consortium.invoicing_address
+            or f"{current_user.company or 'USCAR'}, {current_user.state or 'MI'}",
         }
 
         return render_template(
@@ -2587,6 +2625,7 @@ Southfield, MI  48075""",
             teams=teams,
             vendors=vendors,
             current_user_data=current_user_data,
+            default_team=default_team,
         )
 
     @app.route("/rfpo/<int:id>/edit", methods=["GET", "POST"])

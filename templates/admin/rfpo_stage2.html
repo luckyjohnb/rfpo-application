@@ -74,6 +74,16 @@
                         <div class="form-text">If applicable, reference number for government agreements</div>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="team_id" class="form-label">Team <span class="text-danger">*</span></label>
+                        <select class="form-select" id="team_id" name="team_id" required>
+                            {% for team in teams %}
+                            <option value="{{ team.id }}" {% if default_team and default_team.id == team.id %}selected{% endif %}>{{ team.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Team assignment determining approval workflow</div>
+                    </div>
+
                     <h5 class="mb-3 mt-4">📞 Requestor Information</h5>
 
                     <div class="mb-3">
@@ -106,7 +116,7 @@
 
                     <div class="mb-3">
                         <label for="shipto_tel" class="form-label">Ship to Phone <span class="text-danger">*</span></label>
-                        <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" required>
+                        <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" required value="{{ current_user_data.shipto_tel }}">
                     </div>
 
                     <div class="mb-3">
@@ -114,7 +124,7 @@
                         <textarea class="form-control" id="shipto_address" name="shipto_address" rows="3" required>{{ current_user_data.shipto_address }}</textarea>
                     </div>
 
-                    <h5 class="mb-3 mt-4">🚚 Delivery Information</h5>
+                    <h5 class="mb-3 mt-4">PO Expiration</h5>
 
                     <div class="mb-3">
                         <label for="delivery_date" class="form-label">PO Expiration Date</label>
@@ -198,7 +208,7 @@
             <div class="row mt-4">
                 <div class="col-12">
                     <h5 class="mb-3">🏢 Vendor Selection (Optional)</h5>
-                    <p class="text-muted">You can select a vendor now or add it later when editing the RFPO.</p>
+                    <p class="text-muted">You can select a vendor.</p>
 
                     <div class="row">
                         <div class="col-md-6">

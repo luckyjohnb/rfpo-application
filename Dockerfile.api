@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements-azure.txt
 COPY simple_api.py .
 COPY models.py .
 COPY config.py .
+COPY env_config.py .
 COPY init_postgres_db.py .
 COPY api/ ./api/
 

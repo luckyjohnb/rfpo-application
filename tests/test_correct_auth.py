@@ -5,9 +5,11 @@ Test authentication with Administrator123!
 
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from user_management import UserManager
+
 
 def test_correct_authentication():
     """Test authentication with the correct password"""
@@ -42,8 +44,10 @@ def test_correct_authentication():
     except Exception as e:
         print(f"❌ Error during authentication: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 if __name__ == "__main__":
     success = test_correct_authentication()
@@ -53,4 +57,4 @@ if __name__ == "__main__":
         print("✅ Ready to test Flask login")
     else:
         print("💔 AUTHENTICATION STILL FAILING")
-    print("="*60)
+    print("=" * 60)

@@ -6,15 +6,13 @@ Test Flask login endpoint directly
 import requests
 import json
 
+
 def test_flask_login():
     """Test the Flask login endpoint"""
     print("=== FLASK LOGIN ENDPOINT TEST ===")
 
     login_url = "http://127.0.0.1:5000/api/auth/login"
-    credentials = {
-        "username": "admin",
-        "password": "admin"
-    }
+    credentials = {"username": "admin", "password": "admin"}
 
     print(f"🌐 URL: {login_url}")
     print(f"🔑 Credentials: {credentials}")
@@ -23,8 +21,8 @@ def test_flask_login():
         response = requests.post(
             login_url,
             json=credentials,
-            headers={'Content-Type': 'application/json'},
-            timeout=10
+            headers={"Content-Type": "application/json"},
+            timeout=10,
         )
 
         print(f"📊 Status Code: {response.status_code}")
@@ -48,6 +46,7 @@ def test_flask_login():
         print(f"❌ Error: {e}")
         return False
 
+
 if __name__ == "__main__":
     success = test_flask_login()
     print(f"\n{'='*60}")
@@ -56,4 +55,4 @@ if __name__ == "__main__":
         print("✅ Authentication is working correctly!")
     else:
         print("💔 FLASK LOGIN TEST FAILED")
-    print("="*60)
+    print("=" * 60)

@@ -992,21 +992,37 @@ def create_app():
             }
         )
 
-    # Simple email test form (admin-only)
+    # Email test form (admin-only) — supports multiple recipients and HTML
     @app.route("/tools/email-test", methods=["GET", "POST"])
     @login_required
     def email_test_tool():
         from email_service import email_service
 
         if request.method == "POST":
-            to_email = request.form.get("to_email")
+            raw_emails = request.form.get("to_emails", "")
             subject = request.form.get("subject") or "Test Email from RFPO"
-            message = request.form.get("message") or (
-                "This is a test email from RFPO Admin."
-            )
+            body = request.form.get("message") or "This is a test email from RFPO Admin."
+            send_html = request.form.get("send_html") == "1"
+
+            # Parse comma/semicolon/newline-separated emails
+            to_emails = [
+                e.strip() for e in raw_emails.replace(";", ",").replace("\n", ",").split(",")
+                if e.strip()
+            ]
+
+            if not to_emails:
+                flash("❌ Please enter at least one recipient email address.", "error")
+                return redirect(url_for("email_test_tool"))
+
+            body_html = None
+            body_text = body
+            if send_html:
+                body_html = body
+                body_text = None
 
             ok = email_service.send_email(
-                to_emails=[to_email], subject=subject, body_text=message
+                to_emails=to_emails, subject=subject,
+                body_text=body_text, body_html=body_html,
             )
             diag = (
                 email_service.get_last_send_result()
@@ -1018,8 +1034,10 @@ def create_app():
                 sndr = diag.get("sender") or "(no sender)"
                 status = diag.get("status") or "unknown"
                 msg_id = diag.get("message_id") or "(n/a)"
+                count = len(to_emails)
                 flash(
-                    f"✅ Test email sent via {prov} from {sndr}. Status: {status}. Message ID: {msg_id}",
+                    f"✅ Email sent via {prov} from {sndr} to {count} recipient(s). "
+                    f"Status: {status}. Message ID: {msg_id}",
                     "success",
                 )
             else:

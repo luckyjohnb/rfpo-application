@@ -21,66 +21,85 @@
     <span class="ms-2">{{ label }}</span>
   </p>
 
-  <form method="post" class="card p-3" style="max-width: 640px;" onsubmit="normalizeSubjectTag(event)">
+  <form method="post" class="card p-3" style="max-width: 720px;">
     <div class="mb-3">
-      <label for="to_email" class="form-label">Recipient Email</label>
-      <input type="email" id="to_email" name="to_email" class="form-control" placeholder="user@example.com" required />
+      <label for="to_emails" class="form-label">
+        To <small class="text-muted">(separate multiple addresses with commas)</small>
+      </label>
+      <textarea id="to_emails" name="to_emails" class="form-control" rows="2"
+        placeholder="user1@ford.com, user2@gm.com, user3@stellantis.com" required></textarea>
     </div>
 
     <div class="mb-3">
       <label for="subject" class="form-label">Subject</label>
       {% set mode_tag = '[ACS]' if mode == 'ACS' else ('[SMTP]' if mode == 'SMTP' else '[EMAIL DISABLED]') %}
-      <input type="text" id="subject" name="subject" class="form-control" value="{{ mode_tag }} Test Email from RFPO" data-mode-tag="{{ mode_tag }}" />
+      <input type="text" id="subject" name="subject" class="form-control"
+        value="{{ mode_tag }} RFPO Email Deliverability Test — uscar.org" />
     </div>
 
     <div class="mb-3">
-      <label for="message" class="form-label">Message</label>
-      <textarea id="message" name="message" rows="5" class="form-control">Mode: {{ mode }} — {{ label }}
+      <label for="message" class="form-label">Body</label>
+      <textarea id="message" name="message" rows="10" class="form-control">This is a test email from the RFPO application.
 
-This is a test email from RFPO Admin.</textarea>
+Provider: {{ mode }} — {{ label }}
+Sent at: (server time will be in the email headers)
+
+If you received this in your primary inbox (not spam/junk), email deliverability from uscar.org is working correctly.
+
+Please check the following in the email headers:
+  - From address should show rfpo@uscar.org
+  - SPF should PASS
+  - DKIM should PASS
+  - DMARC should PASS
+
+— RFPO Admin</textarea>
     </div>
 
-    <div class="d-flex gap-2">
-      <button type="submit" class="btn btn-primary">Send Email</button>
-  <button type="button" class="btn btn-outline-secondary" onclick="prefillMe()">Send to me</button>
+    <div class="mb-3 form-check">
+      <input type="checkbox" class="form-check-input" id="send_html" name="send_html" value="1">
+      <label class="form-check-label" for="send_html">Send body as HTML <small class="text-muted">(use if you include HTML markup above)</small></label>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-paper-plane"></i> Send Email
+      </button>
+      <button type="button" class="btn btn-outline-secondary" onclick="prefillMe()">
+        <i class="fas fa-user"></i> Send to me
+      </button>
+      <button type="button" class="btn btn-outline-secondary" onclick="clearForm()">
+        <i class="fas fa-eraser"></i> Clear
+      </button>
     </div>
   </form>
 
-
+  <div class="card mt-3 p-3" style="max-width: 720px;">
+    <h6 class="mb-2">Validation Checklist</h6>
+    <p class="text-muted small mb-2">After receiving the test email, verify:</p>
+    <ul class="small mb-0">
+      <li><strong>Delivery:</strong> Email arrived in primary inbox (not spam/junk)</li>
+      <li><strong>From:</strong> Sender shows <code>rfpo@uscar.org</code></li>
+      <li><strong>SPF:</strong> View email headers → look for <code>spf=pass</code></li>
+      <li><strong>DKIM:</strong> View email headers → look for <code>dkim=pass</code></li>
+      <li><strong>DMARC:</strong> View email headers → look for <code>dmarc=pass</code></li>
+    </ul>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  function normalizeSubjectTag(e) {
-    const subjectInput = document.getElementById('subject');
-    const modeTag = subjectInput?.dataset?.modeTag || '';
-    if (subjectInput && modeTag) {
-      const current = subjectInput.value || '';
-      const updated = current.replace(/^\[[^\]]+\]\s*/, '');
-      subjectInput.value = `${modeTag} ${updated}`.trim();
-    }
-  }
-
   function prefillMe() {
     const me = {{ (current_user.email | tojson) if current_user else 'null' }};
     if (me) {
-      const toInput = document.getElementById('to_email');
-      const subjectInput = document.getElementById('subject');
-      const modeTag = subjectInput?.dataset?.modeTag || '';
-
-      toInput.value = me;
-
-      // Enforce mode tag: replace any existing [TAG] at start, else prefix
-      if (subjectInput && modeTag) {
-        const current = subjectInput.value || '';
-        const updated = current.replace(/^\[[^\]]+\]\s*/,'');
-        subjectInput.value = `${modeTag} ${updated}`.trim();
-      }
-
-      // Submit immediately for quick action
-      toInput.form?.submit();
+      document.getElementById('to_emails').value = me;
     }
+  }
+
+  function clearForm() {
+    document.getElementById('to_emails').value = '';
+    document.getElementById('message').value = '';
+    document.getElementById('send_html').checked = false;
   }
 </script>
 {% endblock %}

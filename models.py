@@ -651,6 +651,11 @@ class User(UserMixin, db.Model):
         db.DateTime
     )  # When approver status was last updated
 
+    # SSO / External Identity
+    entra_oid = db.Column(
+        db.String(36), unique=True, nullable=True
+    )  # Entra ID Object ID (stable, survives email changes)
+
     # Status and Audit
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -914,6 +919,7 @@ class User(UserMixin, db.Model):
                 else None
             ),
             "approver_summary": self.get_approver_summary(),
+            "entra_oid": self.entra_oid,
         }
 
     def __repr__(self):

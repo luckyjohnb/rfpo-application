@@ -46,3 +46,6 @@ python-dotenv==1.0.1
 
 # Azure Communication Services (Email)
 azure-communication-email>=1.0.0,<2.0.0
+
+# SAML SSO Authentication
+python3-saml>=1.16.0

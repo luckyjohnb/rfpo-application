@@ -175,7 +175,92 @@ A: No. The DKIM selectors are unique to Azure Communication Services (`selector1
 A: It proves domain ownership to Azure. It has no effect on email delivery or any other service. It can be removed after initial verification, but we recommend keeping it in case re-verification is needed.
 
 **Q: Can we use a subdomain instead (e.g., `notifications.uscar.org`)?**
-A: Yes, but using the root domain (`uscar.org`) provides the best deliverability and brand recognition. A subdomain would require a separate set of records for that subdomain.
+A: Yes — we are now using `rfpo.uscar.org` as the email subdomain to avoid SPF conflicts with the root domain. See the subdomain section below.
 
 **Q: What is the sender address?**
-A: `rfpo@uscar.org` — this is the "From" address users will see. Only the RFPO application will send from this address via Azure Communication Services.
+A: `rfpo@rfpo.uscar.org` — this is the "From" address users will see. Only the RFPO application will send from this address via Azure Communication Services.
+
+---
+
+## NEW: rfpo.uscar.org Subdomain Records (Priority)
+
+**Date added:** 2026-04-02
+**Status:** DNS records needed from IT — Azure domain already created and waiting for verification
+
+To avoid SPF conflicts with the root `uscar.org` domain (which uses `~all` soft-fail and includes other mechanisms that ACS verification rejects), we are using the subdomain `rfpo.uscar.org` for RFPO email sending. This subdomain gets its own clean SPF record with exactly what Azure requires.
+
+**The sender address will be:** `rfpo@rfpo.uscar.org`
+
+### Subdomain Record 1 — Domain Ownership Verification (TXT)
+
+| Field       | Value                                                       |
+|-------------|-------------------------------------------------------------|
+| **Type**    | TXT                                                         |
+| **Host**    | `rfpo` (or `rfpo.uscar.org` if your DNS requires FQDN)     |
+| **Value**   | `ms-domain-verification=108186d9-e50b-415f-8418-7aa9ceb1b6b2` |
+| **TTL**     | 3600                                                        |
+
+### Subdomain Record 2 — SPF (TXT)
+
+This is a **new record** on the subdomain — it will NOT conflict with the root domain's SPF.
+
+| Field       | Value                                                       |
+|-------------|-------------------------------------------------------------|
+| **Type**    | TXT                                                         |
+| **Host**    | `rfpo` (or `rfpo.uscar.org` if your DNS requires FQDN)     |
+| **Value**   | `v=spf1 include:spf.protection.outlook.com -all`            |
+| **TTL**     | 3600                                                        |
+
+> **Note:** This is a completely separate SPF record from the root `uscar.org` SPF. It only applies to `rfpo.uscar.org` and does not affect any existing email infrastructure.
+
+### Subdomain Record 3 — DKIM Signing Key Selector 1 (CNAME)
+
+| Field       | Value                                                              |
+|-------------|--------------------------------------------------------------------|
+| **Type**    | CNAME                                                              |
+| **Host**    | `selector1-azurecomm-prod-net._domainkey.rfpo`                    |
+| **Target**  | `selector1-azurecomm-prod-net._domainkey.azurecomm.net`           |
+| **TTL**     | 3600                                                               |
+
+### Subdomain Record 4 — DKIM Signing Key Selector 2 (CNAME)
+
+| Field       | Value                                                              |
+|-------------|--------------------------------------------------------------------|
+| **Type**    | CNAME                                                              |
+| **Host**    | `selector2-azurecomm-prod-net._domainkey.rfpo`                    |
+| **Target**  | `selector2-azurecomm-prod-net._domainkey.azurecomm.net`           |
+| **TTL**     | 3600                                                               |
+
+### Subdomain Record 5 — DMARC (TXT) — Recommended
+
+| Field       | Value                                                              |
+|-------------|--------------------------------------------------------------------|
+| **Type**    | TXT                                                                |
+| **Host**    | `_dmarc.rfpo`                                                      |
+| **Value**   | `v=DMARC1; p=reject; rua=mailto:dmarc-reports@uscar.org; fo=1`   |
+| **TTL**     | 3600                                                               |
+
+> **Note:** Since `rfpo.uscar.org` is exclusively used by the RFPO application through Azure, we can use `p=reject` (strict mode) instead of `p=none`. This tells mail servers to reject any email from `rfpo.uscar.org` that fails SPF/DKIM — providing maximum anti-spoofing protection.
+
+### Subdomain Summary Table (Copy-Paste Ready)
+
+| # | Type  | Host/Name                                      | Value / Target                                               | TTL  |
+|---|-------|-------------------------------------------------|--------------------------------------------------------------|------|
+| 1 | TXT   | `rfpo`                                          | `ms-domain-verification=108186d9-e50b-415f-8418-7aa9ceb1b6b2` | 3600 |
+| 2 | TXT   | `rfpo`                                          | `v=spf1 include:spf.protection.outlook.com -all`             | 3600 |
+| 3 | CNAME | `selector1-azurecomm-prod-net._domainkey.rfpo`  | `selector1-azurecomm-prod-net._domainkey.azurecomm.net`      | 3600 |
+| 4 | CNAME | `selector2-azurecomm-prod-net._domainkey.rfpo`  | `selector2-azurecomm-prod-net._domainkey.azurecomm.net`      | 3600 |
+| 5 | TXT   | `_dmarc.rfpo`                                   | `v=DMARC1; p=reject; rua=mailto:dmarc-reports@uscar.org; fo=1` | 3600 |
+
+### Verification Checklist (Subdomain)
+
+After adding the subdomain records:
+
+- [ ] TXT record for `rfpo.uscar.org` contains `ms-domain-verification=108186d9-...` (check: `nslookup -type=txt rfpo.uscar.org`)
+- [ ] TXT record for `rfpo.uscar.org` contains `v=spf1 include:spf.protection.outlook.com -all` (check: `nslookup -type=txt rfpo.uscar.org`)
+- [ ] CNAME `selector1-azurecomm-prod-net._domainkey.rfpo.uscar.org` resolves to `...azurecomm.net`
+- [ ] CNAME `selector2-azurecomm-prod-net._domainkey.rfpo.uscar.org` resolves to `...azurecomm.net`
+- [ ] TXT record for `_dmarc.rfpo.uscar.org` contains DMARC policy
+- [ ] Notify RFPO engineering when records are live
+
+> **Why a subdomain?** The root `uscar.org` SPF record contains additional mechanisms and uses `~all` (soft-fail) which Azure's SPF verification does not accept. The subdomain gets a clean, dedicated SPF record that passes Azure's strict verification. This also means zero risk to existing `uscar.org` email infrastructure.

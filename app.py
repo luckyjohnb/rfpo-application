@@ -5,10 +5,11 @@ API Consumer Only - All data operations go through API layer
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
+import jwt as pyjwt
 import requests
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for, make_response
 from flask_cors import CORS
 
 # Import error handling
@@ -89,7 +90,9 @@ def create_user_app():
     @app.route("/login")
     def login_page():
         """Login page"""
-        return render_template("app/login.html")
+        from auth_saml import is_saml_enabled
+
+        return render_template("app/login.html", saml_enabled=is_saml_enabled())
 
     @app.route("/dashboard")
     def dashboard():
@@ -483,6 +486,138 @@ def create_user_app():
             vendor_site=vendor_site_obj,
             requestor=requestor_obj,
         )
+
+    # ─── SAML SSO Routes ─────────────────────────────────────────────────
+
+    @app.route("/auth/login-microsoft")
+    def saml_login():
+        """Initiate SAML SSO flow — redirects to Microsoft/Entra ID login."""
+        from auth_saml import is_saml_enabled, init_saml_auth
+
+        if not is_saml_enabled():
+            return redirect(url_for("login_page"))
+
+        auth = init_saml_auth(request)
+        # RelayState carries the intended destination after login
+        return_to = request.args.get("next", url_for("dashboard"))
+        sso_url = auth.login(return_to=return_to)
+        return redirect(sso_url)
+
+    @app.route("/saml/acs", methods=["POST"])
+    def saml_acs():
+        """Assertion Consumer Service — receives and validates SAML Response from IdP."""
+        from auth_saml import is_saml_enabled, init_saml_auth, extract_user_attributes, map_roles_to_permissions
+
+        if not is_saml_enabled():
+            return "SAML SSO is not enabled", 403
+
+        auth = init_saml_auth(request)
+        auth.process_response()
+        errors = auth.get_errors()
+
+        if errors:
+            error_reason = auth.get_last_error_reason()
+            logger.error(f"SAML ACS validation failed: {errors} — {error_reason}")
+            return render_template(
+                "app/error.html",
+                error_code=401,
+                error_message="SSO authentication failed. Please contact your administrator.",
+            ), 401
+
+        if not auth.is_authenticated():
+            return render_template(
+                "app/error.html",
+                error_code=401,
+                error_message="Authentication was not completed.",
+            ), 401
+
+        # Extract user attributes from the SAML assertion
+        user_attrs = extract_user_attributes(auth)
+        email = user_attrs.get("email")
+
+        if not email:
+            logger.error("SAML assertion missing email/NameID")
+            return render_template(
+                "app/error.html",
+                error_code=400,
+                error_message="SSO response did not include an email address.",
+            ), 400
+
+        # Match to local RFPO user by email (D3: block if not pre-provisioned)
+        match_response = make_api_request("/auth/saml-match", "POST", {
+            "email": email,
+            "entra_roles": user_attrs.get("roles", []),
+            "first_name": user_attrs.get("first_name", ""),
+            "last_name": user_attrs.get("last_name", ""),
+            "name_id": user_attrs.get("name_id", ""),
+        })
+
+        if not match_response.get("success"):
+            message = match_response.get("message", "Your account has not been set up in RFPO. Contact your USCAR administrator.")
+            logger.warning(f"SAML login blocked — no matching user for {email}")
+            return render_template(
+                "app/error.html",
+                error_code=403,
+                error_message=message,
+            ), 403
+
+        # Store JWT in session (same as password-based login)
+        session["auth_token"] = match_response["token"]
+        session["user"] = match_response["user"]
+        session["auth_method"] = "sso"
+        session["saml_session_index"] = user_attrs.get("session_index")
+
+        # Redirect to intended destination or dashboard
+        relay_state = request.form.get("RelayState", "")
+        if relay_state and relay_state != url_for("saml_login") and not relay_state.startswith("http"):
+            return redirect(relay_state)
+        return redirect(url_for("dashboard"))
+
+    @app.route("/saml/sls", methods=["GET", "POST"])
+    def saml_sls():
+        """Single Logout Service — handles logout initiated by IdP."""
+        from auth_saml import is_saml_enabled, init_saml_auth
+
+        if not is_saml_enabled():
+            return redirect(url_for("login_page"))
+
+        auth = init_saml_auth(request)
+
+        def delete_session():
+            session.pop("auth_token", None)
+            session.pop("user", None)
+            session.pop("auth_method", None)
+            session.pop("saml_session_index", None)
+
+        url = auth.process_slo(delete_session_cb=delete_session)
+        errors = auth.get_errors()
+
+        if errors:
+            logger.error(f"SAML SLS error: {errors}")
+
+        if url:
+            return redirect(url)
+        return redirect(url_for("login_page"))
+
+    @app.route("/saml/metadata")
+    def saml_metadata():
+        """Serve SP metadata XML — useful for IT when configuring the Enterprise Application."""
+        from auth_saml import is_saml_enabled, init_saml_auth
+
+        if not is_saml_enabled():
+            return "SAML SSO is not enabled", 404
+
+        auth = init_saml_auth(request)
+        settings = auth.get_settings()
+        metadata = settings.get_sp_metadata()
+        errors = settings.validate_metadata(metadata)
+
+        if errors:
+            return f"Metadata validation errors: {', '.join(errors)}", 500
+
+        resp = make_response(metadata, 200)
+        resp.headers["Content-Type"] = "text/xml"
+        return resp
 
     # Health check
     @app.route("/health")

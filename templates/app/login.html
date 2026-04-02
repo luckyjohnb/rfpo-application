@@ -26,6 +26,47 @@
         .loading {
             display: none;
         }
+        .divider-text {
+            position: relative;
+            text-align: center;
+            margin: 1.5rem 0;
+        }
+        .divider-text::before,
+        .divider-text::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 40%;
+            height: 1px;
+            background: #dee2e6;
+        }
+        .divider-text::before { left: 0; }
+        .divider-text::after { right: 0; }
+        .divider-text span {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 0 0.75rem;
+            color: #6c757d;
+            font-size: 0.85rem;
+        }
+        .btn-microsoft {
+            background: #fff;
+            border: 1px solid #8c8c8c;
+            color: #5e5e5e;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .btn-microsoft:hover {
+            background: #f3f3f3;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            color: #5e5e5e;
+        }
+        .btn-microsoft img {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            vertical-align: text-bottom;
+        }
     </style>
 </head>
 <body>
@@ -81,6 +122,24 @@
                             </button>
                         </div>
                     </form>
+                    
+                    {% if saml_enabled %}
+                    <div class="divider-text">
+                        <span>or</span>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <a href="/auth/login-microsoft" class="btn btn-microsoft btn-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 21 21" style="margin-right:8px;vertical-align:text-bottom;">
+                                <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                                <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                                <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                            </svg>
+                            Sign in with Microsoft
+                        </a>
+                    </div>
+                    {% endif %}
                     
                     <div class="text-center mt-4">
                         <a href="/" class="text-decoration-none">

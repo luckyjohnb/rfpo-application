@@ -270,3 +270,101 @@ def register():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@auth_api.route("/saml-match", methods=["POST"])
+def saml_match():
+    """Match a SAML-authenticated user to a local RFPO user and issue JWT.
+
+    Called by the User App after validating a SAML assertion. This endpoint:
+    1. Finds the local user by email (case-insensitive)
+    2. Verifies the user is active
+    3. Stores the Entra NameID for stable matching
+    4. Updates permissions from Entra App Roles if present (D7: baseline + override)
+    5. Issues a standard RFPO JWT
+
+    D3: If no matching user exists, returns 403 — no JIT provisioning.
+    """
+    try:
+        data = request.get_json()
+        email = data.get("email", "").strip().lower()
+        entra_roles = data.get("entra_roles", [])
+        name_id = data.get("name_id", "")
+
+        if not email:
+            return (
+                jsonify({"success": False, "message": "Email is required"}),
+                400,
+            )
+
+        # Find user by email (case-insensitive)
+        from sqlalchemy import func
+
+        user = User.query.filter(func.lower(User.email) == email).first()
+
+        if not user:
+            return (
+                jsonify({
+                    "success": False,
+                    "message": "Your account has not been set up in RFPO. Contact your USCAR administrator.",
+                }),
+                403,
+            )
+
+        if not user.active:
+            return (
+                jsonify({
+                    "success": False,
+                    "message": "Your RFPO account is not active. Contact your USCAR administrator.",
+                }),
+                403,
+            )
+
+        # Store Entra NameID on first SSO login (stable identity link)
+        if name_id and not user.entra_oid:
+            user.entra_oid = name_id
+
+        # D7: Update permissions from Entra roles (baseline — admin can still override)
+        if entra_roles:
+            current_perms = set(user.get_permissions())
+            for role in entra_roles:
+                role_upper = role.upper().strip()
+                if role_upper == "RFPO_ADMIN" and "RFPO_ADMIN" not in current_perms:
+                    current_perms.add("RFPO_ADMIN")
+                    current_perms.add("RFPO_USER")
+                elif role_upper == "RFPO_USER" and "RFPO_USER" not in current_perms:
+                    current_perms.add("RFPO_USER")
+            user.set_permissions(list(current_perms))
+
+        # Update last visit
+        user.last_visit = datetime.utcnow()
+        db.session.commit()
+
+        # Issue standard RFPO JWT (D8: same format as password-based login)
+        expiry = datetime.utcnow() + timedelta(hours=24)
+        payload = {
+            "user_id": user.id,
+            "username": user.email,
+            "auth_method": "sso",
+            "exp": expiry,
+        }
+
+        token = jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
+
+        return jsonify({
+            "success": True,
+            "token": token,
+            "user": {
+                "id": user.id,
+                "username": user.email,
+                "display_name": user.fullname,
+                "email": user.email,
+                "roles": user.get_permissions(),
+                "is_approver": user.is_approver,
+                "approver_summary": user.get_approver_summary(),
+            },
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500

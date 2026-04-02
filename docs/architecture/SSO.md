@@ -1,7 +1,7 @@
 # External Identity Integration — Architecture & Implementation Plan
 
-**Date:** 2026-04-01
-**Status:** DRAFT — Pending stakeholder decisions
+**Date:** 2026-04-02
+**Status:** ALL DECISIONS CONFIRMED — Implementation Phase 1 in progress
 **Author:** Engineering
 **Audience:** Engineering leadership, USCAR IT, implementation team
 
@@ -27,7 +27,9 @@ This document evaluates the requirement, analyzes the current system, presents i
 
 ### Recommendation
 
-**Option B: Entra External ID (B2B Collaboration)** via USCAR's tenant, implemented with the MSAL Python library against a single multi-tenant app registration. This matches USCAR's existing pattern, supports the listed organizations, and provides the clearest path to production.
+**Option D: B2B Collaboration + Password Fallback** via USCAR's Entra ID tenant, implemented with **SAML 2.0** protocol using `python3-saml`. IT has confirmed they use SAML-based Enterprise Applications with B2B guest users and `user.assignedroles` for role-based access. This matches USCAR's existing pattern exactly.
+
+**Protocol update:** The original draft recommended OIDC/MSAL. IT's operational model uses SAML Enterprise Applications for external app integrations (see their existing Meraki and IT Asset Management configurations). The identity pattern (B2B Collaboration) remains unchanged — only the protocol layer shifts from OIDC to SAML. All architectural decisions and the B2B model still apply.
 
 ---
 
@@ -410,7 +412,7 @@ This depends on the deployment topology:
 | **Email domain → company mapping** | D2, D3 | If JIT provisioning is implemented (Phase 2), need a table mapping email domains to company_code. e.g., `@ford.com → FORD, @gm.com → GM`. Not needed for Phase 1 if admin pre-creates users. |
 | **Existing user migration** | D4 | Existing users with @ford.com, @gm.com emails will be able to use "Sign in with Microsoft" if their email matches. No migration script needed — just ensure email uniqueness and matching. |
 | **Password hash for SSO users** | D3, D4 | If admin pre-creates users with a temp password, they can migrate to SSO later. If JIT-provisioned, users never have a password — `password_hash` must be nullable or set to a sentinel. Current schema: `nullable=False` — **schema change needed**. |
-| **CSRF and SSO callback** | Security | The OIDC callback endpoint must validate the `state` parameter (MSAL handles this). CSRF on the callback is a known attack vector — MSAL's state parameter provides CSRF protection for the auth flow. |
+| **CSRF and SSO callback** | Security | The SAML ACS endpoint must validate `InResponseTo` (matches the original AuthnRequest ID) and verify the XML signature. `python3-saml` handles both. The ACS endpoint only accepts POST requests with valid signed assertions — CSRF is mitigated by the assertion signature and `InResponseTo` binding. |
 
 ### Follow-On Decisions (Discovered During Review)
 
@@ -425,17 +427,112 @@ This depends on the deployment topology:
 
 ---
 
-## 7. Detailed Implementation Plan
+## 7. IT Stakeholder Input — Decisions Resolved
 
-### Phase 1: Core B2B Integration (Sprint 3)
+*Updated 2026-04-01 after receiving SAML configuration examples and process details from IT.*
+
+### What IT Communicated
+
+1. **Protocol:** IT uses **SAML 2.0 Enterprise Applications** in Entra ID for external app integrations (not OIDC app registrations). Reference configurations provided for LandX Motors Meraki and LandX IT Asset Management System.
+2. **External user process:** Invite user as B2B guest into Entra ID → Add guest account to a security group → Assign the group to the Enterprise Application with an App Role → User authenticates via SAML.
+3. **Role claim:** IT will use `user.assignedroles` to pass App Roles to the application. This claim carries the Entra ID App Roles assigned to the user (either directly or via group membership).
+4. **IT needs from engineering:** Entity ID, Reply URL (ACS), Sign on URL, Logout URL, and any custom claim URLs the application requires.
+
+### Decision Resolution Summary
+
+| Decision | Original Recommendation | Resolved As | Evidence |
+|----------|------------------------|-------------|----------|
+| **D1: App Registration** | (a) USCAR IT registers | **Confirmed (a)** — IT is requesting our SAML endpoints to configure. | IT asked for Entity ID and URLs |
+| **D2: Guest Provisioning** | (c) Admin pre-creates + domain allowlist | **Confirmed** — "inviting the user as a guest...adding the guest account to the required group" | IT's stated process |
+| **D3: JIT Provisioning** | (a) Block — require pre-provisioning | **Confirmed (a)** — Admin creates RFPO user first, IT invites as guest separately. **Owner confirmed 2026-04-02.** | Matches invitation-based model |
+| **D4: Auth Method** | (b) Both methods allowed during rollout | **Confirmed (b)** — Password fallback preserved. SSO users can also use password if pre-created with one. **Owner confirmed 2026-04-02.** | Hybrid approach per Option D |
+| **D5: Admin Panel** | (a) Both apps support SSO | **Confirmed: Phase 1 User App only.** Admin panel remains password-only initially. **Owner confirmed 2026-04-02.** | Simpler rollout; admin users are internal |
+| **D6: Redirect URIs** | Azure Container Apps URLs | **Confirmed** — see SAML configuration table below | Known deployment URLs |
+| **D7: Permission Mapping** | (a) No mapping — manual assignment | **Updated to (b/c hybrid** — `user.assignedroles` carries App Roles from Entra ID. RFPO maps these to permissions. Admin can still override. **Owner confirmed 2026-04-02.** | IT's explicit requirement to use `user.assignedroles` |
+| **D8: Session Lifetime** | (c) Issue RFPO JWT after auth | **Confirmed (c)** — After validating SAML assertion, issue standard RFPO JWT. API layer unchanged. | Same principle regardless of SAML vs OIDC |
+
+### Protocol Change: OIDC → SAML
+
+The original plan recommended OIDC via MSAL. IT operates with SAML Enterprise Applications. This changes:
+
+| Aspect | Original (OIDC) | Updated (SAML) |
+|--------|-----------------|----------------|
+| **Protocol** | OpenID Connect | SAML 2.0 |
+| **Python library** | `msal>=1.28.0` | `python3-saml>=1.16.0` |
+| **Auth initiation** | Redirect to `/authorize` endpoint | SP-initiated SAML AuthnRequest |
+| **Callback endpoint** | `/auth/callback` (authorization code exchange) | `/saml/acs` (Assertion Consumer Service) |
+| **Logout** | Local session clear only | `/saml/sls` (Single Logout Service) |
+| **Token format received** | JWT id_token + access_token | XML SAML Assertion |
+| **User identity extraction** | JWT claims (`preferred_username`, `oid`, `email`) | SAML NameID + Attribute Statements |
+| **CSRF protection** | `state` parameter (MSAL handles) | `RelayState` + `InResponseTo` validation (`python3-saml` handles) |
+| **What RFPO issues after auth** | Same RFPO JWT (unchanged) | Same RFPO JWT (unchanged) |
+
+**What does NOT change:** The identity pattern (B2B), the user matching logic (email → `entra_oid`), the JWT issuance, the API layer, the permission model, or the provisioning flow.
+
+### SAML Configuration — Values for IT
+
+#### Basic SAML Configuration (User App)
+
+| Setting | Value |
+|---------|-------|
+| **Identifier (Entity ID)** | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io` |
+| **Reply URL (Assertion Consumer Service URL)** | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/acs` |
+| **Sign on URL** | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/` |
+| **Relay State (Optional)** | *(leave empty)* |
+| **Logout URL (Optional)** | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/sls` |
+
+#### Attributes & Claims — Required Claims
+
+| Claim Name | Type | Source Attribute | Purpose |
+|------------|------|------------------|---------|
+| **Unique User Identifier (Name ID)** | SAML | `user.userprincipalname` | Primary identity — maps to `email` in RFPO User model |
+| `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/attributes/role` | SAML | `user.assignedroles` | App Roles — maps to RFPO permissions (`RFPO_USER`, `RFPO_ADMIN`) |
+
+#### Attributes & Claims — Additional Claims (Standard)
+
+| Claim Name | Type | Source Attribute | Purpose |
+|------------|------|------------------|---------|
+| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress` | SAML | `user.mail` | Email address for matching |
+| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname` | SAML | `user.givenname` | First name for display |
+| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname` | SAML | `user.surname` | Last name for display |
+| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name` | SAML | `user.userprincipalname` | Full display name |
+
+#### App Roles to Define (on the Enterprise Application)
+
+These roles must be defined on the App Registration in Entra ID. IT assigns users/groups to these roles. The `user.assignedroles` claim carries the role `Value` to the application.
+
+| Display Name | Value | Description | Assigned To |
+|-------------|-------|-------------|-------------|
+| RFPO User | `RFPO_USER` | Standard RFPO user — can view and create RFPOs | Users and/or Groups |
+| RFPO Admin | `RFPO_ADMIN` | RFPO administrator — full CRUD operations | Users and/or Groups |
+
+**Mapping logic in RFPO:** When a SAML assertion arrives with `user.assignedroles` containing `RFPO_ADMIN`, the application grants the user `RFPO_ADMIN` permission (plus inherits `RFPO_USER`). Admin can further elevate to `GOD` or assign additional permissions (`VROOM_ADMIN`, `CAL_MEET_USER`) within RFPO if needed.
+
+### What IT Needs to Do
+
+1. **Create Enterprise Application** in Entra ID → SAML-based Sign-on
+2. **Configure Basic SAML** using the Entity ID, Reply URL, Sign on URL, and Logout URL above
+3. **Configure Attributes & Claims** — add the custom role claim URL and keep standard additional claims
+4. **Define App Roles** (`RFPO_USER`, `RFPO_ADMIN`) on the App Registration
+5. **Create security group(s)** (e.g., "RFPO Users", "RFPO Admins") and assign to the Enterprise Application with appropriate App Roles
+6. **Invite external users** as B2B guests and add them to the appropriate group(s)
+7. **Provide to engineering:** IdP Entity ID, IdP SSO URL, IdP SLS URL, and the Base64 X.509 signing certificate (from the SAML Signing Certificate section of the Enterprise Application)
+
+---
+
+## 8. Detailed Implementation Plan
+
+### Phase 1: Core SAML Integration
 
 #### Prerequisites (USCAR IT — Before Engineering Starts)
 
-- [ ] **USCAR IT:** Confirm Entra ID tenant ID
-- [ ] **USCAR IT:** Register RFPO app (single-tenant, Web platform, redirect URIs as specified in D6)
-- [ ] **USCAR IT:** Provide client ID, tenant ID, client secret to RFPO engineering (via secure channel)
+- [ ] **USCAR IT:** Create SAML Enterprise Application in Entra ID using configuration values from Section 7
+- [ ] **USCAR IT:** Configure Attributes & Claims (Name ID, role claim URL, standard claims)
+- [ ] **USCAR IT:** Define App Roles (`RFPO_USER`, `RFPO_ADMIN`) on the App Registration
+- [ ] **USCAR IT:** Create security group(s) and assign to the Enterprise Application with App Roles
+- [ ] **USCAR IT:** Provide to engineering: IdP Entity ID, IdP SSO URL, IdP SLS URL, X.509 signing certificate (Base64)
 - [ ] **USCAR IT:** Configure B2B collaboration settings → allow @ford.com, @gm.com, @stellantis.com domains
-- [ ] **USCAR IT:** Test: invite one user from each org and confirm they can authenticate to the Entra ID tenant
+- [ ] **USCAR IT:** Invite at least one test guest user and assign to the RFPO group
 
 #### Step 1: Dependencies and Configuration
 
@@ -443,37 +540,42 @@ This depends on the deployment topology:
 
 ```
 # requirements.txt additions
-msal>=1.28.0
+python3-saml>=1.16.0
 ```
 
 **Add environment variables (env.example):**
 
 ```bash
-# Microsoft Entra ID (SSO)
-ENTRA_CLIENT_ID=
-ENTRA_CLIENT_SECRET=
-ENTRA_TENANT_ID=
-ENTRA_AUTHORITY=https://login.microsoftonline.com/{tenant_id}
-ENTRA_REDIRECT_URI_USER=https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/auth/callback
-ENTRA_REDIRECT_URI_ADMIN=https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io/auth/callback
+# SAML SSO Configuration
+SAML_IDP_ENTITY_ID=              # From IT: Azure AD Identifier
+SAML_IDP_SSO_URL=                # From IT: Login URL
+SAML_IDP_SLS_URL=                # From IT: Logout URL
+SAML_IDP_X509_CERT=              # From IT: Base64 signing certificate (single-line, no headers)
+SAML_SP_ENTITY_ID=https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io
+SAML_SP_ACS_URL=https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/acs
+SAML_SP_SLS_URL=https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/sls
 ```
 
-#### Step 2: MSAL Authentication Module
+#### Step 2: SAML Authentication Module
 
-Create `auth_sso.py` — a shared module used by both User App and Admin Panel:
+Create `auth_saml.py` — a shared module used by both User App and Admin Panel:
 
 **Responsibilities:**
-- Build MSAL ConfidentialClientApplication
-- Generate authorization URL (with state, nonce, PKCE)
-- Handle callback (exchange auth code for tokens)
-- Extract user claims from id_token (email, name, oid, tid)
+- Configure `python3-saml` with SP and IdP settings (from env vars)
+- Generate SAML AuthnRequest and redirect to IdP SSO URL
+- Handle ACS callback (validate SAML Response, extract assertion attributes)
+- Extract user identity from SAML assertion (NameID, email, name, roles)
 - Match external identity to local User by email
+- Map `user.assignedroles` claim values to RFPO permissions
 - Issue RFPO JWT (same format as existing password-based login)
+- Handle SLS (Single Logout Service) requests
 
 **Key design decisions in code:**
 - **Single module** shared by both Flask apps (imported, not duplicated)
-- **State parameter** stored in Flask session to prevent CSRF on callback
+- **`RelayState`** used for CSRF protection and post-login redirect (python3-saml handles validation)
+- **SAML Response validation** includes signature verification against IdP X.509 certificate, audience restriction, and time window checks
 - **Email matching** is case-insensitive (`User.query.filter(func.lower(User.email) == email.lower())`)
+- **Role mapping:** assertion attribute `user.assignedroles` values (`RFPO_USER`, `RFPO_ADMIN`) mapped directly to RFPO permission strings
 - **Token issuance** uses the same `jwt.encode()` call as existing `auth_routes.py`, ensuring downstream code is unaffected
 
 #### Step 3: User App Integration
@@ -499,20 +601,24 @@ Create `auth_sso.py` — a shared module used by both User App and Admin Panel:
 6. If not found: render error page — "Your account has not been set up. Contact your USCAR administrator."
 7. Update `last_visit` timestamp
 
-#### Step 4: Admin Panel Integration
+#### Step 4: Admin Panel Integration (Phase 2)
+
+**Deferred to Phase 2.** Admin Panel remains password-only in Phase 1 per resolved Decision D5. When implemented:
 
 **New routes in `custom_admin.py`:**
 
 | Route | Method | Purpose |
-|-------|--------|---------|
-| `/auth/login-microsoft` | GET | Redirect to Microsoft login |
-| `/auth/callback` | GET | OIDC callback — match user, Flask-Login login_user, redirect to dashboard |
+|-------|--------|----------|
+| `/saml/login` | GET | Generate SAML AuthnRequest, redirect to IdP SSO URL |
+| `/saml/acs` | POST | Validate SAML Response, match user, Flask-Login login_user, redirect to dashboard |
 
 **Callback flow:**
-1. Same validation as User App
+1. Same SAML validation as User App
 2. After matching user, check `user.is_rfpo_admin()` or `user.is_super_admin()`
 3. If admin: `login_user(user)`, redirect to dashboard
 4. If not admin: flash error, redirect to login
+
+**Note:** Admin Panel will need a separate Reply URL registered in the Enterprise Application: `https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/acs`
 
 #### Step 5: Model Changes
 
@@ -531,13 +637,15 @@ auth_method = db.Column(db.String(20), default='password')  # 'password', 'sso',
 
 #### Step 6: Security Hardening
 
-- **State parameter validation** on every callback (MSAL handles this)
-- **Nonce validation** to prevent token replay (MSAL handles this)
-- **HTTPS enforcement** on redirect URIs (Azure Container Apps provides TLS)
-- **Token audience validation** — verify `aud` claim matches RFPO client ID
-- **Issuer validation** — verify `iss` claim matches USCAR tenant
-- **Email domain validation** — optional secondary check that email domain is in allowed list
-- **Rate limiting on callback endpoint** — protect against authorization code brute-force
+- **SAML Response signature verification** against IdP X.509 certificate (`python3-saml` handles this)
+- **Audience restriction validation** — verify assertion is intended for RFPO SP Entity ID
+- **`InResponseTo` validation** — prevent assertion replay by matching to the original AuthnRequest ID
+- **Time window validation** — reject assertions outside the `NotBefore`/`NotOnOrAfter` window
+- **HTTPS enforcement** on ACS URL (Azure Container Apps provides TLS)
+- **Issuer validation** — verify assertion issuer matches configured IdP Entity ID
+- **Email domain validation** — optional secondary check that NameID domain is in allowed list
+- **Rate limiting on ACS endpoint** — protect against assertion replay attempts
+- **XML signature wrapping attack protection** — `python3-saml` validates against known XSW attack patterns
 
 ### Phase 2: Enhanced Provisioning (Sprint 4-5)
 
@@ -556,7 +664,7 @@ auth_method = db.Column(db.String(20), default='password')  # 'password', 'sso',
 
 ---
 
-## 8. Testing Strategy
+## 9. Testing Strategy
 
 ### Unit Tests
 
@@ -593,13 +701,13 @@ auth_method = db.Column(db.String(20), default='password')  # 'password', 'sso',
 
 ---
 
-## 9. Open Questions
+## 10. Open Questions
 
-| # | Question | Audience | Blocking? |
-|---|----------|----------|-----------|
-| Q1 | What is USCAR's Entra ID tenant ID? | USCAR IT | Yes — needed for app registration |
-| Q2 | Does USCAR already have B2B collaboration enabled with Ford, GM, Stellantis? | USCAR IT | Yes — if not, they need to configure it |
-| Q3 | Who is the USCAR IT contact for app registration and B2B configuration? | USCAR PM | Yes — establishes working relationship |
+| # | Question | Audience | Status |
+|---|----------|----------|--------|
+| Q1 | What is USCAR's Entra ID tenant ID? | USCAR IT | **Resolved** — IT will provide IdP Entity ID, SSO URL, SLS URL, and X.509 cert when Enterprise App is created |
+| Q2 | Does USCAR already have B2B collaboration enabled with Ford, GM, Stellantis? | USCAR IT | **Partially resolved** — IT confirmed B2B guest invitation process. Domain allowlisting to be verified. |
+| Q3 | Who is the USCAR IT contact for app registration and B2B configuration? | USCAR PM | **Resolved** — IT contact established (provided screenshots and process details) |
 | Q4 | Are there users from organizations beyond Ford, GM, and Stellantis? | USCAR business | No — affects allowlist but doesn't block architecture |
 | Q5 | Does USCAR want a custom domain (e.g., `rfpo.uscar.org`) for the application? | USCAR IT | No — but affects redirect URIs if yes |
 | Q6 | Are there any compliance requirements (FedRAMP, ITAR, etc.) on the identity integration? | USCAR compliance | No — but could constrain data residency |
@@ -608,7 +716,7 @@ auth_method = db.Column(db.String(20), default='password')  # 'password', 'sso',
 
 ---
 
-## 10. Peer Review Findings
+## 11. Peer Review Findings
 
 *The following review was conducted as a second-pass architectural challenge of this plan.*
 
@@ -644,13 +752,13 @@ External API consumers (if any) would continue using the existing `/api/auth/log
 
 **Challenge:** "The plan adds ENTRA_CLIENT_SECRET as an env var. Client secrets in env vars are a security concern."
 
-**Response:** The current system already manages `JWT_SECRET_KEY`, `ACS_CONNECTION_STRING`, `ADMIN_SECRET_KEY`, and database credentials as env vars via `.env` and Container Apps secrets. Adding one more is consistent with the existing security posture. For a tighter approach, use Azure Key Vault and Managed Identity — but that's an infrastructure improvement that benefits ALL secrets, not just this one.
+**Response:** The current system already manages `JWT_SECRET_KEY`, `ACS_CONNECTION_STRING`, `ADMIN_SECRET_KEY`, and database credentials as env vars via `.env` and Container Apps secrets. The SAML integration adds the IdP X.509 certificate and URLs (no client secret needed — SAML uses certificate-based trust, not shared secrets). For a tighter approach, use Azure Key Vault and Managed Identity — but that's an infrastructure improvement that benefits ALL secrets, not just this one.
 
 **Recommendation:** Note as a Phase 2 improvement to move all secrets to Key Vault. Not a blocker for SSO.
 
 ### Challenge 5: Race Condition on First Login
 
-**Challenge:** "If two SSO logins for the same user happen simultaneously (e.g., User App and Admin Panel tabs), both try to store `entra_oid`. One will fail with a unique constraint violation."
+**Challenge:** "If two SSO logins for the same user happen simultaneously (e.g., two browser tabs), both try to store `entra_oid`. One will fail with a unique constraint violation."
 
 **Response:** Edge case but real. Mitigate with:
 1. Use `INSERT ... ON CONFLICT` / upsert semantics when writing `entra_oid`
@@ -668,26 +776,26 @@ Document this as a known design decision. If USCAR explicitly requests "full fed
 
 ---
 
-## 11. Final Recommendation
+## 12. Final Recommendation
 
 ### Pattern
 
-**Entra External ID (B2B Collaboration)** with **password fallback**.
+**Entra External ID (B2B Collaboration)** with **SAML 2.0 protocol** and **password fallback**.
 
 ### Implementation Summary
 
 | Component | Change Required |
 |-----------|----------------|
-| **User App (app.py)** | Add `/auth/login-microsoft` and `/auth/callback` routes. Add "Sign in with Microsoft" button on login page. |
-| **Admin Panel (custom_admin.py)** | Same two routes. Add button on admin login page. Permission check on callback. |
+| **User App (app.py)** | Add `/saml/login`, `/saml/acs`, `/saml/sls`, `/saml/metadata` routes. Add "Sign in with Microsoft" button on login page. |
+| **Admin Panel (custom_admin.py)** | **Phase 2.** No changes in Phase 1. |
 | **API Layer (api/)** | **No changes.** JWT format unchanged. |
 | **Models (models.py)** | Add `entra_oid` (String, unique, nullable) and `auth_method` (String, default 'password'). |
 | **Database** | Two ALTER TABLE statements. No data migration needed. |
-| **New module (auth_sso.py)** | Shared MSAL wrapper — auth URL generation, callback handling, user matching, JWT issuance. |
-| **Dependencies** | Add `msal>=1.28.0` to requirements.txt. |
-| **Configuration** | Add 4 Entra ID env vars. |
-| **Templates** | Update login.html and admin/login.html with Microsoft sign-in button. |
-| **USCAR IT** | Register app, configure B2B domains, provide credentials. |
+| **New module (auth_saml.py)** | Shared SAML wrapper — SP/IdP config, AuthnRequest generation, ACS handling, user matching, role mapping, JWT issuance. |
+| **Dependencies** | Add `python3-saml>=1.16.0` to requirements.txt. |
+| **Configuration** | Add 7 SAML env vars (4 from IT, 3 SP self-configured). |
+| **Templates** | Update login.html with Microsoft sign-in button. |
+| **USCAR IT** | Create SAML Enterprise App, configure claims/roles, provide IdP metadata to engineering. |
 
 ### Next Steps
 

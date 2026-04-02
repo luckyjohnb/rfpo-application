@@ -573,6 +573,63 @@ def create_app():
         except Exception:
             return str(value)
 
+    # --- Permission hierarchy ---------------------------------------------------
+    # GOD > RFPO_ADMIN > RFPO_USER  (and other non-admin roles)
+    _PRIVILEGED_PERMISSIONS = {"GOD"}
+
+    def _enforce_permission_hierarchy(requested_permissions, target_user=None):
+        """Filter requested permissions based on the current user's authority.
+
+        Rules:
+        1. A user can NEVER change their own permissions.
+        2. Only GOD users can grant/revoke the GOD permission.
+        3. All permission changes are audit-logged.
+
+        Returns (filtered_permissions, warnings) where warnings is a list of
+        human-readable messages about permissions that were stripped.
+        """
+        warnings = []
+        actor = current_user
+
+        # Rule 1 — self-edit guard
+        if target_user and hasattr(target_user, 'id') and target_user.id == actor.id:
+            app.logger.warning(
+                "SECURITY: User %s (id=%s) attempted to modify their own permissions",
+                actor.email, actor.id,
+            )
+            warnings.append("You cannot modify your own permissions.")
+            return None, warnings  # caller should skip permission update entirely
+
+        # Rule 2 — only GOD can assign GOD
+        filtered = list(requested_permissions)  # copy
+        if not actor.is_super_admin():
+            stripped = [p for p in filtered if p in _PRIVILEGED_PERMISSIONS]
+            if stripped:
+                filtered = [p for p in filtered if p not in _PRIVILEGED_PERMISSIONS]
+                app.logger.warning(
+                    "SECURITY: Non-GOD user %s (id=%s) attempted to assign privileged "
+                    "permissions %s to user %s — stripped",
+                    actor.email, actor.id, stripped,
+                    target_user.email if target_user else "(new user)",
+                )
+                warnings.append(
+                    f"Only Super Admin (GOD) users can assign: {', '.join(stripped)}. "
+                    f"Those permissions were removed from the request."
+                )
+
+        return filtered, warnings
+
+    def _log_permission_change(target_user, old_permissions, new_permissions, context="edit"):
+        """Audit-log a permission change."""
+        app.logger.info(
+            "AUDIT: Permission change by %s (id=%s) on user %s (id=%s) "
+            "[%s]: %s → %s",
+            current_user.email, current_user.id,
+            target_user.email, target_user.id,
+            context,
+            old_permissions, new_permissions,
+        )
+
     def parse_comma_list(value):
         """Parse comma-separated string to list"""
         if not value:
@@ -2139,7 +2196,18 @@ def create_app():
                         existing.company = company or existing.company
                         existing.position = position or existing.position
                         existing.active = active
-                        existing.set_permissions(permissions)
+                        # Enforce permission hierarchy
+                        old_perms = existing.get_permissions()
+                        safe_perms, perm_warnings = _enforce_permission_hierarchy(permissions, target_user=existing)
+                        if safe_perms is None:
+                            # self-edit blocked — skip permission change, keep rest
+                            for w in perm_warnings:
+                                errors.append(f"Row {idx}: {w}")
+                        else:
+                            for w in perm_warnings:
+                                errors.append(f"Row {idx}: {w}")
+                            existing.set_permissions(safe_perms)
+                            _log_permission_change(existing, old_perms, safe_perms, context="bulk-import-update")
                         existing.updated_by = current_user.email
                         updated += 1
                     else:
@@ -2159,7 +2227,14 @@ def create_app():
                             created_by=current_user.email,
                             updated_by=current_user.email,
                         )
-                        user.set_permissions(permissions)
+                        # Enforce permission hierarchy for new user
+                        safe_perms, perm_warnings = _enforce_permission_hierarchy(permissions, target_user=user)
+                        if safe_perms is None:
+                            safe_perms = permissions  # new user can't be self — shouldn't happen, but safe fallback
+                        for w in perm_warnings:
+                            errors.append(f"Row {idx}: {w}")
+                        user.set_permissions(safe_perms)
+                        _log_permission_change(user, [], safe_perms, context="bulk-import-create")
                         db.session.add(user)
                         created += 1
                 except Exception as row_err:
@@ -2259,10 +2334,17 @@ def create_app():
                         "admin/user_form.html", user=temp_user, action="Create"
                     )
 
-                user.set_permissions(permissions)
+                # Enforce permission hierarchy for new user
+                safe_perms, perm_warnings = _enforce_permission_hierarchy(permissions, target_user=user)
+                if safe_perms is None:
+                    safe_perms = permissions  # new user can't be self — shouldn't happen
+                for w in perm_warnings:
+                    flash(f"⚠️ {w}", "warning")
+                user.set_permissions(safe_perms)
 
                 db.session.add(user)
                 db.session.commit()
+                _log_permission_change(user, [], safe_perms, context="user-create")
 
                 # Send welcome email
                 try:
@@ -2383,9 +2465,23 @@ def create_app():
                         "admin/user_form.html", user=user, action="Edit"
                     )
 
-                user.set_permissions(permissions)
+                # Enforce permission hierarchy
+                old_perms = user.get_permissions()
+                safe_perms, perm_warnings = _enforce_permission_hierarchy(permissions, target_user=user)
+                if safe_perms is None:
+                    # Self-edit blocked — do NOT update permissions
+                    for w in perm_warnings:
+                        flash(f"⚠️ {w}", "warning")
+                    # Still save other field changes
+                    db.session.commit()
+                    flash("✅ User profile updated (permissions unchanged — you cannot edit your own permissions).", "success")
+                    return redirect(url_for("users"))
+                for w in perm_warnings:
+                    flash(f"⚠️ {w}", "warning")
+                user.set_permissions(safe_perms)
 
                 db.session.commit()
+                _log_permission_change(user, old_perms, safe_perms, context="user-edit")
 
                 flash("✅ User updated successfully!", "success")
                 return redirect(url_for("users"))

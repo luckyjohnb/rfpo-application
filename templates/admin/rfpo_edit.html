@@ -5,33 +5,26 @@
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">📄 Edit RFPO: {{ rfpo.rfpo_id }}</h1>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        <div class="btn-group me-2">
-            <a href="{{ url_for('rfpo_generate_rfpo', rfpo_id=rfpo.id) }}"
-               class="btn btn-primary" target="_blank"
-               title="Generate Request for Purchase Order HTML">
-                <i class="fas fa-file-alt"></i> Generate RFPO
-            </a>
-            <a href="{{ url_for('rfpo_generate_po_proof', rfpo_id=rfpo.id) }}"
-               class="btn btn-warning" target="_blank"
-               title="Generate Purchase Order Proof PDF">
-                <i class="fas fa-file-pdf"></i> Generate PO Proof
-            </a>
-            <a href="{{ url_for('rfpo_generate_po', rfpo_id=rfpo.id) }}"
-               class="btn btn-success d-none" target="_blank"
-               title="Generate Purchase Order PDF"
-               id="generatePoBtn">
-                <i class="fas fa-file-pdf"></i> Generate PO
-            </a>
-        </div>
-        <div class="btn-group">
-            <a href="{{ url_for('rfpos') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left"></i> Back to List
-            </a>
-        </div>
+    <div class="btn-toolbar mb-2 mb-md-0 gap-2 flex-wrap">
+        <a href="{{ url_for('rfpo_generate_rfpo', rfpo_id=rfpo.id) }}"
+           class="btn btn-sm btn-primary" target="_blank"
+           title="Generate Request for Purchase Order HTML">
+            <i class="fas fa-file-alt"></i> Generate RFPO
+        </a>
+        <a href="{{ url_for('rfpo_generate_po_proof', rfpo_id=rfpo.id) }}"
+           class="btn btn-sm btn-warning" target="_blank"
+           title="Generate Purchase Order Proof PDF">
+            <i class="fas fa-file-pdf"></i> Generate PO Proof
+        </a>
+        <a href="{{ url_for('rfpo_generate_po', rfpo_id=rfpo.id) }}"
+           class="btn btn-sm btn-success d-none" target="_blank"
+           title="Generate Purchase Order PDF"
+           id="generatePoBtn">
+            <i class="fas fa-file-pdf"></i> Generate PO
+        </a>
         {% if active_instance %}
         <a href="{{ url_for('approval_instance_view', id=active_instance.id) }}"
-           class="btn btn-info ms-2" title="View active approval">
+           class="btn btn-sm btn-info" title="View active approval">
             <i class="fas fa-tasks"></i> View Approval
             {% if active_instance.overall_status == 'waiting' %}
                 <span class="badge bg-warning text-dark">In Progress</span>
@@ -42,11 +35,14 @@
             {% endif %}
         </a>
         {% elif rfpo.status == 'Draft' %}
-        <button type="button" class="btn btn-success ms-2" id="submitForApprovalBtn"
+        <button type="button" class="btn btn-sm btn-success" id="submitForApprovalBtn"
                 onclick="submitForApproval({{ rfpo.id }})">
             <i class="fas fa-paper-plane"></i> Submit for Approval
         </button>
         {% endif %}
+        <a href="{{ url_for('rfpos') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
     </div>
 </div>
 

@@ -437,48 +437,68 @@ class RFPOPDFGenerator:
                 canvas, "vendor_company", "[No Vendor Selected]", 52, 656
             )
 
-        # === SHIP TO SECTION (Box: 392,535 to 590,679 — label "SHIP TO:" at y=669) ===
+        # === SHIP TO SECTION (Box: 420,113 to 590,257 — label "SHIP TO:" at x=424, y=667) ===
         if rfpo.shipto_name:
             self._draw_text_with_positioning(
-                canvas, "ship_to_name", rfpo.shipto_name, 398, 656
+                canvas, "ship_to_name", rfpo.shipto_name, 424, 654
             )
 
         if rfpo.shipto_address:
             self._draw_text_with_positioning(
-                canvas, "ship_to_address", rfpo.shipto_address, 398, 643
+                canvas, "ship_to_address", rfpo.shipto_address, 424, 641
             )
 
         # === MIDDLE FORM FIELDS ===
-        # PROJECT — template "PROJECT:" label at x=251, baseline y=665, box (250,661)-(385,679)
-        # Value placed right after label text (x=285) with auto-fit sizing
+        # PROJECT — label "PROJECT:" at x=253, y=667; box (250,647)-(415,679) — 2 rows, 32pt tall
+        # Value placed right after label; wraps to second line if needed
         from reportlab.pdfbase.pdfmetrics import stringWidth
         project_text = f"[{project.ref}] {project.name}"
-        project_value_x = 285  # right after "PROJECT:" label ends (~x=283)
-        project_box_right = 385
-        project_avail = project_box_right - project_value_x  # 100pt available
-        # Try font sizes from 8 down to 6; truncate only as last resort
+        project_value_x = 295  # right after "PROJECT:" label ends (~x=293)
+        project_box_right = 413  # box right edge with small margin
+        project_avail = project_box_right - project_value_x  # ~118pt available
         project_font_size = 8
-        for try_size in [8, 7.5, 7, 6.5, 6]:
-            if stringWidth(project_text, "Helvetica", try_size) <= project_avail:
-                project_font_size = try_size
-                break
-        else:
-            # Still doesn't fit at 6pt — truncate at 6pt
-            project_font_size = 6
-            while len(project_text) > 8 and stringWidth(project_text, "Helvetica", 6) > project_avail:
-                project_text = project_text[:-4] + "..."
-        canvas.setFont("Helvetica", project_font_size)
-        self._draw_text_with_positioning(
-            canvas, "project_info", project_text, project_value_x, 665
-        )
 
-        # DELIVERY DATE — template label "DELIVERY:" at x=251, baseline y=641, box (250,637)-(385,656)
+        text_width = stringWidth(project_text, "Helvetica", project_font_size)
+        if text_width <= project_avail:
+            # Fits on one line next to label
+            canvas.setFont("Helvetica", project_font_size)
+            self._draw_text_with_positioning(
+                canvas, "project_info", project_text, project_value_x, 667
+            )
+        else:
+            # Wrap to 2 lines: line 1 next to label, line 2 below at full box width
+            line2_x = 253  # start at box left edge for second line
+            line2_avail = project_box_right - line2_x  # full width ~160pt
+            # Split text to fit line 1 width
+            words = project_text.split()
+            line1 = ""
+            line2_words = []
+            for word in words:
+                test = (line1 + " " + word).strip() if line1 else word
+                if stringWidth(test, "Helvetica", project_font_size) <= project_avail:
+                    line1 = test
+                else:
+                    line2_words.append(word)
+            line2 = " ".join(line2_words)
+            # Truncate line2 if still too long
+            while line2 and stringWidth(line2, "Helvetica", project_font_size) > line2_avail:
+                line2 = line2[:-4] + "..."
+            canvas.setFont("Helvetica", project_font_size)
+            self._draw_text_with_positioning(
+                canvas, "project_info", line1, project_value_x, 667
+            )
+            if line2:
+                self._draw_text_with_positioning(
+                    canvas, "project_info_line2", line2, line2_x, 656
+                )
+
+        # DATE — template label "DATE:" at x=253, y=641; box (250,629)-(415,647)
         if rfpo.delivery_date:
             self._draw_text_with_positioning(
                 canvas,
                 "delivery_date",
                 rfpo.delivery_date.strftime("%m/%d/%Y"),
-                310,
+                280,
                 641,
             )
 

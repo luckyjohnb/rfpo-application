@@ -1488,6 +1488,102 @@ def delete_line_item(rfpo_id, line_item_id):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@app.route("/api/rfpos/<int:rfpo_id>/line-items", methods=["GET"])
+@require_auth
+def get_line_items(rfpo_id):
+    """Get all line items for an RFPO"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        line_items = RFPOLineItem.query.filter_by(rfpo_id=rfpo.id).order_by(
+            RFPOLineItem.line_number
+        ).all()
+
+        return jsonify(
+            {"success": True, "line_items": [item.to_dict() for item in line_items]}
+        )
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/rfpos/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["PUT"])
+@require_auth
+def update_line_item(rfpo_id, line_item_id):
+    """Update a line item"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        line_item = RFPOLineItem.query.get_or_404(line_item_id)
+
+        if line_item.rfpo_id != rfpo.id:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Line item does not belong to this RFPO",
+                    }
+                ),
+                400,
+            )
+
+        # Check permissions
+        user = request.current_user
+        if not user.is_super_admin():
+            has_access = False
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+            if rfpo.team_id in team_ids:
+                has_access = True
+
+            if not has_access:
+                return jsonify({"success": False, "message": "Access denied"}), 403
+
+        data = request.get_json()
+
+        if "description" in data:
+            line_item.description = data["description"]
+        if "quantity" in data:
+            line_item.quantity = int(data["quantity"])
+        if "unit_price" in data:
+            line_item.unit_price = float(data["unit_price"])
+        if "is_capital_equipment" in data:
+            line_item.is_capital_equipment = bool(data["is_capital_equipment"])
+        if "capital_description" in data:
+            line_item.capital_description = data["capital_description"]
+        if "capital_serial_id" in data:
+            line_item.capital_serial_id = data["capital_serial_id"]
+        if "capital_location" in data:
+            line_item.capital_location = data["capital_location"]
+        if "capital_condition" in data:
+            line_item.capital_condition = data["capital_condition"]
+        if "capital_acquisition_date" in data and data["capital_acquisition_date"]:
+            line_item.capital_acquisition_date = datetime.strptime(
+                data["capital_acquisition_date"], "%Y-%m-%d"
+            ).date()
+        if "capital_acquisition_cost" in data and data["capital_acquisition_cost"]:
+            line_item.capital_acquisition_cost = float(data["capital_acquisition_cost"])
+
+        # Recalculate total
+        line_item.calculate_total()
+        line_item.updated_at = datetime.utcnow()
+
+        # Update RFPO totals
+        rfpo.update_totals()
+
+        db.session.commit()
+
+        return jsonify(
+            {
+                "success": True,
+                "line_item": line_item.to_dict(),
+                "rfpo": rfpo.to_dict(),
+            }
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 # Supporting API endpoints for admin panel
 @app.route("/api/consortiums")
 @require_auth

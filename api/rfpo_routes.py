@@ -252,21 +252,133 @@ def create_line_item(rfpo_id):
         rfpo = RFPO.query.get_or_404(rfpo_id)
         data = request.get_json()
 
+        if not data.get("description"):
+            return jsonify({"success": False, "message": "Description is required"}), 400
+
+        # Auto-assign next line number
+        max_line = (
+            db.session.query(db.func.max(RFPOLineItem.line_number))
+            .filter_by(rfpo_id=rfpo.id)
+            .scalar()
+        )
+        next_line_number = (max_line or 0) + 1
+
+        quantity = int(data.get("quantity", 1))
+        unit_price = float(data.get("unit_price", 0.0))
+
         line_item = RFPOLineItem(
             rfpo_id=rfpo_id,
-            line_number=data.get("line_number", 1),
+            line_number=data.get("line_number", next_line_number),
             description=data.get("description", ""),
-            quantity=data.get("quantity", 1),
-            unit_price=data.get("unit_price", 0.0),
-            total_price=data.get("quantity", 1) * data.get("unit_price", 0.0),
+            quantity=quantity,
+            unit_price=unit_price,
+            total_price=quantity * unit_price,
+            is_capital_equipment=bool(data.get("is_capital_equipment", False)),
+            capital_description=data.get("capital_description"),
+            capital_serial_id=data.get("capital_serial_id"),
+            capital_location=data.get("capital_location"),
+            capital_condition=data.get("capital_condition"),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
 
+        # Handle capital equipment date
+        capital_date = data.get("capital_acquisition_date")
+        if capital_date:
+            from dateutil.parser import parse as parse_date
+            try:
+                line_item.capital_acquisition_date = parse_date(capital_date).date()
+            except (ValueError, TypeError):
+                pass
+
+        # Handle capital cost
+        capital_cost = data.get("capital_acquisition_cost")
+        if capital_cost:
+            try:
+                line_item.capital_acquisition_cost = float(capital_cost)
+            except (ValueError, TypeError):
+                pass
+
         db.session.add(line_item)
+        db.session.flush()
+
+        # Update RFPO totals
+        rfpo.update_totals()
+
         db.session.commit()
 
         return jsonify({"success": True, "line_item": line_item.to_dict()}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@rfpo_api.route("/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["PUT"])
+@require_auth
+def update_line_item(rfpo_id, line_item_id):
+    """Update RFPO line item"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        line_item = RFPOLineItem.query.get_or_404(line_item_id)
+
+        if line_item.rfpo_id != rfpo.id:
+            return jsonify({"success": False, "message": "Line item does not belong to this RFPO"}), 400
+
+        data = request.get_json()
+
+        if "description" in data:
+            line_item.description = data["description"]
+        if "quantity" in data:
+            line_item.quantity = int(data["quantity"])
+        if "unit_price" in data:
+            line_item.unit_price = float(data["unit_price"])
+        if "is_capital_equipment" in data:
+            line_item.is_capital_equipment = bool(data["is_capital_equipment"])
+        if "capital_description" in data:
+            line_item.capital_description = data["capital_description"]
+        if "capital_serial_id" in data:
+            line_item.capital_serial_id = data["capital_serial_id"]
+        if "capital_location" in data:
+            line_item.capital_location = data["capital_location"]
+        if "capital_condition" in data:
+            line_item.capital_condition = data["capital_condition"]
+
+        # Recalculate total
+        line_item.calculate_total()
+        line_item.updated_at = datetime.utcnow()
+
+        # Update RFPO totals
+        rfpo.update_totals()
+
+        db.session.commit()
+
+        return jsonify({"success": True, "line_item": line_item.to_dict()})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@rfpo_api.route("/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["DELETE"])
+@require_auth
+def delete_line_item(rfpo_id, line_item_id):
+    """Delete RFPO line item"""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        line_item = RFPOLineItem.query.get_or_404(line_item_id)
+
+        if line_item.rfpo_id != rfpo.id:
+            return jsonify({"success": False, "message": "Line item does not belong to this RFPO"}), 400
+
+        db.session.delete(line_item)
+
+        # Update RFPO totals
+        rfpo.update_totals()
+
+        db.session.commit()
+
+        return jsonify({"success": True, "message": "Line item deleted successfully"})
 
     except Exception as e:
         db.session.rollback()

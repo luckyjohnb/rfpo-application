@@ -354,6 +354,26 @@ def create_user_app():
         response = make_api_request(f"/users/approval-action/{action_id}", "POST", data)
         return jsonify(response)
 
+    @app.route("/api/rfpos/<int:rfpo_id>/line-items", methods=["GET", "POST"])
+    def api_rfpo_line_items(rfpo_id):
+        """RFPO line items API proxy"""
+        if request.method == "POST":
+            data = request.get_json()
+            response = make_api_request(f"/rfpos/{rfpo_id}/line-items", "POST", data)
+        else:
+            response = make_api_request(f"/rfpos/{rfpo_id}/line-items")
+        return jsonify(response)
+
+    @app.route("/api/rfpos/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["PUT", "DELETE"])
+    def api_rfpo_line_item_detail(rfpo_id, line_item_id):
+        """RFPO line item detail API proxy"""
+        if request.method == "PUT":
+            data = request.get_json()
+            response = make_api_request(f"/rfpos/{rfpo_id}/line-items/{line_item_id}", "PUT", data)
+        else:  # DELETE
+            response = make_api_request(f"/rfpos/{rfpo_id}/line-items/{line_item_id}", "DELETE")
+        return jsonify(response)
+
     @app.route("/api/rfpos/<int:rfpo_id>/rendered-view", methods=["GET"])
     def api_rfpo_rendered_view(rfpo_id):
         """RFPO rendered view API proxy"""

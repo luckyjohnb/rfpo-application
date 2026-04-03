@@ -20,7 +20,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:5002/api/health"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      start_period: 15s
+      retries: 5
 
   # RFPO Admin Panel (Port 5111)
   rfpo-admin:
@@ -45,7 +46,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:5111/health"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      start_period: 15s
+      retries: 5
 
   # RFPO User App (Port 5001)
   rfpo-user-app:
@@ -69,7 +71,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      start_period: 15s
+      retries: 5
 
 networks:
   rfpo-network:

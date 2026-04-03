@@ -364,9 +364,10 @@ class RFPOPDFGenerator:
             po_font_size -= 0.5
         self._draw_text_with_positioning(canvas, "po_number", po_display, 445, 764, font_size_override=po_font_size)
 
-        # DATE OF ORDER — template label at x=394, baseline y=730; value to right of label
+        # DATE OF ORDER — template label at x=394, baseline y=728; value to right of label
+        # Label ends at x≈463; start value at x=476 for ~13px gap (matches NUMBER field)
         self._draw_text_with_positioning(
-            canvas, "po_date", datetime.now().strftime("%m/%d/%Y"), 490, 730
+            canvas, "po_date", datetime.now().strftime("%m/%d/%Y"), 476, 728
         )
 
         # === VENDOR SECTION (Box: 46,535 to 244,679 — label "VENDOR:" at y=669) ===
@@ -456,9 +457,9 @@ class RFPOPDFGenerator:
         # Value placed right after label; wraps to second line if needed
         from reportlab.pdfbase.pdfmetrics import stringWidth
         project_text = f"[{project.ref}] {project.name}"
-        project_value_x = 295  # right after "PROJECT:" label ends (~x=293)
+        project_value_x = 305  # 12px gap after "PROJECT:" label ends (~x=293)
         project_box_right = 413  # box right edge with small margin
-        project_avail = project_box_right - project_value_x  # ~118pt available
+        project_avail = project_box_right - project_value_x  # ~108pt available
         project_font_size = 8
 
         text_width = stringWidth(project_text, "Helvetica", project_font_size)
@@ -493,27 +494,29 @@ class RFPOPDFGenerator:
                     canvas, "project_info_line2", line2, line2_x, 656, font_size_override=project_font_size
                 )
 
-        # DATE — template label "DATE:" at x=253, y=641; box (250,629)-(415,647)
+        # DATE — template label "DATE:" at x=253, y=639; box (250,629)-(415,647)
+        # Label ends at x≈277; start value at x=290 for ~13px gap
         if rfpo.delivery_date:
             self._draw_text_with_positioning(
                 canvas,
                 "delivery_date",
                 rfpo.delivery_date.strftime("%m/%d/%Y"),
-                280,
-                641,
+                290,
+                639,
             )
 
         # PAYMENT, DELIVERY DETAIL fields hidden from create flow (Issues #5, #6)
         # These fields are no longer collected from users and omitted from PDF output
 
-        # === GOVERNMENT AGREEMENT (template label "under Agreement Number:" ends ~x=390, y=513) ===
+        # === GOVERNMENT AGREEMENT (template label "under Agreement Number:" ends ~x=348, y=511) ===
+        # Start value at x=355 for ~7px gap; keeps within middle column (right edge 415)
         if rfpo.government_agreement_number:
             self._draw_text_with_positioning(
                 canvas,
                 "government_agreement",
                 rfpo.government_agreement_number,
-                395,
-                513,
+                355,
+                511,
             )
 
         # === LINE ITEMS SECTION ===
@@ -645,8 +648,15 @@ class RFPOPDFGenerator:
             )
 
         # === REQUESTOR SECTION (Box: 46,42 to 244,168 — label "REQUESTOR:" at y=156) ===
-        # Requestor details hidden from create flow (Issue #3) — only show requestor name/ID
+        # Look up requestor's name from User model by record_id
         requestor_name = rfpo.requestor_id or "ADMIN001"
+        try:
+            from models import User
+            requestor_user = User.query.filter_by(record_id=rfpo.requestor_id).first()
+            if requestor_user:
+                requestor_name = requestor_user.get_display_name()
+        except Exception as e:
+            print(f"⚠️ Could not look up requestor name: {e}")
         self._draw_text_with_positioning(
             canvas,
             "requestor_info",
@@ -660,6 +670,25 @@ class RFPOPDFGenerator:
             self._draw_text_with_positioning(
                 canvas, "invoice_address", rfpo.invoice_address, 255, 145
             )
+
+        # === APPROVED SECTION (Box: 452,42 to 589,168 — label "APPROVED:" at y=156) ===
+        # Find the most recent approval action for this RFPO
+        try:
+            from models import RFPOApprovalInstance, RFPOApprovalAction
+            instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+            if instance:
+                approval_action = (
+                    RFPOApprovalAction.query
+                    .filter_by(instance_id=instance.id, status='approved')
+                    .order_by(RFPOApprovalAction.created_at.desc())
+                    .first()
+                )
+                if approval_action and approval_action.approver_name:
+                    self._draw_text_with_positioning(
+                        canvas, "approved_by", approval_action.approver_name, 455, 145
+                    )
+        except Exception as e:
+            print(f"⚠️ Could not look up approver name: {e}")
 
         # Return any line items that didn't fit on page 1
         return overflow_items

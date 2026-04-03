@@ -295,6 +295,35 @@ class RFPOPDFGenerator:
             except:
                 pass
 
+    def _draw_fallback_logo(self, canvas, default_x, default_y):
+        """Draw the default USCAR logo from static files when no consortium logo is uploaded"""
+        import os
+
+        logo_path = os.path.join("static", "po_files", "uscar_logo.jpg")
+        if not os.path.exists(logo_path):
+            print(f"⚠️ Default logo not found: {logo_path}")
+            return
+
+        try:
+            x, y, _, _ = self._get_field_position("consortium_logo", default_x, default_y)
+            if x is None:
+                return
+
+            logo_preview_offset = -60
+            pdf_y = y + logo_preview_offset
+
+            canvas.drawImage(
+                logo_path,
+                x,
+                pdf_y,
+                width=80,
+                height=40,
+                preserveAspectRatio=True,
+            )
+            print(f"✅ Drew fallback USCAR logo at ({x}, {pdf_y})")
+        except Exception as e:
+            print(f"❌ Error drawing fallback logo: {e}")
+
     def _draw_page1_data(
         self, canvas, rfpo, consortium, project, vendor, vendor_site, width, height
     ):
@@ -311,6 +340,9 @@ class RFPOPDFGenerator:
             self._draw_logo_with_positioning(
                 canvas, "consortium_logo", consortium.logo, 50, 750
             )
+        else:
+            # Fallback: draw default USCAR logo from static files
+            self._draw_fallback_logo(canvas, 50, 750)
 
         # === TOP SECTION ===
         # PO NUMBER — template "NUMBER:" label at x=394, y=764; fill to right

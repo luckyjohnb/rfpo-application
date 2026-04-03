@@ -187,7 +187,7 @@
         <div class="header1">
             <div class="logo1">
                 {% if consortium and consortium.logo %}
-                <img width="300" src="{{ url_for('static', filename='po_files/uscar_logo.jpg') }}" alt="{{ consortium.name }}" border="0">
+                <img width="300" src="/uploads/logos/{{ consortium.logo }}" alt="{{ consortium.name }}" border="0">
                 {% else %}
                 <img width="300" src="{{ url_for('static', filename='po_files/uscar_logo.jpg') }}" alt="United States Council for Automotive Research LLC" border="0">
                 {% endif %}

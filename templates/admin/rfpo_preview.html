@@ -301,17 +301,6 @@
             </tr>
 
             <tr class="cell">
-                <td style="text-align:right" nowrap><p id="delivery"><b>Contact Fax:</b></p></td>
-                <td><p>
-                    {% if vendor_site %}
-                        {{ vendor_site.contact_fax or '' }}
-                    {% elif vendor %}
-                        {{ vendor.contact_fax or '' }}
-                    {% endif %}
-                </p></td>
-            </tr>
-
-            <tr class="cell">
                 <td style="text-align:right" nowrap><p id="delivery"><b>Vendor Is:</b></p></td>
                 <td><p>
                     {% if vendor %}

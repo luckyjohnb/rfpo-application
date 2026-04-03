@@ -181,7 +181,7 @@ class RFPOPDFGenerator:
         return x, y, font_size, font_weight
 
     def _draw_text_with_positioning(
-        self, canvas, field_name, text, default_x, default_y, right_align=False
+        self, canvas, field_name, text, default_x, default_y, right_align=False, font_size_override=None
     ):
         """Draw text using positioning configuration - supports multi-line text"""
         x, y, font_size, font_weight = self._get_field_position(
@@ -191,6 +191,10 @@ class RFPOPDFGenerator:
         if x is None:  # Field is hidden
             print(f"🚫 Field {field_name} is hidden, skipping")
             return
+
+        # Allow caller to override font size (e.g. for auto-shrink logic)
+        if font_size_override is not None:
+            font_size = font_size_override
 
         print(
             f"📝 Drawing {field_name}: '{text}' at ({x}, {y}) with font {font_size}pt {font_weight}"
@@ -358,8 +362,7 @@ class RFPOPDFGenerator:
         from reportlab.pdfbase.pdfmetrics import stringWidth
         while po_font_size > 5 and stringWidth(po_display, "Helvetica", po_font_size) > max_po_width:
             po_font_size -= 0.5
-        canvas.setFont("Helvetica", po_font_size)
-        self._draw_text_with_positioning(canvas, "po_number", po_display, 445, 764)
+        self._draw_text_with_positioning(canvas, "po_number", po_display, 445, 764, font_size_override=po_font_size)
 
         # DATE OF ORDER — template label at x=394, baseline y=730; value to right of label
         self._draw_text_with_positioning(
@@ -461,9 +464,8 @@ class RFPOPDFGenerator:
         text_width = stringWidth(project_text, "Helvetica", project_font_size)
         if text_width <= project_avail:
             # Fits on one line next to label
-            canvas.setFont("Helvetica", project_font_size)
             self._draw_text_with_positioning(
-                canvas, "project_info", project_text, project_value_x, 667
+                canvas, "project_info", project_text, project_value_x, 667, font_size_override=project_font_size
             )
         else:
             # Wrap to 2 lines: line 1 next to label, line 2 below at full box width
@@ -483,13 +485,12 @@ class RFPOPDFGenerator:
             # Truncate line2 if still too long
             while line2 and stringWidth(line2, "Helvetica", project_font_size) > line2_avail:
                 line2 = line2[:-4] + "..."
-            canvas.setFont("Helvetica", project_font_size)
             self._draw_text_with_positioning(
-                canvas, "project_info", line1, project_value_x, 667
+                canvas, "project_info", line1, project_value_x, 667, font_size_override=project_font_size
             )
             if line2:
                 self._draw_text_with_positioning(
-                    canvas, "project_info_line2", line2, line2_x, 656
+                    canvas, "project_info_line2", line2, line2_x, 656, font_size_override=project_font_size
                 )
 
         # DATE — template label "DATE:" at x=253, y=641; box (250,629)-(415,647)

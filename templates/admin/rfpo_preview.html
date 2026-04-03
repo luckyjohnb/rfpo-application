@@ -236,18 +236,13 @@
             </tr>
 
             <tr class="cell">
-                <td><p id="shipto_tel"><b>Ship to tel:</b></p></td>
-                <td><p>{{ rfpo.shipto_tel or '' }}</p></td>
-            </tr>
-
-            <tr class="cell">
                 <td nowrap><p id="shipto_address"><b>Ship to address:</b></p></td>
                 <td><p>{{ rfpo.shipto_address|replace('\n', '<br />')|safe if rfpo.shipto_address else '' }}</p></td>
             </tr>
 
             <tr class="cell">
-                <td rowspan="5" nowrap><p id="vendor_name"><b>Vendor:</b></p></td>
-                <td rowspan="5">
+                <td rowspan="3" nowrap><p id="vendor_name"><b>Vendor:</b></p></td>
+                <td rowspan="3">
                     <p>
                         {% if vendor %}
                             {{ vendor.company_name }}<br/>
@@ -277,17 +272,6 @@
             </tr>
 
             <tr class="cell">
-                <td style="text-align:right" nowrap><p id="delivery"><b>Contact Dept:</b></p></td>
-                <td><p>
-                    {% if vendor_site %}
-                        {{ vendor_site.contact_dept or '' }}
-                    {% elif vendor %}
-                        {{ vendor.contact_dept or '' }}
-                    {% endif %}
-                </p></td>
-            </tr>
-
-            <tr class="cell">
                 <td style="text-align:right" nowrap><p id="delivery"><b>Contact Tel:</b></p></td>
                 <td><p>
                     {% if vendor_site %}
@@ -300,14 +284,6 @@
                 </p></td>
             </tr>
 
-            <tr class="cell">
-                <td style="text-align:right" nowrap><p id="delivery"><b>Vendor Is:</b></p></td>
-                <td><p>
-                    {% if vendor %}
-                        {% if vendor.is_university %}University{% else %}Commercial{% endif %}
-                    {% endif %}
-                </p></td>
-            </tr>
         </table>
 
         &#160;<br />&#160;

@@ -3306,9 +3306,18 @@ Southfield, MI  48075""",
             return redirect(url_for("rfpos"))
 
         try:
+            # Explicitly delete completed approval instance (safety net alongside cascade)
+            if approval_instance:
+                app.logger.info(
+                    "Deleting completed approval instance %s for RFPO %s",
+                    approval_instance.instance_id, rfpo.rfpo_id,
+                )
+                db.session.delete(approval_instance)
+
             # The following will be automatically deleted due to cascade settings:
             # - RFPOLineItem (line items)
             # - UploadedFile (uploaded files and their document chunks)
+            # - RFPOApprovalInstance + its actions (via cascade)
             db.session.delete(rfpo)
             db.session.commit()
             flash("✅ RFPO deleted successfully!", "success")

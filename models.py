@@ -1969,7 +1969,9 @@ class RFPOApprovalInstance(db.Model):
 
     # Relationships
     rfpo = db.relationship(
-        "RFPO", backref=db.backref("approval_instance", uselist=False)
+        "RFPO", backref=db.backref(
+            "approval_instance", uselist=False, cascade="all, delete-orphan"
+        )
     )
     actions = db.relationship(
         "RFPOApprovalAction",

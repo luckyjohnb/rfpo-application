@@ -665,7 +665,7 @@
                             {% if user %}
                             <div class="card border-info mb-3">
                                 <div class="card-header">
-                                    <h6 class="mb-0"><i class="fas fa-user-check"></i> Approval Workflow Status</h6>
+                                    <h6 class="mb-0"><i class="fas fa-user-check"></i> Workflow Status</h6>
                                 </div>
                                 <div class="card-body">
                                     {% set approver_summary = user.get_approver_summary() %}
@@ -769,7 +769,7 @@
                                             </div>
                                             {% else %}
                                             <p class="mb-0 text-muted">{{ approver_summary.summary }}</p>
-                                            <small class="text-muted">User is not assigned to any approval workflow steps</small>
+                                            <small class="text-muted">User is not assigned to any workflow steps</small>
                                             {% endif %}
                                         </div>
                                     </div>

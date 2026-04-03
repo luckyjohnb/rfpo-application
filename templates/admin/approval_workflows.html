@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
 
-{% block title %}RFPO Approval Workflows{% endblock %}
+{% block title %}RFPO Workflows{% endblock %}
 
 {% block content %}
 
@@ -45,7 +45,7 @@
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>🔄 RFPO Approval Workflows</h1>
+    <h1>🔄 RFPO Workflows</h1>
     <div class="dropdown">
         <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
             <i class="fas fa-plus"></i> New Workflow
@@ -193,7 +193,7 @@
                     {% else %}
                     <tr>
                         <td colspan="{% if current_workflow_type in ['team', 'project'] %}10{% else %}9{% endif %}" class="text-center text-muted">
-                            <i class="fas fa-info-circle"></i> No approval workflows found. 
+                            <i class="fas fa-info-circle"></i> No workflows found. 
                             <a href="{{ url_for('approval_workflow_new_form', workflow_type=current_workflow_type) }}">Create the first one</a>.
                         </td>
                     </tr>
@@ -209,11 +209,11 @@
     <div class="col-md-12">
         <div class="card border-info">
             <div class="card-header bg-info text-white">
-                <i class="fas fa-info-circle"></i> About Approval Workflows
+                <i class="fas fa-info-circle"></i> About Workflows
             </div>
             <div class="card-body">
                 <p>
-                    <strong>Approval workflows</strong> define the approval process for RFPOs within each consortium. 
+                    <strong>Workflows</strong> define the approval process for RFPOs within each consortium. 
                     Each workflow consists of:
                 </p>
                 <ul>

@@ -10,12 +10,17 @@ import mimetypes
 import os
 import re
 import secrets
+import time
 import uuid
+from collections import defaultdict
 from datetime import datetime
+from functools import wraps
+from threading import Lock
 
 from flask import (
     Flask,
     Response,
+    abort,
     flash,
     jsonify,
     redirect,
@@ -44,6 +49,7 @@ from logging_config import setup_logging
 # Import your models
 from models import (
     RFPO,
+    AuditLog,
     Consortium,
     List,
     PDFPositioning,
@@ -396,74 +402,52 @@ def get_user_mindmap_data(user):
         return None
 
 
-class APIHelper:
-    """
-    Safe API helper with fallback to direct database access
-    This allows gradual migration from direct DB to API calls
-    """
+# ---------------------------------------------------------------------------
+# Security infrastructure
+# ---------------------------------------------------------------------------
 
-    def __init__(self, api_base_url="http://localhost:5002/api"):
-        self.api_base_url = api_base_url
-        self.session = None  # Will store admin session/token
+# File upload whitelist — only allow known-safe extensions
+ALLOWED_UPLOAD_EXTENSIONS = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt",
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff",
+    ".ppt", ".pptx", ".rtf", ".odt", ".ods",
+}
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"}
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
-    def make_api_call(self, endpoint, method="GET", data=None, fallback_func=None):
-        """
-        Make API call with fallback to direct database function
-        If API fails, use the fallback function (original DB code)
-        """
-        try:
-            import requests
 
-            url = f"{self.api_base_url}{endpoint}"
-
-            headers = {"Content-Type": "application/json"}
-            if self.session and self.session.get("token"):
-                headers["Authorization"] = f"Bearer {self.session['token']}"
-
-            if method == "GET":
-                response = requests.get(url, headers=headers, timeout=5)
-            elif method == "POST":
-                response = requests.post(url, json=data, headers=headers, timeout=5)
-            elif method == "PUT":
-                response = requests.put(url, json=data, headers=headers, timeout=5)
-            elif method == "DELETE":
-                response = requests.delete(url, headers=headers, timeout=5)
-
-            if response.status_code == 200:
-                return response.json()
-            else:
-                print(f"API call failed: {response.status_code}")
-                if fallback_func:
-                    print("Using database fallback...")
-                    return fallback_func()
-
-        except Exception as e:
-            print(f"API call exception: {e}")
-            if fallback_func:
-                print("Using database fallback...")
-                return fallback_func()
-
-        return None
-
-    def authenticate_admin(self, email, password):
-        """Authenticate admin and store session"""
-        try:
-            import requests
-
-            response = requests.post(
-                f"{self.api_base_url}/auth/login",
-                json={"username": email, "password": password},
-                timeout=5,
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    self.session = {"token": data["token"], "user": data["user"]}
-                    return True
-        except Exception as e:
-            print(f"API authentication failed: {e}")
-
+def _allowed_file(filename, allowed_extensions=None):
+    """Check if a filename has an allowed extension."""
+    if not filename or "." not in filename:
         return False
+    ext = os.path.splitext(filename)[1].lower()
+    exts = allowed_extensions or ALLOWED_UPLOAD_EXTENSIONS
+    return ext in exts
+
+
+# In-memory login rate limiter (thread-safe)
+_login_attempts: dict = defaultdict(list)
+_login_lock = Lock()
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 300  # 5-minute window
+
+
+def _is_rate_limited(ip_address: str) -> bool:
+    """Return True if ip_address has exceeded login attempt threshold."""
+    now = time.time()
+    with _login_lock:
+        # Prune stale entries
+        _login_attempts[ip_address] = [
+            ts for ts in _login_attempts[ip_address]
+            if now - ts < LOGIN_WINDOW_SECONDS
+        ]
+        return len(_login_attempts[ip_address]) >= LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_attempt(ip_address: str) -> None:
+    """Record a failed login attempt from ip_address."""
+    with _login_lock:
+        _login_attempts[ip_address].append(time.time())
 
 
 def create_app():
@@ -472,10 +456,6 @@ def create_app():
 
     # Apply ProxyFix for correct URL generation behind Azure Load Balancer
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-
-    @app.route("/health")
-    def health():
-        return jsonify({"status": "healthy"}), 200
 
     # Configuration
     app.config["SECRET_KEY"] = os.environ.get(
@@ -500,14 +480,61 @@ def create_app():
     # Register error handlers
     register_error_handlers(app, "admin")
 
-    # Initialize API Helper (for gradual migration to API)
-    api_helper = APIHelper("http://rfpo-api:5002/api")  # Use container name for Docker
-    app.api_helper = api_helper
-
     # Initialize Flask-Login
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = "login"
+
+    # -----------------------------------------------------------------------
+    # admin_required decorator — login + GOD/RFPO_ADMIN check
+    # -----------------------------------------------------------------------
+    def admin_required(f):
+        """Ensure user is logged in AND has admin-level permissions."""
+        @wraps(f)
+        @login_required
+        def decorated_function(*args, **kwargs):
+            if not (current_user.is_super_admin() or current_user.is_rfpo_admin()):
+                app.logger.warning(
+                    "SECURITY: Non-admin user %s (id=%s) attempted to access %s",
+                    current_user.email, current_user.id, request.path,
+                )
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+
+    # -----------------------------------------------------------------------
+    # Audit logging helper
+    # -----------------------------------------------------------------------
+    def record_audit(action, entity_type, entity_id=None, details=None):
+        """Create an AuditLog record for the current request."""
+        try:
+            log = AuditLog(
+                user_id=current_user.id if current_user and current_user.is_authenticated else None,
+                user_email=current_user.email if current_user and current_user.is_authenticated else None,
+                action=action,
+                entity_type=entity_type,
+                entity_id=str(entity_id) if entity_id else None,
+                ip_address=request.remote_addr,
+                user_agent=str(request.user_agent)[:512] if request.user_agent else None,
+            )
+            if details:
+                log.set_details(details)
+            db.session.add(log)
+            # Don't commit here — let the caller's transaction handle it
+        except Exception as e:
+            app.logger.error("Failed to write audit log: %s", e)
+
+    # -----------------------------------------------------------------------
+    # Safe date parser (replaces bare strptime calls)
+    # -----------------------------------------------------------------------
+    def _safe_parse_date(value, fmt="%Y-%m-%d"):
+        """Parse a date string safely, returning None on failure."""
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, fmt).date()
+        except (ValueError, TypeError):
+            return None
 
     # Expose build/version info to all admin templates
     @app.context_processor
@@ -562,6 +589,33 @@ def create_app():
             return f"${float_value:,.2f}"
         except (ValueError, TypeError):
             return "$0.00"
+
+    # -----------------------------------------------------------------------
+    # Auto-audit data exports (any /*/export* route that returns a download)
+    # -----------------------------------------------------------------------
+    @app.after_request
+    def audit_export_downloads(response):
+        if (
+            request.path.endswith("/export")
+            or "/export/" in request.path
+        ) and response.status_code == 200:
+            if current_user and current_user.is_authenticated:
+                try:
+                    export_format = request.args.get("format", "xlsx")
+                    entity_type = request.path.split("/")[1] if "/" in request.path else "unknown"
+                    log = AuditLog(
+                        user_id=current_user.id,
+                        user_email=current_user.email,
+                        action="export",
+                        entity_type=entity_type,
+                        ip_address=request.remote_addr,
+                    )
+                    log.set_details({"format": export_format, "path": request.path})
+                    db.session.add(log)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+        return response
 
     # Helper functions
     def format_json_field(value):
@@ -817,12 +871,31 @@ def create_app():
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             return f"{prefix}{timestamp}" if prefix else timestamp
 
-    def handle_file_upload(file, upload_folder):
-        """Handle file upload and return filename"""
+    def handle_file_upload(file, upload_folder, allowed_extensions=None):
+        """Handle file upload with extension whitelist and return filename.
+
+        Args:
+            file: werkzeug FileStorage object
+            upload_folder: destination directory (relative)
+            allowed_extensions: set of allowed extensions (e.g. ALLOWED_IMAGE_EXTENSIONS).
+                                Defaults to ALLOWED_UPLOAD_EXTENSIONS.
+        """
         if file and file.filename and file.filename != "":
             try:
                 # Secure the filename
                 filename = secure_filename(file.filename)
+                if not filename:
+                    app.logger.warning("File upload rejected: empty filename after sanitization")
+                    return None
+
+                # Validate extension against whitelist
+                if not _allowed_file(filename, allowed_extensions):
+                    ext = os.path.splitext(filename)[1].lower()
+                    app.logger.warning(
+                        "File upload rejected: disallowed extension '%s' for file '%s'",
+                        ext, filename,
+                    )
+                    return None
 
                 # Add timestamp to avoid conflicts
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_")
@@ -837,7 +910,7 @@ def create_app():
 
                 return filename
             except Exception as e:
-                print(f"File upload error: {e}")
+                app.logger.error("File upload error: %s", e)
                 return None
         return None
 
@@ -1243,7 +1316,7 @@ def create_app():
 
     # Test route for API integration (safe - doesn't break anything)
     @app.route("/api-test")
-    @login_required
+    @admin_required
     def api_test():
         """Test API integration without breaking existing functionality"""
 
@@ -1255,7 +1328,8 @@ def create_app():
         try:
             import requests
 
-            response = requests.get("http://rfpo-api:5002/api/health", timeout=3)
+            api_url = os.environ.get("API_BASE_URL", "http://rfpo-api:5002/api")
+            response = requests.get(f"{api_url}/health", timeout=3)
             if response.status_code == 200:
                 api_status = "connected"
             else:
@@ -1263,20 +1337,10 @@ def create_app():
         except Exception as e:
             api_status = f"failed_{str(e)[:50]}"
 
-        # Test 3: Try to authenticate with API (if current user has email)
-        api_auth_status = "not_tested"
-        if current_user and hasattr(current_user, "email"):
-            try:
-                _ = app.api_helper.authenticate_admin(current_user.email, "test")
-                api_auth_status = "tested_but_no_password"
-            except Exception as e:
-                api_auth_status = f"auth_error_{str(e)[:30]}"
-
         return jsonify(
             {
                 "database_users": db_user_count,
                 "api_status": api_status,
-                "api_auth_status": api_auth_status,
                 "current_user_email": current_user.email if current_user else None,
                 "message": "API integration test - existing functionality unchanged",
             }
@@ -1287,19 +1351,39 @@ def create_app():
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
-            email = request.form.get("email")
-            password = request.form.get("password")
+            client_ip = request.remote_addr or "unknown"
+
+            # Rate limiting check
+            if _is_rate_limited(client_ip):
+                app.logger.warning(
+                    "SECURITY: Rate-limited login attempt from %s", client_ip
+                )
+                flash("❌ Too many login attempts. Please try again in a few minutes.", "error")
+                return render_template("admin/login.html"), 429
+
+            email = request.form.get("email", "").strip()
+            password = request.form.get("password", "")
 
             user = User.query.filter_by(email=email, active=True).first()
 
             if user and check_password_hash(user.password_hash, password):
                 if user.is_super_admin() or user.is_rfpo_admin():
                     login_user(user)
+                    record_audit("login", "user", user.id, {"email": user.email})
+                    db.session.commit()
                     flash(f"Welcome {user.get_display_name()}! 🎉", "success")
                     return redirect(url_for("dashboard"))
                 else:
+                    _record_login_attempt(client_ip)
+                    app.logger.warning(
+                        "SECURITY: Non-admin login attempt by %s from %s", email, client_ip
+                    )
                     flash("❌ You do not have admin privileges.", "error")
             else:
+                _record_login_attempt(client_ip)
+                app.logger.warning(
+                    "SECURITY: Failed login for '%s' from %s", email, client_ip
+                )
                 flash("❌ Invalid email or password.", "error")
 
         return render_template("admin/login.html")
@@ -1314,27 +1398,47 @@ def create_app():
     @app.route("/")
     @login_required
     def dashboard():
-        """Main dashboard"""
+        """Main dashboard — optimised to batch count queries."""
+        from sqlalchemy import func, case
+
+        # Batch simple counts in a single round-trip
+        basic_counts = db.session.query(
+            func.count(Consortium.id).filter(Consortium.active.is_(True)).label("consortiums"),
+            func.count(Team.id).filter(Team.active.is_(True)).label("teams"),
+            func.count(User.id).filter(User.active.is_(True)).label("users"),
+            func.count(Vendor.id).filter(Vendor.active.is_(True)).label("vendors"),
+            func.count(Project.id).filter(Project.active.is_(True)).label("projects"),
+        ).first()
+
+        # Workflow counts in a single query via conditional aggregation
+        wf_counts = db.session.query(
+            func.count(RFPOApprovalWorkflow.id).label("total"),
+            func.sum(case(
+                (RFPOApprovalWorkflow.workflow_type == "consortium", 1), else_=0
+            )).label("consortium_wf"),
+            func.sum(case(
+                (RFPOApprovalWorkflow.workflow_type == "team", 1), else_=0
+            )).label("team_wf"),
+            func.sum(case(
+                (RFPOApprovalWorkflow.workflow_type == "project", 1), else_=0
+            )).label("project_wf"),
+        ).filter(
+            RFPOApprovalWorkflow.is_template.is_(True),
+            RFPOApprovalWorkflow.is_active.is_(True),
+        ).first()
+
         stats = {
-            "consortiums": Consortium.query.filter_by(active=True).count(),
-            "teams": Team.query.filter_by(active=True).count(),
-            "rfpos": RFPO.query.count(),
-            "users": User.query.filter_by(active=True).count(),
-            "vendors": Vendor.query.filter_by(active=True).count(),
-            "projects": Project.query.filter_by(active=True).count(),
+            "consortiums": basic_counts.consortiums or 0,
+            "teams": basic_counts.teams or 0,
+            "rfpos": RFPO.query.filter(RFPO.deleted_at.is_(None)).count(),
+            "users": basic_counts.users or 0,
+            "vendors": basic_counts.vendors or 0,
+            "projects": basic_counts.projects or 0,
             "uploaded_files": UploadedFile.query.count(),
-            "approval_workflows": RFPOApprovalWorkflow.query.filter_by(
-                is_template=True, is_active=True
-            ).count(),
-            "consortium_workflows": RFPOApprovalWorkflow.query.filter_by(
-                workflow_type="consortium", is_template=True, is_active=True
-            ).count(),
-            "team_workflows": RFPOApprovalWorkflow.query.filter_by(
-                workflow_type="team", is_template=True, is_active=True
-            ).count(),
-            "project_workflows": RFPOApprovalWorkflow.query.filter_by(
-                workflow_type="project", is_template=True, is_active=True
-            ).count(),
+            "approval_workflows": wf_counts.total or 0,
+            "consortium_workflows": int(wf_counts.consortium_wf or 0),
+            "team_workflows": int(wf_counts.team_wf or 0),
+            "project_workflows": int(wf_counts.project_wf or 0),
             "approval_instances": RFPOApprovalInstance.query.count(),
             "pending_approvals": RFPOApprovalAction.query.filter_by(
                 status="pending"
@@ -1399,7 +1503,7 @@ def create_app():
                 if "logo_file" in request.files:
                     logo_file = request.files["logo_file"]
                     if logo_file.filename and logo_file.filename != "":
-                        logo_filename = handle_file_upload(logo_file, "uploads/logos")
+                        logo_filename = handle_file_upload(logo_file, "uploads/logos", ALLOWED_IMAGE_EXTENSIONS)
                         if logo_filename:
                             flash(f"📷 Logo uploaded: {logo_filename}", "info")
 
@@ -1525,7 +1629,7 @@ def create_app():
                                 os.remove(old_logo_path)
 
                         # Upload new logo
-                        consortium.logo = handle_file_upload(logo_file, "uploads/logos")
+                        consortium.logo = handle_file_upload(logo_file, "uploads/logos", ALLOWED_IMAGE_EXTENSIONS)
 
                 # Handle terms PDF upload
                 if "terms_pdf_file" in request.files:
@@ -1656,19 +1760,22 @@ def create_app():
         )
 
     @app.route("/consortium/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def consortium_delete(id):
         """Delete consortium"""
         consortium = Consortium.query.get_or_404(id)
         try:
+            record_audit("delete", "consortium", consortium.consort_id, {"name": consortium.name})
             db.session.delete(consortium)
             db.session.commit()
             flash("✅ Consortium deleted successfully!", "success")
         except Exception as e:
+            db.session.rollback()
             flash(f"❌ Error deleting consortium: {str(e)}", "error")
         return redirect(url_for("consortiums"))
 
     @app.route("/uploads/logos/<filename>")
+    @login_required
     def uploaded_logo(filename):
         """Serve uploaded logo files"""
         from flask import send_from_directory
@@ -1676,6 +1783,7 @@ def create_app():
         return send_from_directory("uploads/logos", filename)
 
     @app.route("/uploads/terms/<filename>")
+    @login_required
     def uploaded_terms(filename):
         """Serve uploaded terms PDF files"""
         from flask import send_from_directory
@@ -1832,7 +1940,7 @@ def create_app():
         )
 
     @app.route("/teams/import", methods=["POST"])
-    @login_required
+    @admin_required
     def teams_import():
         """Import teams from JSON/Excel (upsert by record_id or abbrev)"""
         file = request.files.get("import_file")
@@ -2057,7 +2165,7 @@ def create_app():
         )
 
     @app.route("/team/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def team_delete(id):
         """Delete team"""
         team = Team.query.get_or_404(id)
@@ -2091,6 +2199,7 @@ def create_app():
                 UserTeam.query.filter_by(team_id=team.id).delete()
 
             # Now delete the team
+            record_audit("delete", "team", team.record_id, {"name": team.name})
             db.session.delete(team)
             db.session.commit()
 
@@ -2215,7 +2324,7 @@ def create_app():
         )
 
     @app.route("/users/import", methods=["POST"])
-    @login_required
+    @admin_required
     def users_import():
         """Import users from uploaded JSON or Excel file"""
         file = request.files.get("import_file")
@@ -2650,11 +2759,12 @@ def create_app():
         )
 
     @app.route("/user/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def user_delete(id):
         """Delete user"""
         user = User.query.get_or_404(id)
         try:
+            record_audit("delete", "user", user.record_id, {"email": user.email, "fullname": user.fullname})
             db.session.delete(user)
             db.session.commit()
             flash("✅ User deleted successfully!", "success")
@@ -2667,8 +2777,8 @@ def create_app():
     @app.route("/rfpos")
     @login_required
     def rfpos():
-        """List all RFPOs"""
-        rfpos = RFPO.query.all()
+        """List all RFPOs (excludes soft-deleted)"""
+        rfpos = RFPO.query.filter(RFPO.deleted_at.is_(None)).all()
 
         # Add additional info for each RFPO
         for rfpo in rfpos:
@@ -2798,13 +2908,7 @@ Research LLC
 Attn: Accounts Payable
 3000 Town Center Building, Suite 35
 Southfield, MI  48075""",
-                    delivery_date=(
-                        datetime.strptime(
-                            request.form.get("delivery_date"), "%Y-%m-%d"
-                        ).date()
-                        if request.form.get("delivery_date")
-                        else None
-                    ),
+                    delivery_date=_safe_parse_date(request.form.get("delivery_date")),
                     delivery_type=request.form.get("delivery_type"),
                     delivery_payment=request.form.get("delivery_payment"),
                     delivery_routing=request.form.get("delivery_routing"),
@@ -2898,13 +3002,7 @@ Southfield, MI  48075""",
                 if "shipto_address" in request.form:
                     rfpo.shipto_address = request.form.get("shipto_address")
                 if "delivery_date" in request.form:
-                    rfpo.delivery_date = (
-                        datetime.strptime(
-                            request.form.get("delivery_date"), "%Y-%m-%d"
-                        ).date()
-                        if request.form.get("delivery_date")
-                        else None
-                    )
+                    rfpo.delivery_date = _safe_parse_date(request.form.get("delivery_date"))
                 if "delivery_type" in request.form:
                     rfpo.delivery_type = request.form.get("delivery_type")
                 if "delivery_payment" in request.form:
@@ -3016,12 +3114,7 @@ Southfield, MI  48075""",
             # Handle capital equipment date
             capital_date = request.form.get("capital_acquisition_date")
             if capital_date:
-                try:
-                    line_item.capital_acquisition_date = datetime.strptime(
-                        capital_date, "%Y-%m-%d"
-                    ).date()
-                except ValueError:
-                    pass
+                line_item.capital_acquisition_date = _safe_parse_date(capital_date)
 
             # Handle capital cost
             capital_cost = request.form.get("capital_acquisition_cost")
@@ -3109,13 +3202,19 @@ Southfield, MI  48075""",
             file_size = file.tell()
             file.seek(0)
 
-            if file_size > 10 * 1024 * 1024:  # 10 MB
+            if file_size > MAX_UPLOAD_SIZE_BYTES:
                 flash("❌ File size exceeds 10 MB limit.", "error")
                 return redirect(url_for("rfpo_edit", id=rfpo_id))
 
             # Get file extension and MIME type
             original_filename = secure_filename(file.filename)
             file_extension = os.path.splitext(original_filename)[1].lower()
+
+            # Validate extension against whitelist
+            if not _allowed_file(original_filename):
+                flash(f"❌ File type '{file_extension}' is not allowed.", "error")
+                return redirect(url_for("rfpo_edit", id=rfpo_id))
+
             mime_type, _ = mimetypes.guess_type(original_filename)
 
             # Generate unique file ID and stored filename
@@ -3382,6 +3481,7 @@ Southfield, MI  48075""",
             return redirect(url_for("rfpo_edit", id=rfpo_id))
 
     @app.route("/api/rfpo/<int:rfpo_id>/rendered-html")
+    @login_required
     def api_rfpo_rendered_html(rfpo_id):
         """API endpoint to get RFPO rendered HTML (for user app)"""
         try:
@@ -3426,9 +3526,9 @@ Southfield, MI  48075""",
             return jsonify({"success": False, "message": str(e)}), 500
 
     @app.route("/rfpo/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def rfpo_delete(id):
-        """Delete RFPO"""
+        """Soft-delete RFPO (marks deleted_at instead of permanent removal)"""
         rfpo = RFPO.query.get_or_404(id)
 
         # Check for approval instances that might prevent deletion
@@ -3446,19 +3546,14 @@ Southfield, MI  48075""",
             return redirect(url_for("rfpos"))
 
         try:
-            # Explicitly delete completed approval instance (safety net alongside cascade)
-            if approval_instance:
-                app.logger.info(
-                    "Deleting completed approval instance %s for RFPO %s",
-                    approval_instance.instance_id, rfpo.rfpo_id,
-                )
-                db.session.delete(approval_instance)
-
-            # The following will be automatically deleted due to cascade settings:
-            # - RFPOLineItem (line items)
-            # - UploadedFile (uploaded files and their document chunks)
-            # - RFPOApprovalInstance + its actions (via cascade)
-            db.session.delete(rfpo)
+            # Soft delete — preserve data for audit trail
+            rfpo.soft_delete()
+            rfpo.updated_by = current_user.get_display_name()
+            record_audit("delete", "rfpo", rfpo.rfpo_id, {
+                "title": rfpo.title,
+                "total_amount": float(rfpo.total_amount or 0),
+                "status": rfpo.status,
+            })
             db.session.commit()
             flash("✅ RFPO deleted successfully!", "success")
         except Exception as e:
@@ -3612,7 +3707,7 @@ Southfield, MI  48075""",
         )
 
     @app.route("/projects/import", methods=["POST"])
-    @login_required
+    @admin_required
     def projects_import():
         """Import projects from JSON/Excel (upsert by project_id or ref)"""
         file = request.files.get("import_file")
@@ -3857,11 +3952,12 @@ Southfield, MI  48075""",
         )
 
     @app.route("/project/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def project_delete(id):
         """Delete project"""
         project = Project.query.get_or_404(id)
         try:
+            record_audit("delete", "project", project.project_id, {"name": project.name})
             db.session.delete(project)
             db.session.commit()
             flash("✅ Project deleted successfully!", "success")
@@ -4036,7 +4132,7 @@ Southfield, MI  48075""",
         )
 
     @app.route("/vendors/import", methods=["POST"])
-    @login_required
+    @admin_required
     def vendors_import():
         # Import vendors from JSON/Excel (upsert by id or company name)
         file = request.files.get("import_file")
@@ -4347,7 +4443,7 @@ Southfield, MI  48075""",
         )
 
     @app.route("/consortiums/import", methods=["POST"])
-    @login_required
+    @admin_required
     def consortiums_import():
         # Import consortiums from JSON/Excel (upsert by id or abbrev)
         file = request.files.get("import_file")
@@ -4532,20 +4628,8 @@ Southfield, MI  48075""",
                     status=request.form.get("status", "live"),
                     vendor_type=int(request.form.get("vendor_type", 0)),
                     certs_reps=bool(request.form.get("certs_reps")),
-                    cert_date=(
-                        datetime.strptime(
-                            request.form.get("cert_date"), "%Y-%m-%d"
-                        ).date()
-                        if request.form.get("cert_date")
-                        else None
-                    ),
-                    cert_expire_date=(
-                        datetime.strptime(
-                            request.form.get("cert_expire_date"), "%Y-%m-%d"
-                        ).date()
-                        if request.form.get("cert_expire_date")
-                        else None
-                    ),
+                    cert_date=_safe_parse_date(request.form.get("cert_date")),
+                    cert_expire_date=_safe_parse_date(request.form.get("cert_expire_date")),
                     is_university=bool(request.form.get("is_university")),
                     onetime_project_id=request.form.get("onetime_project_id") or None,
                     contact_name=request.form.get("contact_name"),
@@ -4592,18 +4676,8 @@ Southfield, MI  48075""",
                 vendor.status = request.form.get("status", "live")
                 vendor.vendor_type = int(request.form.get("vendor_type", 0))
                 vendor.certs_reps = bool(request.form.get("certs_reps"))
-                vendor.cert_date = (
-                    datetime.strptime(request.form.get("cert_date"), "%Y-%m-%d").date()
-                    if request.form.get("cert_date")
-                    else None
-                )
-                vendor.cert_expire_date = (
-                    datetime.strptime(
-                        request.form.get("cert_expire_date"), "%Y-%m-%d"
-                    ).date()
-                    if request.form.get("cert_expire_date")
-                    else None
-                )
+                vendor.cert_date = _safe_parse_date(request.form.get("cert_date"))
+                vendor.cert_expire_date = _safe_parse_date(request.form.get("cert_expire_date"))
                 vendor.onetime_project_id = (
                     request.form.get("onetime_project_id") or None
                 )
@@ -4642,11 +4716,12 @@ Southfield, MI  48075""",
         return render_template("admin/vendor_form.html", vendor=vendor, action="Edit")
 
     @app.route("/vendor/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def vendor_delete(id):
         """Delete vendor"""
         vendor = Vendor.query.get_or_404(id)
         try:
+            record_audit("delete", "vendor", vendor.vendor_id, {"company_name": vendor.company_name})
             db.session.delete(vendor)
             db.session.commit()
             flash("✅ Vendor deleted successfully!", "success")
@@ -4742,7 +4817,7 @@ Southfield, MI  48075""",
         )
 
     @app.route("/vendor-site/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def vendor_site_delete(id):
         """Delete vendor site/contact"""
         vendor_site = VendorSite.query.get_or_404(id)
@@ -4895,7 +4970,7 @@ Southfield, MI  48075""",
         )
 
     @app.route("/list/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def list_delete(id):
         """Delete list item"""
         list_item = List.query.get_or_404(id)
@@ -4909,7 +4984,7 @@ Southfield, MI  48075""",
         return redirect(url_for("lists"))
 
     @app.route("/seed-lists", methods=["POST"])
-    @login_required
+    @admin_required
     def seed_lists():
         """Seed the database with required list configurations"""
         try:
@@ -5003,7 +5078,7 @@ Southfield, MI  48075""",
         return redirect(url_for("lists"))
 
     @app.route("/seed-consortiums", methods=["POST"])
-    @login_required
+    @admin_required
     def seed_consortiums():
         """Seed the database with standard consortium data"""
         try:
@@ -5530,7 +5605,7 @@ Southfield, MI  48075""",
         return redirect(url_for("approval_workflow_edit", id=workflow_id))
 
     @app.route("/approval-workflow/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def approval_workflow_delete(id):
         """Delete approval workflow"""
         workflow = RFPOApprovalWorkflow.query.get_or_404(id)
@@ -6193,6 +6268,14 @@ Southfield, MI  48075""",
 
             instance.updated_at = datetime.utcnow()
 
+            record_audit("approve" if status == "approved" else "reject", "rfpo", instance.rfpo.rfpo_id if instance.rfpo else None, {
+                "action_id": action.action_id,
+                "step_name": action.step_name,
+                "status": status,
+                "comments": comments,
+                "overall_status": instance.overall_status,
+            })
+
             db.session.commit()
 
             # Send notifications after successful commit
@@ -6216,24 +6299,29 @@ Southfield, MI  48075""",
         return redirect(url_for("approval_instance_view", id=instance_id))
 
     @app.route("/approval-instance/<int:id>/delete", methods=["POST"])
-    @login_required
+    @admin_required
     def approval_instance_delete(id):
         """Delete approval instance (admin only)"""
         instance = RFPOApprovalInstance.query.get_or_404(id)
 
         try:
-            instance_id = instance.instance_id
+            instance_id_str = instance.instance_id
 
             # Reset RFPO status if it was set by this approval workflow
             if instance.rfpo and instance.rfpo.status in ["Approved", "Refused"]:
                 instance.rfpo.status = "Draft"
                 instance.rfpo.updated_by = current_user.get_display_name()
 
+            # Audit log before delete
+            record_audit("delete", "approval_instance", instance_id_str, {
+                "rfpo_id": instance.rfpo.rfpo_id if instance.rfpo else None,
+            })
+
             # Delete the approval instance (actions will be cascade deleted)
             db.session.delete(instance)
             db.session.commit()
 
-            msg = f'✅ Approval instance "{instance_id}" deleted successfully!'
+            msg = f'✅ Approval instance "{instance_id_str}" deleted successfully!'
             flash(msg + " RFPO reset to Draft status.", "success")
 
         except Exception as e:
@@ -6896,6 +6984,7 @@ Southfield, MI  48075""",
 
     # PDF to Image conversion for positioning editor background
     @app.route("/api/pdf-template-image/<template_name>")
+    @login_required
     def pdf_template_image(template_name):
         """Convert PDF template to image for background display"""
         print("🖼️ PDF Template Image Route Called:")

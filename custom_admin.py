@@ -2949,8 +2949,10 @@ Southfield, MI  48075""",
 
                 db.session.commit()
 
+                # Preserve the active tab after save
+                active_tab = request.form.get("_active_tab", "")
                 flash("✅ RFPO updated successfully!", "success")
-                return redirect(url_for("rfpo_edit", id=rfpo.id))
+                return redirect(url_for("rfpo_edit", id=rfpo.id, tab=active_tab) if active_tab else url_for("rfpo_edit", id=rfpo.id))
 
             except Exception as e:
                 db.session.rollback()

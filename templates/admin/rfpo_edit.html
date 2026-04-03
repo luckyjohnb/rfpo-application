@@ -90,31 +90,63 @@
     </div>
 </div>
 
+<!-- Section completion tracking -->
+{% set basic_complete = rfpo.title and rfpo.requestor_tel %}
+{% set shipping_complete = rfpo.shipto_name and rfpo.shipto_address and rfpo.delivery_date and rfpo.delivery_type and rfpo.payment_terms %}
+{% set vendor_complete = rfpo.vendor_id is not none %}
+{% set items_complete = rfpo.line_items|length > 0 %}
+{% set sections_done = [basic_complete, shipping_complete, vendor_complete, items_complete] | select | list | length %}
+{% set sections_total = 4 %}
+
+<!-- Progress Bar -->
+<div class="mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <small class="text-muted fw-bold">RFPO Completeness</small>
+        <small class="text-muted">{{ sections_done }}/{{ sections_total }} sections complete</small>
+    </div>
+    <div class="progress" style="height: 8px;">
+        <div class="progress-bar {% if sections_done == sections_total %}bg-success{% elif sections_done >= 2 %}bg-info{% else %}bg-warning{% endif %}"
+             role="progressbar" style="width: {{ (sections_done / sections_total * 100)|int }}%"
+             aria-valuenow="{{ sections_done }}" aria-valuemin="0" aria-valuemax="{{ sections_total }}">
+        </div>
+    </div>
+</div>
+
 <!-- Main Content Tabs -->
 <ul class="nav nav-tabs" id="rfpoTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="line-items-tab" data-bs-toggle="tab" data-bs-target="#line-items" type="button" role="tab">
-            📝 Line Items ({{ rfpo.line_items|length }})
+            {% if items_complete %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="far fa-circle text-muted"></i>{% endif %}
+            Line Items ({{ rfpo.line_items|length }})
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="basic-info-tab" data-bs-toggle="tab" data-bs-target="#basic-info" type="button" role="tab">
-            📋 Basic Information
+            {% if basic_complete %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="far fa-circle text-muted"></i>{% endif %}
+            Basic Information
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="shipping-tab" data-bs-toggle="tab" data-bs-target="#shipping" type="button" role="tab">
-            📦 Shipping & Delivery
+            {% if shipping_complete %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="far fa-circle text-muted"></i>{% endif %}
+            Shipping & Delivery
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="vendor-tab" data-bs-toggle="tab" data-bs-target="#vendor" type="button" role="tab">
-            🏢 Vendor Information
+            {% if vendor_complete %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="far fa-circle text-muted"></i>{% endif %}
+            Vendor
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button" role="tab">
             📁 Files ({{ rfpo.files|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="review-tab" data-bs-toggle="tab" data-bs-target="#review" type="button" role="tab">
+            {% if sections_done == sections_total %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="fas fa-clipboard-list text-muted"></i>{% endif %}
+            Review
         </button>
     </li>
 </ul>
@@ -218,6 +250,7 @@
         <div class="card mt-3">
             <div class="card-body">
                 <form method="POST">
+                    <input type="hidden" name="_active_tab" value="basic-info">
                     <div class="row">
                         <div class="col-md-6">
                             <h5 class="mb-3">📋 RFPO Information</h5>
@@ -320,6 +353,7 @@
         <div class="card mt-3">
             <div class="card-body">
                 <form method="POST">
+                    <input type="hidden" name="_active_tab" value="shipping">
                     <div class="row">
                         <div class="col-md-6">
                             <h5 class="mb-3">📦 Shipping Information</h5>
@@ -415,6 +449,7 @@
         <div class="card mt-3">
             <div class="card-body">
                 <form method="POST">
+                    <input type="hidden" name="_active_tab" value="vendor">
                     <div class="row">
                         <div class="col-md-6">
                             <h5 class="mb-3">🏢 Vendor Selection</h5>
@@ -578,6 +613,161 @@
                     <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
                     <h5 class="text-muted">No files uploaded yet</h5>
                     <p class="text-muted">Click "Upload File" to add supporting documents to this RFPO.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Tab -->
+    <div class="tab-pane fade" id="review" role="tabpanel">
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="mb-3"><i class="fas fa-clipboard-list"></i> RFPO Review Summary</h5>
+
+                {% if sections_done < sections_total %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>{{ sections_total - sections_done }} section(s) still need attention</strong> before this RFPO is ready to submit.
+                </div>
+                {% else %}
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>All sections complete!</strong> This RFPO is ready to submit for approval.
+                </div>
+                {% endif %}
+
+                <!-- Basic Information Summary -->
+                <div class="card mb-3 {% if basic_complete %}border-success{% else %}border-warning{% endif %}">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2">
+                        <span>
+                            {% if basic_complete %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="fas fa-exclamation-circle text-warning"></i>{% endif %}
+                            <strong>Basic Information</strong>
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('basic-info-tab').click()">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">Title:</small> {{ rfpo.title or '—' }}<br>
+                                <small class="text-muted">Description:</small> {{ rfpo.description or '—' }}<br>
+                                <small class="text-muted">Gov. Agreement:</small> {{ rfpo.government_agreement_number or '—' }}
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Requestor Phone:</small> {{ rfpo.requestor_tel or '—' }}<br>
+                                <small class="text-muted">Location:</small> {{ rfpo.requestor_location or '—' }}<br>
+                                <small class="text-muted">Status:</small> <span class="badge bg-secondary">{{ rfpo.status }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vendor Summary -->
+                <div class="card mb-3 {% if vendor_complete %}border-success{% else %}border-warning{% endif %}">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2">
+                        <span>
+                            {% if vendor_complete %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="fas fa-exclamation-circle text-warning"></i>{% endif %}
+                            <strong>Vendor</strong>
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('vendor-tab').click()">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
+                    <div class="card-body py-2">
+                        {% if rfpo.vendor %}
+                            <strong>{{ rfpo.vendor.company_name }}</strong>
+                            {% if rfpo.vendor_site %}
+                                — {{ rfpo.vendor_site.contact_name }}
+                                ({{ rfpo.vendor_site.contact_city }}, {{ rfpo.vendor_site.contact_state }})
+                            {% elif rfpo.vendor.contact_name %}
+                                — {{ rfpo.vendor.contact_name }}
+                            {% endif %}
+                        {% else %}
+                            <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> No vendor selected</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Shipping Summary -->
+                <div class="card mb-3 {% if shipping_complete %}border-success{% else %}border-warning{% endif %}">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2">
+                        <span>
+                            {% if shipping_complete %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="fas fa-exclamation-circle text-warning"></i>{% endif %}
+                            <strong>Shipping & Delivery</strong>
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('shipping-tab').click()">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">Ship To:</small> {{ rfpo.shipto_name or '—' }}<br>
+                                <small class="text-muted">Address:</small> {{ rfpo.shipto_address or '—' }}<br>
+                                <small class="text-muted">Delivery Date:</small> {{ rfpo.delivery_date.strftime('%m/%d/%Y') if rfpo.delivery_date else '—' }}
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Delivery Type:</small> {{ rfpo.delivery_type or '—' }}<br>
+                                <small class="text-muted">Payment Terms:</small> {{ rfpo.payment_terms or '—' }}<br>
+                                <small class="text-muted">Routing:</small> {{ rfpo.delivery_routing or '—' }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Line Items Summary -->
+                <div class="card mb-3 {% if items_complete %}border-success{% else %}border-warning{% endif %}">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2">
+                        <span>
+                            {% if items_complete %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="fas fa-exclamation-circle text-warning"></i>{% endif %}
+                            <strong>Line Items</strong>
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('line-items-tab').click()">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
+                    <div class="card-body py-2">
+                        {% if rfpo.line_items %}
+                            <strong>{{ rfpo.line_items|length }}</strong> item(s) —
+                            Subtotal: <strong>{{ rfpo.subtotal|currency }}</strong>
+                            {% if rfpo.cost_share_amount and rfpo.cost_share_amount > 0 %}
+                                | Cost Share: <strong>-{{ rfpo.get_calculated_cost_share_amount()|currency }}</strong>
+                            {% endif %}
+                            | Total: <strong class="text-success">{{ rfpo.get_calculated_total_amount()|currency }}</strong>
+                        {% else %}
+                            <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> No line items added</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Files Summary -->
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2">
+                        <span>
+                            <i class="fas fa-paperclip text-muted"></i>
+                            <strong>Files</strong> <small class="text-muted">(optional)</small>
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('files-tab').click()">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
+                    <div class="card-body py-2">
+                        {% if rfpo.files %}
+                            <strong>{{ rfpo.files|length }}</strong> file(s) attached
+                        {% else %}
+                            <span class="text-muted">No files attached</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Submit Action -->
+                {% if sections_done == sections_total and rfpo.status == 'Draft' and not active_instance %}
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-success btn-lg" onclick="submitForApproval({{ rfpo.id }})">
+                        <i class="fas fa-paper-plane"></i> Submit for Approval
+                    </button>
                 </div>
                 {% endif %}
             </div>
@@ -760,6 +950,27 @@
 </div>
 
 <script>
+// Restore active tab from URL parameter after save
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab) {
+        const tabBtn = document.getElementById(tab + '-tab');
+        if (tabBtn) {
+            // Deactivate current active tab
+            document.querySelectorAll('#rfpoTabs .nav-link.active').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('#rfpoTabContent .tab-pane.show.active').forEach(el => {
+                el.classList.remove('show', 'active');
+            });
+            // Activate target tab
+            tabBtn.classList.add('active');
+            const pane = document.querySelector(tabBtn.dataset.bsTarget);
+            if (pane) pane.classList.add('show', 'active');
+        }
+        // Clean URL
+        history.replaceState(null, '', window.location.pathname);
+    }
+})();
 function toggleCapitalFields() {
     const checkbox = document.getElementById('is_capital_equipment');
     const fields = document.getElementById('capitalFields');

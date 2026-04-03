@@ -21,6 +21,7 @@ reportlab>=4.0.0
 
 # Admin interface
 flask-admin==1.6.1
+flask-wtf>=1.2.0
 wtforms==3.1.1
 
 # Data processing - lightweight versions

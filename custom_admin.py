@@ -31,6 +31,7 @@ from flask_login import (
     login_user,
     logout_user,
 )
+from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import desc
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
@@ -488,6 +489,9 @@ def create_app():
 
     # Initialize extensions
     db.init_app(app)
+
+    # CSRF protection for all POST/PUT/DELETE forms
+    csrf = CSRFProtect(app)
 
     # Setup logging
     logger = setup_logging("admin", log_to_file=True)
@@ -5918,12 +5922,21 @@ Southfield, MI  48075""",
             project = None
             consortium = None
 
+        # Build set of action IDs the current user is authorized to act on
+        authorized_action_ids = set()
+        for act in instance.actions:
+            if act.status == "pending":
+                auth_ids = _get_authorized_approver_ids(instance, act)
+                if current_user.record_id in auth_ids:
+                    authorized_action_ids.add(act.id)
+
         return render_template(
             "admin/approval_instance_view.html",
             instance=instance,
             rfpo=rfpo,
             project=project,
             consortium=consortium,
+            authorized_action_ids=authorized_action_ids,
         )
 
     @app.route(
@@ -5931,6 +5944,31 @@ Southfield, MI  48075""",
         methods=["POST"],
     )
     @login_required
+    def _get_authorized_approver_ids(instance, action):
+        """Return the set of user record_ids authorized to execute this action.
+
+        Authorized users are:
+        - The designated primary approver (action.approver_id)
+        - The backup approver from the workflow step snapshot (if any)
+        """
+        authorized = {action.approver_id}
+        # Look up backup approver from the instance's workflow snapshot
+        try:
+            data = instance.get_instance_data()
+            for phase in data.get("phases", []):
+                stage = phase.get("stage", {})
+                if stage.get("stage_order") == action.stage_order:
+                    for step in stage.get("steps", []):
+                        if step.get("step_order") == action.step_order:
+                            backup_id = step.get("backup_approver_id")
+                            if backup_id:
+                                authorized.add(backup_id)
+                            break
+                    break
+        except Exception:
+            pass  # If snapshot is corrupt, only primary approver is authorized
+        return authorized
+
     def approval_action_approve(instance_id, action_id):
         """Complete an approval action (approve/conditional/refuse)"""
         instance = RFPOApprovalInstance.query.get_or_404(instance_id)
@@ -5940,12 +5978,17 @@ Southfield, MI  48075""",
             flash("❌ Action does not belong to this instance.", "error")
             return redirect(url_for("approval_instance_view", id=instance_id))
 
-        # Check if current user can take this action
-        if (
-            action.approver_id != current_user.record_id
-            and not current_user.is_super_admin()
-        ):
-            flash("❌ You are not authorized to take this action.", "error")
+        # Check if current user is the designated primary or backup approver
+        authorized_ids = _get_authorized_approver_ids(instance, action)
+        if current_user.record_id not in authorized_ids:
+            app.logger.warning(
+                "SECURITY: User %s (id=%s) attempted to approve action %s "
+                "(authorized: %s)",
+                current_user.email, current_user.id,
+                action.action_id, authorized_ids,
+            )
+            flash("❌ You are not authorized to take this action. "
+                  "Only the designated approver or backup approver can act.", "error")
             return redirect(url_for("approval_instance_view", id=instance_id))
 
         try:

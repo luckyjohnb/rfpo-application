@@ -235,7 +235,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if action.status == 'pending' %}
+                                    {% if action.status == 'pending' and action.id in authorized_action_ids %}
                                         <button type="button" class="btn btn-sm btn-success"
                                                 onclick="approveAction({{ instance.id }}, {{ action.id }}, 'approved')">
                                             <i class="fas fa-check"></i> Approve
@@ -244,6 +244,8 @@
                                                 onclick="approveAction({{ instance.id }}, {{ action.id }}, 'refused')">
                                             <i class="fas fa-times"></i> Reject
                                         </button>
+                                    {% elif action.status == 'pending' %}
+                                        <small class="text-muted">Awaiting designated approver</small>
                                     {% else %}
                                         <small class="text-muted">Completed</small>
                                     {% endif %}

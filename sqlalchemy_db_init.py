@@ -35,6 +35,7 @@ from models import (
     RFPOApprovalStep,
     RFPOApprovalInstance,
     RFPOApprovalAction,
+    AuditLog,
 )
 
 

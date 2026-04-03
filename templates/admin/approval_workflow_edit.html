@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
 
-{% block title %}Edit Approval Workflow - {{ workflow.name }}{% endblock %}
+{% block title %}Edit Workflow - {{ workflow.name }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -9,76 +9,76 @@
         background-color: #f8f9fa !important;
         color: #212529 !important;
     }
-    
+
     .card-header.bg-light h6 {
         color: #212529 !important;
     }
-    
+
     .card-header.bg-light .badge {
         margin-right: 5px;
     }
-    
+
     /* Ensure badges have proper contrast */
     .badge-primary {
         background-color: #0d6efd !important;
         color: white !important;
     }
-    
+
     .badge-success {
         background-color: #198754 !important;
         color: white !important;
     }
-    
+
     .badge-info {
         background-color: #0dcaf0 !important;
         color: #212529 !important;
     }
-    
+
     .badge-secondary {
         background-color: #6c757d !important;
         color: white !important;
     }
-    
+
     .badge-warning {
         background-color: #ffc107 !important;
         color: #212529 !important;
     }
-    
+
     /* Ensure table text is visible */
     .table td, .table th {
         color: #212529 !important;
     }
-    
+
     .table .text-muted {
         color: #6c757d !important;
     }
-    
+
     /* Stage name visibility */
     .card-header h6 {
         font-weight: 600;
     }
-    
+
     /* Step name visibility */
     .table td strong {
         color: #212529 !important;
         font-weight: 600;
     }
-    
+
     /* Ensure stage titles are bold and visible */
     .card-header h6 strong {
         color: #212529 !important;
         font-weight: 700;
     }
-    
+
     /* Better spacing for badges */
     .badge + .badge {
         margin-left: 5px;
     }
-    
+
     .badge + strong {
         margin-left: 8px;
     }
-    
+
     strong + .badge {
         margin-left: 8px;
     }
@@ -111,14 +111,14 @@
                         <div class="col-md-8">
                             <div class="form-group">
                                 <label for="name">Workflow Name</label>
-                                <input type="text" class="form-control" id="name" name="name" 
+                                <input type="text" class="form-control" id="name" name="name"
                                        value="{{ workflow.name }}" required>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="version">Version</label>
-                                <input type="text" class="form-control" id="version" name="version" 
+                                <input type="text" class="form-control" id="version" name="version"
                                        value="{{ workflow.version }}">
                             </div>
                         </div>
@@ -135,7 +135,7 @@
                                 <label for="consortium_id">Consortium</label>
                                 <select class="form-control" id="consortium_id" name="consortium_id" required>
                                     {% for consortium in consortiums %}
-                                    <option value="{{ consortium.consort_id }}" 
+                                    <option value="{{ consortium.consort_id }}"
                                             {% if workflow.consortium_id == consortium.consort_id %}selected{% endif %}>
                                         {{ consortium.abbrev }} - {{ consortium.name }}
                                     </option>
@@ -147,7 +147,7 @@
                             <div class="form-group">
                                 <label>&nbsp;</label>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active"
                                            value="1" {% if workflow.is_active %}checked{% endif %}>
                                     <label class="form-check-label" for="is_active">
                                         Active Workflow
@@ -216,9 +216,9 @@
                                 <span class="badge badge-success">${{ "{:,.0f}".format(stage.budget_bracket_amount) }}</span>
                                 {% set doc_names = stage.get_required_document_names() %}
                                 {% if doc_names %}
-                                <span class="badge badge-warning ms-1" 
-                                      data-bs-toggle="tooltip" 
-                                      data-bs-placement="top" 
+                                <span class="badge badge-warning ms-1"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
                                       data-bs-html="true"
                                       title="Required Documents:<br/>{{ doc_names|join('<br/>') }}"
                                       style="cursor: help;">
@@ -231,16 +231,16 @@
                             {% endif %}
                         </div>
                         <div>
-                            <button class="btn btn-sm btn-outline-info" 
+                            <button class="btn btn-sm btn-outline-info"
                                     onclick="showAddStepModal({{ stage.id }}, '{{ stage.stage_name }}')">
                                 <i class="fas fa-plus"></i> Add Step
                             </button>
-                            <button class="btn btn-sm btn-outline-primary me-1" 
+                            <button class="btn btn-sm btn-outline-primary me-1"
                                     onclick="showEditStageModal({{ stage.id }})">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <form method="POST" action="{{ url_for('approval_workflow_delete_stage', workflow_id=workflow.id, stage_id=stage.id) }}" 
-                                  style="display:inline;" 
+                            <form method="POST" action="{{ url_for('approval_workflow_delete_stage', workflow_id=workflow.id, stage_id=stage.id) }}"
+                                  style="display:inline;"
                                   onsubmit="return confirm('Delete this stage and all its steps?')">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
                                     <i class="fas fa-trash"></i>
@@ -255,13 +255,13 @@
                         <table class="table table-sm">
                             <thead>
                                 <tr>
-                                    <th style="width: 40px;"></th>
-                                    <th>Step</th>
-                                    <th>Approval Type</th>
-                                    <th>Primary Approver</th>
-                                    <th>Backup Approver</th>
-                                    <th>Timeout</th>
-                                    <th style="width: 120px;">Actions</th>
+                                    <th scope="col" style="width: 40px;"></th>
+                                    <th scope="col">Step</th>
+                                    <th scope="col">Approval Type</th>
+                                    <th scope="col">Primary Approver</th>
+                                    <th scope="col">Backup Approver</th>
+                                    <th scope="col">Timeout</th>
+                                    <th scope="col" style="width: 120px;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="sortable-steps" data-stage-id="{{ stage.id }}">
@@ -310,12 +310,12 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <button type="button" class="btn btn-sm btn-outline-primary me-1" 
+                                        <button type="button" class="btn btn-sm btn-outline-primary me-1"
                                                 onclick="showEditStepModal({{ stage.id }}, {{ step.id }})">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <form method="POST" action="{{ url_for('approval_workflow_delete_step', workflow_id=workflow.id, stage_id=stage.id, step_id=step.id) }}" 
-                                              style="display:inline;" 
+                                        <form method="POST" action="{{ url_for('approval_workflow_delete_step', workflow_id=workflow.id, stage_id=stage.id, step_id=step.id) }}"
+                                              style="display:inline;"
                                               onsubmit="return confirm('Delete this approval step?')">
                                             <button type="submit" class="btn btn-sm btn-outline-danger">
                                                 <i class="fas fa-trash"></i>
@@ -332,7 +332,7 @@
                         <i class="fas fa-info-circle fa-2x mb-2"></i>
                         <p class="mb-2"><strong>No approval steps configured for this stage</strong></p>
                         <p class="small mb-3">This stage is empty. Click below to add the first approval step.</p>
-                        <button class="btn btn-sm btn-outline-info" 
+                        <button class="btn btn-sm btn-outline-info"
                                 onclick="showAddStepModal({{ stage.id }}, '{{ stage.stage_name }}')">
                             <i class="fas fa-plus"></i> Add First Step
                         </button>
@@ -384,7 +384,7 @@
                     <div class="form-group">
                         <label class="form-label">Required Document Types</label>
                         <input type="text" class="form-control mb-2" id="docSearch" placeholder="🔍 Search documents..." onkeyup="filterDocuments()">
-                        
+
                         <div class="row">
                             <div class="col-6">
                                 <h6 class="text-muted">📋 Available Documents</h6>
@@ -589,7 +589,7 @@
                     <div class="form-group">
                         <label class="form-label">Required Document Types</label>
                         <input type="text" class="form-control mb-2" id="editDocSearch" placeholder="🔍 Search documents..." onkeyup="filterDocumentsEdit()">
-                        
+
                         <div class="row">
                             <div class="col-6">
                                 <h6 class="text-muted">📋 Available Documents</h6>
@@ -646,10 +646,10 @@ function showAddStageModal() {
         .then(response => response.json())
         .then(data => {
             const select = document.getElementById('budget_bracket_key');
-            
+
             // Clear existing options except the first one
             select.innerHTML = '<option value="">Select Budget Bracket</option>';
-            
+
             if (data.success && data.brackets.length > 0) {
                 data.brackets.forEach(bracket => {
                     const option = document.createElement('option');
@@ -664,7 +664,7 @@ function showAddStageModal() {
                 option.disabled = true;
                 select.appendChild(option);
             }
-            
+
             // Show the modal
             const modal = new bootstrap.Modal(document.getElementById('addStageModal'));
             modal.show();
@@ -685,11 +685,11 @@ function showEditStepModal(stageId, stepId) {
             document.getElementById('edit_step_description').value = step.description || '';
             document.getElementById('edit_primary_approver_id').value = step.primary_approver_id || '';
             document.getElementById('edit_backup_approver_id').value = step.backup_approver_id || '';
-            
+
             // Set the form action
             const editUrl = '/approval-workflow/{{ workflow.id }}/stage/' + stageId + '/step/' + stepId + '/edit';
             document.getElementById('editStepForm').action = editUrl;
-            
+
             // Show the modal
             const modal = new bootstrap.Modal(document.getElementById('editStepModal'));
             modal.show();
@@ -711,7 +711,7 @@ function showEditStageModal(stageId) {
         // Populate budget bracket dropdown with available options
         const select = document.getElementById('edit_budget_bracket_key');
         select.innerHTML = '<option value="">Select Budget Bracket</option>';
-        
+
         if (bracketsData.success && bracketsData.brackets.length > 0) {
             bracketsData.brackets.forEach(bracket => {
                 const option = document.createElement('option');
@@ -723,25 +723,25 @@ function showEditStageModal(stageId) {
                 select.appendChild(option);
             });
         }
-        
+
         // Populate other form fields
         document.getElementById('edit_stage_description').value = stage.description || '';
-        
+
         // Reset and populate document selections
         selectedDocumentsEdit = stage.required_document_types || [];
         document.getElementById('edit_required_document_types').value = selectedDocumentsEdit.join(',');
-        
+
         // Clear search
         document.getElementById('editDocSearch').value = '';
-        
+
         // Refresh the document lists
         displayAvailableDocumentsEdit();
         displaySelectedDocumentsEdit();
-        
+
         // Set the form action
         const editUrl = '/approval-workflow/{{ workflow.id }}/stage/' + stageId + '/edit';
         document.getElementById('editStageForm').action = editUrl;
-        
+
         // Show the modal
         const modal = new bootstrap.Modal(document.getElementById('editStageModal'));
         modal.show();
@@ -767,7 +767,7 @@ function initializeDocumentPickers() {
         {% endif %}
         {% endfor %}
     ];
-    
+
     displayAvailableDocuments();
     displaySelectedDocuments();
 }
@@ -782,18 +782,18 @@ function filterDocumentsEdit() {
 
 function displayAvailableDocuments() {
     const searchTerm = document.getElementById('docSearch').value.toLowerCase();
-    
+
     // Filter documents: not selected and matching search term
-    const availableDocs = allDocuments.filter(doc => 
+    const availableDocs = allDocuments.filter(doc =>
         !selectedDocuments.includes(doc.key) &&
         doc.value.toLowerCase().includes(searchTerm)
     );
-    
+
     if (availableDocs.length === 0) {
         document.getElementById('availableDocuments').innerHTML = '<div class="text-muted p-2">No available documents</div>';
         return;
     }
-    
+
     let html = '';
     availableDocs.forEach(doc => {
         html += `
@@ -807,7 +807,7 @@ function displayAvailableDocuments() {
             </div>
         `;
     });
-    
+
     document.getElementById('availableDocuments').innerHTML = html;
 }
 
@@ -816,7 +816,7 @@ function displaySelectedDocuments() {
         document.getElementById('selectedDocuments').innerHTML = '<div class="text-muted p-2">No documents required</div>';
         return;
     }
-    
+
     let html = '';
     selectedDocuments.forEach(docKey => {
         const doc = allDocuments.find(d => d.key === docKey);
@@ -833,7 +833,7 @@ function displaySelectedDocuments() {
             `;
         }
     });
-    
+
     document.getElementById('selectedDocuments').innerHTML = html;
 }
 
@@ -841,7 +841,7 @@ function addDocument(docKey) {
     if (!selectedDocuments.includes(docKey)) {
         selectedDocuments.push(docKey);
         document.getElementById('required_document_types').value = selectedDocuments.join(',');
-        
+
         // Refresh both lists
         displayAvailableDocuments();
         displaySelectedDocuments();
@@ -853,7 +853,7 @@ function removeDocument(docKey) {
     if (index > -1) {
         selectedDocuments.splice(index, 1);
         document.getElementById('required_document_types').value = selectedDocuments.join(',');
-        
+
         // Refresh both lists
         displayAvailableDocuments();
         displaySelectedDocuments();
@@ -863,18 +863,18 @@ function removeDocument(docKey) {
 // Edit modal functions
 function displayAvailableDocumentsEdit() {
     const searchTerm = document.getElementById('editDocSearch').value.toLowerCase();
-    
+
     // Filter documents: not selected and matching search term
-    const availableDocs = allDocuments.filter(doc => 
+    const availableDocs = allDocuments.filter(doc =>
         !selectedDocumentsEdit.includes(doc.key) &&
         doc.value.toLowerCase().includes(searchTerm)
     );
-    
+
     if (availableDocs.length === 0) {
         document.getElementById('editAvailableDocuments').innerHTML = '<div class="text-muted p-2">No available documents</div>';
         return;
     }
-    
+
     let html = '';
     availableDocs.forEach(doc => {
         html += `
@@ -888,7 +888,7 @@ function displayAvailableDocumentsEdit() {
             </div>
         `;
     });
-    
+
     document.getElementById('editAvailableDocuments').innerHTML = html;
 }
 
@@ -897,7 +897,7 @@ function displaySelectedDocumentsEdit() {
         document.getElementById('editSelectedDocuments').innerHTML = '<div class="text-muted p-2">No documents required</div>';
         return;
     }
-    
+
     let html = '';
     selectedDocumentsEdit.forEach(docKey => {
         const doc = allDocuments.find(d => d.key === docKey);
@@ -914,7 +914,7 @@ function displaySelectedDocumentsEdit() {
             `;
         }
     });
-    
+
     document.getElementById('editSelectedDocuments').innerHTML = html;
 }
 
@@ -922,7 +922,7 @@ function addDocumentEdit(docKey) {
     if (!selectedDocumentsEdit.includes(docKey)) {
         selectedDocumentsEdit.push(docKey);
         document.getElementById('edit_required_document_types').value = selectedDocumentsEdit.join(',');
-        
+
         // Refresh both lists
         displayAvailableDocumentsEdit();
         displaySelectedDocumentsEdit();
@@ -934,7 +934,7 @@ function removeDocumentEdit(docKey) {
     if (index > -1) {
         selectedDocumentsEdit.splice(index, 1);
         document.getElementById('edit_required_document_types').value = selectedDocumentsEdit.join(',');
-        
+
         // Refresh both lists
         displayAvailableDocumentsEdit();
         displaySelectedDocumentsEdit();
@@ -950,10 +950,10 @@ document.addEventListener('DOMContentLoaded', function() {
             html: true
         });
     });
-    
+
     // Initialize document pickers
     initializeDocumentPickers();
-    
+
     // Initialize sortable for each stage's steps
     document.querySelectorAll('.sortable-steps').forEach(function(tbody) {
         if (typeof Sortable !== 'undefined') {
@@ -966,7 +966,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 onEnd: function(evt) {
                     const stageId = evt.to.dataset.stageId;
                     const stepIds = Array.from(evt.to.children).map(row => row.dataset.stepId);
-                    
+
                     // Send the new order to the server
                     fetch(`/api/approval-workflow/{{ workflow.id }}/stage/${stageId}/reorder-steps`, {
                         method: 'POST',

@@ -665,7 +665,7 @@
                             {% if user %}
                             <div class="card border-info mb-3">
                                 <div class="card-header">
-                                    <h6 class="mb-0"><i class="fas fa-user-check"></i> Approval Workflow Status</h6>
+                                    <h6 class="mb-0"><i class="fas fa-user-check"></i> Workflow Status</h6>
                                 </div>
                                 <div class="card-body">
                                     {% set approver_summary = user.get_approver_summary() %}
@@ -703,12 +703,12 @@
                                             <table class="table table-sm">
                                                 <thead class="table-light">
                                                     <tr>
-                                                        <th>Workflow</th>
-                                                        <th>Type</th>
-                                                        <th>Entity</th>
-                                                        <th>Step</th>
-                                                        <th>Role</th>
-                                                        <th>Status</th>
+                                                        <th scope="col">Workflow</th>
+                                                        <th scope="col">Type</th>
+                                                        <th scope="col">Entity</th>
+                                                        <th scope="col">Step</th>
+                                                        <th scope="col">Role</th>
+                                                        <th scope="col">Status</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -769,7 +769,7 @@
                                             </div>
                                             {% else %}
                                             <p class="mb-0 text-muted">{{ approver_summary.summary }}</p>
-                                            <small class="text-muted">User is not assigned to any approval workflow steps</small>
+                                            <small class="text-muted">User is not assigned to any workflow steps</small>
                                             {% endif %}
                                         </div>
                                     </div>
@@ -903,7 +903,7 @@
                             <i class="fas fa-times"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} User
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save User{% else %}Create User{% endif %}
                         </button>
                     </div>
                 </div>
@@ -948,11 +948,11 @@
                     <table class="table table-hover">
                         <thead class="table-light">
                             <tr>
-                                <th><i class="fas fa-project-diagram"></i> Project Name</th>
-                                <th><i class="fas fa-tag"></i> Reference</th>
-                                <th><i class="fas fa-shield-alt"></i> Access Level</th>
-                                <th><i class="fas fa-file-invoice"></i> RFPOs</th>
-                                <th><i class="fas fa-building"></i> Consortiums</th>
+                                <th scope="col"><i class="fas fa-project-diagram"></i> Project Name</th>
+                                <th scope="col"><i class="fas fa-tag"></i> Reference</th>
+                                <th scope="col"><i class="fas fa-shield-alt"></i> Access Level</th>
+                                <th scope="col"><i class="fas fa-file-invoice"></i> RFPOs</th>
+                                <th scope="col"><i class="fas fa-building"></i> Consortiums</th>
                             </tr>
                         </thead>
                         <tbody>

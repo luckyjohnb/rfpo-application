@@ -360,8 +360,8 @@ This depends on the deployment topology:
 
 | App | Local Dev URI | Azure Production URI |
 |-----|---------------|---------------------|
-| User App | `http://localhost:5000/auth/callback` | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/auth/callback` |
-| Admin Panel | `http://localhost:5111/auth/callback` | `https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io/auth/callback` |
+| User App | `http://localhost:5000/auth/callback` | `https://rfpo.uscar.org/auth/callback` |
+| Admin Panel | `http://localhost:5111/auth/callback` | `https://rfpo-admin.uscar.org/auth/callback` |
 
 **Note:** All redirect URIs must be registered in the app registration. HTTPS is required for production (Azure Container Apps provides this). HTTP is allowed for `localhost` only.
 
@@ -475,18 +475,18 @@ The original plan recommended OIDC via MSAL. IT operates with SAML Enterprise Ap
 
 | Setting | Value |
 |---------|-------|
-| **Identifier (Entity ID)** | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io` |
-| **Reply URL (Assertion Consumer Service URL)** | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/acs` |
-| **Sign on URL** | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/` |
+| **Identifier (Entity ID)** | `https://rfpo.uscar.org` |
+| **Reply URL (Assertion Consumer Service URL)** | `https://rfpo.uscar.org/saml/acs` |
+| **Sign on URL** | `https://rfpo.uscar.org/` |
 | **Relay State (Optional)** | *(leave empty)* |
-| **Logout URL (Optional)** | `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/sls` |
+| **Logout URL (Optional)** | `https://rfpo.uscar.org/saml/sls` |
 
 #### Attributes & Claims — Required Claims
 
 | Claim Name | Type | Source Attribute | Purpose |
 |------------|------|------------------|---------|
 | **Unique User Identifier (Name ID)** | SAML | `user.userprincipalname` | Primary identity — maps to `email` in RFPO User model |
-| `https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/attributes/role` | SAML | `user.assignedroles` | App Roles — maps to RFPO permissions (`RFPO_USER`, `RFPO_ADMIN`) |
+| `https://rfpo.uscar.org/saml/attributes/role` | SAML | `user.assignedroles` | App Roles — maps to RFPO permissions (`RFPO_USER`, `RFPO_ADMIN`) |
 
 #### Attributes & Claims — Additional Claims (Standard)
 
@@ -551,9 +551,9 @@ SAML_IDP_ENTITY_ID=              # From IT: Azure AD Identifier
 SAML_IDP_SSO_URL=                # From IT: Login URL
 SAML_IDP_SLS_URL=                # From IT: Logout URL
 SAML_IDP_X509_CERT=              # From IT: Base64 signing certificate (single-line, no headers)
-SAML_SP_ENTITY_ID=https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io
-SAML_SP_ACS_URL=https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/acs
-SAML_SP_SLS_URL=https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/sls
+SAML_SP_ENTITY_ID=https://rfpo.uscar.org
+SAML_SP_ACS_URL=https://rfpo.uscar.org/saml/acs
+SAML_SP_SLS_URL=https://rfpo.uscar.org/saml/sls
 ```
 
 #### Step 2: SAML Authentication Module
@@ -618,7 +618,7 @@ Create `auth_saml.py` — a shared module used by both User App and Admin Panel:
 3. If admin: `login_user(user)`, redirect to dashboard
 4. If not admin: flash error, redirect to login
 
-**Note:** Admin Panel will need a separate Reply URL registered in the Enterprise Application: `https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io/saml/acs`
+**Note:** Admin Panel will need a separate Reply URL registered in the Enterprise Application: `https://rfpo-admin.uscar.org/saml/acs`
 
 #### Step 5: Model Changes
 

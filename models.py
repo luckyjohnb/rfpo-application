@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
@@ -70,13 +71,13 @@ class Consortium(db.Model):
 
     # Note: Teams reference this consortium via consortium_consort_id field
 
-    def get_rfpo_viewer_users(self):
+    def get_rfpo_viewer_users(self) -> List[str]:
         """Get list of RFPO viewer user IDs"""
         if self.rfpo_viewer_user_ids:
             return json.loads(self.rfpo_viewer_user_ids)
         return []
 
-    def set_rfpo_viewer_users(self, user_ids):
+    def set_rfpo_viewer_users(self, user_ids: List[str]) -> None:
         """Set RFPO viewer user IDs from a list"""
         if user_ids:
             # Filter out empty strings and 'none' values
@@ -85,13 +86,13 @@ class Consortium(db.Model):
         else:
             self.rfpo_viewer_user_ids = None
 
-    def get_rfpo_admin_users(self):
+    def get_rfpo_admin_users(self) -> List[str]:
         """Get list of RFPO admin user IDs"""
         if self.rfpo_admin_user_ids:
             return json.loads(self.rfpo_admin_user_ids)
         return []
 
-    def set_rfpo_admin_users(self, user_ids):
+    def set_rfpo_admin_users(self, user_ids: List[str]) -> None:
         """Set RFPO admin user IDs from a list"""
         if user_ids:
             # Filter out empty strings and 'none' values
@@ -100,7 +101,7 @@ class Consortium(db.Model):
         else:
             self.rfpo_admin_user_ids = None
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
             "consort_id": self.consort_id,
@@ -140,6 +141,9 @@ class RFPO(db.Model):
     rfpo_id = db.Column(
         db.String(64), unique=True, nullable=False
     )  # e.g., RFPO-TestProj3-2025-08-24-N01
+    po_number = db.Column(
+        db.String(64), unique=True, nullable=True
+    )  # e.g., PO-USCAR-20260402-001 — assigned on approval
     title = db.Column(db.String(256), nullable=False)
     description = db.Column(db.Text)
 
@@ -189,14 +193,24 @@ class RFPO(db.Model):
 
     # Status and tracking
     status = db.Column(
-        db.String(32), default="Draft"
+        db.String(32), default="Draft", index=True
     )  # Draft, Submitted, Approved, etc.
     due_date = db.Column(db.Date)
     created_by = db.Column(db.String(64), nullable=False)
     updated_by = db.Column(db.String(64))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Soft delete support
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    __table_args__ = (
+        db.Index("idx_rfpo_project", "project_id"),
+        db.Index("idx_rfpo_consortium", "consortium_id"),
+        db.Index("idx_rfpo_vendor", "vendor_id"),
+        db.Index("idx_rfpo_requestor", "requestor_id"),
     )
 
     # Relationships
@@ -210,7 +224,35 @@ class RFPO(db.Model):
         "RFPOLineItem", backref="rfpo", lazy=True, cascade="all, delete-orphan"
     )
 
-    def get_calculated_cost_share_amount(self):
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
+
+    def soft_delete(self) -> None:
+        self.deleted_at = datetime.utcnow()
+
+    @classmethod
+    def generate_po_number(cls, consortium_abbrev: str) -> str:
+        """Generate a sequential PO number: PO-{ABBREV}-{YYYYMMDD}-{SEQ:03d}"""
+        today = datetime.utcnow().strftime("%Y%m%d")
+        prefix = f"PO-{consortium_abbrev}-{today}-"
+        # Find the highest sequence for this prefix today
+        latest = (
+            cls.query
+            .filter(cls.po_number.like(f"{prefix}%"))
+            .order_by(cls.po_number.desc())
+            .first()
+        )
+        if latest and latest.po_number:
+            try:
+                seq = int(latest.po_number.replace(prefix, "")) + 1
+            except ValueError:
+                seq = 1
+        else:
+            seq = 1
+        return f"{prefix}{seq:03d}"
+
+    def get_calculated_cost_share_amount(self) -> float:
         """Calculate the actual cost share amount based on type and subtotal"""
         if not self.cost_share_amount or not self.subtotal:
             return 0.00
@@ -223,13 +265,13 @@ class RFPO(db.Model):
             # Direct dollar amount
             return float(self.cost_share_amount)
 
-    def get_calculated_total_amount(self):
+    def get_calculated_total_amount(self) -> float:
         """Calculate the total amount after cost sharing"""
         subtotal = float(self.subtotal or 0)
         cost_share = self.get_calculated_cost_share_amount()
         return subtotal - cost_share
 
-    def update_totals(self):
+    def update_totals(self) -> None:
         """Update subtotal and total_amount based on line items and cost sharing"""
         if self.line_items:
             self.subtotal = sum(
@@ -245,6 +287,7 @@ class RFPO(db.Model):
         return {
             "id": self.id,
             "rfpo_id": self.rfpo_id,
+            "po_number": self.po_number,
             "title": self.title,
             "description": self.description,
             "project_id": self.project_id,
@@ -295,7 +338,7 @@ class RFPOLineItem(db.Model):
     __tablename__ = "rfpo_line_items"
 
     id = db.Column(db.Integer, primary_key=True)
-    rfpo_id = db.Column(db.Integer, db.ForeignKey("rfpos.id"), nullable=False)
+    rfpo_id = db.Column(db.Integer, db.ForeignKey("rfpos.id"), nullable=False, index=True)
     line_number = db.Column(
         db.Integer, nullable=False
     )  # Order in the RFPO (1, 2, 3...)
@@ -386,7 +429,7 @@ class UploadedFile(db.Model):
     processing_error = db.Column(db.Text)
 
     # Associations
-    rfpo_id = db.Column(db.Integer, db.ForeignKey("rfpos.id"), nullable=False)
+    rfpo_id = db.Column(db.Integer, db.ForeignKey("rfpos.id"), nullable=False, index=True)
     uploaded_by = db.Column(db.String(64), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     processed_at = db.Column(db.DateTime)
@@ -665,41 +708,41 @@ class User(UserMixin, db.Model):
     created_by = db.Column(db.String(64))
     updated_by = db.Column(db.String(64))
 
-    def get_permissions(self):
+    def get_permissions(self) -> List[str]:
         """Get list of user permissions"""
         if self.permissions:
             return json.loads(self.permissions)
         return []
 
-    def set_permissions(self, permission_list):
+    def set_permissions(self, permission_list: List[str]) -> None:
         """Set user permissions from a list"""
         if permission_list:
             self.permissions = json.dumps(permission_list)
         else:
             self.permissions = None
 
-    def has_permission(self, permission):
+    def has_permission(self, permission: str) -> bool:
         """Check if user has a specific permission"""
         user_permissions = self.get_permissions()
         return permission in user_permissions
 
-    def is_super_admin(self):
+    def is_super_admin(self) -> bool:
         """Check if user is a super admin (GOD permission)"""
         return self.has_permission("GOD")
 
-    def is_rfpo_admin(self):
+    def is_rfpo_admin(self) -> bool:
         """Check if user has RFPO admin permissions"""
         return self.has_permission("RFPO_ADMIN") or self.is_super_admin()
 
-    def is_rfpo_user(self):
+    def is_rfpo_user(self) -> bool:
         """Check if user has RFPO user permissions"""
         return self.has_permission("RFPO_USER") or self.is_rfpo_admin()
 
-    def get_display_name(self):
+    def get_display_name(self) -> str:
         """Get formatted display name"""
         return self.fullname if self.fullname else self.email
 
-    def get_full_address(self):
+    def get_full_address(self) -> str:
         """Get formatted full address"""
         address_parts = []
         if self.building_address:
@@ -719,19 +762,19 @@ class User(UserMixin, db.Model):
             address_parts.append(self.country)
         return "\n".join(address_parts)
 
-    def get_teams(self):
+    def get_teams(self) -> List[Any]:
         """Get list of teams this user belongs to"""
         return [ut.team for ut in self.user_teams if ut.team]
 
-    def get_team_names(self):
+    def get_team_names(self) -> List[str]:
         """Get list of team names this user belongs to"""
         return [team.name for team in self.get_teams()]
 
-    def is_member_of_team(self, team_id):
+    def is_member_of_team(self, team_id: int) -> bool:
         """Check if user is a member of a specific team"""
         return any(ut.team_id == team_id for ut in self.user_teams)
 
-    def add_to_team(self, team_id, role="member", created_by=None):
+    def add_to_team(self, team_id: int, role: str = "member", created_by: Optional[str] = None) -> None:
         """Add user to a team with specified role"""
         if not self.is_member_of_team(team_id):
             user_team = UserTeam(
@@ -1969,7 +2012,9 @@ class RFPOApprovalInstance(db.Model):
 
     # Relationships
     rfpo = db.relationship(
-        "RFPO", backref=db.backref("approval_instance", uselist=False)
+        "RFPO", backref=db.backref(
+            "approval_instance", uselist=False, cascade="all, delete-orphan"
+        )
     )
     actions = db.relationship(
         "RFPOApprovalAction",
@@ -2268,3 +2313,50 @@ class RFPOApprovalAction(db.Model):
 
     def __repr__(self):
         return f"<RFPOApprovalAction {self.action_id}: {self.step_name} by {self.approver_name} [{self.status}]>"
+
+
+class AuditLog(db.Model):
+    """Audit trail for tracking all significant operations across the application."""
+
+    __tablename__ = "audit_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    user_email = db.Column(db.String(255), nullable=True)
+    action = db.Column(db.String(64), nullable=False, index=True)  # create, update, delete, login, export, approve, reject
+    entity_type = db.Column(db.String(64), nullable=False, index=True)  # rfpo, user, consortium, team, etc.
+    entity_id = db.Column(db.String(64), nullable=True)  # PK or external ID of affected entity
+    details = db.Column(db.Text, nullable=True)  # JSON blob with before/after or extra context
+    ip_address = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(512), nullable=True)
+
+    __table_args__ = (
+        db.Index("idx_audit_entity", "entity_type", "entity_id"),
+        db.Index("idx_audit_user_action", "user_id", "action"),
+    )
+
+    def set_details(self, data: Optional[Dict[str, Any]]) -> None:
+        if data:
+            self.details = json.dumps(data, default=str)
+
+    def get_details(self) -> Dict[str, Any]:
+        if self.details:
+            return json.loads(self.details)
+        return {}
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "user_id": self.user_id,
+            "user_email": self.user_email,
+            "action": self.action,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "details": self.get_details(),
+            "ip_address": self.ip_address,
+        }
+
+    def __repr__(self):
+        return f"<AuditLog {self.id}: {self.action} {self.entity_type}:{self.entity_id} by {self.user_email}>"

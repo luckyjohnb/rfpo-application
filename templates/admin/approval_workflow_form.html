@@ -1,10 +1,10 @@
 {% extends "admin/base.html" %}
 
-{% block title %}{{ action }} {{ workflow_type.title() }} Approval Workflow{% endblock %}
+{% block title %}{{ action }} {{ workflow_type.title() }} Workflow{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>🔄 {{ action }} {{ workflow_type.title() }} Approval Workflow</h1>
+    <h1>🔄 {{ action }} {{ workflow_type.title() }} Workflow</h1>
     <a href="{{ url_for('approval_workflows', workflow_type=workflow_type) }}" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to {{ workflow_type.title() }} Workflows
     </a>
@@ -19,11 +19,11 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('approval_workflow_create') }}" id="workflowForm">
                     <input type="hidden" name="workflow_type" value="{{ workflow_type }}">
-                    
+
                     <div class="form-group">
                         <label for="name">Workflow Name *</label>
-                        <input type="text" class="form-control" id="name" name="name" 
-                               value="{{ workflow.name if workflow else '' }}" 
+                        <input type="text" class="form-control" id="name" name="name"
+                               value="{{ workflow.name if workflow else '' }}"
                                placeholder="e.g., {{ workflow_type.title() }} Standard Approval Process" required>
                         <small class="form-text text-muted">
                             A descriptive name for this {{ workflow_type }} approval workflow
@@ -44,17 +44,17 @@
                                     <option value="">Select {{ workflow_type.title() }}</option>
                                     {% for entity in entities %}
                                     {% if workflow_type == 'consortium' %}
-                                    <option value="{{ entity.consort_id }}" 
+                                    <option value="{{ entity.consort_id }}"
                                             {% if workflow and workflow.consortium_id == entity.consort_id %}selected{% endif %}>
                                         {{ entity.abbrev }} - {{ entity.name }}
                                     </option>
                                     {% elif workflow_type == 'team' %}
-                                    <option value="{{ entity.id }}" 
+                                    <option value="{{ entity.id }}"
                                             {% if workflow and workflow.team_id == entity.id %}selected{% endif %}>
                                         {{ entity.abbrev }} - {{ entity.name }}
                                     </option>
                                     {% elif workflow_type == 'project' %}
-                                    <option value="{{ entity.project_id }}" 
+                                    <option value="{{ entity.project_id }}"
                                             {% if workflow and workflow.project_id == entity.project_id %}selected{% endif %}>
                                         {{ entity.ref }} - {{ entity.name }}
                                     </option>
@@ -69,8 +69,8 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="version">Version</label>
-                                <input type="text" class="form-control" id="version" name="version" 
-                                       value="{{ workflow.version if workflow else '1.0' }}" 
+                                <input type="text" class="form-control" id="version" name="version"
+                                       value="{{ workflow.version if workflow else '1.0' }}"
                                        placeholder="1.0">
                                 <small class="form-text text-muted">
                                     Version number for tracking changes
@@ -81,7 +81,7 @@
 
                     <div class="form-group">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active"
                                    value="1" {% if workflow and workflow.is_active %}checked{% endif %}>
                             <label class="form-check-label" for="is_active">
                                 <strong>Active Workflow</strong>
@@ -96,7 +96,7 @@
 
                     <div class="d-flex justify-content-between">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} Workflow
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save Workflow{% else %}Create Workflow{% endif %}
                         </button>
                         {% if workflow %}
                         <a href="{{ url_for('approval_workflow_edit', id=workflow.id) }}" class="btn btn-info">
@@ -143,7 +143,7 @@
             </div>
             <div class="card-body">
                 <p class="small mb-0">
-                    This is the <strong>active workflow</strong> for {{ workflow.consortium_id }}. 
+                    This is the <strong>active workflow</strong> for {{ workflow.consortium_id }}.
                     All new RFPOs for this consortium will use this approval process.
                 </p>
             </div>
@@ -158,12 +158,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const entitySelect = document.getElementById('entity_id');
     const isActiveCheckbox = document.getElementById('is_active');
     const workflowType = '{{ workflow_type }}';
-    
+
     form.addEventListener('submit', function(e) {
         // Only check for conflicts if creating a new workflow and it's marked as active
         if (isActiveCheckbox.checked && entitySelect.value && {{ 'true' if not workflow else 'false' }}) {
             e.preventDefault();
-            
+
             // Check if there's already an active workflow for this entity
             fetch(`/api/check-active-workflow/${workflowType}/${entitySelect.value}`)
                 .then(response => response.json())
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                       `"${data.active_workflow_name}" (${data.active_workflow_id})\n\n` +
                                       `Creating this new active workflow will automatically deactivate the existing one.\n\n` +
                                       `Do you want to continue?`;
-                        
+
                         if (confirm(message)) {
                             // User confirmed, submit the form
                             form.removeEventListener('submit', arguments.callee);

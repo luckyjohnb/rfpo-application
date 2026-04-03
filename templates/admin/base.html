@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}RFPO Admin Panel{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -41,13 +42,73 @@
             padding: 0.25rem 0.5rem;
             font-size: 0.875rem;
         }
+        /* Focus states for accessibility */
+        a:focus-visible, button:focus-visible, input:focus-visible,
+        select:focus-visible, textarea:focus-visible, .form-control:focus {
+            outline: 2px solid #3498db;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        /* Table column truncation */
+        .table td.text-truncate-cell, .table th.text-truncate-cell {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .table td.text-truncate-cell-sm {
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Required field indicator */
+        label.required::after {
+            content: " *";
+            color: #dc3545;
+        }
+        /* Mobile improvements */
+        @media (max-width: 767.98px) {
+            .sidebar {
+                min-height: auto;
+                position: relative;
+            }
+            .sidebar .nav-link {
+                padding: 0.4rem 0.75rem;
+                font-size: 0.875rem;
+            }
+            .main-content {
+                min-height: auto;
+                padding: 0.5rem !important;
+            }
+            .card-body {
+                padding: 0.75rem;
+            }
+            h1.h2, .h2 {
+                font-size: 1.25rem;
+            }
+            .btn-group-sm > .btn {
+                padding: 0.15rem 0.35rem;
+                font-size: 0.75rem;
+            }
+            .table {
+                font-size: 0.8rem;
+            }
+            .table td, .table th {
+                padding: 0.35rem 0.5rem;
+            }
+            .d-flex.justify-content-between {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->
-            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse" aria-label="Admin navigation">
                 <div class="position-sticky pt-3">
                     <div class="text-center mb-4">
                         <h4 class="text-white">🔧 RFPO Admin</h4>
@@ -127,12 +188,12 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('approval_workflows') }}">
-                                <i class="fas fa-route"></i> Approval Workflows
+                                <i class="fas fa-route"></i> Workflows
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('approval_instances') }}">
-                                <i class="fas fa-clipboard-list"></i> Approval Instances
+                                <i class="fas fa-clipboard-list"></i> Approvals
                             </a>
                         </li>
 
@@ -167,7 +228,7 @@
             </nav>
 
             <!-- Main content -->
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content" role="main">
                 <div class="pt-3">
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
@@ -191,6 +252,76 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // Auto-inject CSRF token into all forms and fetch/XHR requests
+    (function() {
+        var token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+        // Inject hidden input into every form that doesn't already have one
+        document.querySelectorAll('form').forEach(function(form) {
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = token;
+                form.appendChild(input);
+            }
+        });
+
+        // Patch fetch() to include the CSRF header on same-origin requests
+        var originalFetch = window.fetch;
+        window.fetch = function(url, options) {
+            options = options || {};
+            if (options.method && options.method.toUpperCase() !== 'GET') {
+                options.headers = options.headers || {};
+                if (options.headers instanceof Headers) {
+                    if (!options.headers.has('X-CSRFToken')) {
+                        options.headers.set('X-CSRFToken', token);
+                    }
+                } else {
+                    options.headers['X-CSRFToken'] = options.headers['X-CSRFToken'] || token;
+                }
+            }
+            return originalFetch.call(this, url, options);
+        };
+
+        // Patch XMLHttpRequest to include CSRF header
+        var originalOpen = XMLHttpRequest.prototype.open;
+        var originalSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            this._csrfMethod = method;
+            return originalOpen.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.send = function() {
+            if (this._csrfMethod && this._csrfMethod.toUpperCase() !== 'GET') {
+                this.setRequestHeader('X-CSRFToken', token);
+            }
+            return originalSend.apply(this, arguments);
+        };
+    })();
+    </script>
+    <script>
+    // Global form input trimming on submit
+    document.addEventListener('submit', function(e) {
+        if (e.target.tagName === 'FORM') {
+            e.target.querySelectorAll('input[type="text"], input[type="email"], input[type="search"], input[type="url"], input[type="tel"], textarea').forEach(function(input) {
+                if (input.value && !input.readOnly && !input.disabled) {
+                    input.value = input.value.trim();
+                }
+            });
+        }
+    }, true);
+
+    // Flash alert auto-dismiss after 5 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.alert-dismissible').forEach(function(alert) {
+            setTimeout(function() {
+                var bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                if (bsAlert) bsAlert.close();
+            }, 5000);
+        });
+    });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

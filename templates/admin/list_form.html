@@ -197,7 +197,7 @@
                             <i class="fas fa-times"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} List Item
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save List Item{% else %}Create List Item{% endif %}
                         </button>
                     </div>
                 </div>
@@ -284,8 +284,8 @@ async function updateListPreview() {
                             <table class="table table-sm">
                                 <thead>
                                     <tr>
-                                        <th>Key</th>
-                                        <th>Value</th>
+                                        <th scope="col">Key</th>
+                                        <th scope="col">Value</th>
                                     </tr>
                                 </thead>
                                 <tbody>

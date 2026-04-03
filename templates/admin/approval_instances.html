@@ -16,14 +16,14 @@
             <table class="table table-hover">
                 <thead>
                     <tr>
-                        <th>Instance ID</th>
-                        <th>RFPO</th>
-                        <th>Workflow</th>
-                        <th>Current Stage</th>
-                        <th>Status</th>
-                        <th>Progress</th>
-                        <th>Submitted</th>
-                        <th>Actions</th>
+                        <th scope="col">Instance ID</th>
+                        <th scope="col">RFPO</th>
+                        <th scope="col">Workflow</th>
+                        <th scope="col">Current Stage</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Progress</th>
+                        <th scope="col">Submitted</th>
+                        <th scope="col">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -149,7 +149,7 @@
             <div class="card-body">
                 <p>
                     <strong>Approval instances</strong> are created when an RFPO is submitted for approval.
-                    Each instance captures a snapshot of the active approval workflow at the time of submission,
+                    Each instance captures a snapshot of the active workflow at the time of submission,
                     ensuring that approval processes remain consistent even if the workflow is later modified.
                 </p>
                 <ul>
@@ -192,7 +192,7 @@
             </div>
             <div class="modal-body">
                 <p>Are you sure you want to submit this RFPO for approval?</p>
-                <p class="text-muted">This will start the approval workflow process and change the RFPO status to "Submitted".</p>
+                <p class="text-muted">This will start the workflow process and change the RFPO status to "Submitted".</p>
                 <div id="submitValidationResults" class="mt-3"></div>
             </div>
             <div class="modal-footer">
@@ -411,7 +411,7 @@ function displayTestResults(validation) {
             if (!hasWorkflow) {
                 html += `<div class="alert alert-light border">
                     <i class="fas fa-info-circle text-muted"></i> <strong>No Workflow Configured</strong><br>
-                    <small class="text-muted">No active approval workflow is configured for this ${phase.workflow_type}.
+                    <small class="text-muted">No active workflow is configured for this ${phase.workflow_type}.
                     This phase will be skipped in the approval process.</small>
                 </div>`;
             } else {

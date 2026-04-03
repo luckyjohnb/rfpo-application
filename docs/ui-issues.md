@@ -16,13 +16,20 @@ This tracking document accompanies the "UI issues" Pull Request and will be upda
 
 ## Candidate Items (Checklist)
 
-- [ ] Form input trimming (leading/trailing spaces) across common text fields
-- [ ] Consistent placeholder/help text for required fields
-- [ ] Button label consistency (e.g., Save vs. Update)
-- [ ] Table column alignment and responsive truncation of long values
-- [ ] Flash/alert placement and auto-dismiss timing review
-- [ ] Accessibility quick pass (labels/aria, contrast, focus states)
-- [ ] Mobile layout review for key pages (Users, Vendors, RFPOs)
+- [x] Form input trimming (leading/trailing spaces) across common text fields
+  - Global `submit` event handler in both `admin/base.html` and `app/base.html` trims all text/email/search/url/tel inputs and textareas on form submit.
+- [x] Consistent placeholder/help text for required fields
+  - Audited all form templates; all required fields already have descriptive `placeholder` attributes.
+- [x] Button label consistency (e.g., Save vs. Update)
+  - Standardized 8 form templates: edit mode shows "Save X", create mode shows "Create X" (was previously showing "Edit X").
+- [x] Table column alignment and responsive truncation of long values
+  - Added `.text-truncate-cell` (max-width 200px) and `.text-truncate-cell-sm` (max-width 120px) CSS classes in `admin/base.html`. Applied to Users, Vendors, and RFPOs list tables.
+- [x] Flash/alert placement and auto-dismiss timing review
+  - Admin flash alerts auto-dismiss after 5 seconds via `bootstrap.Alert` in `admin/base.html`.
+- [x] Accessibility quick pass (labels/aria, contrast, focus states)
+  - Added `:focus-visible` outline styles in both base templates. Added `aria-label` on User App nav, `role="navigation"` on sidebar, `role="main"` on content area. Added `scope="col"` to User App table headers.
+- [x] Mobile layout review for key pages (Users, Vendors, RFPOs)
+  - Added `@media (max-width: 767.98px)` rules in both base templates: sidebar collapses to full-width, tables get smaller font/padding, cards and headings resize, button groups wrap.
 
 ## Notes
 

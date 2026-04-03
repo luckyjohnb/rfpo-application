@@ -97,7 +97,7 @@
                             <i class="fas fa-times"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} RFPO
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save RFPO{% else %}Create RFPO{% endif %}
                         </button>
                     </div>
                 </div>

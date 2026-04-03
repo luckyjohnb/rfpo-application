@@ -217,7 +217,6 @@
                 <td><p id="requestor_id"><b>Requestor:</b></p></td>
                 <td><p>
                     {{ requestor.get_display_name() if requestor }}<br />
-                    {% if rfpo.requestor_tel %}Tel:{{ rfpo.requestor_tel }}<br />{% endif %}
                     {% if requestor and requestor.email %}Email:<a href="mailto:{{ requestor.email }}">{{ requestor.email }}</a>{% endif %}
                 </p></td>
                 <td style="text-align:right"><p><b>Raised:</b></p></td>
@@ -225,8 +224,6 @@
             </tr>
 
             <tr class="cell">
-                <td><p id="location"><b>Location:</b></p></td>
-                <td><p>{{ rfpo.requestor_location or 'United States' }}</p></td>
                 <td style="text-align:right"><p><b>Invoice to:</b></p></td>
                 <td><p>{{ rfpo.invoice_address|replace('\n', '<br />')|safe if rfpo.invoice_address else (consortium.invoicing_address|replace('\n', '<br />')|safe if consortium and consortium.invoicing_address else 'United States Council for Automotive <br />Research LLC<br />Attn: Accounts Payable<br />3000 Town Center Building, Suite 35<br />Southfield, MI 48075') }}</p></td>
             </tr>
@@ -234,28 +231,18 @@
             <tr class="cell">
                 <td><p id="shipto_name"><b>Ship to name:</b></p></td>
                 <td><p>{{ rfpo.shipto_name or '' }}</p></td>
-                <td style="text-align:right" nowrap><p><b>Delivery Date:</b></p></td>
+                <td style="text-align:right" nowrap><p><b>PO Expiration Date:</b></p></td>
                 <td><p>{{ rfpo.delivery_date.strftime('%B %d, %Y') if rfpo.delivery_date else '' }}</p></td>
             </tr>
 
             <tr class="cell">
                 <td><p id="shipto_tel"><b>Ship to tel:</b></p></td>
                 <td><p>{{ rfpo.shipto_tel or '' }}</p></td>
-                <td style="text-align:right" nowrap><p id="payment_terms"><b>Payment Terms:</b></p></td>
-                <td><p>{{ rfpo.payment_terms or 'Net 30' }}</p></td>
             </tr>
 
             <tr class="cell">
                 <td nowrap><p id="shipto_address"><b>Ship to address:</b></p></td>
                 <td><p>{{ rfpo.shipto_address|replace('\n', '<br />')|safe if rfpo.shipto_address else '' }}</p></td>
-                <td style="text-align:right" nowrap><p id="delivery"><b>Delivery:</b></p></td>
-                <td>
-                    <p>
-                        {% if rfpo.delivery_type %}Type &amp; Place: {{ rfpo.delivery_type }}<br />{% endif %}
-                        {% if rfpo.delivery_payment %}Payment: {{ rfpo.delivery_payment }}<br />{% endif %}
-                        {% if rfpo.delivery_routing %}Routing: {{ rfpo.delivery_routing }}{% endif %}
-                    </p>
-                </td>
             </tr>
 
             <tr class="cell">
@@ -339,11 +326,11 @@
         <!-- LINES TABLE -->
         <table border="0" cellspacing="1" cellpadding="0" class="preview_table">
             <tr>
-                <th><b>#</b></th>
-                <th><b>Qty</b></th>
-                <th><b>Description of supplies or services</b></th>
-                <th style="text-align:right"><b>Unit Price</b></th>
-                <th style="text-align:right"><b>Total Price</b></th>
+                <th scope="col"><b>#</b></th>
+                <th scope="col"><b>Qty</b></th>
+                <th scope="col"><b>Description of supplies or services</b></th>
+                <th scope="col" style="text-align:right"><b>Unit Price</b></th>
+                <th scope="col" style="text-align:right"><b>Total Price</b></th>
             </tr>
 
             {% for item in rfpo.line_items|sort(attribute='line_number') %}

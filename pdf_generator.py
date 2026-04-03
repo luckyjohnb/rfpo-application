@@ -298,7 +298,13 @@ class RFPOPDFGenerator:
     def _draw_page1_data(
         self, canvas, rfpo, consortium, project, vendor, vendor_site, width, height
     ):
-        """Draw data on page 1 (main PO info) - using positioning configuration or legacy defaults"""
+        """Draw data on page 1 (main PO info) - using positioning configuration or legacy defaults
+
+        Default coordinates are mapped to the po.pdf template layout:
+        - Template is 612x792 pts (US Letter)
+        - Coordinates use PDF convention (origin at bottom-left)
+        - Data is placed BELOW each template label to fill the form fields
+        """
 
         # === CONSORTIUM LOGO ===
         if consortium and hasattr(consortium, "logo") and consortium.logo:
@@ -307,17 +313,17 @@ class RFPOPDFGenerator:
             )
 
         # === TOP SECTION ===
-        # PO NUMBER
-        self._draw_text_with_positioning(canvas, "po_number", rfpo.rfpo_id, 470, 710)
+        # PO NUMBER — template "NUMBER:" label at x=394, y=764; fill to right
+        po_display = rfpo.po_number if rfpo.po_number else rfpo.rfpo_id
+        self._draw_text_with_positioning(canvas, "po_number", po_display, 470, 760)
 
-        # DATE OF ORDER
+        # DATE OF ORDER — template label at x=394, y=730; fill to right
         self._draw_text_with_positioning(
-            canvas, "po_date", datetime.now().strftime("%m/%d/%Y"), 470, 695
+            canvas, "po_date", datetime.now().strftime("%m/%d/%Y"), 470, 726
         )
 
-        # === VENDOR SECTION ===
+        # === VENDOR SECTION (Box: 46,535 to 244,679 — label "VENDOR:" at y=669) ===
         if vendor:
-            # Determine which contact info to use - vendor_site takes priority, then vendor default
             contact_name = None
             contact_address = None
             contact_city = None
@@ -333,7 +339,6 @@ class RFPOPDFGenerator:
                 contact_zip = vendor_site.contact_zip
                 contact_tel = vendor_site.contact_tel
             else:
-                # Fall back to vendor's default contact info
                 contact_name = vendor.contact_name
                 contact_address = vendor.contact_address
                 contact_city = vendor.contact_city
@@ -341,25 +346,23 @@ class RFPOPDFGenerator:
                 contact_zip = vendor.contact_zip
                 contact_tel = vendor.contact_tel
 
-            # Vendor company name
+            # Vendor company name — below "VENDOR:" label
             self._draw_text_with_positioning(
-                canvas, "vendor_company", vendor.company_name, 60, 600
+                canvas, "vendor_company", vendor.company_name, 52, 656
             )
 
-            # Contact person
             if contact_name:
                 self._draw_text_with_positioning(
-                    canvas, "vendor_contact", contact_name, 60, 585
+                    canvas, "vendor_contact", contact_name, 52, 643
                 )
 
-            # Use pre-formatted address if available, otherwise build from components
+            # Address
+            vendor_addr_y = 630
             if contact_address:
-                # Use the pre-formatted address (likely already contains full address with line breaks)
                 self._draw_text_with_positioning(
-                    canvas, "vendor_address", contact_address, 60, 570
+                    canvas, "vendor_address", contact_address, 52, vendor_addr_y
                 )
             else:
-                # Build address from individual components if no pre-formatted address
                 address_parts = []
                 city_state_zip = []
                 if contact_city:
@@ -374,150 +377,116 @@ class RFPOPDFGenerator:
 
                 if address_parts:
                     self._draw_text_with_positioning(
-                        canvas, "vendor_address", "\n".join(address_parts), 60, 570
+                        canvas, "vendor_address", "\n".join(address_parts), 52, vendor_addr_y
                     )
 
-            # Phone number if available
             if contact_tel:
+                # Position phone below address dynamically
+                addr_text = contact_address or ", ".join(filter(None, [contact_city, contact_state, contact_zip]))
+                addr_lines = len(addr_text.split("\n")) if addr_text else 0
+                phone_y = vendor_addr_y - (addr_lines * 13) - 13
                 self._draw_text_with_positioning(
-                    canvas, "vendor_phone", f"Phone: {contact_tel}", 60, 555
+                    canvas, "vendor_phone", f"Tel: {contact_tel}", 52, phone_y
                 )
         else:
-            # Show placeholder if no vendor selected
             self._draw_text_with_positioning(
-                canvas, "vendor_company", "[No Vendor Selected]", 60, 600
+                canvas, "vendor_company", "[No Vendor Selected]", 52, 656
             )
 
-        # === SHIP TO SECTION ===
+        # === SHIP TO SECTION (Box: 392,535 to 590,679 — label "SHIP TO:" at y=669) ===
         if rfpo.shipto_name:
             self._draw_text_with_positioning(
-                canvas, "ship_to_name", rfpo.shipto_name, 240, 600
+                canvas, "ship_to_name", rfpo.shipto_name, 398, 656
             )
 
         if rfpo.shipto_address:
-            # Keep original line breaks for proper multi-line formatting
             self._draw_text_with_positioning(
-                canvas, "ship_to_address", rfpo.shipto_address, 240, 585
+                canvas, "ship_to_address", rfpo.shipto_address, 398, 643
             )
 
-        # === DELIVERY SECTION ===
-        # Type & Place
-        if rfpo.delivery_type:
-            self._draw_text_with_positioning(
-                canvas, "delivery_type", rfpo.delivery_type, 410, 570
-            )
-
-        # Payment for Transportation
-        if rfpo.delivery_payment:
-            self._draw_text_with_positioning(
-                canvas, "delivery_payment", rfpo.delivery_payment, 410, 545
-            )
-
-        # Routing
-        if rfpo.delivery_routing:
-            self._draw_text_with_positioning(
-                canvas, "delivery_routing", rfpo.delivery_routing, 410, 520
-            )
-
-        # === MIDDLE SECTION ===
-        # PAYMENT section
-        if rfpo.payment_terms:
-            self._draw_text_with_positioning(
-                canvas, "payment_terms", rfpo.payment_terms, 60, 470
-            )
-
-        # PROJECT section
+        # === MIDDLE FORM FIELDS ===
+        # PROJECT — template label "PROJECT:" at (251, 665), box (250,661)-(385,679)
+        project_text = f"[{project.ref}] {project.name}"
+        if len(project_text) > 28:
+            project_text = project_text[:25] + "..."
         self._draw_text_with_positioning(
-            canvas, "project_info", f"[{project.ref}] {project.name}", 240, 470
+            canvas, "project_info", project_text, 255, 655
         )
 
-        # DELIVERY DATE
+        # DELIVERY DATE — template label "DELIVERY:" at (251, 641), box (250,637)-(385,656)
         if rfpo.delivery_date:
             self._draw_text_with_positioning(
                 canvas,
                 "delivery_date",
                 rfpo.delivery_date.strftime("%m/%d/%Y"),
-                410,
-                470,
+                255,
+                632,
             )
 
-        # Government Agreement Number
+        # PAYMENT, DELIVERY DETAIL fields hidden from create flow (Issues #5, #6)
+        # These fields are no longer collected from users and omitted from PDF output
+
+        # === GOVERNMENT AGREEMENT (template label at x=253, y=522) ===
         if rfpo.government_agreement_number:
             self._draw_text_with_positioning(
                 canvas,
                 "government_agreement",
-                f"U.S. Government Funding under Agreement Number: {rfpo.government_agreement_number}",
-                240,
-                455,
+                rfpo.government_agreement_number,
+                380,
+                518,
             )
 
-        # === LINE ITEMS SECTION (Middle area, starts around y=400) ===
+        # === LINE ITEMS SECTION ===
+        # Template table header row is at y=497-506 (already in template)
+        # Line items area: box (46,176)-(590,491)
         overflow_items = []
         if rfpo.line_items:
-            # Line items table - positioned to match legacy template
-            table_start_y = 410
+            # Start just below the template's header row
             line_height = 12
-            current_y = table_start_y
+            current_y = 480
 
-            # Table headers - use positioning for header
-            self._draw_text_with_positioning(
-                canvas,
-                "line_items_header",
-                "QTY  DESCRIPTION OF SUPPLIES OR SERVICES  UNIT PRICE  TOTAL PRICE",
-                60,
-                current_y,
-            )
-
-            # Draw line under headers
-            canvas.line(60, current_y - 3, 530, current_y - 3)
-
-            current_y -= 20
             canvas.setFont("Helvetica", 8)
 
             for i, item in enumerate(rfpo.line_items):
-                # Calculate space needed for this item (including continuation line if needed)
                 desc_lines = self._wrap_text(item.description, 45)
                 lines_needed = 1 if len(desc_lines) <= 1 else 2
                 space_needed = line_height * lines_needed
 
-                # Check if we have enough space (need to leave room for totals section)
-                if current_y - space_needed < 150:
-                    # This item and all remaining items go to overflow
+                # Leave room for totals section (y=176 is box bottom)
+                if current_y - space_needed < 220:
                     overflow_items = rfpo.line_items[i:]
                     break
 
-                # Quantity (left-aligned in qty column)
+                # Quantity — column (46,176)-(85,491)
                 self._draw_text_with_positioning(
-                    canvas, f"line_item_{i}_quantity", str(item.quantity), 60, current_y
+                    canvas, f"line_item_{i}_quantity", str(item.quantity), 55, current_y
                 )
 
-                # Description (wrapped to fit column width)
+                # Description — column (91,176)-(424,491)
                 desc_text = desc_lines[0] if desc_lines else ""
-
-                # Add capital equipment indicator to description if applicable
                 if item.is_capital_equipment:
                     desc_text += " [CAPITAL EQUIP.]"
 
                 self._draw_text_with_positioning(
-                    canvas, f"line_item_{i}_description", desc_text, 120, current_y
+                    canvas, f"line_item_{i}_description", desc_text, 95, current_y
                 )
 
-                # Unit price (right-aligned in unit price column)
+                # Unit price — column (431,176)-(510,491), right-aligned
                 self._draw_text_with_positioning(
                     canvas,
                     f"line_item_{i}_unit_price",
                     f"${item.unit_price:,.2f}",
-                    450,
+                    505,
                     current_y,
                     right_align=True,
                 )
 
-                # Total price (right-aligned in total price column)
+                # Total price — column (516,176)-(590,491), right-aligned
                 self._draw_text_with_positioning(
                     canvas,
                     f"line_item_{i}_total_price",
                     f"${item.total_price:,.2f}",
-                    530,
+                    585,
                     current_y,
                     right_align=True,
                 )
@@ -534,7 +503,7 @@ class RFPOPDFGenerator:
                             if len(desc_lines[1]) > 45
                             else desc_lines[1]
                         ),
-                        120,
+                        95,
                         current_y,
                     )
                     current_y -= line_height
@@ -576,52 +545,21 @@ class RFPOPDFGenerator:
                 canvas, "total", f"TOTAL: ${rfpo.total_amount:,.2f}", 400, current_y
             )
 
-            # Set the bottom position for requestor/invoice sections
-            bottom_sections_y = current_y - 30
-        else:
-            bottom_sections_y = 350
-
-        # === VENDOR IS SECTION (Bottom left area) ===
-        vendor_is_y = bottom_sections_y - 50
-        canvas.setFont("Helvetica", 8)
+        # === REQUESTOR SECTION (Box: 46,42 to 244,168 — label "REQUESTOR:" at y=156) ===
+        # Requestor details hidden from create flow (Issue #3) — only show requestor name/ID
+        requestor_name = rfpo.requestor_id or "ADMIN001"
         self._draw_text_with_positioning(
-            canvas, "vendor_type_label", "VENDOR IS:", 60, vendor_is_y
+            canvas,
+            "requestor_info",
+            requestor_name,
+            52,
+            145,
         )
 
-        # Checkboxes (using simple text representation)
-        checkbox_y = vendor_is_y - 15
-        self._draw_text_with_positioning(
-            canvas, "vendor_small_business", "☐ SMALL BUSINESS", 60, checkbox_y
-        )
-        self._draw_text_with_positioning(
-            canvas, "vendor_university", "☐ UNIVERSITY", 160, checkbox_y
-        )
-        self._draw_text_with_positioning(
-            canvas, "vendor_nonprofit", "☐ NON-PROFIT", 240, checkbox_y
-        )
-
-        # === REQUESTOR SECTION ===
-        requestor_info_parts = []
-        requestor_info_parts.append(rfpo.requestor_id or "ADMIN001")
-        if rfpo.requestor_tel:
-            requestor_info_parts.append(f"Tel: {rfpo.requestor_tel}")
-        if rfpo.requestor_location:
-            requestor_info_parts.append(rfpo.requestor_location)
-
-        if requestor_info_parts:
-            self._draw_text_with_positioning(
-                canvas,
-                "requestor_info",
-                "\n".join(requestor_info_parts),
-                60,
-                bottom_sections_y,
-            )
-
-        # === INVOICE TO SECTION ===
+        # === INVOICE TO SECTION (Box: 249,42 to 447,168 — label "INVOICE TO:" at y=156) ===
         if rfpo.invoice_address:
-            # Keep original line breaks for proper multi-line formatting
             self._draw_text_with_positioning(
-                canvas, "invoice_address", rfpo.invoice_address, 410, bottom_sections_y
+                canvas, "invoice_address", rfpo.invoice_address, 255, 145
             )
 
         # Return any line items that didn't fit on page 1

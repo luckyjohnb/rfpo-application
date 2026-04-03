@@ -6,12 +6,16 @@ Handles email sending functionality with template support
 import logging
 import os
 import smtplib
+import threading
+import time
+from collections import deque
+from dataclasses import dataclass, field
 from datetime import datetime
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -31,6 +35,23 @@ except Exception:  # pragma: no cover - optional dependency
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FailedEmail:
+    """Represents a failed email stored in the retry queue."""
+
+    to_emails: List[str]
+    subject: str
+    body_text: Optional[str] = None
+    body_html: Optional[str] = None
+    from_email: Optional[str] = None
+    cc_emails: Optional[List[str]] = None
+    bcc_emails: Optional[List[str]] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    attempts: int = 0
+    last_error: str = ""
+    created_at: datetime = field(default_factory=datetime.now)
 
 
 def load_env_file(env_file=".env"):
@@ -72,6 +93,16 @@ class EmailService:
         self.last_sender: Optional[str] = None
         self.last_recipients: List[str] = []
         self.last_message_id: Optional[str] = None
+
+        # Retry configuration
+        self.max_retries: int = int(self.config.get("max_retries", 3))
+        self.retry_base_delay: float = float(
+            self.config.get("retry_base_delay", 0.5)
+        )
+
+        # Thread-safe failed email queue (capped at 1000 entries)
+        self._failed_queue: deque = deque(maxlen=1000)
+        self._queue_lock = threading.Lock()
 
         # SMTP Configuration from environment variables (support multiple naming schemes)
         # Preferred MAIL_*; fall back to SMTP_*; then GMAIL_*
@@ -243,6 +274,124 @@ class EmailService:
             logger.error(f"Failed to create SMTP connection: {str(e)}")
             raise
 
+    # ------------------------------------------------------------------
+    # Retry / queue helpers
+    # ------------------------------------------------------------------
+
+    def _enqueue_failed(
+        self,
+        to_emails: List[str],
+        subject: str,
+        body_text: Optional[str],
+        body_html: Optional[str],
+        from_email: Optional[str],
+        cc_emails: Optional[List[str]],
+        bcc_emails: Optional[List[str]],
+        attachments: Optional[List[Dict[str, Any]]],
+    ) -> None:
+        """Add a failed email to the retry queue (thread-safe)."""
+        entry = FailedEmail(
+            to_emails=list(to_emails),
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            from_email=from_email,
+            cc_emails=list(cc_emails) if cc_emails else None,
+            bcc_emails=list(bcc_emails) if bcc_emails else None,
+            attachments=attachments,
+            attempts=self.max_retries,
+            last_error=self.last_error or "unknown",
+        )
+        with self._queue_lock:
+            self._failed_queue.append(entry)
+        logger.info(
+            "Email queued for later retry (queue size: %d): %s → %s",
+            len(self._failed_queue),
+            subject,
+            to_emails,
+        )
+
+    @property
+    def failed_queue_size(self) -> int:
+        """Number of emails waiting in the failed-email retry queue."""
+        return len(self._failed_queue)
+
+    def get_failed_queue_snapshot(self) -> List[Dict[str, Any]]:
+        """Return a serialisable snapshot of the failed-email queue."""
+        with self._queue_lock:
+            return [
+                {
+                    "to_emails": e.to_emails,
+                    "subject": e.subject,
+                    "attempts": e.attempts,
+                    "last_error": e.last_error,
+                    "created_at": e.created_at.isoformat(),
+                }
+                for e in self._failed_queue
+            ]
+
+    def clear_failed_queue(self) -> int:
+        """Drop all entries from the failed-email queue. Returns count removed."""
+        with self._queue_lock:
+            count = len(self._failed_queue)
+            self._failed_queue.clear()
+        logger.info("Cleared %d entries from the failed-email queue", count)
+        return count
+
+    def retry_failed(self) -> Tuple[int, int]:
+        """Retry all emails in the failed queue.
+
+        Returns:
+            (succeeded, failed) counts.
+        """
+        with self._queue_lock:
+            pending = list(self._failed_queue)
+            self._failed_queue.clear()
+
+        succeeded = 0
+        still_failed: List[FailedEmail] = []
+
+        for entry in pending:
+            ok = self.send_email(
+                to_emails=entry.to_emails,
+                subject=entry.subject,
+                body_text=entry.body_text,
+                body_html=entry.body_html,
+                from_email=entry.from_email,
+                cc_emails=entry.cc_emails,
+                bcc_emails=entry.bcc_emails,
+                attachments=entry.attachments,
+            )
+            if ok:
+                succeeded += 1
+            else:
+                # send_email already re-enqueues on failure; pop it back so we
+                # don't double-enqueue.  We'll re-add the original entry with
+                # an updated attempt count instead.
+                with self._queue_lock:
+                    # Remove the auto-enqueued entry (the last one)
+                    if self._failed_queue:
+                        self._failed_queue.pop()
+                entry.attempts += self.max_retries
+                entry.last_error = self.last_error or "retry failed"
+                still_failed.append(entry)
+
+        # Re-enqueue entries that still failed
+        with self._queue_lock:
+            for entry in still_failed:
+                self._failed_queue.append(entry)
+
+        logger.info(
+            "Retry complete: %d succeeded, %d still failed",
+            succeeded,
+            len(still_failed),
+        )
+        return succeeded, len(still_failed)
+
+    # ------------------------------------------------------------------
+    # Core send with retry
+    # ------------------------------------------------------------------
+
     def send_email(
         self,
         to_emails: List[str],
@@ -254,146 +403,155 @@ class EmailService:
         bcc_emails: Optional[List[str]] = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> bool:
-        """
-        Send email with optional HTML content and attachments
+        """Send email with retry and exponential backoff.
 
-        Args:
-            to_emails: List of recipient email addresses
-            subject: Email subject line
-            body_text: Plain text body (optional)
-            body_html: HTML body (optional)
-            from_email: Sender email (defaults to configured sender)
-            cc_emails: List of CC recipients (optional)
-            bcc_emails: List of BCC recipients (optional)
-            attachments: List of attachment dicts with 'filename' and
-                'content' keys
-
-        Returns:
-            bool: True if email sent successfully, False otherwise
+        Tries ACS first (if configured) with up to *max_retries* attempts,
+        then falls back to SMTP with the same retry policy.  Emails that
+        exhaust all retries are placed on the failed-email queue for later
+        retry via :meth:`retry_failed`.
         """
         try:
             self._reset_last_result()
-            # Validate inputs
+
+            # -- Validate inputs --
             if not to_emails:
                 logger.error("No recipient emails provided")
                 self.last_error = "No recipient emails provided"
                 return False
-
             if not subject:
                 logger.error("No email subject provided")
                 return False
-
             if not body_text and not body_html:
                 logger.error("No email body provided")
                 return False
 
-            # Use default sender if not provided; prefer ACS sender when using
-            # ACS
             sender_email = (
                 from_email or self.acs_sender_email or self.default_sender or ""
             )
             self.last_sender = sender_email
             self.last_recipients = list(to_emails)
 
-            # If ACS is configured, attempt to send with ACS first
+            # =============================================================
+            # ACS attempt (with retry)
+            # =============================================================
             acs_client = self._get_acs_client()
             if acs_client and self.acs_sender_email:
-                try:
-                    self.last_provider = "ACS"
-                    # Build recipients list for ACS
-                    acs_recipients = {"to": [{"address": addr} for addr in to_emails]}
-                    if cc_emails:
-                        acs_recipients["cc"] = [{"address": addr} for addr in cc_emails]
-                    if bcc_emails:
-                        acs_recipients["bcc"] = [
-                            {"address": addr} for addr in bcc_emails
-                        ]
+                self.last_provider = "ACS"
 
-                    # Prepare content
-                    content = {"subject": subject}
-                    if body_text:
-                        content["plainText"] = body_text
-                    if body_html:
-                        content["html"] = body_html
+                # Build ACS message payload (once)
+                acs_recipients: Dict[str, Any] = {
+                    "to": [{"address": addr} for addr in to_emails]
+                }
+                if cc_emails:
+                    acs_recipients["cc"] = [
+                        {"address": addr} for addr in cc_emails
+                    ]
+                if bcc_emails:
+                    acs_recipients["bcc"] = [
+                        {"address": addr} for addr in bcc_emails
+                    ]
+                content: Dict[str, str] = {"subject": subject}
+                if body_text:
+                    content["plainText"] = body_text
+                if body_html:
+                    content["html"] = body_html
+                acs_message = {
+                    "senderAddress": self.acs_sender_email,
+                    "recipients": acs_recipients,
+                    "content": content,
+                }
 
-                    message = {
-                        "senderAddress": self.acs_sender_email,
-                        "recipients": acs_recipients,
-                        "content": content,
-                    }
-
-                    # Attachments support with ACS can be added if needed
-                    # (requires proper file specs)
-                    # Start send and wait for initial result
-                    # (poller completes when request is accepted)
-                    operation = acs_client.begin_send(message)
-                    result = operation.result()
-
-                    # Result can be an object (SendEmailResult) or a dict
-                    # depending on SDK version
-                    message_id = None
-                    if hasattr(result, "message_id"):
-                        message_id = getattr(result, "message_id", None)
-                    elif isinstance(result, dict):
-                        message_id = result.get("messageId") or result.get("id")
-                    self.last_message_id = message_id
-
-                    # Try to fetch status if supported, otherwise assume queued
-                    status_value = None
+                for attempt in range(self.max_retries):
                     try:
-                        has_get = hasattr(acs_client, "get_send_status")
-                        if message_id and has_get:
-                            status_obj = acs_client.get_send_status(message_id)
-                            if hasattr(status_obj, "status"):
-                                status_value = getattr(status_obj, "status", None)
-                            elif isinstance(status_obj, dict):
-                                status_value = status_obj.get("status")
-                    except Exception:  # Non-fatal; treat as queued
+                        operation = acs_client.begin_send(acs_message)
+                        result = operation.result()
+
+                        # Extract message ID
+                        message_id = None
+                        if hasattr(result, "message_id"):
+                            message_id = getattr(result, "message_id", None)
+                        elif isinstance(result, dict):
+                            message_id = (
+                                result.get("messageId") or result.get("id")
+                            )
+                        self.last_message_id = message_id
+
+                        # Fetch status if supported
                         status_value = None
+                        try:
+                            if message_id and hasattr(
+                                acs_client, "get_send_status"
+                            ):
+                                status_obj = acs_client.get_send_status(
+                                    message_id
+                                )
+                                if hasattr(status_obj, "status"):
+                                    status_value = getattr(
+                                        status_obj, "status", None
+                                    )
+                                elif isinstance(status_obj, dict):
+                                    status_value = status_obj.get("status")
+                        except Exception:
+                            status_value = None
 
-                    normalized_status = str(status_value or "queued").lower()
-                    self.last_status = normalized_status
+                        normalized = str(status_value or "queued").lower()
+                        self.last_status = normalized
 
-                    if normalized_status in (
-                        "queued",
-                        "succeeded",
-                        "success",
-                        "completed",
-                    ):
-                        logger.info(
-                            (
+                        if normalized in (
+                            "queued",
+                            "succeeded",
+                            "success",
+                            "completed",
+                        ):
+                            logger.info(
                                 "ACS email queued/sent to %d recipients: %s "
-                                "(message_id=%s)"
-                            ),
-                            len(to_emails),
-                            subject,
-                            message_id,
-                        )
-                        return True
-                    else:
-                        logger.warning(
-                            (
-                                "ACS email send returned status: %s "
-                                "(message_id=%s), falling back to SMTP"
-                            ),
-                            normalized_status,
-                            message_id,
-                        )
-                except AzureError as e:
-                    self.last_error = f"ACS error: {e}"
-                    logger.error(
-                        "ACS email send failed: %s. Falling back to SMTP.",
-                        e,
-                    )
-                except Exception as e:
-                    self.last_error = f"ACS unexpected error: {e}"
-                    logger.error(
-                        "Unexpected error sending via ACS: %s. "
-                        "Falling back to SMTP.",
-                        e,
-                    )
+                                "(message_id=%s)",
+                                len(to_emails),
+                                subject,
+                                message_id,
+                            )
+                            return True
 
-            # Fallback to SMTP
+                        # Non-retryable status — fall through to SMTP
+                        logger.warning(
+                            "ACS returned status %s (message_id=%s), "
+                            "falling back to SMTP",
+                            normalized,
+                            message_id,
+                        )
+                        break
+
+                    except AzureError as e:
+                        self.last_error = f"ACS error: {e}"
+                        if attempt < self.max_retries - 1:
+                            delay = self.retry_base_delay * (2 ** attempt)
+                            logger.warning(
+                                "ACS attempt %d/%d failed, retrying in "
+                                "%.1fs: %s",
+                                attempt + 1,
+                                self.max_retries,
+                                delay,
+                                e,
+                            )
+                            time.sleep(delay)
+                        else:
+                            logger.error(
+                                "ACS failed after %d attempts: %s. "
+                                "Falling back to SMTP.",
+                                self.max_retries,
+                                e,
+                            )
+                    except Exception as e:
+                        self.last_error = f"ACS unexpected error: {e}"
+                        logger.error(
+                            "Unexpected ACS error: %s. Falling back to SMTP.",
+                            e,
+                        )
+                        break  # Don't retry unexpected errors
+
+            # =============================================================
+            # SMTP attempt (with retry)
+            # =============================================================
             self.last_provider = "SMTP"
             if not (self.username and self.password):
                 logger.error(
@@ -403,60 +561,92 @@ class EmailService:
                     "(or GMAIL_USER/GMAIL_APP_PASSWORD)."
                 )
                 self.last_error = "Missing SMTP credentials"
+                self._enqueue_failed(
+                    to_emails, subject, body_text, body_html,
+                    from_email, cc_emails, bcc_emails, attachments,
+                )
                 return False
-            # Create message
+
+            # Build MIME message (once)
             msg = MIMEMultipart("alternative")
             msg["From"] = sender_email
             msg["To"] = ", ".join(to_emails)
             msg["Subject"] = subject
-
             if cc_emails:
                 msg["Cc"] = ", ".join(cc_emails)
             if bcc_emails:
                 msg["Bcc"] = ", ".join(bcc_emails)
-
             if body_text:
-                text_part = MIMEText(body_text, "plain", "utf-8")
-                msg.attach(text_part)
+                msg.attach(MIMEText(body_text, "plain", "utf-8"))
             if body_html:
-                html_part = MIMEText(body_html, "html", "utf-8")
-                msg.attach(html_part)
-
+                msg.attach(MIMEText(body_html, "html", "utf-8"))
             if attachments:
-                for attachment in attachments:
-                    if "filename" in attachment and "content" in attachment:
+                for att in attachments:
+                    if "filename" in att and "content" in att:
                         part = MIMEBase("application", "octet-stream")
-                        part.set_payload(attachment["content"])
+                        part.set_payload(att["content"])
                         encoders.encode_base64(part)
                         part.add_header(
                             "Content-Disposition",
-                            f'attachment; filename= {attachment["filename"]}',
+                            f'attachment; filename= {att["filename"]}',
                         )
                         msg.attach(part)
 
-            all_recipients = to_emails.copy()
+            all_recipients = list(to_emails)
             if cc_emails:
                 all_recipients.extend(cc_emails)
             if bcc_emails:
                 all_recipients.extend(bcc_emails)
 
-            server = self._create_smtp_connection()
-            try:
-                server.send_message(msg, to_addrs=all_recipients)
-            finally:
-                server.quit()
+            for attempt in range(self.max_retries):
+                try:
+                    server = self._create_smtp_connection()
+                    try:
+                        server.send_message(msg, to_addrs=all_recipients)
+                    finally:
+                        server.quit()
 
-            logger.info(
-                "SMTP email sent successfully to %d recipients: %s",
-                len(all_recipients),
-                subject,
+                    logger.info(
+                        "SMTP email sent to %d recipients: %s",
+                        len(all_recipients),
+                        subject,
+                    )
+                    self.last_status = "sent"
+                    return True
+                except Exception as e:
+                    self.last_error = str(e)
+                    if attempt < self.max_retries - 1:
+                        delay = self.retry_base_delay * (2 ** attempt)
+                        logger.warning(
+                            "SMTP attempt %d/%d failed, retrying in "
+                            "%.1fs: %s",
+                            attempt + 1,
+                            self.max_retries,
+                            delay,
+                            e,
+                        )
+                        time.sleep(delay)
+                    else:
+                        logger.error(
+                            "SMTP failed after %d attempts: %s",
+                            self.max_retries,
+                            e,
+                        )
+
+            # Both providers exhausted — queue for later retry
+            self._enqueue_failed(
+                to_emails, subject, body_text, body_html,
+                from_email, cc_emails, bcc_emails, attachments,
             )
-            self.last_status = "sent"
-            return True
+            return False
 
         except Exception as e:
             self.last_error = str(e)
-            logger.error(f"Failed to send email: {str(e)}")
+            logger.error("Failed to send email: %s", e)
+            self._enqueue_failed(
+                to_emails, subject, body_text, body_html,
+                from_email, cc_emails, bcc_emails, attachments,
+            )
             return False
 
     def send_templated_email(

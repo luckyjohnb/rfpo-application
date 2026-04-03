@@ -74,47 +74,25 @@
                         <div class="form-text">If applicable, reference number for government agreements</div>
                     </div>
 
-                    <h5 class="mb-3 mt-4">📞 Requestor Information</h5>
-
-                    <div class="mb-3">
-                        <label class="form-label">Requestor</label>
-                        <input type="text" class="form-control" value="{{ current_user.get_display_name() }}" readonly>
-                        <div class="form-text">Current logged-in user</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="requestor_tel" class="form-label">Requestor Phone <span class="text-danger">*</span></label>
-                        <input type="tel" class="form-control" id="requestor_tel" name="requestor_tel" required
+                    <!-- Hidden per request: Requestor details auto-populated from logged-in user (Issue #3) -->
+                    <div class="d-none">
+                        <input type="tel" id="requestor_tel" name="requestor_tel"
                                value="{{ current_user_data.requestor_tel }}">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="requestor_location" class="form-label">Requestor Location <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="requestor_location" name="requestor_location" rows="2" required>{{ current_user_data.requestor_location }}</textarea>
+                        <textarea id="requestor_location" name="requestor_location">{{ current_user_data.requestor_location }}</textarea>
                     </div>
                 </div>
 
                 <!-- Right Column: Shipping & Delivery -->
                 <div class="col-md-6">
-                    <h5 class="mb-3">📦 Shipping Information</h5>
-
-                    <div class="mb-3">
-                        <label for="shipto_name" class="form-label">Ship to Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="shipto_name" name="shipto_name" required
+                    <!-- Hidden per request: Ship To details auto-populated from consortium/user data (Issue #4) -->
+                    <div class="d-none">
+                        <input type="text" id="shipto_name" name="shipto_name"
                                value="{{ current_user_data.shipto_name }}">
+                        <input type="tel" id="shipto_tel" name="shipto_tel" value="{{ current_user_data.shipto_tel }}">
+                        <textarea id="shipto_address" name="shipto_address">{{ current_user_data.shipto_address }}</textarea>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="shipto_tel" class="form-label">Ship to Phone <span class="text-danger">*</span></label>
-                        <input type="tel" class="form-control" id="shipto_tel" name="shipto_tel" required value="{{ current_user_data.shipto_tel }}">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="shipto_address" class="form-label">Ship to Address <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="shipto_address" name="shipto_address" rows="3" required>{{ current_user_data.shipto_address }}</textarea>
-                    </div>
-
-                    <h5 class="mb-3 mt-4">PO Expiration</h5>
+                    <h5 class="mb-3">PO Expiration</h5>
 
                     <div class="mb-3">
                         <label for="delivery_date" class="form-label">PO Expiration Date</label>

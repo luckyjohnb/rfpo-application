@@ -156,7 +156,7 @@
                             <i class="fas fa-times"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} Team
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save Team{% else %}Create Team{% endif %}
                         </button>
                     </div>
                 </div>

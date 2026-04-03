@@ -1222,10 +1222,16 @@ def get_rfpo(rfpo_id):
                     }
                 )
 
+        # Build RFPO response with line items included
+        rfpo_data = rfpo.to_dict()
+        rfpo_data["line_items"] = [
+            item.to_dict() for item in rfpo.line_items
+        ]
+
         return jsonify(
             {
                 "success": True,
-                "rfpo": rfpo.to_dict(),
+                "rfpo": rfpo_data,
                 "approval_data": approval_data,
                 "user_action": user_action,
                 "files": files_data,

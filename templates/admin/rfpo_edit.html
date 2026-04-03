@@ -29,6 +29,24 @@
                 <i class="fas fa-arrow-left"></i> Back to List
             </a>
         </div>
+        {% if active_instance %}
+        <a href="{{ url_for('approval_instance_view', id=active_instance.id) }}"
+           class="btn btn-info ms-2" title="View active approval">
+            <i class="fas fa-tasks"></i> View Approval
+            {% if active_instance.overall_status == 'waiting' %}
+                <span class="badge bg-warning text-dark">In Progress</span>
+            {% elif active_instance.overall_status == 'approved' %}
+                <span class="badge bg-success">Approved</span>
+            {% elif active_instance.overall_status == 'refused' %}
+                <span class="badge bg-danger">Refused</span>
+            {% endif %}
+        </a>
+        {% elif rfpo.status == 'Draft' %}
+        <button type="button" class="btn btn-success ms-2" id="submitForApprovalBtn"
+                onclick="submitForApproval({{ rfpo.id }})">
+            <i class="fas fa-paper-plane"></i> Submit for Approval
+        </button>
+        {% endif %}
     </div>
 </div>
 
@@ -969,5 +987,40 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+function submitForApproval(rfpoId) {
+    if (!confirm('Submit this RFPO for approval? This will start the approval workflow and notify the first approver.')) {
+        return;
+    }
+
+    const btn = document.getElementById('submitForApprovalBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    fetch(`/api/rfpo/${rfpoId}/submit-approval`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? {'X-CSRFToken': csrfToken} : {})
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(`RFPO submitted successfully! ${data.message}`);
+            window.location.reload();
+        } else {
+            alert(`Submission failed: ${data.error}`);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit for Approval';
+        }
+    })
+    .catch(err => {
+        alert('Error submitting RFPO: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit for Approval';
+    });
+}
 </script>
 {% endblock %}

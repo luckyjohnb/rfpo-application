@@ -634,6 +634,138 @@ def create_app():
             old_permissions, new_permissions,
         )
 
+    def _create_next_sequential_action(instance, completed_action):
+        """Create the next sequential action after a step is approved.
+
+        Walks the workflow snapshot to find the next step in the current phase,
+        or the first step of the next phase. Returns the new RFPOApprovalAction
+        (already added to the session) or None if the workflow is complete.
+        """
+        data = instance.get_instance_data()
+        phases = data.get("phases", [])
+
+        # Build ordered list: [(phase_number, stage_order, step_snapshot), ...]
+        ordered_steps = []
+        for phase in sorted(phases, key=lambda p: p.get("phase_number", 0)):
+            stage = phase.get("stage", {})
+            for step in sorted(stage.get("steps", []), key=lambda s: s.get("step_order", 0)):
+                ordered_steps.append((
+                    phase.get("phase_number", 0),
+                    stage.get("stage_order", 0),
+                    stage.get("stage_name", ""),
+                    step,
+                ))
+
+        # Find current action's position in the ordered list
+        current_idx = None
+        for idx, (phase_num, stage_ord, stage_name, step) in enumerate(ordered_steps):
+            if (stage_ord == completed_action.stage_order and
+                    step.get("step_order") == completed_action.step_order):
+                current_idx = idx
+                break
+
+        if current_idx is None or current_idx + 1 >= len(ordered_steps):
+            return None  # Workflow complete
+
+        # Get next step
+        next_phase, next_stage_order, next_stage_name, next_step = ordered_steps[current_idx + 1]
+
+        # Generate action ID
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        existing_count = RFPOApprovalAction.query.filter_by(
+            instance_id=instance.id
+        ).count()
+        action_id = f"ACT-{timestamp}-{existing_count + 1:03d}"
+
+        primary_approver = User.query.filter_by(
+            record_id=next_step.get("primary_approver_id"), active=True
+        ).first()
+
+        new_action = RFPOApprovalAction(
+            action_id=action_id,
+            instance_id=instance.id,
+            stage_order=next_stage_order,
+            step_order=next_step.get("step_order", 1),
+            stage_name=next_stage_name,
+            step_name=next_step.get("step_name", ""),
+            approval_type_key=next_step.get("approval_type_key", ""),
+            approver_id=next_step.get("primary_approver_id", ""),
+            approver_name=(
+                primary_approver.get_display_name()
+                if primary_approver
+                else "Unknown User"
+            ),
+            status="pending",
+        )
+        db.session.add(new_action)
+        return new_action
+
+    def _notify_pending_approvers(actions, rfpo):
+        """Send email notifications to approvers for pending actions."""
+        try:
+            from email_service import send_approval_notification
+            for action in actions:
+                if action.status != "pending":
+                    continue
+                approver = User.query.filter_by(
+                    record_id=action.approver_id, active=True
+                ).first()
+                if not approver or not approver.email:
+                    continue
+                send_approval_notification(
+                    user_email=approver.email,
+                    user_name=approver.get_display_name(),
+                    rfpo_id=rfpo.rfpo_id,
+                    approval_type=action.step_name,
+                )
+                app.logger.info(
+                    "NOTIFY: Approval email sent to %s for RFPO %s (step: %s)",
+                    approver.email, rfpo.rfpo_id, action.step_name,
+                )
+        except Exception as e:
+            # Notifications are best-effort; don't fail the workflow
+            app.logger.error("Failed to send approval notification: %s", e)
+
+    def _notify_workflow_complete(rfpo, outcome):
+        """Send email notification to RFPO creator when workflow completes."""
+        try:
+            from email_service import email_service as _email_svc
+            creator = User.query.filter_by(
+                email=rfpo.created_by, active=True
+            ).first()
+            if not creator:
+                # created_by might be display_name; try lookup via display
+                creator = User.query.filter(
+                    User.active == True,
+                    (User.first_name + " " + User.last_name) == rfpo.created_by
+                ).first()
+            if not creator or not creator.email:
+                return
+
+            admin_url = (
+                os.environ.get("ADMIN_APP_URL")
+                or os.environ.get("APP_URL")
+                or "http://localhost:5111"
+            )
+            _email_svc.send_templated_email(
+                to_emails=[creator.email],
+                template_name="approval_complete",
+                template_data={
+                    "user_name": creator.get_display_name(),
+                    "rfpo_id": rfpo.rfpo_id,
+                    "po_number": rfpo.po_number,
+                    "outcome": outcome,
+                    "rfpo_url": f"{admin_url}/rfpo/{rfpo.id}/edit",
+                },
+                subject=f"RFPO {outcome} - {rfpo.rfpo_id}",
+            )
+            app.logger.info(
+                "NOTIFY: Completion email sent to %s for RFPO %s (%s)",
+                creator.email, rfpo.rfpo_id, outcome,
+            )
+        except Exception as e:
+            app.logger.error("Failed to send completion notification: %s", e)
+
     def parse_comma_list(value):
         """Parse comma-separated string to list"""
         if not value:
@@ -2834,6 +2966,11 @@ Southfield, MI  48075""",
         # Get document types for file upload dropdown
         doc_types = List.get_by_type("doc_types")
 
+        # Check if RFPO already has an active approval instance
+        active_instance = RFPOApprovalInstance.query.filter_by(
+            rfpo_id=rfpo.id
+        ).first()
+
         return render_template(
             "admin/rfpo_edit.html",
             rfpo=rfpo,
@@ -2842,6 +2979,7 @@ Southfield, MI  48075""",
             project=project,
             consortium=consortium,
             doc_types=doc_types,
+            active_instance=active_instance,
         )
 
     @app.route("/rfpo/<int:rfpo_id>/line-item/add", methods=["POST"])
@@ -6023,29 +6161,49 @@ Southfield, MI  48075""",
                     instance.rfpo.status = "Refused"
                     instance.rfpo.updated_by = current_user.get_display_name()
             else:
-                # For approvals, advance workflow and check for completion
-                instance.advance_to_next_step()
+                # For approvals, determine next sequential step and create its action
+                next_action = _create_next_sequential_action(instance, action)
 
-                # If workflow is now complete and approved, update RFPO status
-                if instance.overall_status == "approved" and instance.rfpo:
-                    instance.rfpo.status = "Approved"
-                    instance.rfpo.updated_by = current_user.get_display_name()
+                if next_action is None:
+                    # No more steps/phases — workflow is complete
+                    instance.overall_status = "approved"
+                    instance.completed_at = datetime.utcnow()
 
-                    # Generate PO number on first approval (if not already assigned)
-                    if not instance.rfpo.po_number:
-                        consortium = Consortium.query.filter_by(
-                            consort_id=instance.rfpo.consortium_id
-                        ).first()
-                        abbrev = consortium.abbrev if consortium else "GEN"
-                        instance.rfpo.po_number = RFPO.generate_po_number(abbrev)
-                        app.logger.info(
-                            "AUDIT: PO number %s assigned to RFPO %s on approval",
-                            instance.rfpo.po_number, instance.rfpo.rfpo_id,
-                        )
+                    if instance.rfpo:
+                        instance.rfpo.status = "Approved"
+                        instance.rfpo.updated_by = current_user.get_display_name()
+
+                        # Generate PO number on first approval (if not already assigned)
+                        if not instance.rfpo.po_number:
+                            consortium = Consortium.query.filter_by(
+                                consort_id=instance.rfpo.consortium_id
+                            ).first()
+                            abbrev = consortium.abbrev if consortium else "GEN"
+                            instance.rfpo.po_number = RFPO.generate_po_number(abbrev)
+                            app.logger.info(
+                                "AUDIT: PO number %s assigned to RFPO %s on approval",
+                                instance.rfpo.po_number, instance.rfpo.rfpo_id,
+                            )
+                else:
+                    # Update instance position to the new action's step
+                    instance.current_stage_order = next_action.stage_order
+                    instance.current_step_order = next_action.step_order
 
             instance.updated_at = datetime.utcnow()
 
             db.session.commit()
+
+            # Send notifications after successful commit
+            if instance.rfpo:
+                if instance.overall_status == "approved":
+                    _notify_workflow_complete(instance.rfpo, "Approved")
+                elif instance.overall_status == "refused":
+                    _notify_workflow_complete(instance.rfpo, "Refused")
+                else:
+                    # Workflow still in progress — notify next pending approver(s)
+                    pending = instance.get_pending_actions()
+                    if pending:
+                        _notify_pending_approvers(pending, instance.rfpo)
 
             flash(f"✅ Action {status} successfully!", "success")
 
@@ -6220,8 +6378,9 @@ Southfield, MI  48075""",
                     }
                     phase_snapshot["stage"]["steps"].append(step_snapshot)
 
-                    # Create actions for Phase 1 only (others will be created when phases advance)
-                    if phase_number == 1:
+                    # Create action for Phase 1, Step 1 only (sequential gating)
+                    # Later steps/phases will be created as each step is approved
+                    if phase_number == 1 and step.step_order == 1:
                         # Generate unique action ID using timestamp + counter
                         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                         action_id_counter += 1
@@ -6281,10 +6440,13 @@ Southfield, MI  48075""",
 
             db.session.commit()
 
+            # Notify the first approver(s) via email
+            _notify_pending_approvers(all_actions, rfpo)
+
             return jsonify(
                 {
                     "success": True,
-                    "message": f"RFPO submitted for {len(applicable_workflows)}-phase approval process",
+                    "message": f"RFPO submitted for {len(applicable_workflows)}-phase approval process. First approver notified.",
                     "instance_id": approval_instance.instance_id,
                     "total_phases": len(applicable_workflows),
                     "first_stage_name": first_stage.stage_name,

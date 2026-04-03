@@ -536,6 +536,84 @@ def create_app():
         except (ValueError, TypeError):
             return None
 
+    # -----------------------------------------------------------------------
+    # Shared import file parser (JSON / Excel)
+    # -----------------------------------------------------------------------
+    def _parse_import_file(file_storage, redirect_url):
+        """Parse an uploaded JSON or Excel file into a list of dicts.
+
+        Returns (records, error_response) — if error_response is not None,
+        return it directly from the route handler.
+        """
+        filename = secure_filename(file_storage.filename or "upload")
+        ext = os.path.splitext(filename)[1].lower()
+
+        if ext in (".json",):
+            try:
+                payload = json.load(file_storage.stream)
+                records = payload if isinstance(payload, list) else [payload]
+                return records, None
+            except Exception as e:
+                flash(f"❌ Invalid JSON: {str(e)}", "error")
+                return None, redirect(redirect_url)
+        elif ext in (".xlsx", ".xls"):
+            if pd is None:
+                flash("❌ Excel import requires pandas to be installed.", "error")
+                return None, redirect(redirect_url)
+            try:
+                df = pd.read_excel(file_storage.stream)
+                return df.to_dict(orient="records"), None
+            except Exception as e:
+                flash(f"❌ Failed to read Excel: {str(e)}", "error")
+                return None, redirect(redirect_url)
+        else:
+            flash("❌ Unsupported file type. Use .json or .xlsx", "error")
+            return None, redirect(redirect_url)
+
+    # -----------------------------------------------------------------------
+    # Shared import value normalization helpers
+    # -----------------------------------------------------------------------
+    def _import_is_nan(v):
+        try:
+            return pd is not None and pd.isna(v)
+        except Exception:
+            return False
+
+    def _import_norm_str(v):
+        if v is None or _import_is_nan(v):
+            return ""
+        try:
+            return str(v).strip()
+        except Exception:
+            return ""
+
+    def _import_parse_bool(v, default=True):
+        if v is None or _import_is_nan(v):
+            return default
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            try:
+                return int(v) == 1
+            except Exception:
+                return default
+        s = _import_norm_str(v).lower()
+        if s in ("1", "true", "yes", "y", "t"):
+            return True
+        if s in ("0", "false", "no", "n", "f"):
+            return False
+        return default
+
+    def _import_parse_list(v):
+        if v is None or _import_is_nan(v):
+            return []
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip()]
+        s = _import_norm_str(v)
+        if not s:
+            return []
+        return [p.strip() for p in s.split(",") if p.strip()]
+
     # Expose build/version info to all admin templates
     @app.context_processor
     def inject_build_info():
@@ -1948,57 +2026,16 @@ def create_app():
             flash("❌ Please choose a file to import.", "error")
             return redirect(url_for("teams"))
 
-        filename = secure_filename(file.filename)
-        ext = os.path.splitext(filename)[1].lower()
+        records, err_response = _parse_import_file(file, url_for("teams"))
+        if err_response:
+            return err_response
 
         created = 0
         updated = 0
         skipped = 0
         errors = []
 
-        def _parse_bool(val, default=True):
-            if val is None:
-                return default
-            if isinstance(val, bool):
-                return val
-            s = str(val).strip().lower()
-            return s in ("1", "true", "yes", "y", "t")
-
-        def _parse_list(val):
-            if val is None:
-                return []
-            if isinstance(val, list):
-                return [str(x).strip() for x in val if str(x).strip()]
-            if isinstance(val, str):
-                return [p.strip() for p in val.split(",") if p.strip()]
-            return []
-
         try:
-            records = []
-            if ext in (".json",):
-                try:
-                    payload = json.load(file.stream)
-                    records = payload if isinstance(payload, list) else [payload]
-                except Exception as e:
-                    flash(f"❌ Invalid JSON: {str(e)}", "error")
-                    return redirect(url_for("teams"))
-            elif ext in (".xlsx", ".xls"):
-                if pd is None:
-                    flash(
-                        "❌ Excel import requires pandas to be installed.",
-                        "error",
-                    )
-                    return redirect(url_for("teams"))
-                try:
-                    df = pd.read_excel(file.stream)
-                    records = df.to_dict(orient="records")
-                except Exception as e:
-                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
-                    return redirect(url_for("teams"))
-            else:
-                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
-                return redirect(url_for("teams"))
-
             for idx, rec in enumerate(records, start=1):
                 try:
                     name = (rec.get("name") or "").strip()
@@ -2015,9 +2052,9 @@ def create_app():
                     if not existing and abbrev:
                         existing = Team.query.filter_by(abbrev=abbrev).first()
 
-                    viewer_ids = _parse_list(rec.get("rfpo_viewer_user_ids"))
-                    admin_ids = _parse_list(rec.get("rfpo_admin_user_ids"))
-                    active = _parse_bool(rec.get("active"), True)
+                    viewer_ids = _import_parse_list(rec.get("rfpo_viewer_user_ids"))
+                    admin_ids = _import_parse_list(rec.get("rfpo_admin_user_ids"))
+                    active = _import_parse_bool(rec.get("active"), True)
 
                     if existing:
                         existing.name = name
@@ -2332,8 +2369,9 @@ def create_app():
             flash("❌ Please choose a file to import.", "error")
             return redirect(url_for("users"))
 
-        filename = secure_filename(file.filename)
-        ext = os.path.splitext(filename)[1].lower()
+        records, err_response = _parse_import_file(file, url_for("users"))
+        if err_response:
+            return err_response
 
         created = 0
         updated = 0
@@ -2341,87 +2379,12 @@ def create_app():
         errors = []
 
         try:
-            records = []
-            if ext in (".json",):
-                try:
-                    payload = json.load(file.stream)
-                    if isinstance(payload, dict):
-                        # Support single-object
-                        records = [payload]
-                    elif isinstance(payload, list):
-                        records = payload
-                    else:
-                        raise ValueError("JSON must be an object or array")
-                except Exception as e:
-                    flash(f"❌ Invalid JSON: {str(e)}", "error")
-                    return redirect(url_for("users"))
-            elif ext in (".xlsx", ".xls"):
-                if pd is None:
-                    flash(
-                        "❌ Excel import requires pandas to be installed.",
-                        "error",
-                    )
-                    return redirect(url_for("users"))
-                try:
-                    df = pd.read_excel(file.stream)
-                    records = df.to_dict(orient="records")
-                except Exception as e:
-                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
-                    return redirect(url_for("users"))
-            else:
-                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
-                return redirect(url_for("users"))
-
             from werkzeug.security import generate_password_hash
-
-            # Helpers to normalize Excel/JSON values
-            def _is_nan(v):
-                try:
-                    return pd is not None and pd.isna(v)
-                except Exception:
-                    return False
-
-            def _norm_str(v):
-                if v is None or _is_nan(v):
-                    return ""
-                try:
-                    s = str(v)
-                except Exception:
-                    return ""
-                return s.strip()
-
-            def _parse_permissions(v):
-                if v is None or _is_nan(v):
-                    return []
-                if isinstance(v, list):
-                    return [str(p).strip() for p in v if str(p).strip()]
-                # Treat everything else as string and split by comma
-                s = _norm_str(v)
-                if not s:
-                    return []
-                return [p.strip() for p in s.split(",") if p.strip()]
-
-            def _parse_bool(v, default=True):
-                if v is None or _is_nan(v):
-                    return default
-                if isinstance(v, bool):
-                    return v
-                if isinstance(v, (int, float)):
-                    try:
-                        return int(v) == 1
-                    except Exception:
-                        return default
-                s = _norm_str(v).lower()
-                if s in ("1", "true", "yes", "y", "t"):  # common truthy strings
-                    return True
-                if s in ("0", "false", "no", "n", "f"):
-                    return False
-                return default
 
             for idx, rec in enumerate(records, start=1):
                 try:
-                    email = _norm_str(rec.get("email"))
-                    fullname = _norm_str(rec.get("fullname"))
+                    email = _import_norm_str(rec.get("email"))
+                    fullname = _import_norm_str(rec.get("fullname"))
                     if not email or not fullname:
                         skipped += 1
                         errors.append(f"Row {idx}: missing email or fullname")
@@ -2430,14 +2393,14 @@ def create_app():
                     existing = User.query.filter_by(email=email).first()
 
                     # Normalize permissions and active flag
-                    permissions = _parse_permissions(rec.get("permissions"))
-                    active = _parse_bool(rec.get("active"), default=True)
+                    permissions = _import_parse_list(rec.get("permissions"))
+                    active = _import_parse_bool(rec.get("active"), default=True)
 
                     if existing:
                         # Update basic fields
                         existing.fullname = fullname
-                        company = _norm_str(rec.get("company"))
-                        position = _norm_str(rec.get("position"))
+                        company = _import_norm_str(rec.get("company"))
+                        position = _import_norm_str(rec.get("position"))
                         existing.company = company or existing.company
                         existing.position = position or existing.position
                         existing.active = active
@@ -2457,7 +2420,7 @@ def create_app():
                         updated += 1
                     else:
                         # Create new user with random secure password
-                        record_id = _norm_str(rec.get("record_id")) or generate_next_id(
+                        record_id = _import_norm_str(rec.get("record_id")) or generate_next_id(
                             User, "record_id", "", 8
                         )
                         temp_password = secrets.token_urlsafe(12)
@@ -2466,8 +2429,8 @@ def create_app():
                             fullname=fullname,
                             email=email,
                             password_hash=generate_password_hash(temp_password),
-                            company=_norm_str(rec.get("company")) or None,
-                            position=_norm_str(rec.get("position")) or None,
+                            company=_import_norm_str(rec.get("company")) or None,
+                            position=_import_norm_str(rec.get("position")) or None,
                             active=active,
                             created_by=current_user.email,
                             updated_by=current_user.email,
@@ -2881,7 +2844,7 @@ def create_app():
                 elif project.team_record_id:
                     # Use project's default team if no team was explicitly selected
                     team = Team.query.filter_by(record_id=project.team_record_id).first()
-                
+
                 # Create RFPO with enhanced model
                 rfpo = RFPO(
                     rfpo_id=rfpo_id,
@@ -3715,57 +3678,16 @@ Southfield, MI  48075""",
             flash("❌ Please choose a file to import.", "error")
             return redirect(url_for("projects"))
 
-        filename = secure_filename(file.filename or "upload")
-        ext = os.path.splitext(filename)[1].lower()
+        records, err_response = _parse_import_file(file, url_for("projects"))
+        if err_response:
+            return err_response
 
         created = 0
         updated = 0
         skipped = 0
         errors = []
 
-        def _parse_bool(val, default=True):
-            if val is None:
-                return default
-            if isinstance(val, bool):
-                return val
-            s = str(val).strip().lower()
-            return s in ("1", "true", "yes", "y", "t")
-
-        def _parse_list(val):
-            if val is None:
-                return []
-            if isinstance(val, list):
-                return [str(x).strip() for x in val if str(x).strip()]
-            if isinstance(val, str):
-                return [p.strip() for p in val.split(",") if p.strip()]
-            return []
-
         try:
-            records = []
-            if ext in (".json",):
-                try:
-                    payload = json.load(file.stream)
-                    records = payload if isinstance(payload, list) else [payload]
-                except Exception as e:
-                    flash(f"❌ Invalid JSON: {str(e)}", "error")
-                    return redirect(url_for("projects"))
-            elif ext in (".xlsx", ".xls"):
-                if pd is None:
-                    flash(
-                        "❌ Excel import requires pandas to be installed.",
-                        "error",
-                    )
-                    return redirect(url_for("projects"))
-                try:
-                    df = pd.read_excel(file.stream)
-                    records = df.to_dict(orient="records")
-                except Exception as e:
-                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
-                    return redirect(url_for("projects"))
-            else:
-                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
-                return redirect(url_for("projects"))
-
             for idx, rec in enumerate(records, start=1):
                 try:
                     name = (rec.get("name") or "").strip()
@@ -3784,11 +3706,11 @@ Southfield, MI  48075""",
                     if not existing and ref:
                         existing = Project.query.filter_by(ref=ref).first()
 
-                    cons_ids = _parse_list(rec.get("consortium_ids"))
-                    viewer_ids = _parse_list(rec.get("rfpo_viewer_user_ids"))
-                    gov_funded = _parse_bool(rec.get("gov_funded"), True)
-                    uni_project = _parse_bool(rec.get("uni_project"), False)
-                    active = _parse_bool(rec.get("active"), True)
+                    cons_ids = _import_parse_list(rec.get("consortium_ids"))
+                    viewer_ids = _import_parse_list(rec.get("rfpo_viewer_user_ids"))
+                    gov_funded = _import_parse_bool(rec.get("gov_funded"), True)
+                    uni_project = _import_parse_bool(rec.get("uni_project"), False)
+                    active = _import_parse_bool(rec.get("active"), True)
 
                     if existing:
                         existing.ref = ref or existing.ref
@@ -4140,21 +4062,14 @@ Southfield, MI  48075""",
             flash("❌ Please choose a file to import.", "error")
             return redirect(url_for("vendors"))
 
-        filename = secure_filename(file.filename or "upload")
-        ext = os.path.splitext(filename)[1].lower()
+        records, err_response = _parse_import_file(file, url_for("vendors"))
+        if err_response:
+            return err_response
 
         created = 0
         updated = 0
         skipped = 0
         errors = []
-
-        def _parse_bool(val, default=True):
-            if val is None:
-                return default
-            if isinstance(val, bool):
-                return val
-            s = str(val).strip().lower()
-            return s in ("1", "true", "yes", "y", "t")
 
         def _parse_int(val, default=0):
             try:
@@ -4162,52 +4077,7 @@ Southfield, MI  48075""",
             except Exception:
                 return default
 
-        def _parse_date(val):
-            if not val:
-                return None
-            try:
-                if isinstance(val, str):
-                    return datetime.strptime(val, "%Y-%m-%d").date()
-                # pandas may give Timestamp
-                return val.date() if hasattr(val, "date") else None
-            except Exception:
-                return None
-
-        def _parse_list(val):
-            if val is None:
-                return []
-            if isinstance(val, list):
-                return [str(x).strip() for x in val if str(x).strip()]
-            if isinstance(val, str):
-                return [p.strip() for p in val.split(",") if p.strip()]
-            return []
-
         try:
-            records = []
-            if ext in (".json",):
-                try:
-                    payload = json.load(file.stream)
-                    records = payload if isinstance(payload, list) else [payload]
-                except Exception as e:
-                    flash(f"❌ Invalid JSON: {str(e)}", "error")
-                    return redirect(url_for("vendors"))
-            elif ext in (".xlsx", ".xls"):
-                if pd is None:
-                    flash(
-                        "❌ Excel import requires pandas to be installed.",
-                        "error",
-                    )
-                    return redirect(url_for("vendors"))
-                try:
-                    df = pd.read_excel(file.stream)
-                    records = df.to_dict(orient="records")
-                except Exception as e:
-                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
-                    return redirect(url_for("vendors"))
-            else:
-                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
-                return redirect(url_for("vendors"))
-
             for idx, rec in enumerate(records, start=1):
                 try:
                     company_name = (rec.get("company_name") or "").strip()
@@ -4225,16 +4095,16 @@ Southfield, MI  48075""",
                             company_name=company_name
                         ).first()
 
-                    approved = _parse_list(rec.get("approved_consortiums"))
+                    approved = _import_parse_list(rec.get("approved_consortiums"))
 
                     # parse fields
                     status = (rec.get("status") or "live").strip()
                     vtype = _parse_int(rec.get("vendor_type"), 0)
-                    certs_reps = _parse_bool(rec.get("certs_reps"), False)
-                    cert_date = _parse_date(rec.get("cert_date"))
-                    cert_expire_date = _parse_date(rec.get("cert_expire_date"))
-                    is_university = _parse_bool(rec.get("is_university"), False)
-                    active = _parse_bool(rec.get("active"), True)
+                    certs_reps = _import_parse_bool(rec.get("certs_reps"), False)
+                    cert_date = _safe_parse_date(rec.get("cert_date"))
+                    cert_expire_date = _safe_parse_date(rec.get("cert_expire_date"))
+                    is_university = _import_parse_bool(rec.get("is_university"), False)
+                    active = _import_parse_bool(rec.get("active"), True)
 
                     if existing:
                         existing.company_name = company_name
@@ -4451,57 +4321,16 @@ Southfield, MI  48075""",
             flash("❌ Please choose a file to import.", "error")
             return redirect(url_for("consortiums"))
 
-        filename = secure_filename(file.filename or "upload")
-        ext = os.path.splitext(filename)[1].lower()
+        records, err_response = _parse_import_file(file, url_for("consortiums"))
+        if err_response:
+            return err_response
 
         created = 0
         updated = 0
         skipped = 0
         errors = []
 
-        def _parse_bool(val, default=True):
-            if val is None:
-                return default
-            if isinstance(val, bool):
-                return val
-            s = str(val).strip().lower()
-            return s in ("1", "true", "yes", "y", "t")
-
-        def _parse_list(val):
-            if val is None:
-                return []
-            if isinstance(val, list):
-                return [str(x).strip() for x in val if str(x).strip()]
-            if isinstance(val, str):
-                return [p.strip() for p in val.split(",") if p.strip()]
-            return []
-
         try:
-            records = []
-            if ext in (".json",):
-                try:
-                    payload = json.load(file.stream)
-                    records = payload if isinstance(payload, list) else [payload]
-                except Exception as e:
-                    flash(f"❌ Invalid JSON: {str(e)}", "error")
-                    return redirect(url_for("consortiums"))
-            elif ext in (".xlsx", ".xls"):
-                if pd is None:
-                    flash(
-                        "❌ Excel import requires pandas to be installed.",
-                        "error",
-                    )
-                    return redirect(url_for("consortiums"))
-                try:
-                    df = pd.read_excel(file.stream)
-                    records = df.to_dict(orient="records")
-                except Exception as e:
-                    flash(f"❌ Failed to read Excel: {str(e)}", "error")
-                    return redirect(url_for("consortiums"))
-            else:
-                flash("❌ Unsupported file type. Use .json or .xlsx", "error")
-                return redirect(url_for("consortiums"))
-
             for idx, rec in enumerate(records, start=1):
                 try:
                     name = (rec.get("name") or "").strip()
@@ -4520,12 +4349,12 @@ Southfield, MI  48075""",
                     if not existing and abbrev:
                         existing = Consortium.query.filter_by(abbrev=abbrev).first()
 
-                    viewer_ids = _parse_list(rec.get("rfpo_viewer_user_ids"))
-                    admin_ids = _parse_list(rec.get("rfpo_admin_user_ids"))
-                    require_approved = _parse_bool(
+                    viewer_ids = _import_parse_list(rec.get("rfpo_viewer_user_ids"))
+                    admin_ids = _import_parse_list(rec.get("rfpo_admin_user_ids"))
+                    require_approved = _import_parse_bool(
                         rec.get("require_approved_vendors"), True
                     )
-                    active = _parse_bool(rec.get("active"), True)
+                    active = _import_parse_bool(rec.get("active"), True)
 
                     if existing:
                         existing.name = name

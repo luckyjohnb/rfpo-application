@@ -2462,6 +2462,60 @@ def create_app():
 
         return redirect(url_for("users"))
 
+    # ------------------------------------------------------------------
+    # Welcome email helper (extracted from user_new / user creation)
+    # ------------------------------------------------------------------
+    def _send_user_welcome_email(user_email, user_fullname, user_password, permissions):
+        """Send welcome email after user creation. Returns a flash tuple (msg, category)."""
+        try:
+            from email_service import email_service, send_welcome_email
+        except ImportError:
+            return ("✅ User created successfully!", "success")
+
+        try:
+            perms_set = set(permissions or [])
+            show_user_link = "RFPO_USER" in perms_set
+            show_admin_link = ("RFPO_ADMIN" in perms_set) or ("GOD" in perms_set)
+            if "GOD" in perms_set:
+                show_user_link = True
+                show_admin_link = True
+
+            email_sent = send_welcome_email(
+                user_email=user_email,
+                user_name=user_fullname,
+                temp_password=user_password,
+                show_user_link=show_user_link,
+                show_admin_link=show_admin_link,
+            )
+            diag = (
+                email_service.get_last_send_result()
+                if hasattr(email_service, "get_last_send_result")
+                else {}
+            )
+            if email_sent:
+                prov = diag.get("provider") or "unknown"
+                status = diag.get("status") or "unknown"
+                msg_id = diag.get("message_id") or "(n/a)"
+                sndr = diag.get("sender") or "(no sender)"
+                return (
+                    f"✅ User created and welcome email sent via {prov} from {sndr}. "
+                    f"Status: {status}. Message ID: {msg_id}",
+                    "success",
+                )
+            else:
+                prov = diag.get("provider") or "unknown"
+                err = diag.get("error") or "unknown error"
+                return (
+                    f"✅ User created, but welcome email failed via {prov}: {err}",
+                    "warning",
+                )
+        except Exception as email_error:
+            app.logger.error("Email sending failed: %s", email_error)
+            return (
+                "✅ User created successfully, but welcome email could not be sent.",
+                "warning",
+            )
+
     @app.route("/user/new", methods=["GET", "POST"])
     @login_required
     def user_new():
@@ -2469,17 +2523,6 @@ def create_app():
         if request.method == "POST":
             try:
                 from werkzeug.security import generate_password_hash
-
-                try:
-                    from email_service import email_service, send_welcome_email
-
-                    EMAIL_SERVICE_AVAILABLE = True
-                except ImportError:
-                    print(
-                        "Warning: email_service not available - user creation will work but no welcome email"
-                    )
-                    EMAIL_SERVICE_AVAILABLE = False
-                    send_welcome_email = None
 
                 # Auto-generate user record ID
                 record_id = generate_next_id(User, "record_id", "", 8)
@@ -2506,21 +2549,17 @@ def create_app():
                 )
 
                 # Handle permissions from checkboxes
-                permissions = request.form.getlist(
-                    "permissions"
-                )  # Get all checked permission values
+                permissions = request.form.getlist("permissions")
 
-                # Validate that at least one permission is selected
                 if not permissions:
                     flash(
                         "❌ Error: At least one permission must be selected for the user.",
                         "error",
                     )
 
-                    # Preserve form data by creating a temporary user object with form values
                     class TempUser:
                         def __init__(self):
-                            self.record_id = None  # Will be auto-generated
+                            self.record_id = None
                             self.fullname = user_fullname
                             self.email = user_email
                             self.sex = request.form.get("sex")
@@ -2530,22 +2569,19 @@ def create_app():
                             self.department = request.form.get("department")
                             self.phone = request.form.get("phone")
                             self.active = bool(request.form.get("active", True))
-                            self.agreed_to_terms = bool(
-                                request.form.get("agreed_to_terms")
-                            )
+                            self.agreed_to_terms = bool(request.form.get("agreed_to_terms"))
 
                         def get_permissions(self):
-                            return []  # No permissions selected
+                            return []
 
-                    temp_user = TempUser()
                     return render_template(
-                        "admin/user_form.html", user=temp_user, action="Create"
+                        "admin/user_form.html", user=TempUser(), action="Create"
                     )
 
-                # Enforce permission hierarchy for new user
+                # Enforce permission hierarchy
                 safe_perms, perm_warnings = _enforce_permission_hierarchy(permissions, target_user=user)
                 if safe_perms is None:
-                    safe_perms = permissions  # new user can't be self — shouldn't happen
+                    safe_perms = permissions
                 for w in perm_warnings:
                     flash(f"⚠️ {w}", "warning")
                 user.set_permissions(safe_perms)
@@ -2554,63 +2590,19 @@ def create_app():
                 db.session.commit()
                 _log_permission_change(user, [], safe_perms, context="user-create")
 
-                # Send welcome email
-                try:
-                    if user_email and user_fullname and EMAIL_SERVICE_AVAILABLE:
-                        # Determine which app links to include
-                        perms_set = set(permissions or [])
-                        show_user_link = "RFPO_USER" in perms_set
-                        show_admin_link = ("RFPO_ADMIN" in perms_set) or (
-                            "GOD" in perms_set
-                        )
-                        # Super Admin (GOD) -> both; RFPO_ADMIN -> admin; RFPO_USER -> user
-                        if "GOD" in perms_set:
-                            show_user_link = True
-                            show_admin_link = True
-
-                        email_sent = send_welcome_email(
-                            user_email=user_email,
-                            user_name=user_fullname,
-                            temp_password=user_password,
-                            show_user_link=show_user_link,
-                            show_admin_link=show_admin_link,
-                        )
-                        diag = (
-                            email_service.get_last_send_result()
-                            if hasattr(email_service, "get_last_send_result")
-                            else {}
-                        )
-                        if email_sent:
-                            prov = diag.get("provider") or "unknown"
-                            status = diag.get("status") or "unknown"
-                            msg_id = diag.get("message_id") or "(n/a)"
-                            sndr = diag.get("sender") or "(no sender)"
-                            msg = (
-                                f"✅ User created and welcome email sent via {prov} from {sndr}. "
-                                f"Status: {status}. Message ID: {msg_id}"
-                            )
-                            flash(msg, "success")
-                        else:
-                            prov = diag.get("provider") or "unknown"
-                            err = diag.get("error") or "unknown error"
-                            flash(
-                                f"✅ User created, but welcome email failed via {prov}: {err}",
-                                "warning",
-                            )
-                    else:
-                        flash("✅ User created successfully!", "success")
-                except Exception as email_error:
-                    # Log the email error but don't fail the user creation
-                    print(f"Email sending failed: {str(email_error)}")
-                    flash(
-                        "✅ User created successfully, but welcome email could not be sent.",
-                        "warning",
+                # Send welcome email via extracted helper
+                if user_email and user_fullname:
+                    msg, cat = _send_user_welcome_email(
+                        user_email, user_fullname, user_password, permissions
                     )
+                    flash(msg, cat)
+                else:
+                    flash("✅ User created successfully!", "success")
 
                 return redirect(url_for("users"))
 
             except Exception as e:
-                db.session.rollback()  # Important: rollback the failed transaction
+                db.session.rollback()
                 flash(f"❌ Error creating user: {str(e)}", "error")
 
         return render_template("admin/user_form.html", user=None, action="Create")
@@ -6171,6 +6163,76 @@ Southfield, MI  48075""",
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
+    # ------------------------------------------------------------------
+    # Approval submission helpers (extracted from api_submit_approval)
+    # ------------------------------------------------------------------
+    def _build_phase_snapshot(rfpo, stage, workflow_type, workflow, phase_number):
+        """Build a single phase snapshot dict for the workflow instance data."""
+        phase = {
+            "phase_number": phase_number,
+            "workflow_type": workflow_type,
+            "workflow_id": workflow.workflow_id,
+            "workflow_name": workflow.name,
+            "workflow_version": workflow.version,
+            "entity_name": workflow.get_entity_name(),
+            "stage": {
+                "stage_id": stage.stage_id,
+                "stage_name": stage.stage_name,
+                "stage_order": stage.stage_order,
+                "budget_bracket_amount": float(stage.budget_bracket_amount),
+                "required_document_types": stage.get_required_document_types(),
+                "steps": [],
+            },
+        }
+        for step in stage.steps:
+            phase["stage"]["steps"].append({
+                "step_id": step.step_id,
+                "step_name": step.step_name,
+                "step_order": step.step_order,
+                "approval_type_key": step.approval_type_key,
+                "approval_type_name": step.approval_type_name,
+                "primary_approver_id": step.primary_approver_id,
+                "backup_approver_id": step.backup_approver_id,
+                "is_required": step.is_required,
+            })
+        return phase
+
+    def _create_first_step_action(stage, counter_start=0):
+        """Create an RFPOApprovalAction for the first step of a stage.
+
+        Returns (action, new_counter) or (None, counter) if no step exists.
+        """
+        first_step = next(
+            (s for s in stage.steps if s.step_order == 1), None
+        )
+        if not first_step:
+            return None, counter_start
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        counter = counter_start + 1
+        action_id = f"ACT-{timestamp}-{counter:03d}"
+
+        primary_approver = User.query.filter_by(
+            record_id=first_step.primary_approver_id, active=True
+        ).first()
+
+        action = RFPOApprovalAction(
+            action_id=action_id,
+            stage_order=stage.stage_order,
+            step_order=first_step.step_order,
+            stage_name=stage.stage_name,
+            step_name=first_step.step_name,
+            approval_type_key=first_step.approval_type_key,
+            approver_id=first_step.primary_approver_id,
+            approver_name=(
+                primary_approver.get_display_name()
+                if primary_approver
+                else "Unknown User"
+            ),
+            status="pending",
+        )
+        return action, counter
+
     @app.route("/api/rfpo/<int:rfpo_id>/submit-approval", methods=["POST"])
     @login_required
     def api_submit_approval(rfpo_id):
@@ -6181,154 +6243,64 @@ Southfield, MI  48075""",
             # Validate RFPO first
             validation_result = validate_rfpo_for_approval(rfpo)
             if not validation_result["is_valid"]:
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": "RFPO validation failed",
-                            "validation": validation_result,
-                        }
-                    ),
-                    400,
-                )
+                return jsonify({"success": False, "error": "RFPO validation failed",
+                                "validation": validation_result}), 400
 
-            # Check if RFPO already has an approval instance
-            existing_instance = RFPOApprovalInstance.query.filter_by(
-                rfpo_id=rfpo.id
-            ).first()
-            if existing_instance:
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": "RFPO already has an active approval workflow",
-                        }
-                    ),
-                    400,
-                )
+            # Check for existing approval instance
+            if RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first():
+                return jsonify({"success": False,
+                                "error": "RFPO already has an active approval workflow"}), 400
 
             # Find all applicable workflows (sequential phases)
             applicable_workflows = get_applicable_workflows(rfpo)
             if not applicable_workflows:
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": "No active approval workflows found for this RFPO",
-                        }
-                    ),
-                    400,
-                )
+                return jsonify({"success": False,
+                                "error": "No active approval workflows found for this RFPO"}), 400
 
-            # Create approval instance for multi-phase workflow
-            instance_id = generate_next_id(
-                RFPOApprovalInstance, "instance_id", "INST-", 8
-            )
-
-            # Create comprehensive workflow snapshot for all phases
+            # Build workflow snapshot for all phases
             workflow_snapshot = {
                 "total_phases": len(applicable_workflows),
                 "current_phase": 1,
                 "phases": [],
             }
 
-            # Process each workflow phase
             first_workflow = None
             first_stage = None
             all_actions = []
-
-            # Use timestamp-based action ID generation to ensure uniqueness
-            # Removed unused 'time' import; using datetime-based timestamps
-
-            action_id_counter = 0
+            action_counter = 0
 
             for workflow_type, workflow, phase_number in applicable_workflows:
                 if phase_number == 1:
                     first_workflow = workflow
 
-                # Determine stage for this workflow
                 stage = determine_rfpo_stage(rfpo, workflow)
                 if not stage:
-                    return (
-                        jsonify(
-                            {
-                                "success": False,
-                                "error": (
-                                    "No appropriate approval stage found for "
-                                    f"Phase {phase_number} ({workflow_type}) workflow"
-                                ),
-                            }
-                        ),
-                        400,
-                    )
+                    return jsonify({
+                        "success": False,
+                        "error": (f"No appropriate approval stage found for "
+                                  f"Phase {phase_number} ({workflow_type}) workflow"),
+                    }), 400
 
                 if phase_number == 1:
                     first_stage = stage
 
-                # Create phase snapshot
-                phase_snapshot = {
-                    "phase_number": phase_number,
-                    "workflow_type": workflow_type,
-                    "workflow_id": workflow.workflow_id,
-                    "workflow_name": workflow.name,
-                    "workflow_version": workflow.version,
-                    "entity_name": workflow.get_entity_name(),
-                    "stage": {
-                        "stage_id": stage.stage_id,
-                        "stage_name": stage.stage_name,
-                        "stage_order": stage.stage_order,
-                        "budget_bracket_amount": float(stage.budget_bracket_amount),
-                        "required_document_types": stage.get_required_document_types(),
-                        "steps": [],
-                    },
-                }
+                snapshot = _build_phase_snapshot(
+                    rfpo, stage, workflow_type, workflow, phase_number
+                )
+                workflow_snapshot["phases"].append(snapshot)
 
-                # Add steps for this phase
-                for step in stage.steps:
-                    step_snapshot = {
-                        "step_id": step.step_id,
-                        "step_name": step.step_name,
-                        "step_order": step.step_order,
-                        "approval_type_key": step.approval_type_key,
-                        "approval_type_name": step.approval_type_name,
-                        "primary_approver_id": step.primary_approver_id,
-                        "backup_approver_id": step.backup_approver_id,
-                        "is_required": step.is_required,
-                    }
-                    phase_snapshot["stage"]["steps"].append(step_snapshot)
-
-                    # Create action for Phase 1, Step 1 only (sequential gating)
-                    # Later steps/phases will be created as each step is approved
-                    if phase_number == 1 and step.step_order == 1:
-                        # Generate unique action ID using timestamp + counter
-                        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                        action_id_counter += 1
-                        action_id = f"ACT-{timestamp}-{action_id_counter:03d}"
-
-                        primary_approver = User.query.filter_by(
-                            record_id=step.primary_approver_id, active=True
-                        ).first()
-
-                        action = RFPOApprovalAction(
-                            action_id=action_id,
-                            stage_order=stage.stage_order,
-                            step_order=step.step_order,
-                            stage_name=stage.stage_name,
-                            step_name=step.step_name,
-                            approval_type_key=step.approval_type_key,
-                            approver_id=step.primary_approver_id,
-                            approver_name=(
-                                primary_approver.get_display_name()
-                                if primary_approver
-                                else "Unknown User"
-                            ),
-                            status="pending",
-                        )
+                # Create action for Phase 1, Step 1 only (sequential gating)
+                if phase_number == 1:
+                    action, action_counter = _create_first_step_action(
+                        stage, action_counter
+                    )
+                    if action:
                         all_actions.append(action)
 
-                workflow_snapshot["phases"].append(phase_snapshot)
-
-            # Create approval instance starting with Phase 1
+            # Create approval instance
+            instance_id = generate_next_id(
+                RFPOApprovalInstance, "instance_id", "INST-", 8
+            )
             approval_instance = RFPOApprovalInstance(
                 instance_id=instance_id,
                 rfpo_id=rfpo.id,
@@ -6342,48 +6314,36 @@ Southfield, MI  48075""",
                 submitted_at=datetime.utcnow(),
                 created_by=current_user.get_display_name(),
             )
-
             approval_instance.set_instance_data(workflow_snapshot)
 
-            # Save everything
             db.session.add(approval_instance)
-            db.session.flush()  # Get the instance ID
+            db.session.flush()
 
             for action in all_actions:
                 action.instance_id = approval_instance.id
                 db.session.add(action)
 
-            # Update RFPO status
             rfpo.status = "Submitted"
             rfpo.updated_by = current_user.get_display_name()
-
             db.session.commit()
 
             # Notify the first approver(s) via email
             _notify_pending_approvers(all_actions, rfpo)
 
-            return jsonify(
-                {
-                    "success": True,
-                    "message": f"RFPO submitted for {len(applicable_workflows)}-phase approval process. First approver notified.",
-                    "instance_id": approval_instance.instance_id,
-                    "total_phases": len(applicable_workflows),
-                    "first_stage_name": first_stage.stage_name,
-                    "first_phase_steps": len(all_actions),
-                }
-            )
+            return jsonify({
+                "success": True,
+                "message": (f"RFPO submitted for {len(applicable_workflows)}-phase "
+                            "approval process. First approver notified."),
+                "instance_id": approval_instance.instance_id,
+                "total_phases": len(applicable_workflows),
+                "first_stage_name": first_stage.stage_name,
+                "first_phase_steps": len(all_actions),
+            })
 
         except Exception as e:
             db.session.rollback()
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": f"Error submitting RFPO for approval: {str(e)}",
-                    }
-                ),
-                500,
-            )
+            return jsonify({"success": False,
+                            "error": f"Error submitting RFPO for approval: {str(e)}"}), 500
 
     # API endpoints for quick data
     @app.route("/api/stats")
@@ -6950,6 +6910,33 @@ Southfield, MI  48075""",
             "admin/pdf_positioning_list.html", configs=configs, consortiums=consortiums
         )
 
+    # ------------------------------------------------------------------
+    # Default PDF field positions (extracted from pdf_positioning_editor)
+    # ------------------------------------------------------------------
+    _DEFAULT_PDF_FIELD_POSITIONS = {
+        "consortium_logo": {"x": 50, "y": 750, "width": 80, "height": 40, "visible": True},
+        "po_number": {"x": 470, "y": 710, "font_size": 10, "font_weight": "bold", "visible": True},
+        "po_date": {"x": 470, "y": 695, "font_size": 9, "font_weight": "normal", "visible": True},
+        "vendor_company": {"x": 60, "y": 600, "font_size": 9, "font_weight": "normal", "visible": True},
+        "vendor_contact": {"x": 60, "y": 585, "font_size": 9, "font_weight": "normal", "visible": True},
+        "vendor_address": {"x": 60, "y": 570, "font_size": 9, "font_weight": "normal", "visible": True},
+        "vendor_phone": {"x": 60, "y": 555, "font_size": 9, "font_weight": "normal", "visible": True},
+        "ship_to_name": {"x": 240, "y": 600, "font_size": 9, "font_weight": "normal", "visible": True},
+        "ship_to_address": {"x": 240, "y": 585, "font_size": 9, "font_weight": "normal", "visible": True},
+        "delivery_type": {"x": 410, "y": 570, "font_size": 9, "font_weight": "normal", "visible": True},
+        "delivery_payment": {"x": 410, "y": 545, "font_size": 9, "font_weight": "normal", "visible": True},
+        "delivery_routing": {"x": 410, "y": 520, "font_size": 9, "font_weight": "normal", "visible": True},
+        "payment_terms": {"x": 60, "y": 470, "font_size": 9, "font_weight": "normal", "visible": True},
+        "project_info": {"x": 240, "y": 470, "font_size": 9, "font_weight": "normal", "visible": True},
+        "delivery_date": {"x": 410, "y": 470, "font_size": 9, "font_weight": "normal", "visible": True},
+        "government_agreement": {"x": 240, "y": 455, "font_size": 8, "font_weight": "normal", "visible": True},
+        "requestor_info": {"x": 60, "y": 380, "font_size": 9, "font_weight": "normal", "visible": True},
+        "invoice_address": {"x": 410, "y": 380, "font_size": 9, "font_weight": "normal", "visible": True},
+        "line_items_header": {"x": 60, "y": 320, "font_size": 8, "font_weight": "bold", "visible": True},
+        "subtotal": {"x": 400, "y": 200, "font_size": 9, "font_weight": "bold", "visible": True},
+        "total": {"x": 400, "y": 180, "font_size": 11, "font_weight": "bold", "visible": True},
+    }
+
     @app.route("/pdf-positioning/editor/<consortium_id>/<template_name>")
     @login_required
     def pdf_positioning_editor(consortium_id, template_name):
@@ -6983,164 +6970,12 @@ Southfield, MI  48075""",
         ).first()
 
         if not config:
-            # Create default configuration with standard PDF fields
             config = PDFPositioning(
                 consortium_id=consortium_id,
                 template_name=template_name,
                 created_by=current_user.get_display_name(),
             )
-
-            # Set default positions for common PDF fields
-            default_fields = {
-                "consortium_logo": {
-                    "x": 50,
-                    "y": 750,
-                    "width": 80,
-                    "height": 40,
-                    "visible": True,
-                },
-                "po_number": {
-                    "x": 470,
-                    "y": 710,
-                    "font_size": 10,
-                    "font_weight": "bold",
-                    "visible": True,
-                },
-                "po_date": {
-                    "x": 470,
-                    "y": 695,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "vendor_company": {
-                    "x": 60,
-                    "y": 600,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "vendor_contact": {
-                    "x": 60,
-                    "y": 585,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "vendor_address": {
-                    "x": 60,
-                    "y": 570,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "vendor_phone": {
-                    "x": 60,
-                    "y": 555,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "ship_to_name": {
-                    "x": 240,
-                    "y": 600,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "ship_to_address": {
-                    "x": 240,
-                    "y": 585,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "delivery_type": {
-                    "x": 410,
-                    "y": 570,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "delivery_payment": {
-                    "x": 410,
-                    "y": 545,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "delivery_routing": {
-                    "x": 410,
-                    "y": 520,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "payment_terms": {
-                    "x": 60,
-                    "y": 470,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "project_info": {
-                    "x": 240,
-                    "y": 470,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "delivery_date": {
-                    "x": 410,
-                    "y": 470,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "government_agreement": {
-                    "x": 240,
-                    "y": 455,
-                    "font_size": 8,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "requestor_info": {
-                    "x": 60,
-                    "y": 380,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "invoice_address": {
-                    "x": 410,
-                    "y": 380,
-                    "font_size": 9,
-                    "font_weight": "normal",
-                    "visible": True,
-                },
-                "line_items_header": {
-                    "x": 60,
-                    "y": 320,
-                    "font_size": 8,
-                    "font_weight": "bold",
-                    "visible": True,
-                },
-                "subtotal": {
-                    "x": 400,
-                    "y": 200,
-                    "font_size": 9,
-                    "font_weight": "bold",
-                    "visible": True,
-                },
-                "total": {
-                    "x": 400,
-                    "y": 180,
-                    "font_size": 11,
-                    "font_weight": "bold",
-                    "visible": True,
-                },
-            }
-            config.set_positioning_data(default_fields)
+            config.set_positioning_data(_DEFAULT_PDF_FIELD_POSITIONS)
             db.session.add(config)
             db.session.commit()
 

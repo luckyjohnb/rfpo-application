@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
@@ -70,13 +71,13 @@ class Consortium(db.Model):
 
     # Note: Teams reference this consortium via consortium_consort_id field
 
-    def get_rfpo_viewer_users(self):
+    def get_rfpo_viewer_users(self) -> List[str]:
         """Get list of RFPO viewer user IDs"""
         if self.rfpo_viewer_user_ids:
             return json.loads(self.rfpo_viewer_user_ids)
         return []
 
-    def set_rfpo_viewer_users(self, user_ids):
+    def set_rfpo_viewer_users(self, user_ids: List[str]) -> None:
         """Set RFPO viewer user IDs from a list"""
         if user_ids:
             # Filter out empty strings and 'none' values
@@ -85,13 +86,13 @@ class Consortium(db.Model):
         else:
             self.rfpo_viewer_user_ids = None
 
-    def get_rfpo_admin_users(self):
+    def get_rfpo_admin_users(self) -> List[str]:
         """Get list of RFPO admin user IDs"""
         if self.rfpo_admin_user_ids:
             return json.loads(self.rfpo_admin_user_ids)
         return []
 
-    def set_rfpo_admin_users(self, user_ids):
+    def set_rfpo_admin_users(self, user_ids: List[str]) -> None:
         """Set RFPO admin user IDs from a list"""
         if user_ids:
             # Filter out empty strings and 'none' values
@@ -100,7 +101,7 @@ class Consortium(db.Model):
         else:
             self.rfpo_admin_user_ids = None
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
             "consort_id": self.consort_id,
@@ -224,14 +225,14 @@ class RFPO(db.Model):
     )
 
     @property
-    def is_deleted(self):
+    def is_deleted(self) -> bool:
         return self.deleted_at is not None
 
-    def soft_delete(self):
+    def soft_delete(self) -> None:
         self.deleted_at = datetime.utcnow()
 
     @classmethod
-    def generate_po_number(cls, consortium_abbrev):
+    def generate_po_number(cls, consortium_abbrev: str) -> str:
         """Generate a sequential PO number: PO-{ABBREV}-{YYYYMMDD}-{SEQ:03d}"""
         today = datetime.utcnow().strftime("%Y%m%d")
         prefix = f"PO-{consortium_abbrev}-{today}-"
@@ -251,7 +252,7 @@ class RFPO(db.Model):
             seq = 1
         return f"{prefix}{seq:03d}"
 
-    def get_calculated_cost_share_amount(self):
+    def get_calculated_cost_share_amount(self) -> float:
         """Calculate the actual cost share amount based on type and subtotal"""
         if not self.cost_share_amount or not self.subtotal:
             return 0.00
@@ -264,13 +265,13 @@ class RFPO(db.Model):
             # Direct dollar amount
             return float(self.cost_share_amount)
 
-    def get_calculated_total_amount(self):
+    def get_calculated_total_amount(self) -> float:
         """Calculate the total amount after cost sharing"""
         subtotal = float(self.subtotal or 0)
         cost_share = self.get_calculated_cost_share_amount()
         return subtotal - cost_share
 
-    def update_totals(self):
+    def update_totals(self) -> None:
         """Update subtotal and total_amount based on line items and cost sharing"""
         if self.line_items:
             self.subtotal = sum(
@@ -707,41 +708,41 @@ class User(UserMixin, db.Model):
     created_by = db.Column(db.String(64))
     updated_by = db.Column(db.String(64))
 
-    def get_permissions(self):
+    def get_permissions(self) -> List[str]:
         """Get list of user permissions"""
         if self.permissions:
             return json.loads(self.permissions)
         return []
 
-    def set_permissions(self, permission_list):
+    def set_permissions(self, permission_list: List[str]) -> None:
         """Set user permissions from a list"""
         if permission_list:
             self.permissions = json.dumps(permission_list)
         else:
             self.permissions = None
 
-    def has_permission(self, permission):
+    def has_permission(self, permission: str) -> bool:
         """Check if user has a specific permission"""
         user_permissions = self.get_permissions()
         return permission in user_permissions
 
-    def is_super_admin(self):
+    def is_super_admin(self) -> bool:
         """Check if user is a super admin (GOD permission)"""
         return self.has_permission("GOD")
 
-    def is_rfpo_admin(self):
+    def is_rfpo_admin(self) -> bool:
         """Check if user has RFPO admin permissions"""
         return self.has_permission("RFPO_ADMIN") or self.is_super_admin()
 
-    def is_rfpo_user(self):
+    def is_rfpo_user(self) -> bool:
         """Check if user has RFPO user permissions"""
         return self.has_permission("RFPO_USER") or self.is_rfpo_admin()
 
-    def get_display_name(self):
+    def get_display_name(self) -> str:
         """Get formatted display name"""
         return self.fullname if self.fullname else self.email
 
-    def get_full_address(self):
+    def get_full_address(self) -> str:
         """Get formatted full address"""
         address_parts = []
         if self.building_address:
@@ -761,19 +762,19 @@ class User(UserMixin, db.Model):
             address_parts.append(self.country)
         return "\n".join(address_parts)
 
-    def get_teams(self):
+    def get_teams(self) -> List[Any]:
         """Get list of teams this user belongs to"""
         return [ut.team for ut in self.user_teams if ut.team]
 
-    def get_team_names(self):
+    def get_team_names(self) -> List[str]:
         """Get list of team names this user belongs to"""
         return [team.name for team in self.get_teams()]
 
-    def is_member_of_team(self, team_id):
+    def is_member_of_team(self, team_id: int) -> bool:
         """Check if user is a member of a specific team"""
         return any(ut.team_id == team_id for ut in self.user_teams)
 
-    def add_to_team(self, team_id, role="member", created_by=None):
+    def add_to_team(self, team_id: int, role: str = "member", created_by: Optional[str] = None) -> None:
         """Add user to a team with specified role"""
         if not self.is_member_of_team(team_id):
             user_team = UserTeam(
@@ -2335,16 +2336,16 @@ class AuditLog(db.Model):
         db.Index("idx_audit_user_action", "user_id", "action"),
     )
 
-    def set_details(self, data):
+    def set_details(self, data: Optional[Dict[str, Any]]) -> None:
         if data:
             self.details = json.dumps(data, default=str)
 
-    def get_details(self):
+    def get_details(self) -> Dict[str, Any]:
         if self.details:
             return json.loads(self.details)
         return {}
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,

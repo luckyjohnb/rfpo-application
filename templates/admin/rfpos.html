@@ -42,8 +42,8 @@
                                     <br><small class="text-success"><i class="fas fa-file-invoice"></i> {{ rfpo.po_number }}</small>
                                 {% endif %}
                             </td>
-                            <td>{{ rfpo.title }}</td>
-                            <td>{{ rfpo.vendor.company_name if rfpo.vendor else 'N/A' }}</td>
+                            <td class="text-truncate-cell">{{ rfpo.title }}</td>
+                            <td class="text-truncate-cell-sm">{{ rfpo.vendor.company_name if rfpo.vendor else 'N/A' }}</td>
                             <td>
                                 {% if rfpo.total_amount %}
                                     <strong>${{ "{:,.2f}".format(rfpo.total_amount) }}</strong>

@@ -376,13 +376,80 @@
                     // Update statistics for approver view
                     document.getElementById('totalRfpos').textContent = data.summary.total || 0;
                     document.getElementById('pendingRfpos').textContent = data.summary.pending || 0;
+                    document.getElementById('completedRfpos').textContent = '-';
                     
-                    // Update recent RFPOs with approval-focused data
-                    updateRecentRfpos(data.rfpos.slice(0, 5));
+                    // Show approval-focused content in recent RFPOs area
+                    const container = document.getElementById('recentRfposContainer');
+                    if (data.summary.pending > 0) {
+                        let html = `
+                            <div class="alert alert-warning d-flex align-items-center mb-3">
+                                <i class="fas fa-bell fa-lg me-3"></i>
+                                <div>
+                                    <strong>${data.summary.pending} approval action${data.summary.pending !== 1 ? 's' : ''}</strong> 
+                                    waiting for your review across ${data.summary.total} RFPO${data.summary.total !== 1 ? 's' : ''}.
+                                </div>
+                            </div>
+                        `;
+                        // Show first few pending items
+                        for (const item of data.rfpos.slice(0, 3)) {
+                            const rfpo = item.rfpo;
+                            const actionCount = item.pending_actions.length;
+                            html += `
+                                <div class="border-bottom pb-3 mb-3">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-6">
+                                            <h6 class="mb-1">
+                                                <a href="/rfpos/${rfpo.id}" class="text-decoration-none">
+                                                    ${rfpo.title || 'Untitled RFPO'}
+                                                </a>
+                                            </h6>
+                                            <small class="text-muted">${rfpo.rfpo_id || ''}</small>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <span class="badge bg-warning">${actionCount} pending</span>
+                                        </div>
+                                        <div class="col-md-3 text-end">
+                                            <a href="/approvals" class="btn btn-sm btn-success">
+                                                <i class="fas fa-clipboard-check"></i> Review
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        html += `
+                            <div class="text-center mt-2">
+                                <a href="/approvals" class="btn btn-warning">
+                                    <i class="fas fa-clipboard-check"></i> Go to My Approvals
+                                </a>
+                            </div>
+                        `;
+                        container.innerHTML = html;
+                    } else {
+                        container.innerHTML = `
+                            <div class="text-center py-4">
+                                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                                <h5 class="text-muted">All caught up!</h5>
+                                <p class="text-muted">No RFPOs are currently waiting for your approval.</p>
+                                <a href="/approvals" class="btn btn-outline-success">
+                                    <i class="fas fa-clipboard-check"></i> View Approvals
+                                </a>
+                            </div>
+                        `;
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error loading approver dashboard:', error);
+                // Fallback: just point them to the approvals page
+                const container = document.getElementById('recentRfposContainer');
+                container.innerHTML = `
+                    <div class="text-center py-4">
+                        <a href="/approvals" class="btn btn-warning btn-lg">
+                            <i class="fas fa-clipboard-check"></i> Go to My Approvals
+                        </a>
+                    </div>
+                `;
             });
     }
     
@@ -390,9 +457,10 @@
         // Hide RFPO-related statistics and show profile message
         document.getElementById('totalRfpos').textContent = 'N/A';
         document.getElementById('pendingRfpos').textContent = 'N/A';
+        document.getElementById('completedRfpos').textContent = 'N/A';
         
-        const recentRfposContainer = document.getElementById('recentRfpos');
-        recentRfposContainer.innerHTML = `
+        const container = document.getElementById('recentRfposContainer');
+        container.innerHTML = `
             <div class="text-center py-4">
                 <i class="fas fa-user-circle fa-4x text-muted mb-3"></i>
                 <h6>Profile Management Access</h6>
@@ -407,8 +475,8 @@
     
     function showNoAccessDashboard() {
         // Show no access message
-        const recentRfposContainer = document.getElementById('recentRfpos');
-        recentRfposContainer.innerHTML = `
+        const container = document.getElementById('recentRfposContainer');
+        container.innerHTML = `
             <div class="text-center py-4">
                 <i class="fas fa-exclamation-triangle fa-4x text-warning mb-3"></i>
                 <h6>Limited Access</h6>

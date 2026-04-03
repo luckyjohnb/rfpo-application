@@ -42,6 +42,66 @@
             padding: 0.25rem 0.5rem;
             font-size: 0.875rem;
         }
+        /* Focus states for accessibility */
+        a:focus-visible, button:focus-visible, input:focus-visible,
+        select:focus-visible, textarea:focus-visible, .form-control:focus {
+            outline: 2px solid #3498db;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        /* Table column truncation */
+        .table td.text-truncate-cell, .table th.text-truncate-cell {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .table td.text-truncate-cell-sm {
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Required field indicator */
+        label.required::after {
+            content: " *";
+            color: #dc3545;
+        }
+        /* Mobile improvements */
+        @media (max-width: 767.98px) {
+            .sidebar {
+                min-height: auto;
+                position: relative;
+            }
+            .sidebar .nav-link {
+                padding: 0.4rem 0.75rem;
+                font-size: 0.875rem;
+            }
+            .main-content {
+                min-height: auto;
+                padding: 0.5rem !important;
+            }
+            .card-body {
+                padding: 0.75rem;
+            }
+            h1.h2, .h2 {
+                font-size: 1.25rem;
+            }
+            .btn-group-sm > .btn {
+                padding: 0.15rem 0.35rem;
+                font-size: 0.75rem;
+            }
+            .table {
+                font-size: 0.8rem;
+            }
+            .table td, .table th {
+                padding: 0.35rem 0.5rem;
+            }
+            .d-flex.justify-content-between {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -239,6 +299,28 @@
             return originalSend.apply(this, arguments);
         };
     })();
+    </script>
+    <script>
+    // Global form input trimming on submit
+    document.addEventListener('submit', function(e) {
+        if (e.target.tagName === 'FORM') {
+            e.target.querySelectorAll('input[type="text"], input[type="email"], input[type="search"], input[type="url"], input[type="tel"], textarea').forEach(function(input) {
+                if (input.value && !input.readOnly && !input.disabled) {
+                    input.value = input.value.trim();
+                }
+            });
+        }
+    }, true);
+
+    // Flash alert auto-dismiss after 5 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.alert-dismissible').forEach(function(alert) {
+            setTimeout(function() {
+                var bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                if (bsAlert) bsAlert.close();
+            }, 5000);
+        });
+    });
     </script>
     {% block scripts %}{% endblock %}
 </body>

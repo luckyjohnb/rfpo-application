@@ -271,7 +271,7 @@
                             <i class="fas fa-times"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} Vendor
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save Vendor{% else %}Create Vendor{% endif %}
                         </button>
                     </div>
                 </div>

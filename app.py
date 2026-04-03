@@ -223,6 +223,14 @@ def create_user_app():
 
         return render_template("app/profile.html")
 
+    @app.route("/approvals")
+    def approvals():
+        """Approval queue page for approvers"""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+
+        return render_template("app/approvals.html")
+
     @app.route("/first-login-password-reset")
     def first_login_password_reset():
         """First login password reset page - forces password change"""

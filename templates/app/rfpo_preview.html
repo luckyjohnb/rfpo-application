@@ -326,11 +326,11 @@
         <!-- LINES TABLE -->
         <table border="0" cellspacing="1" cellpadding="0" class="preview_table">
             <tr>
-                <th><b>#</b></th>
-                <th><b>Qty</b></th>
-                <th><b>Description of supplies or services</b></th>
-                <th style="text-align:right"><b>Unit Price</b></th>
-                <th style="text-align:right"><b>Total Price</b></th>
+                <th scope="col"><b>#</b></th>
+                <th scope="col"><b>Qty</b></th>
+                <th scope="col"><b>Description of supplies or services</b></th>
+                <th scope="col" style="text-align:right"><b>Unit Price</b></th>
+                <th scope="col" style="text-align:right"><b>Total Price</b></th>
             </tr>
 
             {% for item in rfpo.line_items|sort(attribute='line_number') %}

@@ -161,7 +161,7 @@
                             <i class="fas fa-times"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} Project
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save Project{% else %}Create Project{% endif %}
                         </button>
                     </div>
                 </div>

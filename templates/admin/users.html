@@ -54,10 +54,10 @@
                         {% for user in users %}
                         <tr>
                             <td><strong>{{ user.record_id }}</strong></td>
-                            <td>{{ user.fullname }}</td>
-                            <td>{{ user.email }}</td>
-                            <td>{{ user.company or 'N/A' }}</td>
-                            <td>{{ user.position or 'N/A' }}</td>
+                            <td class="text-truncate-cell">{{ user.fullname }}</td>
+                            <td class="text-truncate-cell">{{ user.email }}</td>
+                            <td class="text-truncate-cell-sm">{{ user.company or 'N/A' }}</td>
+                            <td class="text-truncate-cell-sm">{{ user.position or 'N/A' }}</td>
                             <td><small>{{ format_json(user.permissions) }}</small></td>
                             <td>
                                 {% if user.active %}

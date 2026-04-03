@@ -1,0 +1,422 @@
+{% extends "app/base.html" %}
+
+{% block title %}My Approvals - RFPO Application{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-clipboard-check"></i> My Approvals
+        </h1>
+        <p class="text-muted">RFPOs waiting for your approval decision</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Pending Actions</h5>
+                        <h2 class="mb-0" id="pendingCount">-</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-hourglass-half fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">RFPOs to Review</h5>
+                        <h2 class="mb-0" id="rfpoCount">-</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-file-invoice fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Approver Status</h5>
+                        <h2 class="mb-0"><i class="fas fa-user-check"></i></h2>
+                    </div>
+                    <div class="align-self-center">
+                        <span class="badge bg-light text-dark" id="approverBadge">Checking...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Approvals List -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tasks"></i> Pending Approval Actions
+                </h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadApprovals()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body" id="approvalsContainer">
+                <div class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                    <p class="text-muted mt-2">Loading approval queue...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approval Action Modal -->
+<div class="modal fade" id="approvalModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-gavel"></i> Take Approval Action
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- RFPO Summary -->
+                <div class="card mb-3 bg-light">
+                    <div class="card-body">
+                        <h6 class="card-title" id="modalRfpoTitle"></h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <small class="text-muted">RFPO ID</small>
+                                <p class="mb-1 fw-bold" id="modalRfpoId"></p>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted">Total Amount</small>
+                                <p class="mb-1 fw-bold" id="modalRfpoAmount"></p>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted">Status</small>
+                                <p class="mb-1" id="modalRfpoStatus"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Details -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">Approval Step Details</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">Stage</small>
+                                <p class="mb-1" id="modalStageName"></p>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Step</small>
+                                <p class="mb-1" id="modalStepName"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decision -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Your Decision</label>
+                    <div class="d-flex gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="approvalStatus" 
+                                   id="statusApprove" value="approved" checked>
+                            <label class="form-check-label text-success fw-bold" for="statusApprove">
+                                <i class="fas fa-check-circle"></i> Approve
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="approvalStatus" 
+                                   id="statusRefuse" value="refused">
+                            <label class="form-check-label text-danger fw-bold" for="statusRefuse">
+                                <i class="fas fa-times-circle"></i> Refuse
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="approvalComments" class="form-label">Comments</label>
+                    <textarea class="form-control" id="approvalComments" rows="3" 
+                              placeholder="Optional comments about your decision..."></textarea>
+                </div>
+
+                <!-- Warning for refusal -->
+                <div class="alert alert-danger d-none" id="refuseWarning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Warning:</strong> Refusing this action will immediately reject the entire RFPO. 
+                    This cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="#" class="btn btn-outline-info" id="modalPreviewBtn" target="_blank">
+                    <i class="fas fa-eye"></i> Preview RFPO
+                </a>
+                <button type="button" class="btn btn-primary" id="submitApprovalBtn" onclick="submitApproval()">
+                    <i class="fas fa-check"></i> Submit Decision
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentActionId = null;
+    let currentRfpoId = null;
+
+    async function loadApprovals() {
+        const container = document.getElementById('approvalsContainer');
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                <p class="text-muted mt-2">Loading approval queue...</p>
+            </div>
+        `;
+
+        try {
+            const data = await makeApiCall('/api/users/approver-rfpos');
+            
+            if (!data.success) {
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> ${data.message || 'Failed to load approvals'}
+                    </div>
+                `;
+                return;
+            }
+
+            // Update summary cards
+            document.getElementById('pendingCount').textContent = data.summary.pending || 0;
+            document.getElementById('rfpoCount').textContent = data.summary.total || 0;
+            document.getElementById('approverBadge').textContent = 'Active';
+            document.getElementById('approverBadge').className = 'badge bg-success';
+
+            if (!data.rfpos || data.rfpos.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                        <h5 class="text-muted">All caught up!</h5>
+                        <p class="text-muted">No RFPOs are currently waiting for your approval.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Render approval cards
+            let html = '';
+            for (const item of data.rfpos) {
+                const rfpo = item.rfpo;
+                const instance = item.instance;
+                const actions = item.pending_actions;
+
+                html += `
+                    <div class="card mb-3 border-warning">
+                        <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">
+                                    <a href="/rfpos/${rfpo.id}" class="text-decoration-none">
+                                        ${escapeHtml(rfpo.title || 'Untitled RFPO')}
+                                    </a>
+                                </h6>
+                                <small class="text-muted">${escapeHtml(rfpo.rfpo_id || '')}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-primary fs-6">${formatCurrency(rfpo.total_amount)}</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-2">
+                                <div class="col-md-4">
+                                    <small class="text-muted">Workflow</small>
+                                    <p class="mb-0">${escapeHtml(instance.workflow_name || 'N/A')}</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Current Stage</small>
+                                    <p class="mb-0">${escapeHtml(instance.current_stage_name || 'Stage ' + (instance.current_stage_order || 1))}</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Submitted</small>
+                                    <p class="mb-0">${instance.submitted_at ? new Date(instance.submitted_at).toLocaleDateString() : 'N/A'}</p>
+                                </div>
+                            </div>
+                            
+                            <hr>
+                            <h6 class="text-muted mb-2">
+                                <i class="fas fa-tasks"></i> Your Pending Action${actions.length > 1 ? 's' : ''}
+                            </h6>
+                `;
+
+                for (const action of actions) {
+                    html += `
+                            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+                                <div>
+                                    <span class="fw-bold">${escapeHtml(action.step_name || 'Approval Step')}</span>
+                                    <br>
+                                    <small class="text-muted">
+                                        Stage: ${escapeHtml(action.stage_name || 'N/A')} &middot; 
+                                        Type: ${escapeHtml(action.approval_type_key || 'N/A')}
+                                    </small>
+                                </div>
+                                <div>
+                                    <a href="/rfpos/${rfpo.id}/preview" class="btn btn-sm btn-outline-info me-1" target="_blank" title="Preview RFPO">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-success me-1" 
+                                            onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, ${JSON.stringify(escapeHtml(rfpo.title || '')).replace(/'/g, "\\'")}, '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}')">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" 
+                                            onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, ${JSON.stringify(escapeHtml(rfpo.title || '')).replace(/'/g, "\\'")}, '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}', true)">
+                                        <i class="fas fa-times"></i> Refuse
+                                    </button>
+                                </div>
+                            </div>
+                    `;
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading approvals:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i> Error loading approval queue. Please try again.
+                </div>
+            `;
+        }
+    }
+
+    function openApprovalModal(actionId, rfpoId, rfpoTitle, rfpoIdStr, rfpoAmount, rfpoStatus, stageName, stepName, preSelectRefuse) {
+        currentActionId = actionId;
+        currentRfpoId = rfpoId;
+
+        document.getElementById('modalRfpoTitle').textContent = rfpoTitle;
+        document.getElementById('modalRfpoId').textContent = rfpoIdStr;
+        document.getElementById('modalRfpoAmount').textContent = formatCurrency(rfpoAmount);
+        document.getElementById('modalRfpoStatus').innerHTML = `<span class="badge bg-warning">${escapeHtml(rfpoStatus)}</span>`;
+        document.getElementById('modalStageName').textContent = stageName;
+        document.getElementById('modalStepName').textContent = stepName;
+        document.getElementById('modalPreviewBtn').href = `/rfpos/${rfpoId}/preview`;
+        document.getElementById('approvalComments').value = '';
+
+        if (preSelectRefuse) {
+            document.getElementById('statusRefuse').checked = true;
+            document.getElementById('refuseWarning').classList.remove('d-none');
+        } else {
+            document.getElementById('statusApprove').checked = true;
+            document.getElementById('refuseWarning').classList.add('d-none');
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById('approvalModal'));
+        modal.show();
+    }
+
+    // Show/hide refuse warning when radio changes
+    document.addEventListener('DOMContentLoaded', function() {
+        const radios = document.querySelectorAll('input[name="approvalStatus"]');
+        radios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                const warning = document.getElementById('refuseWarning');
+                if (this.value === 'refused') {
+                    warning.classList.remove('d-none');
+                } else {
+                    warning.classList.add('d-none');
+                }
+            });
+        });
+    });
+
+    async function submitApproval() {
+        if (!currentActionId) return;
+
+        const status = document.querySelector('input[name="approvalStatus"]:checked').value;
+        const comments = document.getElementById('approvalComments').value.trim();
+
+        // Confirm refusal
+        if (status === 'refused') {
+            if (!confirm('Are you sure you want to REFUSE this RFPO? This will reject the entire purchase order and cannot be undone.')) {
+                return;
+            }
+        }
+
+        const btn = document.getElementById('submitApprovalBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
+        try {
+            const response = await makeApiCall(`/api/users/approval-action/${currentActionId}`, {
+                method: 'POST',
+                body: JSON.stringify({ status, comments }),
+            });
+
+            if (response.success) {
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
+                modal.hide();
+
+                showAlert(
+                    `<i class="fas fa-check-circle"></i> RFPO ${status === 'approved' ? 'approved' : 'refused'} successfully!`,
+                    status === 'approved' ? 'success' : 'warning'
+                );
+
+                // Reload the approvals list
+                loadApprovals();
+            } else {
+                showAlert(`<i class="fas fa-exclamation-circle"></i> ${response.message}`, 'danger');
+            }
+        } catch (error) {
+            showAlert(`<i class="fas fa-exclamation-circle"></i> Error: ${error.message}`, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Submit Decision';
+        }
+    }
+
+    function formatCurrency(value) {
+        if (value === null || value === undefined) return '$0.00';
+        return '$' + Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function escapeAttr(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Load on page load
+    document.addEventListener('DOMContentLoaded', loadApprovals);
+</script>
+{% endblock %}

@@ -96,7 +96,7 @@
 
                     <div class="d-flex justify-content-between">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> {{ action }} Workflow
+                            <i class="fas fa-save"></i> {% if action == 'Edit' %}Save Workflow{% else %}Create Workflow{% endif %}
                         </button>
                         {% if workflow %}
                         <a href="{{ url_for('approval_workflow_edit', id=workflow.id) }}" class="btn btn-info">

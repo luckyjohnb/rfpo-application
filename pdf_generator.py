@@ -309,8 +309,13 @@ class RFPOPDFGenerator:
             if x is None:
                 return
 
-            logo_preview_offset = -60
-            pdf_y = y + logo_preview_offset
+            # Only apply preview offset when positioning config exists (designer coordinates)
+            # For defaults, place logo directly above the title strip (y=712 top of strip)
+            if self.positioning_config:
+                logo_preview_offset = -60
+                pdf_y = y + logo_preview_offset
+            else:
+                pdf_y = 716  # Just above PURCHASE ORDER title strip (top at y=712)
 
             canvas.drawImage(
                 logo_path,
@@ -345,13 +350,20 @@ class RFPOPDFGenerator:
             self._draw_fallback_logo(canvas, 50, 750)
 
         # === TOP SECTION ===
-        # PO NUMBER — template "NUMBER:" label at x=394, y=764; fill to right
+        # PO NUMBER — template "NUMBER:" label at x=394, baseline y=764; value to right
         po_display = rfpo.po_number if rfpo.po_number else rfpo.rfpo_id
-        self._draw_text_with_positioning(canvas, "po_number", po_display, 470, 760)
+        # Auto-shrink font for long PO numbers to fit within box (x=445 to x=588)
+        max_po_width = 143  # 588 - 445
+        po_font_size = 9
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+        while po_font_size > 5 and stringWidth(po_display, "Helvetica", po_font_size) > max_po_width:
+            po_font_size -= 0.5
+        canvas.setFont("Helvetica", po_font_size)
+        self._draw_text_with_positioning(canvas, "po_number", po_display, 445, 764)
 
-        # DATE OF ORDER — template label at x=394, y=730; fill to right
+        # DATE OF ORDER — template label at x=394, baseline y=730; value to right of label
         self._draw_text_with_positioning(
-            canvas, "po_date", datetime.now().strftime("%m/%d/%Y"), 470, 726
+            canvas, "po_date", datetime.now().strftime("%m/%d/%Y"), 490, 730
         )
 
         # === VENDOR SECTION (Box: 46,535 to 244,679 — label "VENDOR:" at y=669) ===
@@ -437,35 +449,50 @@ class RFPOPDFGenerator:
             )
 
         # === MIDDLE FORM FIELDS ===
-        # PROJECT — template label "PROJECT:" at (251, 665), box (250,661)-(385,679)
+        # PROJECT — template "PROJECT:" label at x=251, baseline y=665, box (250,661)-(385,679)
+        # Value placed right after label text (x=285) with auto-fit sizing
+        from reportlab.pdfbase.pdfmetrics import stringWidth
         project_text = f"[{project.ref}] {project.name}"
-        if len(project_text) > 28:
-            project_text = project_text[:25] + "..."
+        project_value_x = 285  # right after "PROJECT:" label ends (~x=283)
+        project_box_right = 385
+        project_avail = project_box_right - project_value_x  # 100pt available
+        # Try font sizes from 8 down to 6; truncate only as last resort
+        project_font_size = 8
+        for try_size in [8, 7.5, 7, 6.5, 6]:
+            if stringWidth(project_text, "Helvetica", try_size) <= project_avail:
+                project_font_size = try_size
+                break
+        else:
+            # Still doesn't fit at 6pt — truncate at 6pt
+            project_font_size = 6
+            while len(project_text) > 8 and stringWidth(project_text, "Helvetica", 6) > project_avail:
+                project_text = project_text[:-4] + "..."
+        canvas.setFont("Helvetica", project_font_size)
         self._draw_text_with_positioning(
-            canvas, "project_info", project_text, 255, 655
+            canvas, "project_info", project_text, project_value_x, 665
         )
 
-        # DELIVERY DATE — template label "DELIVERY:" at (251, 641), box (250,637)-(385,656)
+        # DELIVERY DATE — template label "DELIVERY:" at x=251, baseline y=641, box (250,637)-(385,656)
         if rfpo.delivery_date:
             self._draw_text_with_positioning(
                 canvas,
                 "delivery_date",
                 rfpo.delivery_date.strftime("%m/%d/%Y"),
-                255,
-                632,
+                310,
+                641,
             )
 
         # PAYMENT, DELIVERY DETAIL fields hidden from create flow (Issues #5, #6)
         # These fields are no longer collected from users and omitted from PDF output
 
-        # === GOVERNMENT AGREEMENT (template label at x=253, y=522) ===
+        # === GOVERNMENT AGREEMENT (template label "under Agreement Number:" ends ~x=390, y=513) ===
         if rfpo.government_agreement_number:
             self._draw_text_with_positioning(
                 canvas,
                 "government_agreement",
                 rfpo.government_agreement_number,
-                380,
-                518,
+                395,
+                513,
             )
 
         # === LINE ITEMS SECTION ===
@@ -540,41 +567,60 @@ class RFPOPDFGenerator:
                     )
                     current_y -= line_height
 
-            # Add totals section at bottom right
-            current_y -= 10
-            canvas.line(400, current_y, 530, current_y)  # Line above totals
-            current_y -= 15
+            # === TOTALS SECTION ===
+            # Always anchored at the bottom of the line items box (y=176)
+            # This keeps totals in a consistent position regardless of item count
+            # UNIT PRICE col right edge = 505, TOTAL PRICE col right edge = 585
+            # Price column boxes bottom at y=176; place totals just above that
+            totals_y = 192  # baseline for TOTAL row, ~16pt above box bottom
+            subtotals_y = totals_y + 13  # SUBTOTAL row above TOTAL
 
-            # Subtotal
+            # If there's a cost share, shift everything up to make room
+            if rfpo.cost_share_amount and rfpo.cost_share_amount > 0:
+                totals_y = 185
+                cost_share_y = totals_y + 13
+                subtotals_y = cost_share_y + 13
+
+            # Horizontal rule above subtotal
+            canvas.line(431, subtotals_y + 10, 585, subtotals_y + 10)
+
+            # Subtotal — label right-aligned in unit price col, value in total price col
+            canvas.setFont("Helvetica", 8)
             self._draw_text_with_positioning(
-                canvas, "subtotal", f"SUBTOTAL: ${rfpo.subtotal:,.2f}", 400, current_y
+                canvas, "subtotal_label", "SUBTOTAL:", 505, subtotals_y, right_align=True
+            )
+            self._draw_text_with_positioning(
+                canvas, "subtotal", f"${rfpo.subtotal:,.2f}", 585, subtotals_y, right_align=True
             )
 
             if rfpo.cost_share_amount and rfpo.cost_share_amount > 0:
-                current_y -= 15
-                canvas.setFont("Helvetica", 9)
                 self._draw_text_with_positioning(
                     canvas,
                     "vendor_cost_share_label",
                     "VENDOR COST SHARE:",
-                    350,
-                    current_y,
+                    505,
+                    cost_share_y,
+                    right_align=True,
                 )
                 self._draw_text_with_positioning(
                     canvas,
                     "vendor_cost_share_amount",
                     f"-${rfpo.cost_share_amount:,.2f}",
-                    530,
-                    current_y,
+                    585,
+                    cost_share_y,
                     right_align=True,
                 )
 
-            current_y -= 15
-            canvas.line(400, current_y + 10, 530, current_y + 10)  # Line above total
+            # Horizontal rule above total
+            canvas.line(431, totals_y + 10, 585, totals_y + 10)
 
-            # Total
+            # Total — bold, same column alignment
+            canvas.setFont("Helvetica-Bold", 9)
             self._draw_text_with_positioning(
-                canvas, "total", f"TOTAL: ${rfpo.total_amount:,.2f}", 400, current_y
+                canvas, "total_label", "TOTAL:", 505, totals_y, right_align=True
+            )
+            self._draw_text_with_positioning(
+                canvas, "total", f"${rfpo.total_amount:,.2f}", 585, totals_y, right_align=True
             )
 
         # === REQUESTOR SECTION (Box: 46,42 to 244,168 — label "REQUESTOR:" at y=156) ===

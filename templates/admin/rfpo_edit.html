@@ -91,8 +91,8 @@
 </div>
 
 <!-- Section completion tracking -->
-{% set basic_complete = rfpo.title and rfpo.requestor_tel %}
-{% set shipping_complete = rfpo.shipto_name and rfpo.shipto_address and rfpo.delivery_date and rfpo.delivery_type and rfpo.payment_terms %}
+{% set basic_complete = rfpo.title %}
+{% set shipping_complete = rfpo.shipto_name and rfpo.shipto_address %}
 {% set vendor_complete = rfpo.vendor_id is not none %}
 {% set items_complete = rfpo.line_items|length > 0 %}
 {% set sections_done = [basic_complete, shipping_complete, vendor_complete, items_complete] | select | list | length %}
@@ -285,18 +285,7 @@
                         </div>
 
                         <div class="col-md-6">
-                            <h5 class="mb-3">📞 Requestor Information</h5>
-
-                            <div class="mb-3">
-                                <label for="requestor_tel" class="form-label">Requestor Phone</label>
-                                <input type="tel" class="form-control" id="requestor_tel" name="requestor_tel"
-                                       value="{{ rfpo.requestor_tel or '' }}">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="requestor_location" class="form-label">Requestor Location</label>
-                                <textarea class="form-control" id="requestor_location" name="requestor_location" rows="2">{{ rfpo.requestor_location or '' }}</textarea>
-                            </div>
+                            <!-- Requestor fields hidden from UI, auto-populated from user data (Issue #3) -->
 
                             <h5 class="mb-3 mt-4">💰 Cost Sharing</h5>
 
@@ -378,56 +367,11 @@
 
                         <div class="col-md-6">
 
-
+                            <!-- Delivery detail fields hidden from UI (Issues #5, #6) -->
                             <div class="mb-3">
-                                <label for="delivery_date" class="form-label">Delivery Date</label>
+                                <label for="delivery_date" class="form-label">PO Expiration Date</label>
                                 <input type="date" class="form-control" id="delivery_date" name="delivery_date"
                                        value="{{ rfpo.delivery_date.strftime('%Y-%m-%d') if rfpo.delivery_date else '' }}">
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="delivery_type" class="form-label">Delivery Type</label>
-                                        <select class="form-select" id="delivery_type" name="delivery_type">
-                                            <option value="">-- Select --</option>
-                                            <option value="FOB Seller's Plant" {{ 'selected' if rfpo.delivery_type == "FOB Seller's Plant" }}>FOB Seller's Plant</option>
-                                            <option value="FOB Destination" {{ 'selected' if rfpo.delivery_type == 'FOB Destination' }}>FOB Destination</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="delivery_payment" class="form-label">Payment</label>
-                                        <select class="form-select" id="delivery_payment" name="delivery_payment">
-                                            <option value="">-- Select --</option>
-                                            <option value="Collect" {{ 'selected' if rfpo.delivery_payment == 'Collect' }}>Collect</option>
-                                            <option value="Prepaid" {{ 'selected' if rfpo.delivery_payment == 'Prepaid' }}>Prepaid</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="delivery_routing" class="form-label">Routing</label>
-                                        <select class="form-select" id="delivery_routing" name="delivery_routing">
-                                            <option value="">-- Select --</option>
-                                            <option value="Buyer's traffic" {{ 'selected' if rfpo.delivery_routing == "Buyer's traffic" }}>Buyer's traffic</option>
-                                            <option value="Seller's traffic" {{ 'selected' if rfpo.delivery_routing == "Seller's traffic" }}>Seller's traffic</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="payment_terms" class="form-label">Payment Terms</label>
-                                        <select class="form-select" id="payment_terms" name="payment_terms">
-                                            <option value="Net 30" {{ 'selected' if rfpo.payment_terms == 'Net 30' }}>Net 30</option>
-                                            <option value="Net 30th Prox" {{ 'selected' if rfpo.payment_terms == 'Net 30th Prox' }}>Net 30th Prox</option>
-                                        </select>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -656,8 +600,6 @@
                                 <small class="text-muted">Gov. Agreement:</small> {{ rfpo.government_agreement_number or '—' }}
                             </div>
                             <div class="col-md-6">
-                                <small class="text-muted">Requestor Phone:</small> {{ rfpo.requestor_tel or '—' }}<br>
-                                <small class="text-muted">Location:</small> {{ rfpo.requestor_location or '—' }}<br>
                                 <small class="text-muted">Status:</small> <span class="badge bg-secondary">{{ rfpo.status }}</span>
                             </div>
                         </div>
@@ -706,12 +648,7 @@
                             <div class="col-md-6">
                                 <small class="text-muted">Ship To:</small> {{ rfpo.shipto_name or '—' }}<br>
                                 <small class="text-muted">Address:</small> {{ rfpo.shipto_address or '—' }}<br>
-                                <small class="text-muted">Delivery Date:</small> {{ rfpo.delivery_date.strftime('%m/%d/%Y') if rfpo.delivery_date else '—' }}
-                            </div>
-                            <div class="col-md-6">
-                                <small class="text-muted">Delivery Type:</small> {{ rfpo.delivery_type or '—' }}<br>
-                                <small class="text-muted">Payment Terms:</small> {{ rfpo.payment_terms or '—' }}<br>
-                                <small class="text-muted">Routing:</small> {{ rfpo.delivery_routing or '—' }}
+                                <small class="text-muted">PO Expiration:</small> {{ rfpo.delivery_date.strftime('%m/%d/%Y') if rfpo.delivery_date else '—' }}
                             </div>
                         </div>
                     </div>
@@ -1200,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function submitForApproval(rfpoId) {
-    if (!confirm('Submit this RFPO for approval? This will start the approval workflow and notify the first approver.')) {
+    if (!confirm('Submit this RFPO for approval? This will start the workflow and notify the first approver.')) {
         return;
     }
 

@@ -89,7 +89,7 @@
                                 {% if rfpo.approval_instance %}
                                     <span class="badge bg-warning"
                                           data-bs-toggle="tooltip"
-                                          title="Approval workflow: {{ rfpo.approval_instance.overall_status }}">
+                                          title="Workflow: {{ rfpo.approval_instance.overall_status }}">
                                         {{ rfpo.approval_instance.overall_status.title() }}
                                     </span>
                                 {% else %}
@@ -129,7 +129,7 @@
                                         <button type="button" class="btn btn-outline-secondary btn-sm"
                                                 disabled
                                                 data-bs-toggle="tooltip"
-                                                title="Cannot delete: RFPO has active approval workflow">
+                                                title="Cannot delete: RFPO has active workflow">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     {% endif %}

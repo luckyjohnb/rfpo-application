@@ -9,6 +9,8 @@ services:
       - "5002:5002"
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=sqlite:////app/instance/rfpo_admin.db
     volumes:
       - ./instance:/app/instance
     networks:
@@ -30,6 +32,8 @@ services:
       - "5111:5111"
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=sqlite:////app/instance/rfpo_admin.db
     volumes:
       - ./instance:/app/instance
       - ./uploads:/app/uploads

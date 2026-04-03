@@ -423,30 +423,8 @@ class RFPOPDFGenerator:
                 632,
             )
 
-        # PAYMENT — template label "PAYMENT:" at (252, 618), box (250,614)-(385,632)
-        if rfpo.payment_terms:
-            self._draw_text_with_positioning(
-                canvas, "payment_terms", rfpo.payment_terms, 255, 608
-            )
-
-        # === DELIVERY DETAIL SECTION (right side, labels at x=253) ===
-        # Type & Place — template label at y=587
-        if rfpo.delivery_type:
-            self._draw_text_with_positioning(
-                canvas, "delivery_type", rfpo.delivery_type, 390, 581
-            )
-
-        # Payment for Transportation — template label at y=568
-        if rfpo.delivery_payment:
-            self._draw_text_with_positioning(
-                canvas, "delivery_payment", rfpo.delivery_payment, 390, 562
-            )
-
-        # Routing — template label at y=549
-        if rfpo.delivery_routing:
-            self._draw_text_with_positioning(
-                canvas, "delivery_routing", rfpo.delivery_routing, 390, 543
-            )
+        # PAYMENT, DELIVERY DETAIL fields hidden from create flow (Issues #5, #6)
+        # These fields are no longer collected from users and omitted from PDF output
 
         # === GOVERNMENT AGREEMENT (template label at x=253, y=522) ===
         if rfpo.government_agreement_number:
@@ -568,21 +546,15 @@ class RFPOPDFGenerator:
             )
 
         # === REQUESTOR SECTION (Box: 46,42 to 244,168 — label "REQUESTOR:" at y=156) ===
-        requestor_info_parts = []
-        requestor_info_parts.append(rfpo.requestor_id or "ADMIN001")
-        if rfpo.requestor_tel:
-            requestor_info_parts.append(f"Tel: {rfpo.requestor_tel}")
-        if rfpo.requestor_location:
-            requestor_info_parts.append(rfpo.requestor_location)
-
-        if requestor_info_parts:
-            self._draw_text_with_positioning(
-                canvas,
-                "requestor_info",
-                "\n".join(requestor_info_parts),
-                52,
-                145,
-            )
+        # Requestor details hidden from create flow (Issue #3) — only show requestor name/ID
+        requestor_name = rfpo.requestor_id or "ADMIN001"
+        self._draw_text_with_positioning(
+            canvas,
+            "requestor_info",
+            requestor_name,
+            52,
+            145,
+        )
 
         # === INVOICE TO SECTION (Box: 249,42 to 447,168 — label "INVOICE TO:" at y=156) ===
         if rfpo.invoice_address:

@@ -308,7 +308,8 @@ class RFPOPDFGenerator:
 
         # === TOP SECTION ===
         # PO NUMBER
-        self._draw_text_with_positioning(canvas, "po_number", rfpo.rfpo_id, 470, 710)
+        po_display = rfpo.po_number if rfpo.po_number else rfpo.rfpo_id
+        self._draw_text_with_positioning(canvas, "po_number", po_display, 470, 710)
 
         # DATE OF ORDER
         self._draw_text_with_positioning(

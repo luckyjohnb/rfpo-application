@@ -39,6 +39,10 @@
             <div class="card-body py-2">
                 <small class="text-muted">RFPO ID:</small><br>
                 <strong>{{ rfpo.rfpo_id }}</strong>
+                {% if rfpo.po_number %}
+                    <br><small class="text-muted">PO Number:</small><br>
+                    <strong class="text-success">{{ rfpo.po_number }}</strong>
+                {% endif %}
             </div>
         </div>
     </div>

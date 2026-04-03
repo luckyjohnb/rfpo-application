@@ -6031,6 +6031,18 @@ Southfield, MI  48075""",
                     instance.rfpo.status = "Approved"
                     instance.rfpo.updated_by = current_user.get_display_name()
 
+                    # Generate PO number on first approval (if not already assigned)
+                    if not instance.rfpo.po_number:
+                        consortium = Consortium.query.filter_by(
+                            consort_id=instance.rfpo.consortium_id
+                        ).first()
+                        abbrev = consortium.abbrev if consortium else "GEN"
+                        instance.rfpo.po_number = RFPO.generate_po_number(abbrev)
+                        app.logger.info(
+                            "AUDIT: PO number %s assigned to RFPO %s on approval",
+                            instance.rfpo.po_number, instance.rfpo.rfpo_id,
+                        )
+
             instance.updated_at = datetime.utcnow()
 
             db.session.commit()

@@ -36,7 +36,12 @@
                     <tbody>
                         {% for rfpo in rfpos %}
                         <tr>
-                            <td><strong>{{ rfpo.rfpo_id }}</strong></td>
+                            <td>
+                                <strong>{{ rfpo.rfpo_id }}</strong>
+                                {% if rfpo.po_number %}
+                                    <br><small class="text-success"><i class="fas fa-file-invoice"></i> {{ rfpo.po_number }}</small>
+                                {% endif %}
+                            </td>
                             <td>{{ rfpo.title }}</td>
                             <td>{{ rfpo.vendor.company_name if rfpo.vendor else 'N/A' }}</td>
                             <td>

@@ -140,6 +140,9 @@ class RFPO(db.Model):
     rfpo_id = db.Column(
         db.String(64), unique=True, nullable=False
     )  # e.g., RFPO-TestProj3-2025-08-24-N01
+    po_number = db.Column(
+        db.String(64), unique=True, nullable=True
+    )  # e.g., PO-USCAR-20260402-001 — assigned on approval
     title = db.Column(db.String(256), nullable=False)
     description = db.Column(db.Text)
 
@@ -210,6 +213,27 @@ class RFPO(db.Model):
         "RFPOLineItem", backref="rfpo", lazy=True, cascade="all, delete-orphan"
     )
 
+    @classmethod
+    def generate_po_number(cls, consortium_abbrev):
+        """Generate a sequential PO number: PO-{ABBREV}-{YYYYMMDD}-{SEQ:03d}"""
+        today = datetime.utcnow().strftime("%Y%m%d")
+        prefix = f"PO-{consortium_abbrev}-{today}-"
+        # Find the highest sequence for this prefix today
+        latest = (
+            cls.query
+            .filter(cls.po_number.like(f"{prefix}%"))
+            .order_by(cls.po_number.desc())
+            .first()
+        )
+        if latest and latest.po_number:
+            try:
+                seq = int(latest.po_number.replace(prefix, "")) + 1
+            except ValueError:
+                seq = 1
+        else:
+            seq = 1
+        return f"{prefix}{seq:03d}"
+
     def get_calculated_cost_share_amount(self):
         """Calculate the actual cost share amount based on type and subtotal"""
         if not self.cost_share_amount or not self.subtotal:
@@ -245,6 +269,7 @@ class RFPO(db.Model):
         return {
             "id": self.id,
             "rfpo_id": self.rfpo_id,
+            "po_number": self.po_number,
             "title": self.title,
             "description": self.description,
             "project_id": self.project_id,

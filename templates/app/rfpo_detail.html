@@ -289,9 +289,26 @@
                 // Load the complete HTML page in an iframe for proper styling
                 const iframe = document.createElement('iframe');
                 iframe.style.width = '100%';
-                iframe.style.height = '100%';
                 iframe.style.border = 'none';
+                iframe.style.minHeight = '600px';
                 iframe.srcdoc = htmlContent;
+
+                // Auto-resize iframe to fit content after load
+                iframe.onload = function() {
+                    try {
+                        const body = iframe.contentDocument.body;
+                        const html = iframe.contentDocument.documentElement;
+                        const height = Math.max(
+                            body.scrollHeight, body.offsetHeight,
+                            html.scrollHeight, html.offsetHeight
+                        );
+                        iframe.style.height = height + 40 + 'px';
+                        // Expand container to fit
+                        container.style.height = 'auto';
+                    } catch(e) {
+                        iframe.style.height = '1200px';
+                    }
+                };
                 
                 container.innerHTML = '';
                 container.appendChild(iframe);

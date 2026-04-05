@@ -13,7 +13,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import db, Team, Consortium
-from utils import require_auth, require_admin_or_team_admin
+from utils import require_auth, require_admin_or_team_admin, error_response
 
 team_api = Blueprint("team_api", __name__, url_prefix="/api/teams")
 
@@ -57,7 +57,7 @@ def list_teams():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @team_api.route("", methods=["POST"])
@@ -124,7 +124,7 @@ def create_team():
         )
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @team_api.route("/<int:team_id>", methods=["GET"])
@@ -135,7 +135,7 @@ def get_team(team_id):
         team = Team.query.get_or_404(team_id)
         return jsonify({"success": True, "team": team.to_dict()})
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @team_api.route("/<int:team_id>", methods=["PUT"])
@@ -179,7 +179,7 @@ def update_team(team_id):
         )
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @team_api.route("/<int:team_id>", methods=["DELETE"])
@@ -209,7 +209,7 @@ def delete_team(team_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @team_api.route("/<int:team_id>/activate", methods=["POST"])
@@ -229,7 +229,7 @@ def activate_team(team_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @team_api.route("/<int:team_id>/deactivate", methods=["POST"])
@@ -249,4 +249,4 @@ def deactivate_team(team_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)

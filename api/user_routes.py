@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models import (
     db, User, RFPO, RFPOApprovalInstance, RFPOApprovalAction, Consortium,
 )
-from utils import require_auth
+from utils import require_auth, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def get_user_profile():
         user = request.current_user
         return jsonify({"success": True, "user": user.to_dict()})
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @user_api.route("/profile", methods=["PUT"])
@@ -83,7 +83,7 @@ def update_user_profile():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @user_api.route("/change-password", methods=["POST"])
@@ -138,7 +138,7 @@ def change_password():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @user_api.route("/permissions-summary", methods=["GET"])
@@ -292,7 +292,7 @@ def get_user_permissions_summary():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @user_api.route("/approver-status", methods=["GET"])
@@ -321,7 +321,7 @@ def get_user_approver_status():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @user_api.route("/sync-approver-status", methods=["POST"])
@@ -350,7 +350,7 @@ def sync_user_approver_status():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @user_api.route("/approver-rfpos", methods=["GET"])
@@ -442,7 +442,7 @@ def get_user_approver_rfpos():
 
     except Exception as e:
         logging.getLogger(__name__).exception(f"Approver RFPOs error for user {request.current_user.record_id}: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 def _get_authorized_approver_ids_api(instance, action):
@@ -628,7 +628,7 @@ def take_approval_action(action_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 def _notify_pending_approvers_api(actions, rfpo):

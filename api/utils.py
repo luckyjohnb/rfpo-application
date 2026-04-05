@@ -148,6 +148,13 @@ def format_response(success=True, data=None, message=None, status_code=200):
     return jsonify(response), status_code
 
 
+def error_response(e, status_code=500):
+    """Return sanitized error response — log details server-side, generic message to client."""
+    import logging
+    logging.getLogger(__name__).error("Request error: %s", str(e), exc_info=True)
+    return jsonify({"success": False, "message": "An internal error occurred"}), status_code
+
+
 def validate_required_fields(data, required_fields):
     """Validate required fields in request data"""
     missing_fields = []

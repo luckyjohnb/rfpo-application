@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import db, User, Consortium, Project, Vendor, VendorSite, List
-from utils import require_auth, require_admin
+from utils import require_auth, require_admin, error_response
 
 admin_api = Blueprint("admin_api", __name__, url_prefix="/api/admin")
 
@@ -51,7 +51,7 @@ def list_users():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @admin_api.route("/users", methods=["POST"])
@@ -111,7 +111,7 @@ def create_user():
         return jsonify({"success": False, "message": "Email already exists"}), 400
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 # Consortium Management Routes
@@ -140,7 +140,7 @@ def list_consortiums():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @admin_api.route("/consortiums", methods=["POST"])
@@ -196,7 +196,7 @@ def create_consortium():
         )
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 # Project Management Routes
@@ -225,7 +225,7 @@ def list_projects():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 # Vendor Management Routes
@@ -253,7 +253,7 @@ def list_vendors():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 # Configuration Lists Routes
@@ -280,4 +280,4 @@ def list_configuration_lists():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)

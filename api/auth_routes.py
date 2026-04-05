@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import db, User
-from utils import JWT_SECRET_KEY
+from utils import JWT_SECRET_KEY, error_response
 
 auth_api = Blueprint("auth_api", __name__, url_prefix="/api/auth")
 
@@ -123,7 +123,7 @@ def login():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @auth_api.route("/verify", methods=["GET"])
@@ -170,7 +170,7 @@ def verify_token():
     except jwt.InvalidTokenError:
         return jsonify({"success": False, "authenticated": False, "message": "Invalid token"}), 401
     except Exception as e:
-        return jsonify({"success": False, "authenticated": False, "message": str(e)}), 401
+        return error_response(e, 401)
 
 
 @auth_api.route("/logout", methods=["POST"])
@@ -249,7 +249,7 @@ def change_password():
         return jsonify({"success": False, "message": "Invalid token"}), 401
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @auth_api.route("/register", methods=["POST"])
@@ -303,7 +303,7 @@ def register():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @auth_api.route("/saml-match", methods=["POST"])
@@ -403,4 +403,4 @@ def saml_match():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)

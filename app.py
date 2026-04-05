@@ -31,6 +31,8 @@ def create_user_app():
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "True").lower() == "true"
+    app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))
 
     # Setup logging
     logger = setup_logging("user_app", log_to_file=True)
@@ -40,7 +42,8 @@ def create_user_app():
     register_error_handlers(app, "user_app")
 
     # Enable CORS - restrict to known origins in production
-    _allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+    _cors_default = "https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io"
+    _allowed_origins = os.environ.get("CORS_ORIGINS", _cors_default).split(",")
     CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
 
     # Security headers
@@ -49,6 +52,7 @@ def create_user_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "

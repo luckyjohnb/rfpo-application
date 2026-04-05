@@ -66,9 +66,20 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL", f'sqlite:///{os.path.abspath("instance/rfpo_admin.db")}'
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_size": 20,
+    "pool_recycle": 3600,
+    "pool_pre_ping": True,
+}
 
 # Initialize database
 db.init_app(app)
+
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db.session.remove()
+
 
 # Setup structured logging and error handlers
 try:
@@ -83,7 +94,11 @@ except ImportError:
     app.logger.warning("logging_config/error_handlers not available, using basic logging")
 
 # Enable CORS - restrict to known origins in production
-_allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+_cors_default = (
+    "https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io,"
+    "https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io"
+)
+_allowed_origins = os.environ.get("CORS_ORIGINS", _cors_default).split(",")
 CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
 
 # Security headers
@@ -92,7 +107,14 @@ def set_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
+
+
+def _error_response(e, status_code=500):
+    """Return sanitized error response — log details server-side, generic message to client."""
+    app.logger.error("Request error: %s", str(e), exc_info=True)
+    return jsonify({"success": False, "message": "An internal error occurred"}), status_code
 
 # Register admin routes if available
 if ADMIN_ROUTES_AVAILABLE:
@@ -446,7 +468,7 @@ def change_password():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/auth/saml-match", methods=["POST"])
@@ -613,7 +635,7 @@ def get_approver_rfpos():
 
     except Exception as e:
         app.logger.exception(f"Approver RFPOs error for user {request.current_user.record_id}: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users/approval-action/<action_id>", methods=["POST"])
@@ -749,7 +771,7 @@ def take_approval_action(action_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users/bulk-approval", methods=["POST"])
@@ -821,7 +843,7 @@ def bulk_approval_action():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>/submit-for-approval", methods=["POST"])
@@ -1022,7 +1044,7 @@ def submit_for_approval(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>/withdraw-approval", methods=["POST"])
@@ -1084,7 +1106,7 @@ def withdraw_approval(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users/reassign-approval/<action_id>", methods=["POST"])
@@ -1179,7 +1201,7 @@ def reassign_approval_action(action_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users", methods=["GET"])
@@ -1206,7 +1228,7 @@ def list_users():
             ],
         })
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users/profile", methods=["GET"])
@@ -1253,7 +1275,7 @@ def get_user_profile():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users/approver-status", methods=["GET"])
@@ -1282,7 +1304,7 @@ def get_user_approver_status():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users/sync-approver-status", methods=["POST"])
@@ -1311,7 +1333,7 @@ def sync_user_approver_status():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users/profile", methods=["PUT"])
@@ -1354,7 +1376,7 @@ def update_user_profile():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/users/permissions-summary")
@@ -1558,7 +1580,7 @@ def get_user_permissions_summary():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos")
@@ -1701,7 +1723,7 @@ def list_rfpos():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos", methods=["POST"])
@@ -1790,7 +1812,7 @@ def create_rfpo():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>", methods=["GET"])
@@ -1966,7 +1988,7 @@ def get_rfpo(rfpo_id):
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>", methods=["PUT", "PATCH"])
@@ -2059,7 +2081,7 @@ def update_rfpo(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>", methods=["DELETE"])
@@ -2097,7 +2119,7 @@ def delete_rfpo(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 # Line Items API
@@ -2176,7 +2198,7 @@ def add_line_item(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["DELETE"])
@@ -2230,7 +2252,7 @@ def delete_line_item(rfpo_id, line_item_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>/line-items", methods=["GET"])
@@ -2248,7 +2270,7 @@ def get_line_items(rfpo_id):
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["PUT"])
@@ -2329,7 +2351,7 @@ def update_line_item(rfpo_id, line_item_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 # Supporting API endpoints for admin panel
@@ -2355,7 +2377,7 @@ def list_consortiums():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/projects")
@@ -2383,7 +2405,7 @@ def list_projects():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/projects/<consortium_id>")
@@ -2412,7 +2434,7 @@ def list_projects_for_consortium(consortium_id):
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/vendors")
@@ -2438,7 +2460,7 @@ def list_vendors():
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/vendor-sites/<int:vendor_id>")
@@ -2479,7 +2501,7 @@ def list_vendor_sites(vendor_id):
 
         return jsonify(site_data)
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 @app.route("/api/rfpos/<int:rfpo_id>/rendered-view")
@@ -2575,7 +2597,7 @@ def get_rfpo_rendered_view(rfpo_id):
             )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return _error_response(e)
 
 
 if __name__ == "__main__":

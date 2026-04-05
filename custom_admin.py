@@ -478,9 +478,21 @@ def create_app():
         f'sqlite:///{os.path.join(os.getcwd(), "instance", "rfpo_admin.db")}',
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "True").lower() == "true"
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_size": 20,
+        "pool_recycle": 3600,
+        "pool_pre_ping": True,
+    }
 
     # Initialize extensions
     db.init_app(app)
+
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        db.session.remove()
 
     # CSRF protection for all POST/PUT/DELETE forms
     csrf = CSRFProtect(app)
@@ -498,6 +510,7 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "

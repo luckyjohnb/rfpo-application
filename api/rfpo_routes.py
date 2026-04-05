@@ -13,7 +13,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import db, RFPO, RFPOLineItem, Team, UploadedFile, Project
-from utils import require_auth
+from utils import require_auth, error_response
 
 rfpo_api = Blueprint("rfpo_api", __name__, url_prefix="/api/rfpos")
 
@@ -97,7 +97,7 @@ def list_rfpos():
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("", methods=["POST"])
@@ -167,7 +167,7 @@ def create_rfpo():
         return jsonify({"success": False, "message": "RFPO ID already exists"}), 400
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("/<int:rfpo_id>", methods=["GET"])
@@ -209,7 +209,7 @@ def get_rfpo(rfpo_id):
         return jsonify({"success": True, "rfpo": rfpo_data})
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("/<int:rfpo_id>", methods=["PUT"])
@@ -236,7 +236,7 @@ def update_rfpo(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("/<int:rfpo_id>", methods=["DELETE"])
@@ -261,7 +261,7 @@ def delete_rfpo(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("/<int:rfpo_id>/line-items", methods=["GET"])
@@ -277,7 +277,7 @@ def get_rfpo_line_items(rfpo_id):
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("/<int:rfpo_id>/line-items", methods=["POST"])
@@ -352,7 +352,7 @@ def create_line_item(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["PUT"])
@@ -403,7 +403,7 @@ def update_line_item(rfpo_id, line_item_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["DELETE"])
@@ -433,7 +433,7 @@ def delete_line_item(rfpo_id, line_item_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)
 
 
 @rfpo_api.route("/<int:rfpo_id>/files", methods=["GET"])
@@ -447,4 +447,4 @@ def get_rfpo_files(rfpo_id):
         return jsonify({"success": True, "files": [file.to_dict() for file in files]})
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        return error_response(e)

@@ -10,6 +10,9 @@ from werkzeug.security import check_password_hash
 import jwt
 from datetime import datetime, timedelta
 import os
+import time
+import threading
+from collections import defaultdict
 
 # Import our models
 from models import (
@@ -53,8 +56,21 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # Initialize database
 db.init_app(app)
 
-# Enable CORS
-CORS(app)
+# Setup structured logging and error handlers
+try:
+    from logging_config import setup_logging
+    from error_handlers import register_error_handlers
+    logger = setup_logging("simple_api", log_to_file=True)
+    app.logger = logger
+    register_error_handlers(app, "simple_api")
+except ImportError:
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    app.logger.warning("logging_config/error_handlers not available, using basic logging")
+
+# Enable CORS - restrict to known origins in production
+_allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
 
 # Register admin routes if available
 if ADMIN_ROUTES_AVAILABLE:
@@ -63,8 +79,32 @@ if ADMIN_ROUTES_AVAILABLE:
 
 # User routes are handled directly in this file (not as blueprint)
 
-# JWT Secret
-JWT_SECRET = "simple-jwt-secret"
+# JWT Secret - MUST be set via environment variable in production
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY", "simple-jwt-secret")
+if JWT_SECRET == "simple-jwt-secret" and not os.environ.get("FLASK_ENV") == "development":
+    import warnings
+    warnings.warn("JWT_SECRET_KEY not set! Using insecure default. Set JWT_SECRET_KEY env var.", stacklevel=1)
+
+# --- Rate limiting for login ---
+_login_attempts = defaultdict(list)
+_login_lock = threading.Lock()
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+
+
+def _is_rate_limited(ip_address: str) -> bool:
+    now = time.time()
+    with _login_lock:
+        _login_attempts[ip_address] = [
+            ts for ts in _login_attempts[ip_address]
+            if now - ts < _LOGIN_WINDOW_SECONDS
+        ]
+        return len(_login_attempts[ip_address]) >= _LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_attempt(ip_address: str) -> None:
+    with _login_lock:
+        _login_attempts[ip_address].append(time.time())
 
 
 # Simple authentication decorator
@@ -81,7 +121,8 @@ def require_auth(f):
             if not user or not user.active:
                 return jsonify({"error": "Invalid user"}), 401
             request.current_user = user
-        except:
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception) as e:
+            app.logger.warning(f"Token validation failed: {type(e).__name__}")
             return jsonify({"error": "Invalid token"}), 401
 
         return f(*args, **kwargs)
@@ -113,11 +154,14 @@ def health():
 
 @app.route("/api/auth/login", methods=["POST"])
 def login():
+    # Rate limiting
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if _is_rate_limited(client_ip):
+        return jsonify({"success": False, "message": "Too many login attempts. Try again later."}), 429
+
     data = request.get_json()
     email = data.get("username")  # Frontend sends as 'username' but it's email
     password = data.get("password")
-
-    print(f"Login attempt: {email}")
 
     if not email or not password:
         return (
@@ -128,19 +172,16 @@ def login():
     # Find user
     user = User.query.filter_by(email=email).first()
 
-    print(f"User found: {user is not None}")
-    if user:
-        print(f"User active: {user.active}")
-
     if not user or not user.active:
-        return jsonify({"success": False, "message": "User not found or inactive"}), 401
+        _record_login_attempt(client_ip)
+        return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
     # Check password
     if not check_password_hash(user.password_hash, password):
-        print("Password check failed")
-        return jsonify({"success": False, "message": "Invalid password"}), 401
+        _record_login_attempt(client_ip)
+        return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
-    print("Login successful!")
+    app.logger.info(f"Login successful: {email}")
 
     # Create token
     token = jwt.encode(

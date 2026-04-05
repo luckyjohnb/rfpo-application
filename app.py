@@ -33,8 +33,9 @@ def create_user_app():
     # Register error handlers
     register_error_handlers(app, "user_app")
 
-    # Enable CORS
-    CORS(app, origins="*", allow_headers=["Content-Type", "Authorization"])
+    # Enable CORS - restrict to known origins in production
+    _allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+    CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
 
     # Custom Jinja2 filter for currency formatting
     @app.template_filter("currency")
@@ -780,4 +781,4 @@ if __name__ == "__main__":
     print(f"🔐 Login: http://127.0.0.1:5000/login")
     print("=" * 60)
 
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=os.environ.get("FLASK_ENV") == "development", host="0.0.0.0", port=5000)

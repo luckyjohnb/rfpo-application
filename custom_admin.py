@@ -7282,4 +7282,4 @@ if __name__ == "__main__":
     print("⚠️  Running on port 5111 (main app uses 5000)")
     print("")
 
-    app.run(debug=True, host="0.0.0.0", port=5111)
+    app.run(debug=os.environ.get("FLASK_ENV") == "development", host="0.0.0.0", port=5111)

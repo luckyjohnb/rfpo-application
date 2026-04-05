@@ -50,3 +50,6 @@ azure-communication-email>=1.0.0,<2.0.0
 
 # SAML SSO Authentication
 python3-saml>=1.16.0
+
+# Production WSGI server
+gunicorn>=21.2.0

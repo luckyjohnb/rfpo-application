@@ -41,5 +41,5 @@ EXPOSE 5111
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5111/health || exit 1
 
-# Run the admin panel
-CMD ["python", "custom_admin.py"]
+# Run with gunicorn production WSGI server
+CMD ["gunicorn", "--bind", "0.0.0.0:5111", "--workers", "2", "--timeout", "120", "custom_admin:create_app()"]

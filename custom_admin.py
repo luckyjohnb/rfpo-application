@@ -430,6 +430,7 @@ _login_attempts: dict = defaultdict(list)
 _login_lock = Lock()
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW_SECONDS = 300  # 5-minute window
+_MAX_TRACKED_IPS = 10000  # Cap to prevent unbounded memory growth
 
 
 def _is_rate_limited(ip_address: str) -> bool:
@@ -441,6 +442,14 @@ def _is_rate_limited(ip_address: str) -> bool:
             ts for ts in _login_attempts[ip_address]
             if now - ts < LOGIN_WINDOW_SECONDS
         ]
+        # Periodic cleanup: if dict is too large, remove all expired IPs
+        if len(_login_attempts) > _MAX_TRACKED_IPS:
+            expired_ips = [
+                k for k, v in _login_attempts.items()
+                if not v or all(now - ts >= LOGIN_WINDOW_SECONDS for ts in v)
+            ]
+            for k in expired_ips:
+                del _login_attempts[k]
         return len(_login_attempts[ip_address]) >= LOGIN_MAX_ATTEMPTS
 
 

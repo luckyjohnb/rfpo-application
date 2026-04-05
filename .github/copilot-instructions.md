@@ -18,10 +18,10 @@
 
 ## Database Models (models.py)
 
-**18 SQLAlchemy models** - always import ALL models for db.create_all() to work:
+**17 SQLAlchemy models** - always import ALL models for db.create_all() to work:
 ```python
 from models import (
-    db, User, Consortium, RFPO, RFPOLineItem, UploadedFile, DocumentChunk,
+    db, User, Consortium, RFPO, RFPOLineItem, UploadedFile,
     Team, UserTeam, Project, Vendor, VendorSite, PDFPositioning, List,
     RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep,
     RFPOApprovalInstance, RFPOApprovalAction
@@ -44,7 +44,7 @@ from models import (
 ## Database Initialization
 
 **CRITICAL:** When initializing databases (especially Azure PostgreSQL), use `sqlalchemy_db_init.py`:
-- Imports all 18 models (required for table creation - missing even ONE will break db.create_all())
+- Imports all 17 models (required for table creation - missing even ONE will break db.create_all())
 - Creates admin user with werkzeug hashed password (NOT bcrypt! - admin panel uses werkzeug.security for verification)
 - Handles both SQLite and PostgreSQL via `DATABASE_URL` env var from `.env` file
 - **NEVER hardcode connection strings** - use `env_config.py` centralized configuration
@@ -179,7 +179,6 @@ Users have multi-layer permissions:
 - Generate UUID: `file_id = str(uuid.uuid4())`
 - Store as: `{uuid}_{secure_filename(original)}`
 - Track in `UploadedFile` model with RFPO association
-- RAG processing: extract text → create `DocumentChunk` records with embeddings
 
 ## Common Tasks
 

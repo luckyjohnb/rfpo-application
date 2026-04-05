@@ -419,25 +419,10 @@ class UploadedFile(db.Model):
     document_type = db.Column(db.String(255))  # Document type from doc_types list
     description = db.Column(db.Text)  # Optional description
 
-    # RAG processing status
-    processing_status = db.Column(
-        db.String(32), default="pending"
-    )  # pending, processing, completed, failed
-    text_extracted = db.Column(db.Boolean, default=False)
-    embeddings_created = db.Column(db.Boolean, default=False)
-    chunk_count = db.Column(db.Integer, default=0)
-    processing_error = db.Column(db.Text)
-
     # Associations
     rfpo_id = db.Column(db.Integer, db.ForeignKey("rfpos.id"), nullable=False, index=True)
     uploaded_by = db.Column(db.String(64), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    processed_at = db.Column(db.DateTime)
-
-    # Relationships
-    chunks = db.relationship(
-        "DocumentChunk", backref="file", lazy=True, cascade="all, delete-orphan"
-    )
 
     def to_dict(self):
         return {
@@ -449,81 +434,9 @@ class UploadedFile(db.Model):
             "file_extension": self.file_extension,
             "document_type": self.document_type,
             "description": self.description,
-            "processing_status": self.processing_status,
-            "text_extracted": self.text_extracted,
-            "embeddings_created": self.embeddings_created,
-            "chunk_count": self.chunk_count,
-            "processing_error": self.processing_error,
             "rfpo_id": self.rfpo_id,
             "uploaded_by": self.uploaded_by,
             "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
-            "processed_at": (
-                self.processed_at.isoformat() if self.processed_at else None
-            ),
-        }
-
-
-class DocumentChunk(db.Model):
-    """Text chunks from documents for RAG"""
-
-    __tablename__ = "document_chunks"
-
-    id = db.Column(db.Integer, primary_key=True)
-    chunk_id = db.Column(db.String(36), unique=True, nullable=False)  # UUID
-    text_content = db.Column(db.Text, nullable=False)
-    chunk_index = db.Column(db.Integer, nullable=False)  # Order in document
-    chunk_size = db.Column(db.Integer, nullable=False)  # Character count
-
-    # Metadata
-    page_number = db.Column(db.Integer)  # For PDFs
-    section_title = db.Column(db.String(256))  # If extractable
-    metadata_json = db.Column(db.Text)  # Additional metadata as JSON
-
-    # Vector embeddings (stored as JSON for SQLite compatibility)
-    embedding_vector = db.Column(db.Text)  # JSON serialized embedding
-    embedding_model = db.Column(db.String(128))  # Model used for embedding
-
-    # Associations
-    file_id = db.Column(db.Integer, db.ForeignKey("uploaded_files.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def set_embedding(self, vector):
-        """Store embedding vector as JSON"""
-        if vector is not None:
-            self.embedding_vector = json.dumps(
-                vector.tolist() if hasattr(vector, "tolist") else vector
-            )
-
-    def get_embedding(self):
-        """Retrieve embedding vector from JSON"""
-        if self.embedding_vector:
-            return json.loads(self.embedding_vector)
-        return None
-
-    def set_metadata(self, metadata_dict):
-        """Store metadata as JSON"""
-        if metadata_dict:
-            self.metadata_json = json.dumps(metadata_dict)
-
-    def get_metadata(self):
-        """Retrieve metadata from JSON"""
-        if self.metadata_json:
-            return json.loads(self.metadata_json)
-        return {}
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "chunk_id": self.chunk_id,
-            "text_content": self.text_content,
-            "chunk_index": self.chunk_index,
-            "chunk_size": self.chunk_size,
-            "page_number": self.page_number,
-            "section_title": self.section_title,
-            "metadata": self.get_metadata(),
-            "embedding_model": self.embedding_model,
-            "file_id": self.file_id,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
@@ -609,7 +522,7 @@ class Team(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,
             "updated_by": self.updated_by,
-            "rfpo_count": len(self.rfpos) if self.rfpos else 0,
+            "rfpo_count": RFPO.query.filter_by(team_id=self.id).count() if self.id else 0,
         }
 
     def __repr__(self):

@@ -27,7 +27,6 @@ from models import (
     RFPO,
     RFPOLineItem,
     UploadedFile,
-    DocumentChunk,
     UserTeam,
     PDFPositioning,
     List,

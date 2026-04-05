@@ -11,10 +11,17 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models import User
+from models import User, Team
 
-# JWT Configuration
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-in-production")
+# JWT Configuration - fail-hard if secret is missing or insecure
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "")
+if not JWT_SECRET_KEY or JWT_SECRET_KEY == "dev-jwt-secret-change-in-production":
+    import warnings
+    if os.environ.get("FLASK_ENV") == "production":
+        raise RuntimeError("JWT_SECRET_KEY must be set to a secure value in production")
+    else:
+        JWT_SECRET_KEY = "dev-jwt-secret-LOCAL-ONLY-NOT-FOR-PRODUCTION"
+        warnings.warn("JWT_SECRET_KEY not set - using insecure default for local development only", stacklevel=1)
 
 
 def require_auth(f):
@@ -75,7 +82,9 @@ def require_admin(f):
 
 
 def require_admin_or_team_admin(f):
-    """Decorator to require admin or team admin privileges"""
+    """Decorator to require admin or team admin privileges.
+    Checks system-level GOD/RFPO_ADMIN permissions first,
+    then falls back to checking if user is a team-level admin."""
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -85,16 +94,26 @@ def require_admin_or_team_admin(f):
                 401,
             )
 
-        user_permissions = request.current_user.get_permissions() or []
-        if not any(perm in user_permissions for perm in ["GOD", "RFPO_ADMIN"]):
-            return (
-                jsonify(
-                    {"success": False, "message": "Admin or RFPO Admin access required"}
-                ),
-                403,
-            )
+        user = request.current_user
+        user_permissions = user.get_permissions() or []
 
-        return f(*args, **kwargs)
+        # System-level admin check
+        if any(perm in user_permissions for perm in ["GOD", "RFPO_ADMIN"]):
+            return f(*args, **kwargs)
+
+        # Team-level admin check: user's record_id in any team's rfpo_admin_user_ids
+        teams = Team.query.all()
+        for team in teams:
+            admin_users = team.get_rfpo_admin_users()
+            if user.record_id in admin_users:
+                return f(*args, **kwargs)
+
+        return (
+            jsonify(
+                {"success": False, "message": "Admin or Team Admin access required"}
+            ),
+            403,
+        )
 
     return decorated_function
 

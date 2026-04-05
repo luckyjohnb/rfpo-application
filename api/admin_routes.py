@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import db, User, Consortium, Project, Vendor, VendorSite, List
-from utils import require_auth, require_admin, format_response
+from utils import require_auth, require_admin
 
 admin_api = Blueprint("admin_api", __name__, url_prefix="/api/admin")
 

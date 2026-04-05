@@ -18,27 +18,35 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import db, User
+from utils import JWT_SECRET_KEY
 
 auth_api = Blueprint("auth_api", __name__, url_prefix="/api/auth")
-
-# JWT Configuration
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-in-production")
 
 # --- Rate limiting for login ---
 _login_attempts = defaultdict(list)
 _login_lock = threading.Lock()
 _MAX_ATTEMPTS = 5
 _WINDOW_SECONDS = 300  # 5 minutes
+_MAX_TRACKED_IPS = 10000  # Cap to prevent unbounded memory growth
 
 
 def _is_rate_limited(ip):
     """Check if IP has exceeded login attempt limit"""
     now = datetime.utcnow()
     with _login_lock:
+        # Prune expired entries for this IP
         _login_attempts[ip] = [
             t for t in _login_attempts[ip]
             if (now - t).total_seconds() < _WINDOW_SECONDS
         ]
+        # Periodic cleanup: if dict is too large, remove all expired IPs
+        if len(_login_attempts) > _MAX_TRACKED_IPS:
+            expired_ips = [
+                k for k, v in _login_attempts.items()
+                if not v or all((now - t).total_seconds() >= _WINDOW_SECONDS for t in v)
+            ]
+            for k in expired_ips:
+                del _login_attempts[k]
         return len(_login_attempts[ip]) >= _MAX_ATTEMPTS
 
 

@@ -6,6 +6,7 @@ Centralized team endpoints for both user app and admin panel
 from flask import Blueprint, request, jsonify
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
+import uuid
 import sys
 import os
 
@@ -27,11 +28,11 @@ def list_teams():
 
         active = request.args.get("active")
         if active is not None:
-            query = query.filter_by(is_active=(active.lower() == "true"))
+            query = query.filter_by(active=(active.lower() == "true"))
 
         consortium_id = request.args.get("consortium_id")
         if consortium_id:
-            query = query.filter_by(consortium_id=consortium_id)
+            query = query.filter_by(consortium_consort_id=consortium_id)
 
         search = request.args.get("search")
         if search:
@@ -83,19 +84,27 @@ def create_team():
                 400,
             )
 
+        # Auto-generate record_id
+        record_id = data.get("record_id") or str(uuid.uuid4())[:8].upper()
+
         team = Team(
+            record_id=record_id,
             name=data["name"],
             description=data.get("description"),
             abbrev=data["abbrev"],
-            consortium_id=data["consortium_id"],
-            viewer_user_ids=data.get("viewer_user_ids", []),
-            limited_admin_user_ids=data.get("limited_admin_user_ids", []),
-            is_active=data.get("is_active", True),
+            consortium_consort_id=data["consortium_id"],
+            active=data.get("active", True),
             created_by=request.current_user.username,
             updated_by=request.current_user.username,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
+
+        # Set JSON array fields via setter methods
+        if data.get("rfpo_viewer_user_ids"):
+            team.set_rfpo_viewer_users(data["rfpo_viewer_user_ids"])
+        if data.get("rfpo_admin_user_ids"):
+            team.set_rfpo_admin_users(data["rfpo_admin_user_ids"])
 
         db.session.add(team)
         db.session.commit()
@@ -142,12 +151,14 @@ def update_team(team_id):
         team.name = data.get("name", team.name)
         team.description = data.get("description", team.description)
         team.abbrev = data.get("abbrev", team.abbrev)
-        team.consortium_id = data.get("consortium_id", team.consortium_id)
-        team.viewer_user_ids = data.get("viewer_user_ids", team.viewer_user_ids)
-        team.limited_admin_user_ids = data.get(
-            "limited_admin_user_ids", team.limited_admin_user_ids
-        )
-        team.is_active = data.get("is_active", team.is_active)
+        if "consortium_id" in data:
+            team.consortium_consort_id = data["consortium_id"]
+        if "active" in data:
+            team.active = data["active"]
+        if "rfpo_viewer_user_ids" in data:
+            team.set_rfpo_viewer_users(data["rfpo_viewer_user_ids"])
+        if "rfpo_admin_user_ids" in data:
+            team.set_rfpo_admin_users(data["rfpo_admin_user_ids"])
         team.updated_by = request.current_user.username
         team.updated_at = datetime.utcnow()
 
@@ -178,7 +189,8 @@ def delete_team(team_id):
     """Delete team (admin only)"""
     try:
         # Only system admins can delete teams
-        if "Administrator" not in request.current_user.roles:
+        user_perms = request.current_user.get_permissions() or []
+        if "GOD" not in user_perms:
             return (
                 jsonify(
                     {
@@ -207,7 +219,7 @@ def activate_team(team_id):
     """Activate team"""
     try:
         team = Team.query.get_or_404(team_id)
-        team.is_active = True
+        team.active = True
         team.updated_by = request.current_user.username
         team.updated_at = datetime.utcnow()
 
@@ -227,7 +239,7 @@ def deactivate_team(team_id):
     """Deactivate team"""
     try:
         team = Team.query.get_or_404(team_id)
-        team.is_active = False
+        team.active = False
         team.updated_by = request.current_user.username
         team.updated_at = datetime.utcnow()
 

@@ -5,13 +5,14 @@ Centralized RFPO endpoints for both user app and admin panel
 
 from flask import Blueprint, request, jsonify
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 from datetime import datetime
 import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models import db, RFPO, RFPOLineItem, Team, UploadedFile
+from models import db, RFPO, RFPOLineItem, Team, UploadedFile, Project
 from utils import require_auth
 
 rfpo_api = Blueprint("rfpo_api", __name__, url_prefix="/api/rfpos")
@@ -22,12 +23,13 @@ rfpo_api = Blueprint("rfpo_api", __name__, url_prefix="/api/rfpos")
 def list_rfpos():
     """List RFPOs with filtering and pagination based on user permissions"""
     try:
-        from models import Team, Project
-
         user = request.current_user
 
-        # Build base query with permission filtering
-        query = RFPO.query
+        # Build base query with permission filtering and eager loading
+        query = RFPO.query.options(
+            joinedload(RFPO.team),
+            joinedload(RFPO.line_items),
+        )
 
         # If user is super admin, they can see all RFPOs
         if not user.is_super_admin():
@@ -120,8 +122,16 @@ def create_rfpo():
             team = Team.query.get(team_id)
             if not team:
                 return jsonify({"success": False, "message": "Team not found"}), 404
-        # Generate RFPO ID
-        rfpo_count = RFPO.query.count()
+        # Generate RFPO ID atomically using MAX to avoid race conditions
+        max_rfpo = db.session.query(db.func.max(RFPO.rfpo_id)).scalar()
+        if max_rfpo:
+            try:
+                last_num = int(max_rfpo.replace("RFPO-", ""))
+                rfpo_count = last_num
+            except ValueError:
+                rfpo_count = RFPO.query.count()
+        else:
+            rfpo_count = 0
         rfpo_id = f"RFPO-{rfpo_count + 1:04d}"
 
         # Ensure unique RFPO ID
@@ -166,6 +176,26 @@ def get_rfpo(rfpo_id):
     """Get RFPO details"""
     try:
         rfpo = RFPO.query.get_or_404(rfpo_id)
+
+        # Authorization: verify user has access to this RFPO
+        user = request.current_user
+        if not user.is_super_admin():
+            user_teams = user.get_teams()
+            team_ids = [team.id for team in user_teams]
+
+            # Check project-level access
+            accessible_project_ids = []
+            if rfpo.project_id:
+                project = Project.query.filter_by(project_id=rfpo.project_id).first()
+                if project and user.record_id in project.get_rfpo_viewer_users():
+                    accessible_project_ids.append(rfpo.project_id)
+
+            has_team_access = rfpo.team_id and rfpo.team_id in team_ids
+            has_project_access = rfpo.project_id and rfpo.project_id in accessible_project_ids
+
+            if not has_team_access and not has_project_access:
+                return jsonify({"success": False, "message": "Access denied"}), 403
+
         rfpo_data = rfpo.to_dict()
 
         # Add line items
@@ -217,9 +247,10 @@ def delete_rfpo(rfpo_id):
         rfpo = RFPO.query.get_or_404(rfpo_id)
 
         # Check permissions (only creator or admin can delete)
+        user_perms = request.current_user.get_permissions() or []
         if (
             rfpo.created_by != request.current_user.username
-            and "Administrator" not in request.current_user.roles
+            and "GOD" not in user_perms
         ):
             return jsonify({"success": False, "message": "Permission denied"}), 403
 

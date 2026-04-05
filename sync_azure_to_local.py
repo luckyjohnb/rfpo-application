@@ -32,7 +32,6 @@ TABLE_ORDER = [
     "rfpos",
     "rfpo_line_items",
     "uploaded_files",
-    "document_chunks",
     "pdf_positioning",
     "rfpo_approval_workflows",
     "rfpo_approval_stages",

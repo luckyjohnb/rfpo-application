@@ -965,10 +965,20 @@ class RFPOPDFGenerator:
             and hasattr(consortium_obj, "terms_pdf")
             and consortium_obj.terms_pdf
         ):
+            # Sanitize filename to prevent path traversal
+            terms_filename = os.path.basename(consortium_obj.terms_pdf)
+            if not terms_filename or terms_filename.startswith('.'):
+                return None
             # Return path relative to uploads/terms/
-            return os.path.join(
-                "..", "..", "uploads", "terms", consortium_obj.terms_pdf
+            terms_path = os.path.join(
+                "..", "..", "uploads", "terms", terms_filename
             )
+            # Verify resolved path stays within uploads/terms/
+            resolved = os.path.realpath(os.path.join(self.static_path, terms_path))
+            uploads_dir = os.path.realpath(os.path.join(self.static_path, "..", "..", "uploads", "terms"))
+            if not resolved.startswith(uploads_dir):
+                return None
+            return terms_path
 
         # No fallback - if no terms configured, don't add any terms
         return None

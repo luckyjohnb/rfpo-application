@@ -46,12 +46,12 @@
                             <div class="form-text">Optional - leave empty to create RFPO without team assignment</div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="3"></textarea>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="vendor" class="form-label">Vendor</label>
@@ -62,7 +62,7 @@
                             <input type="date" class="form-control" id="due_date" name="due_date">
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="status" class="form-label">Status</label>
                         <select class="form-select" id="status" name="status">
@@ -71,7 +71,7 @@
                             <option value="In Review">In Review</option>
                         </select>
                     </div>
-                    
+
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-arrow-left"></i> Cancel
@@ -87,7 +87,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-lg-4">
         <div class="card">
             <div class="card-header">
@@ -118,7 +118,7 @@
 <script>
     document.getElementById('rfpoCreateForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const formData = new FormData(this);
         const teamIdValue = formData.get('team_id');
         const rfpoData = {
@@ -129,19 +129,19 @@
             due_date: formData.get('due_date'),
             status: formData.get('status')
         };
-        
+
         // Show loading state
         const submitBtn = this.querySelector('button[type="submit"]');
         const loadingSpan = submitBtn.querySelector('.loading');
         loadingSpan.style.display = 'inline';
         submitBtn.disabled = true;
-        
+
         try {
             const response = await makeApiCall('/api/rfpos', {
                 method: 'POST',
                 body: JSON.stringify(rfpoData)
             });
-            
+
             if (response.success) {
                 showAlert('RFPO created successfully!', 'success');
                 setTimeout(() => {

@@ -77,8 +77,8 @@ def list_rfpos():
             )
 
         # Pagination
-        page = int(request.args.get("page", 1))
-        per_page = int(request.args.get("per_page", 20))
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 20, type=int), 200)
 
         rfpos = query.order_by(RFPO.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False

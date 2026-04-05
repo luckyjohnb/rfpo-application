@@ -572,7 +572,7 @@ def create_user_app():
                     rfpo["created_at"] = datetime.fromisoformat(
                         rfpo["created_at"].replace("Z", "+00:00")
                     )
-            except:
+            except (ValueError, TypeError):
                 rfpo["created_at"] = None
 
         if rfpo.get("delivery_date"):
@@ -581,7 +581,7 @@ def create_user_app():
                     rfpo["delivery_date"] = datetime.fromisoformat(
                         rfpo["delivery_date"].replace("Z", "+00:00")
                     ).date()
-            except:
+            except (ValueError, TypeError):
                 rfpo["delivery_date"] = None
 
         rfpo_obj = SimpleNamespace(**rfpo)

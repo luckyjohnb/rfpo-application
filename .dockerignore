@@ -29,4 +29,11 @@ htmlcov/
 dist/
 build/
 
+# Development/test files not needed in production images
+tests/
+backups/
+docs/
+*.md
+!README.md
+
 # Keep static/ since Dockerfiles COPY it; do not exclude it here.

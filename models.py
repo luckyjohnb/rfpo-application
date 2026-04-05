@@ -1406,7 +1406,7 @@ class PDFPositioning(db.Model):
         if self.positioning_data:
             try:
                 return json.loads(self.positioning_data)
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 return {}
         return {}
 
@@ -1793,7 +1793,7 @@ class RFPOApprovalStage(db.Model):
         if self.required_document_types:
             try:
                 return json.loads(self.required_document_types)
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 return []
         return []
 
@@ -2029,7 +2029,7 @@ class RFPOApprovalInstance(db.Model):
         if self.instance_data:
             try:
                 return json.loads(self.instance_data)
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 return {}
         return {}
 

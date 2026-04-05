@@ -6,10 +6,14 @@ Centralized authentication endpoints for both user app and admin panel
 from flask import Blueprint, request, jsonify
 from werkzeug.security import check_password_hash
 from datetime import datetime, timedelta
+from collections import defaultdict
+import threading
 import jwt
 import os
 import sys
-import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -20,11 +24,39 @@ auth_api = Blueprint("auth_api", __name__, url_prefix="/api/auth")
 # JWT Configuration
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-in-production")
 
+# --- Rate limiting for login ---
+_login_attempts = defaultdict(list)
+_login_lock = threading.Lock()
+_MAX_ATTEMPTS = 5
+_WINDOW_SECONDS = 300  # 5 minutes
+
+
+def _is_rate_limited(ip):
+    """Check if IP has exceeded login attempt limit"""
+    now = datetime.utcnow()
+    with _login_lock:
+        _login_attempts[ip] = [
+            t for t in _login_attempts[ip]
+            if (now - t).total_seconds() < _WINDOW_SECONDS
+        ]
+        return len(_login_attempts[ip]) >= _MAX_ATTEMPTS
+
+
+def _record_login_attempt(ip):
+    with _login_lock:
+        _login_attempts[ip].append(datetime.utcnow())
+
 
 @auth_api.route("/login", methods=["POST"])
 def login():
     """User login endpoint"""
     try:
+        # Rate limiting
+        client_ip = request.environ.get("HTTP_X_FORWARDED_FOR", request.remote_addr)
+        if _is_rate_limited(client_ip):
+            logger.warning(f"Rate limited login from {client_ip}")
+            return jsonify({"success": False, "message": "Too many login attempts. Try again later."}), 429
+
         data = request.get_json()
         username = data.get("username")  # This will actually be an email
         password = data.get("password")
@@ -39,22 +71,15 @@ def login():
         # Find user by email (since email is used as username)
         user = User.query.filter_by(email=username).first()
 
-        # Debug logging
-        print(f"DEBUG: Login attempt for email: {username}")
-        print(f"DEBUG: Total users in database: {User.query.count()}")
-        all_users = User.query.all()
-        print(f"DEBUG: All user emails: {[u.email for u in all_users]}")
-        print(f"DEBUG: User found: {user is not None}")
-        if user:
-            print(f"DEBUG: User active: {user.active}")
-            password_valid = check_password_hash(user.password_hash, password)
-            print(f"DEBUG: Password valid: {password_valid}")
+        logger.debug(f"Login attempt for email: {username}")
 
         if not user or not check_password_hash(user.password_hash, password):
+            _record_login_attempt(client_ip)
             return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
         # Check if user is active
         if not user.active:
+            _record_login_attempt(client_ip)
             return jsonify({"success": False, "message": "Account is not active"}), 401
 
         # Generate JWT token

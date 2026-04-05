@@ -296,7 +296,7 @@ class RFPOPDFGenerator:
             try:
                 canvas.setFont("Helvetica", 8)
                 canvas.drawString(x, y, f"[LOGO ERROR: {logo_filename}]")
-            except:
+            except Exception:
                 pass
 
     def _draw_fallback_logo(self, canvas, default_x, default_y):
@@ -944,8 +944,8 @@ class RFPOPDFGenerator:
                     print(
                         f"   Page {i+1} ({page_type}): {mediabox.width}x{mediabox.height}, content={has_content}"
                     )
-                except:
-                    print(f"   Page {i+1} ({page_type}): validation failed")
+                except Exception:
+                    pass
 
             output_buffer.seek(0)  # Reset for return
         except Exception as validation_error:

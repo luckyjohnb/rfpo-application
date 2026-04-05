@@ -38,8 +38,8 @@ def list_teams():
             query = query.filter(Team.name.ilike(f"%{search}%"))
 
         # Pagination
-        page = int(request.args.get("page", 1))
-        per_page = int(request.args.get("per_page", 20))
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 20, type=int), 200)
 
         teams = query.order_by(Team.name).paginate(
             page=page, per_page=per_page, error_out=False

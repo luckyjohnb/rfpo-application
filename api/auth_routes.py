@@ -321,11 +321,13 @@ def saml_match():
             )
 
         # Store Entra NameID on first SSO login (stable identity link)
-        if name_id and not user.entra_oid:
+        first_sso = not user.entra_oid
+        if name_id and first_sso:
             user.entra_oid = name_id
 
-        # D7: Update permissions from Entra roles (baseline — admin can still override)
-        if entra_roles:
+        # D7: Only apply Entra roles on FIRST SSO login (baseline setup).
+        # After that, admin-set permissions take precedence.
+        if entra_roles and first_sso:
             current_perms = set(user.get_permissions())
             for role in entra_roles:
                 role_upper = role.upper().strip()

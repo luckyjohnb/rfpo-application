@@ -71,7 +71,7 @@ def _get_saml_settings():
             "logoutRequestSigned": False,
             "logoutResponseSigned": False,
             "signMetadata": False,
-            "wantMessagesSigned": True,
+            "wantMessagesSigned": False,
             "wantAssertionsSigned": True,
             "wantNameIdEncrypted": False,
             "wantAssertionsEncrypted": False,

@@ -696,8 +696,8 @@ class User(UserMixin, db.Model):
 
     # SSO / External Identity
     entra_oid = db.Column(
-        db.String(36), unique=True, nullable=True
-    )  # Entra ID Object ID (stable, survives email changes)
+        db.String(255), unique=True, nullable=True
+    )  # Entra ID Object ID or UPN (stable, survives email changes)
 
     # Status and Audit
     active = db.Column(db.Boolean, default=True)

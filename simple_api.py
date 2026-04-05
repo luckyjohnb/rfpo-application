@@ -356,8 +356,10 @@ def saml_match():
         })
     except Exception as e:
         db.session.rollback()
-        print(f"SAML match error: {e}")
-        return jsonify({"success": False, "message": "Internal server error"}), 500
+        import traceback
+        traceback.print_exc()
+        print(f"SAML match error: {e}", flush=True)
+        return jsonify({"success": False, "message": f"Internal server error: {str(e)}"}), 500
 
 
 @app.route("/api/users/approver-rfpos", methods=["GET"])

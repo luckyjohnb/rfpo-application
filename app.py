@@ -585,7 +585,7 @@ def create_user_app():
 
         if not match_response.get("success"):
             message = match_response.get("message", "Your account has not been set up in RFPO. Contact your USCAR administrator.")
-            logger.warning(f"SAML login blocked — no matching user for {email}")
+            logger.warning(f"SAML login blocked for {email}: {message}")
             return render_template(
                 "app/error.html",
                 error_code=403,

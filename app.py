@@ -531,10 +531,13 @@ def create_user_app():
         sso_url = auth.login(return_to=return_to)
         return redirect(sso_url)
 
-    @app.route("/saml/acs", methods=["POST"])
+    @app.route("/saml/acs", methods=["GET", "POST"])
     def saml_acs():
         """Assertion Consumer Service — receives and validates SAML Response from IdP."""
         from auth_saml import is_saml_enabled, init_saml_auth, extract_user_attributes, map_roles_to_permissions
+
+        if request.method == "GET":
+            return redirect(url_for("login_page"))
 
         if not is_saml_enabled():
             return "SAML SSO is not enabled", 403

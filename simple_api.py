@@ -288,6 +288,78 @@ def change_password():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@app.route("/api/auth/saml-match", methods=["POST"])
+def saml_match():
+    """Match a SAML-authenticated user to a local RFPO user and issue JWT."""
+    try:
+        data = request.get_json()
+        email = data.get("email", "").strip().lower()
+        entra_roles = data.get("entra_roles", [])
+        name_id = data.get("name_id", "")
+
+        if not email:
+            return jsonify({"success": False, "message": "Email is required"}), 400
+
+        from sqlalchemy import func
+
+        user = User.query.filter(func.lower(User.email) == email).first()
+
+        if not user:
+            return jsonify({
+                "success": False,
+                "message": "Your account has not been set up in RFPO. Contact your USCAR administrator.",
+            }), 403
+
+        if not user.active:
+            return jsonify({
+                "success": False,
+                "message": "Your RFPO account is not active. Contact your USCAR administrator.",
+            }), 403
+
+        # Store Entra NameID on first SSO login
+        if name_id and not user.entra_oid:
+            user.entra_oid = name_id
+
+        # Update permissions from Entra roles
+        if entra_roles:
+            current_perms = set(user.get_permissions())
+            for role in entra_roles:
+                role_upper = role.upper().strip()
+                if role_upper == "RFPO_ADMIN" and "RFPO_ADMIN" not in current_perms:
+                    current_perms.add("RFPO_ADMIN")
+                    current_perms.add("RFPO_USER")
+                elif role_upper == "RFPO_USER" and "RFPO_USER" not in current_perms:
+                    current_perms.add("RFPO_USER")
+            user.set_permissions(list(current_perms))
+
+        user.last_visit = datetime.utcnow()
+        db.session.commit()
+
+        # Issue JWT
+        token = jwt.encode(
+            {"user_id": user.id, "exp": datetime.utcnow() + timedelta(hours=24)},
+            JWT_SECRET,
+            algorithm="HS256",
+        )
+
+        return jsonify({
+            "success": True,
+            "token": token,
+            "user": {
+                "id": user.id,
+                "username": user.email,
+                "display_name": user.fullname,
+                "email": user.email,
+                "roles": user.get_permissions(),
+                "is_approver": user.is_approver,
+            },
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"SAML match error: {e}")
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+
 @app.route("/api/users/approver-rfpos", methods=["GET"])
 @require_auth
 def get_approver_rfpos():

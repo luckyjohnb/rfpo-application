@@ -17,12 +17,7 @@
         <h1 class="h2 mb-0">
             <i class="fas fa-users"></i> Teams
         </h1>
-        <p class="text-muted">View and manage teams</p>
-    </div>
-    <div class="col-md-6 text-end">
-        <button class="btn btn-primary" onclick="requestTeamAccess()">
-            <i class="fas fa-user-plus"></i> Request Team Access
-        </button>
+        <p class="text-muted">Browse teams and view details</p>
     </div>
 </div>
 
@@ -134,34 +129,50 @@
             return;
         }
 
-        const teamsGrid = teams.map(team => `
-            <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card h-100 team-card" style="cursor: pointer;" onclick="viewTeam(${team.id})">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="card-title mb-0">${escapeHtml(team.name)}</h6>
-                            <span class="badge bg-primary">${escapeHtml(team.abbrev)}</span>
-                        </div>
-                        <p class="card-text text-muted small">
-                            ${escapeHtml(team.description || 'No description available')}
-                        </p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">
-                                <i class="fas fa-building"></i> ${escapeHtml(team.consortium_name || 'Unknown Consortium')}
-                            </small>
-                            <div class="btn-group" role="group">
-                                <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); viewTeam(${team.id})">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); requestAccess(${team.id}, '${team.name}')">
-                                    <i class="fas fa-user-plus"></i>
-                                </button>
+        const teamsGrid = teams.map(team => {
+            const memberBadge = team.is_member
+                ? '<span class="badge bg-success"><i class="fas fa-check-circle"></i> Member</span>'
+                : '';
+
+            const statsLine = [
+                `<i class="fas fa-users"></i> ${team.member_count || 0}`,
+                `<i class="fas fa-file-invoice"></i> ${team.rfpo_count || 0}`,
+            ].join(' &middot; ');
+
+            const actionBtn = team.is_member
+                ? `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); viewTeam(${team.id})">
+                       <i class="fas fa-eye"></i> View
+                   </button>`
+                : `<button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); requestAccess(${team.id}, '${escapeAttr(team.name)}')">
+                       <i class="fas fa-user-plus"></i> Request Access
+                   </button>`;
+
+            return `
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100 team-card" style="cursor: pointer;" onclick="viewTeam(${team.id})">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">${escapeHtml(team.name)}</h6>
+                                <div class="d-flex gap-1">
+                                    ${memberBadge}
+                                    <span class="badge bg-primary">${escapeHtml(team.abbrev)}</span>
+                                </div>
+                            </div>
+                            <p class="card-text text-muted small mb-2">
+                                ${escapeHtml(team.description || 'No description available')}
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="fas fa-building"></i> ${escapeHtml(team.consortium_name || 'Unknown')}
+                                    &middot; ${statsLine}
+                                </small>
+                                ${actionBtn}
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         container.innerHTML = `<div class="row">${teamsGrid}</div>`;
     }
@@ -216,17 +227,13 @@
     }
 
     function viewTeam(teamId) {
-        showAlert(`Team details view coming soon for team ID: ${teamId}`, 'info');
+        window.location.href = `/teams/${teamId}`;
     }
 
     function requestAccess(teamId, teamName) {
         showConfirmModal('Request Access', `Request access to team <strong>${escapeHtml(teamName)}</strong>?`, function() {
             showAlert('Team access request functionality coming soon', 'info');
         }, 'btn-primary');
-    }
-
-    function requestTeamAccess() {
-        showAlert('General team access request functionality coming soon', 'info');
     }
 
     // Event listeners

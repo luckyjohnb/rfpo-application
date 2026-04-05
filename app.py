@@ -249,6 +249,14 @@ def create_user_app():
 
         return render_template("app/teams.html")
 
+    @app.route("/teams/<int:team_id>")
+    def team_detail(team_id):
+        """Team detail page"""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+
+        return render_template("app/team_detail.html", team_id=team_id)
+
     @app.route("/profile")
     def profile():
         """User profile page"""

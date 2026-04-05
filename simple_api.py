@@ -16,6 +16,7 @@ from models import (
     db,
     User,
     Team,
+    UserTeam,
     RFPO,
     RFPOLineItem,
     Consortium,
@@ -188,21 +189,95 @@ def verify():
 @app.route("/api/teams")
 @require_auth
 def list_teams():
-    teams = Team.query.filter_by(active=True).all()
-    return jsonify(
-        {
-            "success": True,
-            "teams": [
-                {
-                    "id": t.id,
-                    "name": t.name,
-                    "abbrev": t.abbrev,
-                    "description": t.description,
-                }
-                for t in teams
-            ],
-        }
+    user = request.current_user
+    teams = Team.query.filter_by(active=True).order_by(Team.name).all()
+
+    # Get user's team memberships in one query
+    member_team_ids = set(
+        ut.team_id for ut in UserTeam.query.filter_by(user_id=user.id).all()
     )
+
+    # Build consortium lookup
+    consortiums = {c.consort_id: c.name for c in Consortium.query.all()}
+
+    result = []
+    for t in teams:
+        result.append({
+            "id": t.id,
+            "name": t.name,
+            "abbrev": t.abbrev,
+            "description": t.description,
+            "consortium_name": consortiums.get(t.consortium_consort_id, "Unknown"),
+            "is_member": t.id in member_team_ids,
+            "member_count": len(t.team_users) if t.team_users else 0,
+            "rfpo_count": len(t.rfpos) if t.rfpos else 0,
+        })
+
+    return jsonify({"success": True, "teams": result})
+
+
+@app.route("/api/teams/<int:team_id>")
+@require_auth
+def get_team_detail(team_id):
+    """Get full team details including members and RFPOs"""
+    user = request.current_user
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({"success": False, "message": "Team not found"}), 404
+
+    # Consortium info
+    consortium = Consortium.query.filter_by(consort_id=team.consortium_consort_id).first()
+
+    # Members via UserTeam
+    members = []
+    for ut in team.team_users:
+        if ut.user and ut.user.active:
+            members.append({
+                "id": ut.user.id,
+                "fullname": ut.user.fullname,
+                "email": ut.user.email,
+                "company": ut.user.company,
+                "role": ut.role or "member",
+            })
+
+    # Team RFPOs (non-deleted, most recent first)
+    rfpos = []
+    for r in sorted(
+        [r for r in team.rfpos if not r.is_deleted],
+        key=lambda x: x.created_at or datetime.min,
+        reverse=True,
+    ):
+        rfpos.append({
+            "id": r.id,
+            "rfpo_id": r.rfpo_id,
+            "title": r.title,
+            "status": r.status,
+            "total_amount": float(r.total_amount) if r.total_amount else 0,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "created_by": r.created_by,
+        })
+
+    # Check membership
+    is_member = any(ut.user_id == user.id for ut in team.team_users)
+
+    return jsonify({
+        "success": True,
+        "team": {
+            "id": team.id,
+            "name": team.name,
+            "abbrev": team.abbrev,
+            "description": team.description,
+            "active": team.active,
+            "created_at": team.created_at.isoformat() if team.created_at else None,
+            "consortium": {
+                "name": consortium.name if consortium else "Unknown",
+                "abbrev": consortium.abbrev if consortium else "",
+            } if consortium else None,
+            "is_member": is_member,
+            "members": members,
+            "rfpos": rfpos,
+        },
+    })
 
 
 @app.route("/api/auth/change-password", methods=["POST"])

@@ -336,9 +336,11 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
+                    {% if nav.is_admin %}
                     <a href="{{ url_for('rfpo_create') }}" class="btn btn-outline-primary btn-sm">
                         <i class="fas fa-plus"></i> Create RFPO
                     </a>
+                    {% endif %}
                     <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-list"></i> My RFPOs
                     </a>

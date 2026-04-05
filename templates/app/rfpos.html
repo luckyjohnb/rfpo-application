@@ -19,11 +19,13 @@
         </h1>
         <p class="text-muted">Manage your Request for Purchase Orders</p>
     </div>
+    {% if nav.is_admin %}
     <div class="col-md-6 text-end">
         <a href="{{ url_for('rfpo_create') }}" class="btn btn-primary">
             <i class="fas fa-plus"></i> Create RFPO
         </a>
     </div>
+    {% endif %}
 </div>
 
 <!-- Filters -->

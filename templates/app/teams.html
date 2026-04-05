@@ -2,18 +2,22 @@
 
 {% block title %}Teams - RFPO Application{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Teams</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-6">
         <h1 class="h2 mb-0">
             <i class="fas fa-users"></i> Teams
         </h1>
-        <p class="text-muted">View and manage teams</p>
-    </div>
-    <div class="col-md-6 text-end">
-        <button class="btn btn-primary" onclick="requestTeamAccess()">
-            <i class="fas fa-user-plus"></i> Request Team Access
-        </button>
+        <p class="text-muted">Browse teams and view details</p>
     </div>
 </div>
 
@@ -59,7 +63,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Pagination -->
         <nav id="paginationContainer" style="display: none;">
             <ul class="pagination justify-content-center">
@@ -78,17 +82,18 @@
 
     async function loadTeams(page = 1) {
         try {
-            showLoading(true);
-            
+            const container = document.getElementById('teamsContainer');
+            renderSkeletons(container, 6, 'card');
+
             // Build query parameters
             const params = new URLSearchParams({
                 page: page,
-                per_page: 12,
+                per_page: 50,
                 ...currentFilters
             });
-            
+
             const response = await makeApiCall(`/api/teams?${params}`);
-            
+
             if (response.success) {
                 displayTeams(response.teams);
                 updatePagination(response.page || 1, response.pages || 1, response.total || response.teams.length);
@@ -113,7 +118,7 @@
 
     function displayTeams(teams) {
         const container = document.getElementById('teamsContainer');
-        
+
         if (teams.length === 0) {
             container.innerHTML = `
                 <div class="text-center py-4">
@@ -124,34 +129,50 @@
             return;
         }
 
-        const teamsGrid = teams.map(team => `
-            <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card h-100 team-card" style="cursor: pointer;" onclick="viewTeam(${team.id})">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="card-title mb-0">${team.name}</h6>
-                            <span class="badge bg-primary">${team.abbrev}</span>
-                        </div>
-                        <p class="card-text text-muted small">
-                            ${team.description || 'No description available'}
-                        </p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">
-                                <i class="fas fa-building"></i> ${team.consortium_name || 'Unknown Consortium'}
-                            </small>
-                            <div class="btn-group" role="group">
-                                <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); viewTeam(${team.id})">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); requestAccess(${team.id}, '${team.name}')">
-                                    <i class="fas fa-user-plus"></i>
-                                </button>
+        const teamsGrid = teams.map(team => {
+            const memberBadge = team.is_member
+                ? '<span class="badge bg-success"><i class="fas fa-check-circle"></i> Member</span>'
+                : '';
+
+            const statsLine = [
+                `<i class="fas fa-users"></i> ${team.member_count || 0}`,
+                `<i class="fas fa-file-invoice"></i> ${team.rfpo_count || 0}`,
+            ].join(' &middot; ');
+
+            const actionBtn = team.is_member
+                ? `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); viewTeam(${team.id})">
+                       <i class="fas fa-eye"></i> View
+                   </button>`
+                : `<button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); requestAccess(${team.id}, '${escapeAttr(team.name)}')">
+                       <i class="fas fa-user-plus"></i> Request Access
+                   </button>`;
+
+            return `
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100 team-card" style="cursor: pointer;" onclick="viewTeam(${team.id})">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">${escapeHtml(team.name)}</h6>
+                                <div class="d-flex gap-1">
+                                    ${memberBadge}
+                                    <span class="badge bg-primary">${escapeHtml(team.abbrev)}</span>
+                                </div>
+                            </div>
+                            <p class="card-text text-muted small mb-2">
+                                ${escapeHtml(team.description || 'No description available')}
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="fas fa-building"></i> ${escapeHtml(team.consortium_name || 'Unknown')}
+                                    &middot; ${statsLine}
+                                </small>
+                                ${actionBtn}
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         container.innerHTML = `<div class="row">${teamsGrid}</div>`;
     }
@@ -159,25 +180,25 @@
     function updatePagination(page, pages, total) {
         currentPage = page;
         totalPages = pages;
-        
+
         const container = document.getElementById('paginationContainer');
-        
+
         if (pages <= 1) {
             container.style.display = 'none';
             return;
         }
-        
+
         container.style.display = 'block';
-        
+
         let paginationHTML = '';
-        
+
         // Previous button
         paginationHTML += `
             <li class="page-item ${page <= 1 ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="loadTeams(${page - 1})">Previous</a>
             </li>
         `;
-        
+
         // Page numbers
         for (let i = 1; i <= pages; i++) {
             if (i === page) {
@@ -188,14 +209,14 @@
                 paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
             }
         }
-        
+
         // Next button
         paginationHTML += `
             <li class="page-item ${page >= pages ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="loadTeams(${page + 1})">Next</a>
             </li>
         `;
-        
+
         container.querySelector('.pagination').innerHTML = paginationHTML;
     }
 
@@ -206,31 +227,27 @@
     }
 
     function viewTeam(teamId) {
-        showAlert(`Team details view coming soon for team ID: ${teamId}`, 'info');
+        window.location.href = `/teams/${teamId}`;
     }
 
     function requestAccess(teamId, teamName) {
-        if (confirm(`Request access to team "${teamName}"?`)) {
+        showConfirmModal('Request Access', `Request access to team <strong>${escapeHtml(teamName)}</strong>?`, function() {
             showAlert('Team access request functionality coming soon', 'info');
-        }
-    }
-
-    function requestTeamAccess() {
-        showAlert('General team access request functionality coming soon', 'info');
+        }, 'btn-primary');
     }
 
     // Event listeners
     document.getElementById('filterForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        
+
         currentFilters = {};
-        
+
         const search = document.getElementById('searchInput').value.trim();
         if (search) currentFilters.search = search;
-        
+
         const consortium = document.getElementById('consortiumFilter').value;
         if (consortium) currentFilters.consortium_id = consortium;
-        
+
         loadTeams(1);
     });
 
@@ -244,7 +261,7 @@
     .team-card {
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    
+
     .team-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);

@@ -241,7 +241,7 @@ def get_user_permissions_summary():
         accessible_rfpos = list({rfpo.id: rfpo for rfpo in accessible_rfpos}.values())
 
         rfpo_summary = []
-        for rfpo in accessible_rfpos[:10]:  # Limit to first 10 for performance
+        for rfpo in accessible_rfpos:  # Return all accessible RFPOs
             rfpo_summary.append(
                 {
                     "id": rfpo.id,
@@ -415,6 +415,16 @@ def get_user_approver_rfpos():
 
         rfpos_list = list(rfpo_map.values())
 
+        # Also fetch completed actions for this user
+        completed_actions = RFPOApprovalAction.query.filter(
+            RFPOApprovalAction.approver_id == user.record_id,
+            RFPOApprovalAction.status.in_(["approved", "conditional"]),
+        ).all()
+        refused_actions = RFPOApprovalAction.query.filter_by(
+            approver_id=user.record_id,
+            status="refused",
+        ).all()
+
         # Summary counts
         total_pending = len(all_actions)
         total_rfpos = len(rfpos_list)
@@ -425,6 +435,8 @@ def get_user_approver_rfpos():
             "summary": {
                 "total": total_rfpos,
                 "pending": total_pending,
+                "completed": len(completed_actions),
+                "refused": len(refused_actions),
             },
         })
 

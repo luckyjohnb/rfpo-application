@@ -2,6 +2,15 @@
 
 {% block title %}RFPOs - RFPO Application{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">RFPOs</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-6">
@@ -10,11 +19,13 @@
         </h1>
         <p class="text-muted">Manage your Request for Purchase Orders</p>
     </div>
+    {% if nav.is_admin %}
     <div class="col-md-6 text-end">
         <a href="{{ url_for('rfpo_create') }}" class="btn btn-primary">
             <i class="fas fa-plus"></i> Create RFPO
         </a>
     </div>
+    {% endif %}
 </div>
 
 <!-- Filters -->
@@ -30,10 +41,13 @@
                 <select class="form-select" id="statusFilter">
                     <option value="">All Statuses</option>
                     <option value="Draft">Draft</option>
+                    <option value="Submitted">Submitted</option>
                     <option value="Pending">Pending</option>
+                    <option value="Pending Approval">Pending Approval</option>
                     <option value="In Review">In Review</option>
                     <option value="Approved">Approved</option>
                     <option value="Completed">Completed</option>
+                    <option value="Refused">Refused</option>
                     <option value="Rejected">Rejected</option>
                     <option value="Cancelled">Cancelled</option>
                 </select>
@@ -56,6 +70,27 @@
     </div>
 </div>
 
+<!-- Bulk Action Bar (hidden until selections made) -->
+<div id="bulkActionBar" class="card mb-3 border-warning" style="display: none;">
+    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+        <div>
+            <i class="fas fa-check-square text-warning me-2"></i>
+            <strong id="selectedCount">0</strong> RFPO(s) selected for approval
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm" onclick="bulkApprove('approved')">
+                <i class="fas fa-check"></i> Approve Selected
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="bulkApprove('refused')">
+                <i class="fas fa-times"></i> Refuse Selected
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="clearSelection()">
+                <i class="fas fa-times-circle"></i> Clear
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- RFPOs List -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -71,7 +106,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Pagination -->
         <nav id="paginationContainer" style="display: none;">
             <ul class="pagination justify-content-center">
@@ -90,17 +125,18 @@
 
     async function loadRfpos(page = 1) {
         try {
-            showLoading(true);
-            
+            const container = document.getElementById('rfposContainer');
+            renderSkeletons(container, 5, 'list');
+
             // Build query parameters
             const params = new URLSearchParams({
                 page: page,
-                per_page: 10,
+                per_page: 50,
                 ...currentFilters
             });
-            
+
             const response = await makeApiCall(`/api/rfpos?${params}`);
-            
+
             if (response.success) {
                 displayRfpos(response.rfpos);
                 updatePagination(response.page, response.pages, response.total);
@@ -125,11 +161,11 @@
 
     function displayRfpos(rfpos) {
         const container = document.getElementById('rfposContainer');
-        
+
         if (rfpos.length === 0) {
             // Check if filters are applied
             const hasFilters = Object.keys(currentFilters).length > 0;
-            
+
             if (hasFilters) {
                 container.innerHTML = `
                     <div class="text-center py-4">
@@ -148,7 +184,7 @@
                         <h5 class="text-muted mb-3">No RFPOs Available</h5>
                         <p class="text-muted mb-3">You don't have access to any RFPOs yet.</p>
                         <p class="small text-muted mb-4">
-                            To access RFPOs, you need to be assigned to teams, projects, or consortiums. 
+                            To access RFPOs, you need to be assigned to teams, projects, or consortiums.
                             Please contact your system administrator to be added to the appropriate groups.
                         </p>
                         <div class="mt-3">
@@ -169,26 +205,47 @@
             const statusBadge = getStatusBadge(rfpo.status);
             const createdDate = new Date(rfpo.created_at).toLocaleDateString();
             const dueDate = rfpo.due_date ? new Date(rfpo.due_date).toLocaleDateString() : 'Not set';
-            
+            const amount = rfpo.total_amount
+                ? `$${rfpo.total_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                : '$0.00';
+
+            const checkbox = rfpo.pending_action_id
+                ? `<div class="form-check d-inline-block me-2">
+                       <input class="form-check-input bulk-select" type="checkbox"
+                              data-action-id="${escapeAttr(rfpo.pending_action_id)}"
+                              data-rfpo-title="${escapeAttr(rfpo.title)}"
+                              onchange="updateBulkBar()">
+                   </div>`
+                : '';
+
             return `
                 <div class="border-bottom pb-3 mb-3">
                     <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <h6 class="mb-1">
-                                <a href="/rfpos/${rfpo.id}" class="text-decoration-none">
-                                    ${rfpo.title}
-                                </a>
-                            </h6>
-                            <p class="text-muted small mb-1">
-                                <strong>ID:</strong> ${rfpo.rfpo_id} | 
-                                <strong>Created:</strong> ${createdDate}
-                            </p>
-                            <p class="text-muted small mb-0">
-                                <strong>Due:</strong> ${dueDate} | 
-                                <strong>Vendor:</strong> ${rfpo.vendor || 'Not specified'}
-                            </p>
+                        <div class="col-md-5">
+                            <div class="d-flex align-items-start">
+                                ${checkbox}
+                                <div>
+                                    <h6 class="mb-1">
+                                        <a href="/rfpos/${rfpo.id}" class="text-decoration-none">
+                                            ${escapeHtml(rfpo.title)}
+                                        </a>
+                                        ${rfpo.pending_action_id ? '<span class="badge bg-warning text-dark ms-1" title="Awaiting your approval"><i class="fas fa-bell"></i></span>' : ''}
+                                    </h6>
+                                    <p class="text-muted small mb-1">
+                                        <strong>ID:</strong> ${escapeHtml(rfpo.rfpo_id)} |
+                                        <strong>Created:</strong> ${createdDate}
+                                    </p>
+                                    <p class="text-muted small mb-0">
+                                        <strong>Due:</strong> ${dueDate} |
+                                        <strong>Vendor:</strong> ${escapeHtml(rfpo.vendor || 'Not specified')}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2 text-end">
+                            <strong>${amount}</strong>
+                        </div>
+                        <div class="col-md-2 text-center">
                             ${statusBadge}
                         </div>
                         <div class="col-md-3 text-end">
@@ -196,7 +253,7 @@
                                 <a href="/rfpos/${rfpo.id}" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
                                         data-bs-toggle="dropdown">
                                     <i class="fas fa-ellipsis-v"></i>
                                 </button>
@@ -205,7 +262,7 @@
                                         <i class="fas fa-edit"></i> Edit
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item text-danger" href="#" 
+                                    <li><a class="dropdown-item text-danger" href="#"
                                            onclick="deleteRfpo(${rfpo.id}, '${rfpo.title}')">
                                         <i class="fas fa-trash"></i> Delete
                                     </a></li>
@@ -223,14 +280,17 @@
     function getStatusBadge(status) {
         const statusClasses = {
             'Draft': 'bg-secondary',
+            'Submitted': 'bg-primary',
             'Pending': 'bg-warning',
+            'Pending Approval': 'bg-warning',
             'In Review': 'bg-info',
             'Approved': 'bg-success',
             'Completed': 'bg-success',
+            'Refused': 'bg-danger',
             'Rejected': 'bg-danger',
             'Cancelled': 'bg-dark'
         };
-        
+
         const badgeClass = statusClasses[status] || 'bg-secondary';
         return `<span class="badge ${badgeClass}">${status}</span>`;
     }
@@ -238,25 +298,25 @@
     function updatePagination(page, pages, total) {
         currentPage = page;
         totalPages = pages;
-        
+
         const container = document.getElementById('paginationContainer');
-        
+
         if (pages <= 1) {
             container.style.display = 'none';
             return;
         }
-        
+
         container.style.display = 'block';
-        
+
         let paginationHTML = '';
-        
+
         // Previous button
         paginationHTML += `
             <li class="page-item ${page <= 1 ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="loadRfpos(${page - 1})">Previous</a>
             </li>
         `;
-        
+
         // Page numbers
         for (let i = 1; i <= pages; i++) {
             if (i === page) {
@@ -267,14 +327,14 @@
                 paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
             }
         }
-        
+
         // Next button
         paginationHTML += `
             <li class="page-item ${page >= pages ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="loadRfpos(${page + 1})">Next</a>
             </li>
         `;
-        
+
         container.querySelector('.pagination').innerHTML = paginationHTML;
     }
 
@@ -302,43 +362,103 @@
     }
 
     async function deleteRfpo(rfpoId, title) {
-        if (!confirm(`Are you sure you want to delete "${title}"?`)) {
-            return;
-        }
-        
-        try {
-            const response = await makeApiCall(`/api/rfpos/${rfpoId}`, { method: 'DELETE' });
-            if (response.success) {
-                showAlert('RFPO deleted successfully', 'success');
-                loadRfpos(currentPage);
-            } else {
-                throw new Error(response.message || 'Failed to delete RFPO');
+        showConfirmModal('Delete', `Are you sure you want to delete <strong>${escapeHtml(title)}</strong>? This cannot be undone.`, async function() {
+            try {
+                const response = await makeApiCall(`/api/rfpos/${rfpoId}`, { method: 'DELETE' });
+                if (response.success) {
+                    showAlert('RFPO deleted successfully', 'success');
+                    loadRfpos(currentPage);
+                } else {
+                    throw new Error(response.message || 'Failed to delete RFPO');
+                }
+            } catch (error) {
+                showAlert(`Error deleting RFPO: ${error.message}`, 'danger');
             }
-        } catch (error) {
-            showAlert(`Error deleting RFPO: ${error.message}`, 'danger');
+        });
+    }
+
+    // Bulk approval functions
+    function updateBulkBar() {
+        const checked = document.querySelectorAll('.bulk-select:checked');
+        const bar = document.getElementById('bulkActionBar');
+        const count = document.getElementById('selectedCount');
+
+        if (checked.length > 0) {
+            bar.style.display = '';
+            count.textContent = checked.length;
+        } else {
+            bar.style.display = 'none';
         }
+    }
+
+    function clearSelection() {
+        document.querySelectorAll('.bulk-select:checked').forEach(cb => cb.checked = false);
+        updateBulkBar();
+    }
+
+    async function bulkApprove(status) {
+        const checked = document.querySelectorAll('.bulk-select:checked');
+        const actionIds = Array.from(checked).map(cb => cb.dataset.actionId);
+
+        if (actionIds.length === 0) return;
+
+        const label = status === 'approved' ? 'approve' : 'refuse';
+        showConfirmModal(
+            `Bulk ${label.charAt(0).toUpperCase() + label.slice(1)}`,
+            `Are you sure you want to <strong>${label}</strong> ${actionIds.length} RFPO(s)?`,
+            async function() {
+                try {
+                    const response = await makeApiCall('/api/users/bulk-approval', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ action_ids: actionIds, status: status, comments: `Bulk ${label}` })
+                    });
+                    if (response.success) {
+                        showAlert(response.message, 'success');
+                        clearSelection();
+                        loadRfpos(currentPage);
+                    } else {
+                        throw new Error(response.message || 'Bulk action failed');
+                    }
+                } catch (error) {
+                    showAlert(`Error: ${error.message}`, 'danger');
+                }
+            },
+            status === 'approved' ? 'btn-success' : 'btn-danger'
+        );
     }
 
     // Event listeners
     document.getElementById('filterForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        
+
         currentFilters = {};
-        
+
         const search = document.getElementById('searchInput').value.trim();
         if (search) currentFilters.search = search;
-        
+
         const status = document.getElementById('statusFilter').value;
         if (status) currentFilters.status = status;
-        
+
         const team = document.getElementById('teamFilter').value;
         if (team) currentFilters.team_id = team;
-        
+
         loadRfpos(1);
     });
 
-    // Initialize page
+    // Check for status param from dashboard link
     document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const statusParam = urlParams.get('status');
+        if (statusParam) {
+            // Map dashboard param to filter value
+            const map = {'pending': 'Pending', 'completed': 'Completed'};
+            const filterVal = map[statusParam.toLowerCase()];
+            if (filterVal) {
+                document.getElementById('statusFilter').value = filterVal;
+                currentFilters.status = filterVal;
+            }
+        }
         loadTeams();
         loadRfpos();
     });

@@ -52,6 +52,26 @@ def create_user_app():
     API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:5003/api")
     ADMIN_API_URL = os.environ.get("ADMIN_API_URL", "http://127.0.0.1:5111/api")
 
+    # Context processor — inject nav context into every template
+    @app.context_processor
+    def inject_nav_context():
+        """Provide role-based navigation context to all templates."""
+        nav = {"is_admin": False, "is_approver": False, "show_rfpo_nav": False}
+        if "auth_token" not in session:
+            return {"nav": nav}
+        try:
+            resp = make_api_request("/auth/verify")
+            if resp.get("authenticated"):
+                roles = resp.get("user", {}).get("roles", [])
+                is_admin = "RFPO_ADMIN" in roles or "GOD" in roles
+                is_approver = resp.get("user", {}).get("is_approver", False)
+                nav["is_admin"] = is_admin
+                nav["is_approver"] = is_approver
+                nav["show_rfpo_nav"] = is_admin or is_approver
+        except Exception:
+            pass
+        return {"nav": nav}
+
     # Helper function to make API calls
     def make_api_request(endpoint, method="GET", data=None, use_admin_api=False):
         """Make API request with authentication"""
@@ -125,7 +145,7 @@ def create_user_app():
                 return redirect(url_for("first_login_password_reset"))
 
         # Get recent RFPOs
-        rfpos_response = make_api_request("/rfpos?per_page=5")
+        rfpos_response = make_api_request("/rfpos")
         recent_rfpos = (
             rfpos_response.get("rfpos", []) if rfpos_response.get("success") else []
         )
@@ -228,6 +248,14 @@ def create_user_app():
             return redirect(url_for("login_page"))
 
         return render_template("app/teams.html")
+
+    @app.route("/teams/<int:team_id>")
+    def team_detail(team_id):
+        """Team detail page"""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+
+        return render_template("app/team_detail.html", team_id=team_id)
 
     @app.route("/profile")
     def profile():
@@ -366,6 +394,13 @@ def create_user_app():
         """Take approval action API proxy"""
         data = request.get_json()
         response = make_api_request(f"/users/approval-action/{action_id}", "POST", data)
+        return jsonify(response)
+
+    @app.route("/api/users/bulk-approval", methods=["POST"])
+    def api_bulk_approval():
+        """Bulk approval action API proxy"""
+        data = request.get_json()
+        response = make_api_request("/users/bulk-approval", "POST", data)
         return jsonify(response)
 
     @app.route("/api/rfpos/<int:rfpo_id>/line-items", methods=["GET", "POST"])

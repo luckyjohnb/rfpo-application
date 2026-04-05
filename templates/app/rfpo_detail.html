@@ -2,6 +2,16 @@
 
 {% block title %}RFPO Details - RFPO Application{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('rfpos_list') }}">RFPOs</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Details</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-6">
@@ -49,7 +59,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Row 2: Approval Chain + Recent Activity -->
     <div class="row mb-4">
         <div class="col-lg-8">
@@ -67,7 +77,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="col-lg-4">
             <!-- Recent Activity Card -->
             <div class="card h-100">
@@ -87,7 +97,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Row 3: RFPO Information -->
     <div class="row mb-4">
         <div class="col-12">
@@ -103,13 +113,13 @@
                             <dl class="row">
                                 <dt class="col-sm-4">RFPO ID:</dt>
                                 <dd class="col-sm-8" id="rfpoId">-</dd>
-                                
+
                                 <dt class="col-sm-4">Title:</dt>
                                 <dd class="col-sm-8" id="rfpoTitle">-</dd>
-                                
+
                                 <dt class="col-sm-4">Status:</dt>
                                 <dd class="col-sm-8" id="rfpoStatus">-</dd>
-                                
+
                                 <dt class="col-sm-4">Team:</dt>
                                 <dd class="col-sm-8" id="rfpoTeam">-</dd>
                             </dl>
@@ -118,19 +128,19 @@
                             <dl class="row">
                                 <dt class="col-sm-4">Vendor:</dt>
                                 <dd class="col-sm-8" id="rfpoVendor">-</dd>
-                                
+
                                 <dt class="col-sm-4">Due Date:</dt>
                                 <dd class="col-sm-8" id="rfpoDueDate">-</dd>
-                                
+
                                 <dt class="col-sm-4">Created:</dt>
                                 <dd class="col-sm-8" id="rfpoCreated">-</dd>
-                                
+
                                 <dt class="col-sm-4">Created By:</dt>
                                 <dd class="col-sm-8" id="rfpoCreatedBy">-</dd>
                             </dl>
                         </div>
                     </div>
-                    
+
                     <div class="row mt-3">
                         <div class="col-md-6">
                             <dt class="mb-2">Description:</dt>
@@ -145,7 +155,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Row 4: Line Items -->
     <div class="row mb-4">
         <div class="col-12">
@@ -292,7 +302,7 @@
         try {
             showLoading(true);
             const response = await makeApiCall(`/api/rfpos/${rfpoId}`);
-            
+
             if (response.success) {
                 currentRfpo = response.rfpo;
                 displayRfpoDetails(response);  // Pass full response with approval data
@@ -309,7 +319,7 @@
 
     function displayRfpoDetails(data) {
         const rfpo = data.rfpo;
-        
+
         document.getElementById('rfpoSubtitle').textContent = rfpo.rfpo_id + ' - ' + rfpo.title;
         document.getElementById('rfpoId').textContent = rfpo.rfpo_id;
         document.getElementById('rfpoTitle').textContent = rfpo.title;
@@ -320,26 +330,26 @@
         document.getElementById('rfpoCreated').textContent = rfpo.created_at ? new Date(rfpo.created_at).toLocaleDateString() : 'Unknown';
         document.getElementById('rfpoCreatedBy').textContent = rfpo.created_by || 'Unknown';
         document.getElementById('rfpoDescription').textContent = rfpo.description || 'No description provided';
-        
+
         // Update page title
         document.title = `${rfpo.rfpo_id} - ${rfpo.title} - RFPO Application`;
-        
+
         // Handle approval data for approvers
         if (data.approval_data) {
             displayApprovalChain(data.approval_data);
         }
-        
+
         // Handle user action for approvers
         if (data.user_action && data.user_action.can_take_action) {
             displayUserAction(data.user_action);
         }
-        
+
         // Load files into RFPO Information section
         loadAttachedFiles(data.files || []);
 
         // Load line items
         displayLineItems(rfpo.line_items || []);
-        
+
         // Load RFPO document view
         loadRfpoDocument();
     }
@@ -354,7 +364,7 @@
             'Rejected': 'bg-danger',
             'Cancelled': 'bg-dark'
         };
-        
+
         const badgeClass = statusClasses[status] || 'bg-secondary';
         return `<span class="badge ${badgeClass}">${status}</span>`;
     }
@@ -365,7 +375,7 @@
             container.innerHTML = '<span class="text-muted">No files attached</span>';
             return;
         }
-        
+
         // Display files list in RFPO Information section
         const filesList = files.map(file => {
             const fileSize = (file.file_size / 1024).toFixed(1) + ' KB';
@@ -383,13 +393,13 @@
                 </div>
             `;
         }).join('');
-        
+
         container.innerHTML = filesList;
     }
-    
+
     function loadRfpoDocument() {
         const container = document.getElementById('rfpoDocumentContainer');
-        
+
         // Load RFPO rendered HTML view from user app (same rendering as admin panel)
         fetch(`/rfpos/${rfpoId}/preview`)
             .then(response => {
@@ -423,7 +433,7 @@
                         iframe.style.height = '1200px';
                     }
                 };
-                
+
                 container.innerHTML = '';
                 container.appendChild(iframe);
             })
@@ -440,7 +450,7 @@
                 `;
             });
     }
-    
+
     function createRfpoDocumentHtml(rfpo, project, consortium, vendor, requestor) {
         // Fallback RFPO document view (if admin template not available)
         return `
@@ -449,27 +459,27 @@
                     <h6 class="text-primary">REQUEST FOR PURCHASE ORDER</h6>
                     <h5>${rfpo.rfpo_id}</h5>
                 </div>
-                
+
                 <div class="mb-3">
                     <strong>Project:</strong> ${project ? project.name : 'Unknown'}<br>
                     <strong>Consortium:</strong> ${consortium ? consortium.name : 'Unknown'}<br>
                     <strong>Title:</strong> ${rfpo.title}
                 </div>
-                
+
                 <div class="mb-3">
                     <strong>Requestor:</strong> ${requestor ? requestor.display_name : 'Unknown'}
                 </div>
-                
+
                 <div class="mb-3">
                     <strong>Vendor:</strong> ${vendor ? vendor.company_name : 'Not specified'}<br>
                     <strong>Total Amount:</strong> $${Number(rfpo.total_amount || 0).toLocaleString()}
                 </div>
-                
+
                 <div class="mb-3">
                     <strong>Description:</strong><br>
                     <div class="border p-2 bg-light">${rfpo.description || 'No description provided'}</div>
                 </div>
-                
+
                 <div class="mb-3">
                     <strong>Status:</strong> <span class="badge bg-info">${rfpo.status}</span><br>
                     <strong>Created:</strong> ${new Date(rfpo.created_at).toLocaleDateString()}<br>
@@ -478,20 +488,20 @@
             </div>
         `;
     }
-    
+
     function displayApprovalChain(approvalData) {
         const chainSection = document.getElementById('approvalChainSection');
         const chainContent = document.getElementById('approvalChainContent');
-        
+
         if (!approvalData || !approvalData.approval_chain) {
             chainContent.innerHTML = '<p class="text-muted">No approval chain data available</p>';
             return;
         }
-        
+
         const chainHtml = approvalData.approval_chain.map(action => {
             const statusBadge = getActionStatusBadge(action.status);
             const userIndicator = action.is_user_action ? '<i class="fas fa-user text-primary" title="Your action"></i> ' : '';
-            
+
             return `
                 <div class="d-flex justify-content-between align-items-center border-bottom py-3">
                     <div>
@@ -506,46 +516,46 @@
                 </div>
             `;
         }).join('');
-        
+
         chainContent.innerHTML = chainHtml;
         chainSection.style.display = 'block';
     }
-    
+
     function displayUserAction(userAction) {
         const actionSection = document.getElementById('approvalActionSection');
-        
+
         document.getElementById('actionStepName').textContent = userAction.step_name;
         document.getElementById('actionStageName').textContent = userAction.stage_name;
-        
+
         actionSection.style.display = 'block';
     }
-    
+
     function getActionStatusBadge(status) {
         const statusClasses = {
             'pending': 'bg-warning',
             'approved': 'bg-success',
             'refused': 'bg-danger'
         };
-        
+
         const badgeClass = statusClasses[status] || 'bg-secondary';
         return `<span class="badge ${badgeClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
     }
-    
+
     function viewFile(fileId, filename) {
         // Open file in new tab for viewing
         window.open(`/api/rfpos/${rfpoId}/files/${fileId}/view`, '_blank');
     }
-    
+
     function openRfpoInNewTab() {
         // Open full RFPO document in new tab
         window.open(`/rfpos/${rfpoId}/preview`, '_blank');
     }
-    
+
     let currentUserAction = null;
-    
+
     function showApprovalModal(action) {
         currentUserAction = action;
-        
+
         // Create and show modal
         const modalHtml = `
             <div class="modal fade" id="approvalModal" tabindex="-1">
@@ -562,7 +572,7 @@
                             </div>
                             <div class="mb-3">
                                 <label for="approvalComments" class="form-label">Comments</label>
-                                <textarea class="form-control" id="approvalComments" rows="3" 
+                                <textarea class="form-control" id="approvalComments" rows="3"
                                           placeholder="Enter your comments for this ${action} action..."></textarea>
                             </div>
                         </div>
@@ -576,39 +586,39 @@
                 </div>
             </div>
         `;
-        
+
         // Remove existing modal if any
         const existingModal = document.getElementById('approvalModal');
         if (existingModal) {
             existingModal.remove();
         }
-        
+
         // Add modal to page
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
+
         // Set step name
         document.getElementById('modalStepName').textContent = document.getElementById('actionStepName').textContent;
-        
+
         // Show modal
         const modal = new bootstrap.Modal(document.getElementById('approvalModal'));
         modal.show();
     }
-    
+
     function submitApprovalAction() {
         if (!currentUserAction || !currentRfpo) {
             showAlert('Error: No action selected', 'danger');
             return;
         }
-        
+
         const comments = document.getElementById('approvalComments').value;
-        
+
         // Get user's action ID from the loaded data
         fetch(`/api/rfpos/${rfpoId}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.user_action) {
                     const actionId = data.user_action.action_id;
-                    
+
                     // Submit the approval action
                     return fetch(`/api/users/approval-action/${actionId}`, {
                         method: 'POST',
@@ -630,10 +640,10 @@
                     // Close modal
                     const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
                     modal.hide();
-                    
+
                     // Show success message
                     showAlert(`RFPO ${currentUserAction} successfully!`, 'success');
-                    
+
                     // Reload page to show updated status
                     setTimeout(() => {
                         window.location.reload();
@@ -885,9 +895,9 @@
     }
 
     function confirmDeleteLineItem(lineItemId, lineNumber) {
-        if (confirm(`Delete line item #${lineNumber}? This cannot be undone.`)) {
+        showConfirmModal('Delete', `Delete line item <strong>#${lineNumber}</strong>? This cannot be undone.`, function() {
             deleteLineItem(lineItemId);
-        }
+        });
     }
 
     async function deleteLineItem(lineItemId) {

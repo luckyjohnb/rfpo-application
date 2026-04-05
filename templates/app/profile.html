@@ -2,6 +2,15 @@
 
 {% block title %}Profile - RFPO Application{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Profile</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col">
@@ -35,7 +44,7 @@
                         <label for="currentPassword" class="form-label">Current Password</label>
                         <input type="password" class="form-control" id="currentPassword" name="currentPassword" required>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="newPassword" class="form-label">New Password</label>
@@ -47,7 +56,7 @@
                             <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
                         </div>
                     </div>
-                    
+
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-key"></i> Change Password
                         <span class="loading" style="display: none;">
@@ -78,7 +87,7 @@
                             <div class="form-text">Contact admin to change email</div>
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="sex" class="form-label"><strong>Sex</strong></label>
@@ -92,7 +101,7 @@
                             <input type="text" class="form-control" id="position" name="position" maxlength="100" size="40">
                         </div>
                     </div>
-                    
+
                     <button type="submit" class="btn btn-success">
                         <i class="fas fa-save"></i> Update Profile
                         <span class="loading" style="display: none;">
@@ -136,12 +145,12 @@
                             <input type="text" class="form-control" id="company" name="company" maxlength="100" size="40">
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="department" class="form-label"><strong>Department</strong></label>
                         <input type="text" class="form-control" id="department" name="department" maxlength="100" size="40">
                     </div>
-                    
+
                     <button type="submit" class="btn btn-success">
                         <i class="fas fa-save"></i> Update Company Info
                         <span class="loading" style="display: none;">
@@ -151,7 +160,7 @@
                 </form>
             </div>
         </div>
-        
+
         <!-- Address Information -->
         <div class="card mb-4">
             <div class="card-header">
@@ -165,7 +174,7 @@
                         <label for="building_address" class="form-label"><strong>Building/Int Mail address</strong></label>
                         <input type="text" class="form-control" id="building_address" name="building_address" maxlength="100" size="40">
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="address1" class="form-label"><strong>Address Line 1</strong></label>
@@ -176,7 +185,7 @@
                             <input type="text" class="form-control" id="address2" name="address2" maxlength="100" size="40">
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label for="city" class="form-label"><strong>City</strong></label>
@@ -243,12 +252,12 @@
                             <input type="text" class="form-control" id="zip_code" name="zip_code" maxlength="20" size="40">
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="country" class="form-label"><strong>Country</strong></label>
                         <input type="text" class="form-control" id="country" name="country" maxlength="100" size="40">
                     </div>
-                    
+
                     <button type="submit" class="btn btn-success">
                         <i class="fas fa-save"></i> Update Address
                         <span class="loading" style="display: none;">
@@ -258,7 +267,7 @@
                 </form>
             </div>
         </div>
-        
+
         <!-- Contact Information -->
         <div class="card mb-4">
             <div class="card-header">
@@ -278,7 +287,7 @@
                             <input type="text" class="form-control" id="phone_ext" name="phone_ext" maxlength="8" size="8">
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="mobile" class="form-label"><strong>Mobile/Cell no</strong></label>
@@ -289,7 +298,7 @@
                             <input type="text" class="form-control" id="fax" name="fax" maxlength="50">
                         </div>
                     </div>
-                    
+
                     <button type="submit" class="btn btn-success">
                         <i class="fas fa-save"></i> Update Contact Info
                         <span class="loading" style="display: none;">
@@ -300,7 +309,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-lg-4">
         <!-- Profile Summary -->
         <div class="card mb-4">
@@ -317,7 +326,7 @@
                 <p class="text-muted small" id="profileSummaryEmail">Loading...</p>
             </div>
         </div>
-        
+
         <!-- Quick Actions -->
         <div class="card">
             <div class="card-header">
@@ -327,9 +336,11 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
+                    {% if nav.is_admin %}
                     <a href="{{ url_for('rfpo_create') }}" class="btn btn-outline-primary btn-sm">
                         <i class="fas fa-plus"></i> Create RFPO
                     </a>
+                    {% endif %}
                     <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-list"></i> My RFPOs
                     </a>
@@ -353,7 +364,7 @@
     // Check if this is first login
     const urlParams = new URLSearchParams(window.location.search);
     const isFirstLogin = urlParams.get('first_login') === 'true';
-    
+
     if (isFirstLogin) {
         document.getElementById('firstLoginAlert').style.display = 'block';
         document.getElementById('passwordRequired').style.display = 'inline';
@@ -366,7 +377,7 @@
         try {
             showLoading(true);
             const response = await makeApiCall('/api/users/profile');
-            
+
             if (response.success) {
                 currentUser = response.user;
                 displayUserProfile(currentUser);
@@ -386,12 +397,12 @@
         document.getElementById('email').value = user.email || '';
         document.getElementById('sex').value = user.sex || '';
         document.getElementById('position').value = user.position || '';
-        
+
         // Company form
         document.getElementById('company_code').value = user.company_code || '';
         document.getElementById('company').value = user.company || '';
         document.getElementById('department').value = user.department || '';
-        
+
         // Address form
         document.getElementById('building_address').value = user.building_address || '';
         document.getElementById('address1').value = user.address1 || '';
@@ -400,13 +411,13 @@
         document.getElementById('state').value = user.state || '';
         document.getElementById('zip_code').value = user.zip_code || '';
         document.getElementById('country').value = user.country || '';
-        
+
         // Contact form
         document.getElementById('phone').value = user.phone || '';
         document.getElementById('phone_ext').value = user.phone_ext || '';
         document.getElementById('mobile').value = user.mobile || '';
         document.getElementById('fax').value = user.fax || '';
-        
+
         // Profile summary
         document.getElementById('profileSummaryName').textContent = user.fullname || user.email;
         document.getElementById('profileSummaryEmail').textContent = user.email;
@@ -415,29 +426,29 @@
     // Password change form
     document.getElementById('passwordForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const formData = new FormData(this);
         const currentPassword = formData.get('currentPassword');
         const newPassword = formData.get('newPassword');
         const confirmPassword = formData.get('confirmPassword');
-        
+
         // Validation
         if (newPassword !== confirmPassword) {
             showAlert('New passwords do not match', 'danger');
             return;
         }
-        
+
         if (newPassword.length < 8) {
             showAlert('Password must be at least 8 characters long', 'danger');
             return;
         }
-        
+
         // Show loading
         const submitBtn = this.querySelector('button[type="submit"]');
         const loadingSpan = submitBtn.querySelector('.loading');
         loadingSpan.style.display = 'inline';
         submitBtn.disabled = true;
-        
+
         try {
             const response = await makeApiCall('/api/auth/change-password', {
                 method: 'POST',
@@ -446,13 +457,13 @@
                     new_password: newPassword
                 })
             });
-            
+
             if (response.success) {
                 showAlert('Password changed successfully! A security notification has been sent to your email. Logging out...', 'success');
-                
+
                 // Clear the form
                 this.reset();
-                
+
                 // Automatic logout after password change
                 setTimeout(async () => {
                     try {
@@ -460,11 +471,11 @@
                     } catch (e) {
                         // Ignore logout API errors
                     }
-                    
+
                     // Clear session and redirect to login
                     window.location.href = '/login?message=Password changed successfully. Please log in with your new password.';
                 }, 2000);
-                
+
             } else {
                 throw new Error(response.message || 'Failed to change password');
             }
@@ -479,26 +490,26 @@
     // Profile form
     document.getElementById('profileForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const formData = new FormData(this);
         const profileData = {
             fullname: formData.get('fullname'),
             sex: formData.get('sex'),
             position: formData.get('position')
         };
-        
+
         // Show loading
         const submitBtn = this.querySelector('button[type="submit"]');
         const loadingSpan = submitBtn.querySelector('.loading');
         loadingSpan.style.display = 'inline';
         submitBtn.disabled = true;
-        
+
         try {
             const response = await makeApiCall('/api/users/profile', {
                 method: 'PUT',
                 body: JSON.stringify(profileData)
             });
-            
+
             if (response.success) {
                 showAlert('Profile updated successfully!', 'success');
                 // Reload profile to show updated data
@@ -517,26 +528,26 @@
     // Company form
     document.getElementById('companyForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const formData = new FormData(this);
         const companyData = {
             company_code: formData.get('company_code'),
             company: formData.get('company'),
             department: formData.get('department')
         };
-        
+
         // Show loading
         const submitBtn = this.querySelector('button[type="submit"]');
         const loadingSpan = submitBtn.querySelector('.loading');
         loadingSpan.style.display = 'inline';
         submitBtn.disabled = true;
-        
+
         try {
             const response = await makeApiCall('/api/users/profile', {
                 method: 'PUT',
                 body: JSON.stringify(companyData)
             });
-            
+
             if (response.success) {
                 showAlert('Company information updated successfully!', 'success');
                 // Reload profile to show updated data
@@ -551,11 +562,11 @@
             submitBtn.disabled = false;
         }
     });
-    
+
     // Address form
     document.getElementById('addressForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const formData = new FormData(this);
         const addressData = {
             building_address: formData.get('building_address'),
@@ -566,19 +577,19 @@
             zip_code: formData.get('zip_code'),
             country: formData.get('country')
         };
-        
+
         // Show loading
         const submitBtn = this.querySelector('button[type="submit"]');
         const loadingSpan = submitBtn.querySelector('.loading');
         loadingSpan.style.display = 'inline';
         submitBtn.disabled = true;
-        
+
         try {
             const response = await makeApiCall('/api/users/profile', {
                 method: 'PUT',
                 body: JSON.stringify(addressData)
             });
-            
+
             if (response.success) {
                 showAlert('Address information updated successfully!', 'success');
                 // Reload profile to show updated data
@@ -593,11 +604,11 @@
             submitBtn.disabled = false;
         }
     });
-    
+
     // Contact form
     document.getElementById('contactForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const formData = new FormData(this);
         const contactData = {
             phone: formData.get('phone'),
@@ -605,19 +616,19 @@
             mobile: formData.get('mobile'),
             fax: formData.get('fax')
         };
-        
+
         // Show loading
         const submitBtn = this.querySelector('button[type="submit"]');
         const loadingSpan = submitBtn.querySelector('.loading');
         loadingSpan.style.display = 'inline';
         submitBtn.disabled = true;
-        
+
         try {
             const response = await makeApiCall('/api/users/profile', {
                 method: 'PUT',
                 body: JSON.stringify(contactData)
             });
-            
+
             if (response.success) {
                 showAlert('Contact information updated successfully!', 'success');
                 // Reload profile to show updated data

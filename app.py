@@ -25,6 +25,9 @@ def create_user_app():
     app.config["SECRET_KEY"] = os.environ.get(
         "USER_APP_SECRET_KEY", "user-app-secret-change-in-production"
     )
+    if app.config["SECRET_KEY"] == "user-app-secret-change-in-production":
+        import warnings
+        warnings.warn("USER_APP_SECRET_KEY not set! Using insecure default.", stacklevel=1)
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -39,6 +42,22 @@ def create_user_app():
     # Enable CORS - restrict to known origins in production
     _allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
     CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
+
+    # Security headers
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "font-src 'self' https://cdnjs.cloudflare.com; "
+            "img-src 'self' data:; "
+            "connect-src 'self' " + os.environ.get("API_BASE_URL", "http://127.0.0.1:5003/api").rsplit("/api", 1)[0]
+        )
+        return response
 
     # Custom Jinja2 filter for currency formatting
     @app.template_filter("currency")

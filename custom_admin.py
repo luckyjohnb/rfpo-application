@@ -461,6 +461,9 @@ def create_app():
     app.config["SECRET_KEY"] = os.environ.get(
         "ADMIN_SECRET_KEY", "rfpo-admin-secret-key-change-in-production"
     )
+    if app.config["SECRET_KEY"] == "rfpo-admin-secret-key-change-in-production":
+        import warnings
+        warnings.warn("ADMIN_SECRET_KEY not set! Using insecure default.", stacklevel=1)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
         "DATABASE_URL",
         f'sqlite:///{os.path.join(os.getcwd(), "instance", "rfpo_admin.db")}',
@@ -479,6 +482,22 @@ def create_app():
 
     # Register error handlers
     register_error_handlers(app, "admin")
+
+    # Security headers
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "font-src 'self' https://cdnjs.cloudflare.com; "
+            "img-src 'self' data:; "
+            "connect-src 'self'"
+        )
+        return response
 
     # Initialize Flask-Login
     login_manager = LoginManager()

@@ -47,7 +47,7 @@ try:
 
     ADMIN_ROUTES_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: Admin routes not available: {e}")
+    app.logger.warning(f"Admin routes not available: {e}")
     ADMIN_ROUTES_AVAILABLE = False
 
 # User routes are handled directly in this file
@@ -58,6 +58,9 @@ app = Flask(__name__, template_folder="templates")
 
 # Configuration
 app.config["SECRET_KEY"] = os.environ.get("API_SECRET_KEY", "simple-api-secret")
+if app.config["SECRET_KEY"] == "simple-api-secret":
+    import warnings
+    warnings.warn("API_SECRET_KEY not set! Using insecure default.", stacklevel=1)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL", f'sqlite:///{os.path.abspath("instance/rfpo_admin.db")}'
 )
@@ -82,10 +85,18 @@ except ImportError:
 _allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
 CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
 
+# Security headers
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
 # Register admin routes if available
 if ADMIN_ROUTES_AVAILABLE:
     app.register_blueprint(admin_api)
-    print("✅ Admin API routes registered")
+    app.logger.info("Admin API routes registered")
 
 # User routes are handled directly in this file (not as blueprint)
 
@@ -420,17 +431,15 @@ def change_password():
                     user.email, user.fullname, user_ip
                 )
                 if email_sent:
-                    print(f"✅ Password change notification sent to {user.email}")
+                    app.logger.info(f"Password change notification sent to {user.email}")
                 else:
-                    print(f"⚠️ Password change notification failed for {user.email}")
+                    app.logger.warning(f"Password change notification failed for {user.email}")
             except ImportError:
-                print(
-                    "⚠️ Email service not available - password change notification not sent"
-                )
+                app.logger.warning("Email service not available - password change notification not sent")
             except Exception as email_error:
-                print(f"⚠️ Email notification error: {email_error}")
+                app.logger.warning(f"Email notification error: {email_error}")
         except Exception as e:
-            print(f"⚠️ Error sending password change notification: {e}")
+            app.logger.warning(f"Error sending password change notification: {e}")
 
         return jsonify({"success": True, "message": "Password changed successfully"})
 
@@ -509,9 +518,7 @@ def saml_match():
         })
     except Exception as e:
         db.session.rollback()
-        import traceback
-        traceback.print_exc()
-        print(f"SAML match error: {e}", flush=True)
+        app.logger.exception(f"SAML match error: {e}")
         return jsonify({"success": False, "message": f"Internal server error: {str(e)}"}), 500
 
 
@@ -604,9 +611,7 @@ def get_approver_rfpos():
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"Approver RFPOs error for user {request.current_user.record_id}: {e}", flush=True)
+        app.logger.exception(f"Approver RFPOs error for user {request.current_user.record_id}: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
 
@@ -1558,13 +1563,17 @@ def get_user_permissions_summary():
 @app.route("/api/rfpos")
 @require_auth
 def list_rfpos():
-    """List RFPOs with permission filtering and pagination"""
+    """List RFPOs with permission filtering, pagination, and search"""
     try:
         user = request.current_user
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 50, type=int)
         per_page = min(per_page, 200)  # Cap at 200
         status_filter = request.args.get("status")
+        search_query = request.args.get("search", "").strip()
+        team_id_filter = request.args.get("team_id", type=int)
+        date_from = request.args.get("date_from")  # YYYY-MM-DD
+        date_to = request.args.get("date_to")  # YYYY-MM-DD
 
         # If user is super admin, they can see all RFPOs
         if user.is_super_admin():
@@ -1616,6 +1625,35 @@ def list_rfpos():
         # Apply status filter if provided
         if status_filter:
             query = query.filter(RFPO.status == status_filter)
+
+        # Apply text search
+        if search_query:
+            like_term = f"%{search_query}%"
+            query = query.filter(
+                db.or_(
+                    RFPO.title.ilike(like_term),
+                    RFPO.rfpo_id.ilike(like_term),
+                    RFPO.description.ilike(like_term),
+                )
+            )
+
+        # Apply team filter
+        if team_id_filter:
+            query = query.filter(RFPO.team_id == team_id_filter)
+
+        # Apply date range filters
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, "%Y-%m-%d")
+                query = query.filter(RFPO.created_at >= from_date)
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+                query = query.filter(RFPO.created_at < to_date)
+            except ValueError:
+                pass
 
         # Order and paginate
         query = query.order_by(RFPO.created_at.desc())
@@ -1930,7 +1968,7 @@ def get_rfpo(rfpo_id):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
-@app.route("/api/rfpos/<int:rfpo_id>", methods=["PUT"])
+@app.route("/api/rfpos/<int:rfpo_id>", methods=["PUT", "PATCH"])
 @require_auth
 def update_rfpo(rfpo_id):
     """Update RFPO"""
@@ -2540,10 +2578,10 @@ def get_rfpo_rendered_view(rfpo_id):
 
 
 if __name__ == "__main__":
-    print("🚀 Starting Simple RFPO API")
-    print(f"📂 Database: {app.config['SQLALCHEMY_DATABASE_URI']}")
+    app.logger.info("Starting Simple RFPO API")
+    app.logger.info(f"Database: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
     with app.app_context():
-        print(f"👥 Users in database: {User.query.count()}")
+        app.logger.info(f"Users in database: {User.query.count()}")
 
     app.run(debug=False, host="0.0.0.0", port=5002)

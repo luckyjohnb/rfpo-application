@@ -6,7 +6,7 @@ This script connects directly to Azure PostgreSQL and initializes the database
 
 import psycopg2
 import psycopg2.extras
-import bcrypt
+from werkzeug.security import generate_password_hash
 import os
 import sys
 from env_config import get_database_url
@@ -21,10 +21,8 @@ def create_admin_user():
     password = "admin123"
     fullname = "System Administrator"
 
-    # Hash the password
-    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode(
-        "utf-8"
-    )
+    # Hash the password using Werkzeug (matches custom_admin.py login verification)
+    password_hash = generate_password_hash(password)
 
     return {
         "email": email,

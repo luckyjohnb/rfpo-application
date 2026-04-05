@@ -6,8 +6,8 @@ This script uses SQLAlchemy models to create tables properly
 
 import os
 import sys
-import bcrypt
 import logging
+from werkzeug.security import generate_password_hash
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
@@ -44,11 +44,9 @@ def create_admin_user(app):
             print("👤 Admin user already exists")
             return existing_admin
 
-        # Hash the password
+        # Hash the password using Werkzeug (matches custom_admin.py login verification)
         password = "admin123"
-        password_hash = bcrypt.hashpw(
-            password.encode("utf-8"), bcrypt.gensalt()
-        ).decode("utf-8")
+        password_hash = generate_password_hash(password)
 
         # Create admin user
         admin_user = User(

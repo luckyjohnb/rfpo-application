@@ -632,6 +632,79 @@ def take_approval_action(action_id):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@app.route("/api/users/bulk-approval", methods=["POST"])
+@require_auth
+def bulk_approval_action():
+    """Approve or refuse multiple approval actions at once"""
+    try:
+        from models import RFPOApprovalAction
+
+        user = request.current_user
+        data = request.get_json()
+
+        action_ids = data.get("action_ids", [])
+        status = data.get("status")
+        comments = data.get("comments", "")
+
+        if not action_ids:
+            return jsonify({"success": False, "message": "No actions specified"}), 400
+        if status not in ["approved", "refused"]:
+            return jsonify({"success": False, "message": "Status must be approved or refused"}), 400
+
+        results = {"succeeded": 0, "failed": 0, "errors": []}
+
+        for action_id in action_ids:
+            try:
+                action = RFPOApprovalAction.query.filter_by(action_id=action_id).first()
+                if not action:
+                    results["failed"] += 1
+                    results["errors"].append(f"{action_id}: not found")
+                    continue
+                if action.approver_id != user.record_id and not user.is_super_admin():
+                    results["failed"] += 1
+                    results["errors"].append(f"{action_id}: not authorized")
+                    continue
+                if action.status != "pending":
+                    results["failed"] += 1
+                    results["errors"].append(f"{action_id}: already completed")
+                    continue
+
+                action.complete_action(status, comments, None, user.record_id)
+
+                instance = action.instance
+                if status == "refused":
+                    instance.overall_status = "refused"
+                    instance.completed_at = datetime.utcnow()
+                    if instance.rfpo:
+                        instance.rfpo.status = "Refused"
+                        instance.rfpo.updated_by = user.get_display_name()
+                else:
+                    instance.advance_to_next_step()
+                    if instance.overall_status == "approved" and instance.rfpo:
+                        instance.rfpo.status = "Approved"
+                        instance.rfpo.updated_by = user.get_display_name()
+
+                instance.updated_at = datetime.utcnow()
+                results["succeeded"] += 1
+
+            except Exception as action_err:
+                results["failed"] += 1
+                results["errors"].append(f"{action_id}: {str(action_err)}")
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"{results['succeeded']} action(s) {status} successfully" +
+                       (f", {results['failed']} failed" if results["failed"] else ""),
+            "results": results,
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @app.route("/api/users/profile", methods=["GET"])
 @require_auth
 def get_user_profile():
@@ -1042,6 +1115,20 @@ def list_rfpos():
                 # User has no access to any RFPOs
                 rfpos = []
 
+        # Build a lookup of pending approval action_ids for this user
+        from models import RFPOApprovalAction, RFPOApprovalInstance
+        pending_action_map = {}  # rfpo_id -> action_id
+        try:
+            user_pending = RFPOApprovalAction.query.filter_by(
+                approver_id=user.record_id, status="pending"
+            ).all()
+            for pa in user_pending:
+                inst = RFPOApprovalInstance.query.get(pa.instance_id)
+                if inst and inst.rfpo_id:
+                    pending_action_map[inst.rfpo_id] = pa.action_id
+        except Exception:
+            pass
+
         return jsonify(
             {
                 "success": True,
@@ -1051,9 +1138,13 @@ def list_rfpos():
                         "rfpo_id": r.rfpo_id,
                         "title": r.title,
                         "status": r.status,
+                        "total_amount": float(r.total_amount) if r.total_amount else 0,
+                        "vendor": r.vendor.name if r.vendor else None,
+                        "due_date": r.due_date.isoformat() if r.due_date else None,
                         "created_at": (
                             r.created_at.isoformat() if r.created_at else None
                         ),
+                        "pending_action_id": pending_action_map.get(r.id),
                     }
                     for r in rfpos
                 ],

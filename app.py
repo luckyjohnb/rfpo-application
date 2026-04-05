@@ -396,6 +396,13 @@ def create_user_app():
         response = make_api_request(f"/users/approval-action/{action_id}", "POST", data)
         return jsonify(response)
 
+    @app.route("/api/users/bulk-approval", methods=["POST"])
+    def api_bulk_approval():
+        """Bulk approval action API proxy"""
+        data = request.get_json()
+        response = make_api_request("/users/bulk-approval", "POST", data)
+        return jsonify(response)
+
     @app.route("/api/rfpos/<int:rfpo_id>/line-items", methods=["GET", "POST"])
     def api_rfpo_line_items(rfpo_id):
         """RFPO line items API proxy"""

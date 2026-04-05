@@ -6,6 +6,7 @@ Combines template PDFs with dynamic RFPO data
 
 import os
 import io
+import logging
 from datetime import datetime
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
@@ -14,6 +15,8 @@ from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from flask import current_app
+
+logger = logging.getLogger(__name__)
 
 
 class RFPOPDFGenerator:
@@ -24,33 +27,34 @@ class RFPOPDFGenerator:
 
         # Debug positioning config
         if positioning_config:
-            print(
-                f"🎯 PDF Generator initialized WITH positioning config: {type(positioning_config)}"
+            logger.debug(
+                "PDF Generator initialized WITH positioning config: %s", type(positioning_config)
             )
             try:
                 pos_data = positioning_config.get_positioning_data()
-                print(f"🎯 Positioning data keys: {list(pos_data.keys())}")
+                logger.debug("Positioning data keys: %s", list(pos_data.keys()))
                 visible_fields = [
                     k for k, v in pos_data.items() if v.get("visible", True)
                 ]
                 hidden_fields = [
                     k for k, v in pos_data.items() if not v.get("visible", True)
                 ]
-                print(f"🎯 Visible fields ({len(visible_fields)}): {visible_fields}")
-                print(f"🎯 Hidden fields ({len(hidden_fields)}): {hidden_fields}")
+                logger.debug("Visible fields (%d): %s", len(visible_fields), visible_fields)
+                logger.debug("Hidden fields (%d): %s", len(hidden_fields), hidden_fields)
 
                 # Show first few fields with details
                 for i, (field_name, field_data) in enumerate(
                     list(pos_data.items())[:3]
                 ):
-                    print(
-                        f"🎯 Field {i+1} {field_name}: x={field_data.get('x')}, y={field_data.get('y')}, visible={field_data.get('visible')}"
+                    logger.debug(
+                        "Field %d %s: x=%s, y=%s, visible=%s",
+                        i+1, field_name, field_data.get('x'), field_data.get('y'), field_data.get('visible')
                     )
             except Exception as e:
-                print(f"❌ Error accessing positioning data: {e}")
+                logger.error("Error accessing positioning data: %s", e)
         else:
-            print(
-                "⚠️  PDF Generator initialized WITHOUT positioning config - will use defaults"
+            logger.debug(
+                "PDF Generator initialized WITHOUT positioning config - will use defaults"
             )
 
     def generate_po_pdf(self, rfpo, consortium, project, vendor=None, vendor_site=None):
@@ -69,7 +73,7 @@ class RFPOPDFGenerator:
             return final_pdf
 
         except Exception as e:
-            print(f"Error generating PDF: {e}")
+            logger.error("Error generating PDF: %s", e)
             raise
 
     def _create_data_overlay(
@@ -120,8 +124,8 @@ class RFPOPDFGenerator:
         )
 
         if is_dynamic_field and not field_data:
-            print(
-                f"📋 Dynamic field {field_name} using defaults (not in positioning config)"
+            logger.debug(
+                "Dynamic field %s using defaults (not in positioning config)", field_name
             )
             return (
                 default_x,
@@ -132,12 +136,12 @@ class RFPOPDFGenerator:
 
         # For other fields, if not in positioning data, don't draw it (field was cleared/removed)
         if not field_data:
-            print(f"🚫 Field {field_name} not in positioning data - skipping (cleared)")
+            logger.debug("Field %s not in positioning data - skipping (cleared)", field_name)
             return None, None, None, None
 
         # If field is explicitly hidden, don't draw it
         if not field_data.get("visible", True):
-            print(f"🚫 Field {field_name} is hidden - skipping")
+            logger.debug("Field %s is hidden - skipping", field_name)
             return None, None, None, None
 
         x = field_data.get("x", default_x)
@@ -152,7 +156,7 @@ class RFPOPDFGenerator:
             pdf_width = 612
             pdf_height = 792
 
-            print(f"📐 Canvas is fixed at PDF dimensions: {pdf_width}x{pdf_height}")
+            logger.debug("Canvas is fixed at PDF dimensions: %dx%d", pdf_width, pdf_height)
 
             # Coordinates are already in PDF space - apply preview offset for alignment
             preview_offset = (
@@ -161,19 +165,19 @@ class RFPOPDFGenerator:
             pdf_x = x
             pdf_y = y + preview_offset  # Adjust Y coordinate for preview alignment
 
-            print(f"🔄 Using stored PDF coordinates for {field_name}:")
-            print(
-                f"   Stored PDF coords: ({x}, {y}) -> Preview adjusted: ({pdf_x:.1f}, {pdf_y:.1f})"
+            logger.debug("Using stored PDF coordinates for %s:", field_name)
+            logger.debug(
+                "   Stored PDF coords: (%s, %s) -> Preview adjusted: (%.1f, %.1f)", x, y, pdf_x, pdf_y
             )
-            print(f"   Applied preview offset: +{preview_offset}px Y")
+            logger.debug("   Applied preview offset: +%dpx Y", preview_offset)
 
             # Ensure coordinates are within PDF bounds
             pdf_x = max(0, min(pdf_width, pdf_x))
             pdf_y = max(0, min(pdf_height, pdf_y))
 
             if pdf_x != x or pdf_y != (y + preview_offset):
-                print(
-                    f"⚠️  Clamped {field_name} coordinates to bounds: ({pdf_x:.1f}, {pdf_y:.1f})"
+                logger.debug(
+                    "Clamped %s coordinates to bounds: (%.1f, %.1f)", field_name, pdf_x, pdf_y
                 )
 
             return pdf_x, pdf_y, font_size, font_weight
@@ -189,21 +193,21 @@ class RFPOPDFGenerator:
         )
 
         if x is None:  # Field is hidden
-            print(f"🚫 Field {field_name} is hidden, skipping")
+            logger.debug("Field %s is hidden, skipping", field_name)
             return
 
         # Allow caller to override font size (e.g. for auto-shrink logic)
         if font_size_override is not None:
             font_size = font_size_override
 
-        print(
-            f"📝 Drawing {field_name}: '{text}' at ({x}, {y}) with font {font_size}pt {font_weight}"
+        logger.debug(
+            "Drawing %s: '%s' at (%s, %s) with font %spt %s", field_name, text, x, y, font_size, font_weight
         )
 
         # Validate coordinates are within PDF bounds
         if x < 0 or x > 612 or y < 0 or y > 792:
-            print(
-                f"⚠️  WARNING: {field_name} coordinates ({x}, {y}) are outside PDF bounds (612x792)"
+            logger.warning(
+                "%s coordinates (%s, %s) are outside PDF bounds (612x792)", field_name, x, y
             )
 
         # Set font based on weight
@@ -224,9 +228,9 @@ class RFPOPDFGenerator:
                 else:
                     canvas.drawString(x, line_y, line.strip())
 
-            print(f"✅ Successfully drew {field_name} ({len(text_lines)} lines)")
+            logger.debug("Successfully drew %s (%d lines)", field_name, len(text_lines))
         except Exception as e:
-            print(f"❌ Error drawing {field_name}: {e}")
+            logger.error("Error drawing %s: %s", field_name, e)
 
     def _draw_logo_with_positioning(
         self, canvas, field_name, logo_filename, default_x, default_y
@@ -235,10 +239,10 @@ class RFPOPDFGenerator:
         x, y, _, _ = self._get_field_position(field_name, default_x, default_y)
 
         if x is None:  # Field is hidden
-            print(f"🚫 Logo field {field_name} is hidden, skipping")
+            logger.debug("Logo field %s is hidden, skipping", field_name)
             return
 
-        print(f"🖼️ Drawing logo {field_name}: '{logo_filename}' at ({x}, {y})")
+        logger.debug("Drawing logo %s: '%s' at (%s, %s)", field_name, logo_filename, x, y)
 
         try:
             import os
@@ -250,7 +254,7 @@ class RFPOPDFGenerator:
 
             # Check if logo file exists
             if not os.path.exists(logo_path):
-                print(f"⚠️ Logo file not found: {logo_path}")
+                logger.warning("Logo file not found: %s", logo_path)
                 # Draw placeholder text instead
                 canvas.setFont("Helvetica", 8)
                 canvas.drawString(x, y, f"[LOGO: {logo_filename}]")
@@ -275,8 +279,8 @@ class RFPOPDFGenerator:
 
             # Validate coordinates are within PDF bounds
             if x < 0 or x > 612 or pdf_y < 0 or pdf_y > 792:
-                print(
-                    f"⚠️ WARNING: {field_name} coordinates ({x}, {pdf_y}) are outside PDF bounds (612x792)"
+                logger.warning(
+                    "%s coordinates (%s, %s) are outside PDF bounds (612x792)", field_name, x, pdf_y
                 )
 
             # Draw the logo image
@@ -288,10 +292,10 @@ class RFPOPDFGenerator:
                 height=logo_height,
                 preserveAspectRatio=True,
             )
-            print(f"✅ Successfully drew logo {field_name}")
+            logger.debug("Successfully drew logo %s", field_name)
 
         except Exception as e:
-            print(f"❌ Error drawing logo {field_name}: {e}")
+            logger.error("Error drawing logo %s: %s", field_name, e)
             # Draw placeholder text as fallback
             try:
                 canvas.setFont("Helvetica", 8)
@@ -305,7 +309,7 @@ class RFPOPDFGenerator:
 
         logo_path = os.path.join("static", "po_files", "uscar_logo.jpg")
         if not os.path.exists(logo_path):
-            print(f"⚠️ Default logo not found: {logo_path}")
+            logger.warning("Default logo not found: %s", logo_path)
             return
 
         try:
@@ -329,9 +333,9 @@ class RFPOPDFGenerator:
                 height=40,
                 preserveAspectRatio=True,
             )
-            print(f"✅ Drew fallback USCAR logo at ({x}, {pdf_y})")
+            logger.debug("Drew fallback USCAR logo at (%s, %s)", x, pdf_y)
         except Exception as e:
-            print(f"❌ Error drawing fallback logo: {e}")
+            logger.error("Error drawing fallback logo: %s", e)
 
     def _draw_page1_data(
         self, canvas, rfpo, consortium, project, vendor, vendor_site, width, height
@@ -656,7 +660,7 @@ class RFPOPDFGenerator:
             if requestor_user:
                 requestor_name = requestor_user.get_display_name()
         except Exception as e:
-            print(f"⚠️ Could not look up requestor name: {e}")
+            logger.warning("Could not look up requestor name: %s", e)
         self._draw_text_with_positioning(
             canvas,
             "requestor_info",
@@ -688,7 +692,7 @@ class RFPOPDFGenerator:
                         canvas, "approved_by", approval_action.approver_name, 455, 145
                     )
         except Exception as e:
-            print(f"⚠️ Could not look up approver name: {e}")
+            logger.warning("Could not look up approver name: %s", e)
 
         # Return any line items that didn't fit on page 1
         return overflow_items
@@ -791,13 +795,13 @@ class RFPOPDFGenerator:
                 template_page.merge_page(data_page)
                 output.add_page(template_page)
 
-                print(f"✅ Merged page 1: template + data overlay")
+                logger.debug("Merged page 1: template + data overlay")
             elif len(data_reader.pages) > 0:
                 # Fallback: just use data page if no template
                 output.add_page(data_reader.pages[0])
-                print(f"⚠️  Using data page only (no template)")
+                logger.debug("Using data page only (no template)")
             else:
-                print(f"❌ No data pages to merge")
+                logger.warning("No data pages to merge")
 
         # Pages 2+: Combine additional data pages with po_page2.pdf template (for overflow line items)
         page2_template_path = os.path.join(self.static_path, "po_page2.pdf")
@@ -841,26 +845,26 @@ class RFPOPDFGenerator:
 
                     # Add all main pages first
                     main_reader = PdfReader(main_buffer)
-                    print(
-                        f"📄 Adding {len(main_reader.pages)} main pages to final output"
+                    logger.debug(
+                        "Adding %d main pages to final output", len(main_reader.pages)
                     )
                     for i, page in enumerate(main_reader.pages):
                         final_output.add_page(page)
-                        print(f"✅ Added main page {i+1}")
+                        logger.debug("Added main page %d", i+1)
 
                     # Now add terms pages using fresh reader (no prior merge conflicts)
                     terms_reader = PdfReader(terms_path, strict=False)
-                    print(
-                        f"📄 Adding {len(terms_reader.pages)} terms pages from {terms_file}"
+                    logger.debug(
+                        "Adding %d terms pages from %s", len(terms_reader.pages), terms_file
                     )
 
                     for i, page in enumerate(terms_reader.pages):
                         try:
                             # Since this is a fresh reader with no prior merges, it should work
                             final_output.add_page(page)
-                            print(f"✅ Added terms page {i+1} (fresh reader)")
+                            logger.debug("Added terms page %d (fresh reader)", i+1)
                         except Exception as add_error:
-                            print(f"❌ Failed to add terms page {i+1}: {add_error}")
+                            logger.error("Failed to add terms page %d: %s", i+1, add_error)
 
                             # Fallback: Create a text placeholder
                             try:
@@ -885,21 +889,21 @@ class RFPOPDFGenerator:
 
                                 fallback_reader = PdfReader(fallback_buffer)
                                 final_output.add_page(fallback_reader.pages[0])
-                                print(f"⚠️  Added fallback for terms page {i+1}")
+                                logger.debug("Added fallback for terms page %d", i+1)
 
                             except Exception as fallback_error:
-                                print(
-                                    f"❌ Fallback failed for terms page {i+1}: {fallback_error}"
+                                logger.error(
+                                    "Fallback failed for terms page %d: %s", i+1, fallback_error
                                 )
 
                     # Replace the original output with the final combined version
                     output = final_output
-                    print(
-                        f"🎯 Successfully combined main pages + terms using fresh readers"
+                    logger.debug(
+                        "Successfully combined main pages + terms using fresh readers"
                     )
 
                 except Exception as e:
-                    print(f"❌ Error reading terms PDF {terms_file}: {e}")
+                    logger.error("Error reading terms PDF %s: %s", terms_file, e)
                     # Create a simple text page as fallback
                     from reportlab.pdfgen import canvas
                     from reportlab.lib.pagesizes import letter
@@ -916,11 +920,11 @@ class RFPOPDFGenerator:
 
                     fallback_reader = PdfReader(fallback_buffer)
                     output.add_page(fallback_reader.pages[0])
-                    print(f"⚠️  Added fallback terms page")
+                    logger.debug("Added fallback terms page")
             else:
-                print(f"⚠️  Terms file not found: {terms_path}")
+                logger.warning("Terms file not found: %s", terms_path)
         else:
-            print(f"⚠️  No terms mapping for consortium: {consortium_abbrev}")
+            logger.debug("No terms mapping for consortium: %s", consortium_abbrev)
 
         # Write to bytes
         output_buffer = io.BytesIO()
@@ -932,7 +936,7 @@ class RFPOPDFGenerator:
             output_buffer.seek(0)
             final_reader = PdfReader(output_buffer)
             total_pages = len(final_reader.pages)
-            print(f"🎯 Final PDF validation: {total_pages} total pages")
+            logger.debug("Final PDF validation: %d total pages", total_pages)
 
             # Quick check of each page type
             for i, page in enumerate(final_reader.pages):
@@ -941,15 +945,15 @@ class RFPOPDFGenerator:
                     mediabox = page.mediabox
                     resources = page.get("/Resources", {})
                     has_content = "/XObject" in resources or "/Font" in resources
-                    print(
-                        f"   Page {i+1} ({page_type}): {mediabox.width}x{mediabox.height}, content={has_content}"
+                    logger.debug(
+                        "   Page %d (%s): %sx%s, content=%s", i+1, page_type, mediabox.width, mediabox.height, has_content
                     )
                 except Exception:
                     pass
 
             output_buffer.seek(0)  # Reset for return
         except Exception as validation_error:
-            print(f"⚠️  PDF validation failed: {validation_error}")
+            logger.warning("PDF validation failed: %s", validation_error)
 
         return output_buffer
 

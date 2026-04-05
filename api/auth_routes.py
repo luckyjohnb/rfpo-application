@@ -123,7 +123,7 @@ def verify_token():
     """Verify authentication token"""
     token = request.headers.get("Authorization")
     if not token:
-        return jsonify({"authenticated": False, "message": "No token provided"}), 401
+        return jsonify({"success": False, "authenticated": False, "message": "No token provided"}), 401
 
     if token.startswith("Bearer "):
         token = token[7:]
@@ -133,16 +133,17 @@ def verify_token():
         user = User.query.get(payload["user_id"])
 
         if not user:
-            return jsonify({"authenticated": False, "message": "User not found"}), 401
+            return jsonify({"success": False, "authenticated": False, "message": "User not found"}), 401
 
         if not user.active:
             return (
-                jsonify({"authenticated": False, "message": "Account not active"}),
+                jsonify({"success": False, "authenticated": False, "message": "Account not active"}),
                 401,
             )
 
         return jsonify(
             {
+                "success": True,
                 "authenticated": True,
                 "user": {
                     "id": user.id,
@@ -157,11 +158,11 @@ def verify_token():
         )
 
     except jwt.ExpiredSignatureError:
-        return jsonify({"authenticated": False, "message": "Token expired"}), 401
+        return jsonify({"success": False, "authenticated": False, "message": "Token expired"}), 401
     except jwt.InvalidTokenError:
-        return jsonify({"authenticated": False, "message": "Invalid token"}), 401
+        return jsonify({"success": False, "authenticated": False, "message": "Invalid token"}), 401
     except Exception as e:
-        return jsonify({"authenticated": False, "message": str(e)}), 401
+        return jsonify({"success": False, "authenticated": False, "message": str(e)}), 401
 
 
 @auth_api.route("/logout", methods=["POST"])

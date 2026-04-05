@@ -8,6 +8,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import check_password_hash
 import jwt
+import logging
 from datetime import datetime, timedelta
 import os
 import time
@@ -47,7 +48,7 @@ try:
 
     ADMIN_ROUTES_AVAILABLE = True
 except ImportError as e:
-    app.logger.warning(f"Admin routes not available: {e}")
+    logging.getLogger(__name__).warning(f"Admin routes not available: {e}")
     ADMIN_ROUTES_AVAILABLE = False
 
 # User routes are handled directly in this file

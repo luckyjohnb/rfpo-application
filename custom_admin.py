@@ -6,6 +6,7 @@ Built from scratch to avoid WTForms compatibility issues.
 
 import io
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -76,6 +77,8 @@ except Exception:  # pragma: no cover - optional in runtime
     pd = None
 from pdf_generator import RFPOPDFGenerator
 
+_logger = logging.getLogger(__name__)
+
 
 def _parse_budget_amount(value):
     """Parse a numeric amount from various bracket value formats.
@@ -114,7 +117,7 @@ def sync_all_users_approver_status(updated_by=None):
         return updated_count
     except Exception as e:
         db.session.rollback()
-        print(f"Error syncing approver status: {e}")
+        _logger.error("Error syncing approver status: %s", e)
         return 0
 
 
@@ -145,7 +148,7 @@ def sync_user_approver_status_for_workflow(workflow_id, updated_by=None):
         return updated_count
     except Exception as e:
         db.session.rollback()
-        print(f"Error syncing approver status for workflow {workflow_id}: {e}")
+        _logger.error("Error syncing approver status for workflow %s: %s", workflow_id, e)
         return 0
 
 
@@ -395,10 +398,7 @@ def get_user_mindmap_data(user):
         }
 
     except Exception as e:
-        print(f"Error in get_user_mindmap_data: {e}")
-        import traceback
-
-        traceback.print_exc()
+        _logger.exception("Error in get_user_mindmap_data: %s", e)
         return None
 
 
@@ -2804,18 +2804,12 @@ def create_app():
             user_mindmap = get_user_mindmap_data(user)
             # Debug output for troubleshooting
             if user_mindmap:
-                print(f"🔍 Mindmap Debug for {user.email}:")
-                print(
-                    f"  Consortiums: {user_mindmap.get('associations', {}).get('consortiums', {})}"
-                )
-                print(
-                    f"  Projects: {user_mindmap.get('associations', {}).get('projects', {})}"
-                )
+                app.logger.debug("Mindmap data for %s: consortiums=%s, projects=%s",
+                    user.email,
+                    user_mindmap.get('associations', {}).get('consortiums', {}),
+                    user_mindmap.get('associations', {}).get('projects', {}))
         except Exception as e:
-            print(f"Error getting user mindmap: {e}")
-            import traceback
-
-            traceback.print_exc()
+            app.logger.exception("Error getting user mindmap: %s", e)
             user_mindmap = None
 
         return render_template(
@@ -3435,7 +3429,7 @@ Southfield, MI  48075""",
             )
 
         except Exception as e:
-            print(f"PO Proof generation error: {e}")
+            app.logger.error("PO Proof generation error: %s", e)
             flash(f"❌ Error generating PO Proof: {str(e)}", "error")
             return redirect(url_for("rfpo_edit", id=rfpo_id))
 
@@ -3495,7 +3489,7 @@ Southfield, MI  48075""",
             )
 
         except Exception as e:
-            print(f"PDF generation error: {e}")
+            app.logger.error("PDF generation error: %s", e)
             flash(f"❌ Error generating PDF: {str(e)}", "error")
             return redirect(url_for("rfpo_edit", id=rfpo_id))
 
@@ -3540,7 +3534,7 @@ Southfield, MI  48075""",
             )
 
         except Exception as e:
-            print(f"RFPO generation error: {e}")
+            app.logger.error("RFPO generation error: %s", e)
             flash(f"❌ Error generating RFPO: {str(e)}", "error")
             return redirect(url_for("rfpo_edit", id=rfpo_id))
 
@@ -5255,8 +5249,8 @@ Southfield, MI  48075""",
                     workflow.id, updated_by=current_user.get_display_name()
                 )
             except Exception as e:
-                print(
-                    f"Warning: Could not sync approver status after workflow creation: {e}"
+                app.logger.warning(
+                    "Could not sync approver status after workflow creation: %s", e
                 )
 
             flash("✅ Approval workflow created successfully!", "success")
@@ -5297,8 +5291,8 @@ Southfield, MI  48075""",
                         workflow.id, updated_by=current_user.get_display_name()
                     )
                 except Exception as e:
-                    print(
-                        f"Warning: Could not sync approver status after workflow edit: {e}"
+                    app.logger.warning(
+                        "Could not sync approver status after workflow edit: %s", e
                     )
 
                 flash("✅ Approval workflow updated successfully!", "success")
@@ -5457,8 +5451,8 @@ Southfield, MI  48075""",
                     workflow_id, updated_by=current_user.get_display_name()
                 )
             except Exception as e:
-                print(
-                    f"Warning: Could not sync approver status after step addition: {e}"
+                app.logger.warning(
+                    "Could not sync approver status after step addition: %s", e
                 )
 
             flash(f'✅ Step "{step.step_name}" added successfully!', "success")
@@ -5522,8 +5516,8 @@ Southfield, MI  48075""",
                     workflow_id, updated_by=current_user.get_display_name()
                 )
             except Exception as e:
-                print(
-                    f"Warning: Could not sync approver status after step deletion: {e}"
+                app.logger.warning(
+                    "Could not sync approver status after step deletion: %s", e
                 )
 
             flash(f'✅ Step "{step_name}" deleted successfully!', "success")
@@ -5583,8 +5577,8 @@ Southfield, MI  48075""",
                     workflow.id, updated_by=current_user.get_display_name()
                 )
             except Exception as e:
-                print(
-                    f"Warning: Could not sync approver status after workflow activation: {e}"
+                app.logger.warning(
+                    "Could not sync approver status after workflow activation: %s", e
                 )
 
             flash(
@@ -5904,7 +5898,7 @@ Southfield, MI  48075""",
                     workflow_id, updated_by=current_user.get_display_name()
                 )
             except Exception as e:
-                print(f"Warning: Could not sync approver status after step edit: {e}")
+                app.logger.warning("Could not sync approver status after step edit: %s", e)
 
             flash(f'✅ Step "{step.step_name}" updated successfully!', "success")
 
@@ -6885,8 +6879,7 @@ Southfield, MI  48075""",
     @login_required
     def pdf_template_image(template_name):
         """Convert PDF template to image for background display"""
-        print("🖼️ PDF Template Image Route Called:")
-        print(f"  - template_name: {template_name}")
+        app.logger.debug("PDF Template Image Route Called: template_name=%s", template_name)
 
         try:
             import io
@@ -6901,19 +6894,16 @@ Southfield, MI  48075""",
                 # Map template names to PDF files
                 template_files = {"po_template": "po.pdf", "po_page2": "po_page2.pdf"}
 
-                print(f"  - Available templates: {list(template_files.keys())}")
+                app.logger.debug("Available templates: %s", list(template_files.keys()))
 
                 if template_name not in template_files:
-                    print(
-                        f"❌ Template '{template_name}' not found in available templates"
-                    )
+                    app.logger.warning("Template '%s' not found in available templates", template_name)
                     return Response("Template not found", status=404)
 
                 pdf_path = os.path.join(
                     app.root_path, "static", "po_files", template_files[template_name]
                 )
-                print(f"  - PDF path: {pdf_path}")
-                print(f"  - PDF exists: {os.path.exists(pdf_path)}")
+                app.logger.debug("PDF path: %s, exists: %s", pdf_path, os.path.exists(pdf_path))
 
                 if not os.path.exists(pdf_path):
                     return Response("PDF file not found", status=404)
@@ -6993,10 +6983,7 @@ Southfield, MI  48075""",
                 )
 
         except Exception as e:
-            print(f"Error generating template image: {e}")
-            import traceback
-
-            traceback.print_exc()
+            app.logger.exception("Error generating template image: %s", e)
             return Response(f"Error generating template image: {str(e)}", status=500)
 
     # PDF Positioning Editor routes
@@ -7050,19 +7037,16 @@ Southfield, MI  48075""",
     @login_required
     def pdf_positioning_editor(consortium_id, template_name):
         """Visual PDF positioning editor"""
-        print("🔍 PDF Editor Route Called:")
-        print(f"  - consortium_id: {consortium_id}")
-        print(f"  - template_name: {template_name}")
+        app.logger.debug("PDF Editor Route Called: consortium_id=%s, template_name=%s", consortium_id, template_name)
 
         # Debug: List all consortiums
         all_consortiums = Consortium.query.all()
-        print("  - Available consortiums:")
-        for c in all_consortiums:
-            print(f"    * ID: {c.id}, consort_id: {c.consort_id}, name: {c.name}")
+        app.logger.debug("Available consortiums: %s",
+            [(c.id, c.consort_id, c.name) for c in all_consortiums])
 
         consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
         if not consortium:
-            print(f"❌ No consortium found with consort_id='{consortium_id}'")
+            app.logger.warning("No consortium found with consort_id='%s'", consortium_id)
             return (
                 (
                     f"No consortium found with consort_id='{consortium_id}'. "
@@ -7071,7 +7055,7 @@ Southfield, MI  48075""",
                 404,
             )
 
-        print(f"✅ Found consortium: {consortium.name}")
+        app.logger.debug("Found consortium: %s", consortium.name)
 
         # Get existing positioning config or create default
         config = PDFPositioning.query.filter_by(

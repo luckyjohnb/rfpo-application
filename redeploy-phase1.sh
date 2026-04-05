@@ -151,6 +151,28 @@ API_FQDN=$(az containerapp show --name rfpo-api --resource-group "$RESOURCE_GROU
 ADMIN_FQDN=$(az containerapp show --name rfpo-admin --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
 USER_EXTRA_ENV="API_BASE_URL=https://${API_FQDN}/api ADMIN_API_URL=https://${ADMIN_FQDN}/api"
 
+# ── SAML SSO Configuration ──────────────────────────────────────────────
+# Reads the IdP certificate from config/saml/idp_cert.pem and ensures all
+# SAML env vars are set on rfpo-user so SSO survives container recreation.
+SAML_CERT_FILE="$(cd "$(dirname "$0")" && pwd)/config/saml/idp_cert.pem"
+if [ -f "$SAML_CERT_FILE" ]; then
+    echo -e "${YELLOW}🔑 Loading SAML IdP certificate from config/saml/idp_cert.pem...${NC}"
+    # Strip PEM headers and join into a single line (python3-saml expects raw base64)
+    SAML_CERT_VALUE=$(grep -v '^-----' "$SAML_CERT_FILE" | tr -d '\n')
+    SAML_ENV_VARS="SAML_ENABLED=true"
+    SAML_ENV_VARS="${SAML_ENV_VARS} SAML_SP_ENTITY_ID=https://rfpo.uscar.org"
+    SAML_ENV_VARS="${SAML_ENV_VARS} SAML_SP_ACS_URL=https://rfpo.uscar.org/saml/acs"
+    SAML_ENV_VARS="${SAML_ENV_VARS} SAML_SP_SLS_URL=https://rfpo.uscar.org/saml/sls"
+    SAML_ENV_VARS="${SAML_ENV_VARS} SAML_IDP_ENTITY_ID=https://sts.windows.net/3f59ba70-530a-4800-be1b-f5b04e0e15f7/"
+    SAML_ENV_VARS="${SAML_ENV_VARS} SAML_IDP_SSO_URL=https://login.microsoftonline.com/3f59ba70-530a-4800-be1b-f5b04e0e15f7/saml2"
+    SAML_ENV_VARS="${SAML_ENV_VARS} SAML_IDP_SLS_URL=https://login.microsoftonline.com/3f59ba70-530a-4800-be1b-f5b04e0e15f7/saml2"
+    SAML_ENV_VARS="${SAML_ENV_VARS} SAML_IDP_X509_CERT=${SAML_CERT_VALUE}"
+    USER_EXTRA_ENV="${USER_EXTRA_ENV} ${SAML_ENV_VARS}"
+    echo -e "${GREEN}✅ SAML SSO env vars will be applied to rfpo-user${NC}"
+else
+    echo -e "${YELLOW}⚠️  No SAML cert found at config/saml/idp_cert.pem — skipping SSO env vars${NC}"
+fi
+
 update_app_with_suffix_retry() {
     local app_name="$1"; shift
     local image_ref="$1"; shift
@@ -288,11 +310,11 @@ echo "  📊 Admin Panel:  https://$ADMIN_FQDN"
 echo "  👥 User App:     https://$USER_FQDN"
 echo "  🔌 API:          https://$API_FQDN"
 echo ""
-echo -e "${YELLOW}Test the improvements:${NC}"
-echo "  1. Login to Admin Panel: admin@rfpo.com / admin123"
-echo "  2. Check logs in Azure Portal (Container Apps → Logs)"
-echo "  3. Test error handling: visit /nonexistent on any app"
-echo "  4. Verify environment config loading from .env"
+echo -e "${YELLOW}Test the deployment:${NC}"
+echo "  1. Login to Admin Panel: https://$ADMIN_FQDN/login"
+echo "  2. Test SSO: https://$USER_FQDN (Sign in with Microsoft)"
+echo "  3. Check logs in Azure Portal (Container Apps → Logs)"
+echo "  4. Test error handling: visit /nonexistent on any app"
 echo ""
 echo -e "${BLUE}Monitor logs:${NC}"
 echo "  az containerapp logs show --name rfpo-admin --resource-group $RESOURCE_GROUP --follow"

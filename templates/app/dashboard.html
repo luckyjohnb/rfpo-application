@@ -28,7 +28,8 @@
 <!-- Statistics Cards -->
 <div class="row g-4 mb-4">
     <div class="col-md-3">
-        <div class="card bg-primary text-white">
+        <a href="{{ url_for('rfpos_list') }}" class="text-decoration-none">
+        <div class="card bg-primary text-white dashboard-stat-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
@@ -41,10 +42,12 @@
                 </div>
             </div>
         </div>
+        </a>
     </div>
 
     <div class="col-md-3">
-        <div class="card bg-success text-white">
+        <a href="{{ url_for('teams_list') }}" class="text-decoration-none">
+        <div class="card bg-success text-white dashboard-stat-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
@@ -57,10 +60,12 @@
                 </div>
             </div>
         </div>
+        </a>
     </div>
 
     <div class="col-md-3">
-        <div class="card bg-warning text-dark">
+        <a href="{{ url_for('rfpos_list') }}?status=pending" class="text-decoration-none">
+        <div class="card bg-warning text-dark dashboard-stat-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
@@ -73,10 +78,12 @@
                 </div>
             </div>
         </div>
+        </a>
     </div>
 
     <div class="col-md-3">
-        <div class="card bg-info text-white">
+        <a href="{{ url_for('rfpos_list') }}?status=completed" class="text-decoration-none">
+        <div class="card bg-info text-white dashboard-stat-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
@@ -89,6 +96,7 @@
                 </div>
             </div>
         </div>
+        </a>
     </div>
 </div>
 
@@ -314,6 +322,16 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+    .dashboard-stat-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+    }
+    .dashboard-stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    }
+</style>
 <script>
     async function loadDashboardData() {
         try {

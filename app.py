@@ -193,6 +193,13 @@ def create_user_app():
         if "auth_token" not in session:
             return redirect(url_for("login_page"))
 
+        # Only admins can create RFPOs
+        user_info = make_api_request("/auth/verify")
+        if user_info.get("authenticated"):
+            roles = user_info.get("user", {}).get("roles", [])
+            if "RFPO_ADMIN" not in roles and "GOD" not in roles:
+                return redirect(url_for("dashboard"))
+
         # Get teams for dropdown
         teams_response = make_api_request("/teams")
         teams = teams_response.get("teams", []) if teams_response.get("success") else []
@@ -205,7 +212,14 @@ def create_user_app():
         if "auth_token" not in session:
             return redirect(url_for("login_page"))
 
-        return render_template("app/rfpo_detail.html", rfpo_id=rfpo_id)
+        # Get user info for role-based UI
+        user_info = make_api_request("/auth/verify")
+        is_admin = False
+        if user_info.get("authenticated"):
+            roles = user_info.get("user", {}).get("roles", [])
+            is_admin = "RFPO_ADMIN" in roles or "GOD" in roles
+
+        return render_template("app/rfpo_detail.html", rfpo_id=rfpo_id, is_admin=is_admin)
 
     @app.route("/teams")
     def teams_list():

@@ -103,6 +103,11 @@ def list_rfpos():
 def create_rfpo():
     """Create new RFPO"""
     try:
+        # Only RFPO_ADMIN or GOD can create RFPOs
+        user_perms = request.current_user.get_permissions() or []
+        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required to create RFPOs"}), 403
+
         data = request.get_json()
 
         # Validate required fields - only title is required, team is optional
@@ -249,6 +254,11 @@ def get_rfpo_line_items(rfpo_id):
 def create_line_item(rfpo_id):
     """Create RFPO line item"""
     try:
+        # Only RFPO_ADMIN or GOD can create line items
+        user_perms = request.current_user.get_permissions() or []
+        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
         rfpo = RFPO.query.get_or_404(rfpo_id)
         data = request.get_json()
 
@@ -319,6 +329,11 @@ def create_line_item(rfpo_id):
 def update_line_item(rfpo_id, line_item_id):
     """Update RFPO line item"""
     try:
+        # Only RFPO_ADMIN or GOD can update line items
+        user_perms = request.current_user.get_permissions() or []
+        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
         rfpo = RFPO.query.get_or_404(rfpo_id)
         line_item = RFPOLineItem.query.get_or_404(line_item_id)
 
@@ -365,6 +380,11 @@ def update_line_item(rfpo_id, line_item_id):
 def delete_line_item(rfpo_id, line_item_id):
     """Delete RFPO line item"""
     try:
+        # Only RFPO_ADMIN or GOD can delete line items
+        user_perms = request.current_user.get_permissions() or []
+        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
         rfpo = RFPO.query.get_or_404(rfpo_id)
         line_item = RFPOLineItem.query.get_or_404(line_item_id)
 

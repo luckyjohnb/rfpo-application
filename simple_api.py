@@ -523,6 +523,9 @@ def get_approver_rfpos():
         )
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Approver RFPOs error for user {request.current_user.record_id}: {e}", flush=True)
         return jsonify({"success": False, "message": str(e)}), 500
 
 
@@ -1060,6 +1063,11 @@ def list_rfpos():
 def create_rfpo():
     """Create new RFPO"""
     try:
+        # Only RFPO_ADMIN or GOD can create RFPOs
+        user_perms = request.current_user.get_permissions() or []
+        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required to create RFPOs"}), 403
+
         data = request.get_json()
 
         # Validate required fields
@@ -1451,17 +1459,11 @@ def add_line_item(rfpo_id):
         rfpo = RFPO.query.get_or_404(rfpo_id)
         data = request.get_json()
 
-        # Check permissions
+        # Only RFPO_ADMIN or GOD can add line items
         user = request.current_user
-        if not user.is_super_admin():
-            has_access = False
-            user_teams = user.get_teams()
-            team_ids = [team.id for team in user_teams]
-            if rfpo.team_id in team_ids:
-                has_access = True
-
-            if not has_access:
-                return jsonify({"success": False, "message": "Access denied"}), 403
+        user_perms = user.get_permissions() or []
+        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
 
         # Get next line number
         max_line = (
@@ -1538,17 +1540,11 @@ def delete_line_item(rfpo_id, line_item_id):
                 400,
             )
 
-        # Check permissions
+        # Only RFPO_ADMIN or GOD can delete line items
         user = request.current_user
-        if not user.is_super_admin():
-            has_access = False
-            user_teams = user.get_teams()
-            team_ids = [team.id for team in user_teams]
-            if rfpo.team_id in team_ids:
-                has_access = True
-
-            if not has_access:
-                return jsonify({"success": False, "message": "Access denied"}), 403
+        user_perms = user.get_permissions() or []
+        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
 
         db.session.delete(line_item)
 
@@ -1607,17 +1603,11 @@ def update_line_item(rfpo_id, line_item_id):
                 400,
             )
 
-        # Check permissions
+        # Only RFPO_ADMIN or GOD can update line items
         user = request.current_user
-        if not user.is_super_admin():
-            has_access = False
-            user_teams = user.get_teams()
-            team_ids = [team.id for team in user_teams]
-            if rfpo.team_id in team_ids:
-                has_access = True
-
-            if not has_access:
-                return jsonify({"success": False, "message": "Access denied"}), 403
+        user_perms = user.get_permissions() or []
+        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
 
         data = request.get_json()
 

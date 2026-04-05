@@ -155,9 +155,11 @@
                         <i class="fas fa-receipt"></i> Line Items
                         <span class="badge bg-secondary ms-2" id="lineItemCount">0</span>
                     </h5>
+                    {% if is_admin %}
                     <button class="btn btn-primary btn-sm" onclick="showAddLineItemModal()" id="addLineItemBtn">
                         <i class="fas fa-plus"></i> Add Line Item
                     </button>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     <div id="lineItemsContent">
@@ -283,6 +285,7 @@
 {% block extra_js %}
 <script>
     const rfpoId = {{ rfpo_id }};
+    const isAdmin = {{ 'true' if is_admin else 'false' }};
     let currentRfpo = null;
 
     async function loadRfpoDetails() {
@@ -688,12 +691,14 @@
                     ${item.is_capital_equipment ? '<span class="badge bg-warning">YES</span>' : '<span class="badge bg-secondary">NO</span>'}
                 </td>
                 <td>
+                    ${isAdmin ? `
                     <button class="btn btn-outline-primary btn-sm me-1" onclick="editLineItem(${item.id})" title="Edit">
                         <i class="fas fa-edit"></i>
                     </button>
                     <button class="btn btn-outline-danger btn-sm" onclick="confirmDeleteLineItem(${item.id}, ${item.line_number})" title="Delete">
                         <i class="fas fa-trash"></i>
                     </button>
+                    ` : ''}
                 </td>
             </tr>
         `).join('');
@@ -709,7 +714,7 @@
                             <th scope="col" class="text-end">Unit Price</th>
                             <th scope="col" class="text-end">Total</th>
                             <th scope="col">Capital</th>
-                            <th scope="col">Actions</th>
+                            ${isAdmin ? '<th scope="col">Actions</th>' : ''}
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>

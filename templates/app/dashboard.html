@@ -93,7 +93,7 @@
 </div>
 
 <!-- Quick Actions -->
-{% if has_rfpo_access %}
+{% if dashboard_type == 'admin' %}
 <div class="row mb-4">
     <div class="col">
         <div class="card">
@@ -133,8 +133,85 @@
         </div>
     </div>
 </div>
+{% elif dashboard_type == 'approver' %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bolt"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('approvals') }}" class="btn btn-warning btn-lg w-100">
+                            <i class="fas fa-clipboard-check"></i><br>
+                            My Approvals
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
+                            <i class="fas fa-list"></i><br>
+                            View RFPOs
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                            <i class="fas fa-users"></i><br>
+                            Explore Teams
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('profile') }}" class="btn btn-outline-info btn-lg w-100">
+                            <i class="fas fa-user-cog"></i><br>
+                            Profile Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% elif dashboard_type == 'profile_only' %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-info">
+            <div class="card-header bg-info bg-opacity-10">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bolt"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    Your account is set up. Browse RFPOs assigned to your teams or update your profile.
+                </p>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
+                            <i class="fas fa-list"></i><br>
+                            View RFPOs
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                            <i class="fas fa-users"></i><br>
+                            Explore Teams
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('profile') }}" class="btn btn-outline-info btn-lg w-100">
+                            <i class="fas fa-user-cog"></i><br>
+                            Profile Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% else %}
-<!-- Limited Access Actions -->
+<!-- Limited Access / No Access -->
 <div class="row mb-4">
     <div class="col">
         <div class="card border-warning">
@@ -145,7 +222,7 @@
             </div>
             <div class="card-body">
                 <p class="text-muted mb-3">
-                    You have system permissions but are not assigned to any teams, projects, or consortiums. 
+                    Your account is set up, but you are not yet assigned to any teams or consortiums.
                     Contact your administrator to be added to the appropriate groups.
                 </p>
                 <div class="row g-3">

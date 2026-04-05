@@ -429,6 +429,9 @@ def get_user_approver_rfpos():
         })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Approver RFPOs error for user {request.current_user.record_id}: {e}", flush=True)
         return jsonify({"success": False, "message": str(e)}), 500
 
 

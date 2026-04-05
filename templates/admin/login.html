@@ -48,6 +48,19 @@
                         </button>
                     </form>
 
+                    {% if saml_enabled %}
+                    <div class="text-center mb-3">
+                        <span class="text-muted">— or —</span>
+                    </div>
+                    <a href="{{ url_for('saml_login') }}" class="btn btn-outline-primary w-100 mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 23 23" class="me-2" style="vertical-align: text-bottom;">
+                            <path fill="#f35325" d="M1 1h10v10H1z"/><path fill="#81bc06" d="M12 1h10v10H12z"/>
+                            <path fill="#05a6f0" d="M1 12h10v10H1z"/><path fill="#ffba08" d="M12 12h10v10H12z"/>
+                        </svg>
+                        Sign in with Microsoft
+                    </a>
+                    {% endif %}
+
                     <div class="text-center">
                         <small class="text-muted">
                             RFPO Administration

@@ -1464,7 +1464,97 @@ def create_app():
                 )
                 flash("❌ Invalid email or password.", "error")
 
-        return render_template("admin/login.html")
+        from auth_saml import is_saml_enabled
+        return render_template("admin/login.html", saml_enabled=is_saml_enabled())
+
+    # ─── SAML SSO Routes (Admin) ─────────────────────────────────────────
+
+    @app.route("/auth/login-microsoft")
+    def saml_login():
+        """Initiate SAML SSO flow for admin panel."""
+        from auth_saml import is_saml_enabled, init_saml_auth
+
+        if not is_saml_enabled():
+            return redirect(url_for("login"))
+
+        auth = init_saml_auth(request)
+        return_to = request.args.get("next", url_for("dashboard"))
+        sso_url = auth.login(return_to=return_to)
+        return redirect(sso_url)
+
+    @app.route("/saml/acs", methods=["POST"])
+    @csrf.exempt
+    def saml_acs():
+        """Assertion Consumer Service — receives SAML Response from Entra."""
+        from auth_saml import is_saml_enabled, init_saml_auth, extract_user_attributes
+
+        if not is_saml_enabled():
+            return "SAML SSO is not enabled", 403
+
+        auth = init_saml_auth(request)
+        auth.process_response()
+        errors = auth.get_errors()
+
+        if errors:
+            error_reason = auth.get_last_error_reason()
+            logger.error(f"SAML ACS validation failed: {errors} — {error_reason}")
+            flash("❌ SSO authentication failed. Please contact your administrator.", "error")
+            return redirect(url_for("login"))
+
+        if not auth.is_authenticated():
+            flash("❌ Authentication was not completed.", "error")
+            return redirect(url_for("login"))
+
+        user_attrs = extract_user_attributes(auth)
+        email = user_attrs.get("email")
+
+        if not email:
+            logger.error("SAML assertion missing email/NameID")
+            flash("❌ SSO response did not include an email address.", "error")
+            return redirect(url_for("login"))
+
+        # Match to local user by email — must be active and have admin privileges
+        user = User.query.filter(
+            db.func.lower(User.email) == email.lower(),
+            User.active == True,
+        ).first()
+
+        if not user:
+            logger.warning(f"SAML admin login blocked — no user for {email}")
+            flash("❌ Your account has not been set up in RFPO. Contact your administrator.", "error")
+            return redirect(url_for("login"))
+
+        if not (user.is_super_admin() or user.is_rfpo_admin()):
+            logger.warning(f"SAML admin login blocked — {email} has no admin privileges")
+            flash("❌ You do not have admin privileges.", "error")
+            return redirect(url_for("login"))
+
+        # Store Entra Object ID on first SSO login
+        name_id = user_attrs.get("name_id", "")
+        if not user.entra_oid and name_id:
+            user.entra_oid = name_id
+            db.session.commit()
+
+        login_user(user)
+        record_audit("login", "user", user.id, {"email": user.email, "method": "sso"})
+        db.session.commit()
+        flash(f"Welcome {user.get_display_name()}! 🎉", "success")
+
+        relay_state = request.form.get("RelayState", "")
+        if relay_state and relay_state != url_for("saml_login") and not relay_state.startswith("http"):
+            return redirect(relay_state)
+        return redirect(url_for("dashboard"))
+
+    @app.route("/saml/metadata")
+    def saml_metadata():
+        """Serve SP metadata XML."""
+        from auth_saml import is_saml_enabled, get_sp_metadata
+
+        if not is_saml_enabled():
+            return "SAML SSO is not enabled", 404
+
+        metadata = get_sp_metadata()
+        return Response(metadata, mimetype="text/xml")
 
     @app.route("/logout")
     @login_required

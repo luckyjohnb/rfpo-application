@@ -168,7 +168,16 @@ if [ -f "$SAML_CERT_FILE" ]; then
     SAML_ENV_VARS="${SAML_ENV_VARS} SAML_IDP_SLS_URL=https://login.microsoftonline.com/3f59ba70-530a-4800-be1b-f5b04e0e15f7/saml2"
     SAML_ENV_VARS="${SAML_ENV_VARS} SAML_IDP_X509_CERT=${SAML_CERT_VALUE}"
     USER_EXTRA_ENV="${USER_EXTRA_ENV} ${SAML_ENV_VARS}"
-    echo -e "${GREEN}✅ SAML SSO env vars will be applied to rfpo-user${NC}"
+    # Admin app uses its own SP URLs (rfpo-admin.uscar.org)
+    ADMIN_SAML_ENV_VARS="SAML_ENABLED=true"
+    ADMIN_SAML_ENV_VARS="${ADMIN_SAML_ENV_VARS} SAML_SP_ENTITY_ID=https://rfpo-admin.uscar.org"
+    ADMIN_SAML_ENV_VARS="${ADMIN_SAML_ENV_VARS} SAML_SP_ACS_URL=https://rfpo-admin.uscar.org/saml/acs"
+    ADMIN_SAML_ENV_VARS="${ADMIN_SAML_ENV_VARS} SAML_SP_SLS_URL=https://rfpo-admin.uscar.org/saml/sls"
+    ADMIN_SAML_ENV_VARS="${ADMIN_SAML_ENV_VARS} SAML_IDP_ENTITY_ID=https://sts.windows.net/3f59ba70-530a-4800-be1b-f5b04e0e15f7/"
+    ADMIN_SAML_ENV_VARS="${ADMIN_SAML_ENV_VARS} SAML_IDP_SSO_URL=https://login.microsoftonline.com/3f59ba70-530a-4800-be1b-f5b04e0e15f7/saml2"
+    ADMIN_SAML_ENV_VARS="${ADMIN_SAML_ENV_VARS} SAML_IDP_SLS_URL=https://login.microsoftonline.com/3f59ba70-530a-4800-be1b-f5b04e0e15f7/saml2"
+    ADMIN_SAML_ENV_VARS="${ADMIN_SAML_ENV_VARS} SAML_IDP_X509_CERT=${SAML_CERT_VALUE}"
+    echo -e "${GREEN}✅ SAML SSO env vars will be applied to rfpo-user and rfpo-admin${NC}"
 else
     echo -e "${YELLOW}⚠️  No SAML cert found at config/saml/idp_cert.pem — skipping SSO env vars${NC}"
 fi
@@ -263,7 +272,8 @@ update_app_with_suffix_retry \
     "rfpo-admin" \
     "$ACR_LOGIN_SERVER/rfpo-admin@${rfpo_admin_DIGEST}" \
     "${rfpo_admin_GIT_HEAD}" \
-    "admin-${rfpo_admin_GIT_SHORT}"
+    "admin-${rfpo_admin_GIT_SHORT}" \
+    "${ADMIN_SAML_ENV_VARS:-}"
 
 # Update User Container App (with retry on suffix collision)
 update_app_with_suffix_retry \

@@ -145,7 +145,7 @@ def create_user_app():
                 return redirect(url_for("first_login_password_reset"))
 
         # Get recent RFPOs
-        rfpos_response = make_api_request("/rfpos?per_page=5")
+        rfpos_response = make_api_request("/rfpos")
         recent_rfpos = (
             rfpos_response.get("rfpos", []) if rfpos_response.get("success") else []
         )

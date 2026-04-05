@@ -2,6 +2,15 @@
 
 {% block title %}Teams - RFPO Application{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Teams</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-6">
@@ -59,7 +68,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Pagination -->
         <nav id="paginationContainer" style="display: none;">
             <ul class="pagination justify-content-center">
@@ -78,17 +87,18 @@
 
     async function loadTeams(page = 1) {
         try {
-            showLoading(true);
-            
+            const container = document.getElementById('teamsContainer');
+            renderSkeletons(container, 6, 'card');
+
             // Build query parameters
             const params = new URLSearchParams({
                 page: page,
-                per_page: 12,
+                per_page: 50,
                 ...currentFilters
             });
-            
+
             const response = await makeApiCall(`/api/teams?${params}`);
-            
+
             if (response.success) {
                 displayTeams(response.teams);
                 updatePagination(response.page || 1, response.pages || 1, response.total || response.teams.length);
@@ -113,7 +123,7 @@
 
     function displayTeams(teams) {
         const container = document.getElementById('teamsContainer');
-        
+
         if (teams.length === 0) {
             container.innerHTML = `
                 <div class="text-center py-4">
@@ -159,25 +169,25 @@
     function updatePagination(page, pages, total) {
         currentPage = page;
         totalPages = pages;
-        
+
         const container = document.getElementById('paginationContainer');
-        
+
         if (pages <= 1) {
             container.style.display = 'none';
             return;
         }
-        
+
         container.style.display = 'block';
-        
+
         let paginationHTML = '';
-        
+
         // Previous button
         paginationHTML += `
             <li class="page-item ${page <= 1 ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="loadTeams(${page - 1})">Previous</a>
             </li>
         `;
-        
+
         // Page numbers
         for (let i = 1; i <= pages; i++) {
             if (i === page) {
@@ -188,14 +198,14 @@
                 paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
             }
         }
-        
+
         // Next button
         paginationHTML += `
             <li class="page-item ${page >= pages ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="loadTeams(${page + 1})">Next</a>
             </li>
         `;
-        
+
         container.querySelector('.pagination').innerHTML = paginationHTML;
     }
 
@@ -222,15 +232,15 @@
     // Event listeners
     document.getElementById('filterForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        
+
         currentFilters = {};
-        
+
         const search = document.getElementById('searchInput').value.trim();
         if (search) currentFilters.search = search;
-        
+
         const consortium = document.getElementById('consortiumFilter').value;
         if (consortium) currentFilters.consortium_id = consortium;
-        
+
         loadTeams(1);
     });
 
@@ -244,7 +254,7 @@
     .team-card {
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    
+
     .team-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);

@@ -2,6 +2,15 @@
 
 {% block title %}RFPOs - RFPO Application{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">RFPOs</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-6">
@@ -71,7 +80,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Pagination -->
         <nav id="paginationContainer" style="display: none;">
             <ul class="pagination justify-content-center">
@@ -90,17 +99,18 @@
 
     async function loadRfpos(page = 1) {
         try {
-            showLoading(true);
-            
+            const container = document.getElementById('rfposContainer');
+            renderSkeletons(container, 5, 'list');
+
             // Build query parameters
             const params = new URLSearchParams({
                 page: page,
-                per_page: 10,
+                per_page: 50,
                 ...currentFilters
             });
-            
+
             const response = await makeApiCall(`/api/rfpos?${params}`);
-            
+
             if (response.success) {
                 displayRfpos(response.rfpos);
                 updatePagination(response.page, response.pages, response.total);
@@ -125,11 +135,11 @@
 
     function displayRfpos(rfpos) {
         const container = document.getElementById('rfposContainer');
-        
+
         if (rfpos.length === 0) {
             // Check if filters are applied
             const hasFilters = Object.keys(currentFilters).length > 0;
-            
+
             if (hasFilters) {
                 container.innerHTML = `
                     <div class="text-center py-4">
@@ -148,7 +158,7 @@
                         <h5 class="text-muted mb-3">No RFPOs Available</h5>
                         <p class="text-muted mb-3">You don't have access to any RFPOs yet.</p>
                         <p class="small text-muted mb-4">
-                            To access RFPOs, you need to be assigned to teams, projects, or consortiums. 
+                            To access RFPOs, you need to be assigned to teams, projects, or consortiums.
                             Please contact your system administrator to be added to the appropriate groups.
                         </p>
                         <div class="mt-3">
@@ -169,7 +179,7 @@
             const statusBadge = getStatusBadge(rfpo.status);
             const createdDate = new Date(rfpo.created_at).toLocaleDateString();
             const dueDate = rfpo.due_date ? new Date(rfpo.due_date).toLocaleDateString() : 'Not set';
-            
+
             return `
                 <div class="border-bottom pb-3 mb-3">
                     <div class="row align-items-center">
@@ -180,11 +190,11 @@
                                 </a>
                             </h6>
                             <p class="text-muted small mb-1">
-                                <strong>ID:</strong> ${escapeHtml(rfpo.rfpo_id)} | 
+                                <strong>ID:</strong> ${escapeHtml(rfpo.rfpo_id)} |
                                 <strong>Created:</strong> ${createdDate}
                             </p>
                             <p class="text-muted small mb-0">
-                                <strong>Due:</strong> ${dueDate} | 
+                                <strong>Due:</strong> ${dueDate} |
                                 <strong>Vendor:</strong> ${escapeHtml(rfpo.vendor || 'Not specified')}
                             </p>
                         </div>
@@ -196,7 +206,7 @@
                                 <a href="/rfpos/${rfpo.id}" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
                                         data-bs-toggle="dropdown">
                                     <i class="fas fa-ellipsis-v"></i>
                                 </button>
@@ -205,7 +215,7 @@
                                         <i class="fas fa-edit"></i> Edit
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item text-danger" href="#" 
+                                    <li><a class="dropdown-item text-danger" href="#"
                                            onclick="deleteRfpo(${rfpo.id}, '${rfpo.title}')">
                                         <i class="fas fa-trash"></i> Delete
                                     </a></li>
@@ -230,7 +240,7 @@
             'Rejected': 'bg-danger',
             'Cancelled': 'bg-dark'
         };
-        
+
         const badgeClass = statusClasses[status] || 'bg-secondary';
         return `<span class="badge ${badgeClass}">${status}</span>`;
     }
@@ -238,25 +248,25 @@
     function updatePagination(page, pages, total) {
         currentPage = page;
         totalPages = pages;
-        
+
         const container = document.getElementById('paginationContainer');
-        
+
         if (pages <= 1) {
             container.style.display = 'none';
             return;
         }
-        
+
         container.style.display = 'block';
-        
+
         let paginationHTML = '';
-        
+
         // Previous button
         paginationHTML += `
             <li class="page-item ${page <= 1 ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="loadRfpos(${page - 1})">Previous</a>
             </li>
         `;
-        
+
         // Page numbers
         for (let i = 1; i <= pages; i++) {
             if (i === page) {
@@ -267,14 +277,14 @@
                 paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
             }
         }
-        
+
         // Next button
         paginationHTML += `
             <li class="page-item ${page >= pages ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="loadRfpos(${page + 1})">Next</a>
             </li>
         `;
-        
+
         container.querySelector('.pagination').innerHTML = paginationHTML;
     }
 
@@ -320,18 +330,18 @@
     // Event listeners
     document.getElementById('filterForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        
+
         currentFilters = {};
-        
+
         const search = document.getElementById('searchInput').value.trim();
         if (search) currentFilters.search = search;
-        
+
         const status = document.getElementById('statusFilter').value;
         if (status) currentFilters.status = status;
-        
+
         const team = document.getElementById('teamFilter').value;
         if (team) currentFilters.team_id = team;
-        
+
         loadRfpos(1);
     });
 

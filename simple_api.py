@@ -367,160 +367,94 @@ def saml_match():
 @app.route("/api/users/approver-rfpos", methods=["GET"])
 @require_auth
 def get_approver_rfpos():
-    """Get RFPOs where current user is an approver"""
+    """Get RFPOs with pending approval actions for the current user"""
     try:
         from models import (
             RFPOApprovalInstance,
             RFPOApprovalAction,
-            Project,
-            Consortium,
-            Vendor,
         )
 
         user = request.current_user
 
-        # Find RFPOs where user is an approver through approval actions
-        user_actions = RFPOApprovalAction.query.filter_by(
-            approver_id=user.record_id
+        # Find all pending actions assigned to this user (primary approver)
+        pending_actions = RFPOApprovalAction.query.filter_by(
+            approver_id=user.record_id,
+            status="pending",
         ).all()
 
-        rfpo_data = []
-        seen_rfpo_ids = set()
+        # Also find actions where user is backup approver (from instance snapshots)
+        all_active_instances = RFPOApprovalInstance.query.filter(
+            RFPOApprovalInstance.overall_status.in_(["waiting", "draft"]),
+        ).all()
 
-        for action in user_actions:
-            if (
-                action.instance
-                and action.instance.rfpo
-                and action.instance.rfpo.id not in seen_rfpo_ids
-            ):
-                rfpo = action.instance.rfpo
-                instance = action.instance
+        backup_action_ids = set()
+        for inst in all_active_instances:
+            try:
+                data = inst.get_instance_data()
+                for phase in data.get("phases", []):
+                    stage = phase.get("stage", {})
+                    for step in stage.get("steps", []):
+                        if step.get("backup_approver_id") == user.record_id:
+                            for act in inst.actions:
+                                if (act.status == "pending"
+                                        and act.stage_order == stage.get("stage_order")
+                                        and act.step_order == step.get("step_order")):
+                                    backup_action_ids.add(act.id)
+            except Exception:
+                continue
 
-                # Get related data
-                project = Project.query.filter_by(project_id=rfpo.project_id).first()
-                consortium = Consortium.query.filter_by(
-                    consort_id=rfpo.consortium_id
-                ).first()
-                vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+        # Merge primary + backup actions
+        if backup_action_ids:
+            extra_actions = RFPOApprovalAction.query.filter(
+                RFPOApprovalAction.id.in_(backup_action_ids),
+            ).all()
+            all_actions = list(pending_actions) + [
+                a for a in extra_actions if a.id not in {pa.id for pa in pending_actions}
+            ]
+        else:
+            all_actions = list(pending_actions)
 
-                # Get user's specific action for this RFPO
-                user_action = action
-
-                rfpo_info = {
-                    "id": rfpo.id,
-                    "rfpo_id": rfpo.rfpo_id,
-                    "title": rfpo.title,
-                    "description": rfpo.description,
-                    "total_amount": float(rfpo.total_amount or 0),
-                    "status": rfpo.status,
-                    "created_at": (
-                        rfpo.created_at.isoformat() if rfpo.created_at else None
-                    ),
-                    "created_by": rfpo.created_by,
-                    # Project info
-                    "project": (
-                        {
-                            "id": project.project_id if project else None,
-                            "name": project.name if project else None,
-                            "ref": project.ref if project else None,
-                        }
-                        if project
-                        else None
-                    ),
-                    # Consortium info
-                    "consortium": (
-                        {
-                            "id": consortium.consort_id if consortium else None,
-                            "name": consortium.name if consortium else None,
-                            "abbrev": consortium.abbrev if consortium else None,
-                        }
-                        if consortium
-                        else None
-                    ),
-                    # Vendor info
-                    "vendor": (
-                        {
-                            "id": vendor.id if vendor else None,
-                            "company_name": vendor.company_name if vendor else None,
-                        }
-                        if vendor
-                        else None
-                    ),
-                    # Approval info
-                    "approval_instance": {
-                        "instance_id": instance.instance_id,
-                        "workflow_name": instance.workflow_name,
-                        "overall_status": instance.overall_status,
-                        "current_stage_order": instance.current_stage_order,
-                        "current_step_order": instance.current_step_order,
-                        "submitted_at": (
-                            instance.submitted_at.isoformat()
-                            if instance.submitted_at
-                            else None
-                        ),
-                        "completed_at": (
-                            instance.completed_at.isoformat()
-                            if instance.completed_at
-                            else None
-                        ),
-                    },
-                    # User's specific action
-                    "user_action": {
-                        "action_id": user_action.action_id,
-                        "step_name": user_action.step_name,
-                        "stage_name": user_action.stage_name,
-                        "status": user_action.status,
-                        "assigned_at": (
-                            user_action.assigned_at.isoformat()
-                            if user_action.assigned_at
-                            else None
-                        ),
-                        "completed_at": (
-                            user_action.completed_at.isoformat()
-                            if user_action.completed_at
-                            else None
-                        ),
-                        "comments": user_action.comments,
-                        "approval_type": user_action.approval_type_key,
-                    },
+        # Build response grouped by RFPO
+        rfpo_map = {}
+        for action in all_actions:
+            instance = RFPOApprovalInstance.query.get(action.instance_id)
+            if not instance or not instance.rfpo:
+                continue
+            rfpo = instance.rfpo
+            if rfpo.id not in rfpo_map:
+                rfpo_map[rfpo.id] = {
+                    "rfpo": rfpo.to_dict(),
+                    "instance": instance.to_dict(),
+                    "pending_actions": [],
                 }
+            rfpo_map[rfpo.id]["pending_actions"].append(action.to_dict())
 
-                rfpo_data.append(rfpo_info)
-                seen_rfpo_ids.add(rfpo.id)
+        rfpos_list = list(rfpo_map.values())
 
-        # Categorize RFPOs by status for dashboard
-        categorized_rfpos = {
-            "pending": [
-                r for r in rfpo_data if r["user_action"]["status"] == "pending"
-            ],
-            "approved": [
-                r for r in rfpo_data if r["user_action"]["status"] == "approved"
-            ],
-            "rejected": [
-                r for r in rfpo_data if r["user_action"]["status"] == "refused"
-            ],
-            "waiting": [
-                r
-                for r in rfpo_data
-                if r["approval_instance"]["overall_status"] == "waiting"
-                and r["user_action"]["status"] != "pending"
-            ],
-        }
+        # Also fetch completed actions for this user
+        completed_actions = RFPOApprovalAction.query.filter(
+            RFPOApprovalAction.approver_id == user.record_id,
+            RFPOApprovalAction.status.in_(["approved", "conditional"]),
+        ).all()
+        refused_actions = RFPOApprovalAction.query.filter_by(
+            approver_id=user.record_id,
+            status="refused",
+        ).all()
 
-        return jsonify(
-            {
-                "success": True,
-                "rfpos": rfpo_data,
-                "categorized": categorized_rfpos,
-                "summary": {
-                    "total": len(rfpo_data),
-                    "pending": len(categorized_rfpos["pending"]),
-                    "approved": len(categorized_rfpos["approved"]),
-                    "rejected": len(categorized_rfpos["rejected"]),
-                    "waiting": len(categorized_rfpos["waiting"]),
-                },
-            }
-        )
+        # Summary counts
+        total_pending = len(all_actions)
+        total_rfpos = len(rfpos_list)
+
+        return jsonify({
+            "success": True,
+            "rfpos": rfpos_list,
+            "summary": {
+                "total": total_rfpos,
+                "pending": total_pending,
+                "completed": len(completed_actions),
+                "refused": len(refused_actions),
+            },
+        })
 
     except Exception as e:
         import traceback

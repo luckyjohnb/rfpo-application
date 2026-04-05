@@ -23,7 +23,7 @@
 
 <!-- Summary Cards -->
 <div class="row g-4 mb-4">
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="card bg-warning text-white">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
@@ -38,7 +38,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="card bg-primary text-white">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
@@ -48,21 +48,6 @@
                     </div>
                     <div class="align-self-center">
                         <i class="fas fa-file-invoice fa-2x opacity-75"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h5 class="card-title">Approver Status</h5>
-                        <h2 class="mb-0"><i class="fas fa-user-check"></i></h2>
-                    </div>
-                    <div class="align-self-center">
-                        <span class="badge bg-light text-dark" id="approverBadge">Checking...</span>
                     </div>
                 </div>
             </div>
@@ -218,8 +203,6 @@
             // Update summary cards
             document.getElementById('pendingCount').textContent = data.summary.pending || 0;
             document.getElementById('rfpoCount').textContent = data.summary.total || 0;
-            document.getElementById('approverBadge').textContent = 'Active';
-            document.getElementById('approverBadge').className = 'badge bg-success';
 
             if (!data.rfpos || data.rfpos.length === 0) {
                 container.innerHTML = `

@@ -616,7 +616,44 @@ def take_approval_action(action_id):
                 instance.rfpo.updated_by = user.get_display_name()
 
         instance.updated_at = datetime.utcnow()
+
+        # Audit trail
+        from models import AuditLog
+        audit = AuditLog(
+            user_id=user.id,
+            user_email=user.email,
+            action=status,
+            entity_type="rfpo_approval",
+            entity_id=str(instance.rfpo_id),
+            ip_address=request.remote_addr,
+        )
+        audit.set_details({
+            "action_id": action.action_id,
+            "step_name": action.step_name,
+            "stage_name": action.stage_name,
+            "comments": comments,
+            "conditions": conditions if status == "conditional" else None,
+            "instance_status": instance.overall_status,
+        })
+        db.session.add(audit)
+
         db.session.commit()
+
+        # Send email notifications (non-blocking)
+        try:
+            from email_service import send_approval_notification
+            # Notify requestor if workflow completed
+            if instance.overall_status in ("approved", "refused") and instance.rfpo:
+                requestor = User.query.filter_by(
+                    record_id=instance.rfpo.created_by_id
+                ).first() if hasattr(instance.rfpo, 'created_by_id') else None
+                if requestor and requestor.email:
+                    send_approval_notification(
+                        requestor.email, requestor.get_display_name(),
+                        instance.rfpo.rfpo_id, f"RFPO {instance.overall_status.title()}"
+                    )
+        except Exception:
+            pass  # Email failure should not block the response
 
         return jsonify(
             {
@@ -869,7 +906,42 @@ def submit_for_approval(rfpo_id):
         rfpo.updated_by = user.get_display_name()
         rfpo.updated_at = datetime.utcnow()
 
+        # Audit trail
+        from models import AuditLog
+        audit = AuditLog(
+            user_id=user.id,
+            user_email=user.email,
+            action="submit_for_approval",
+            entity_type="rfpo",
+            entity_id=str(rfpo.id),
+            ip_address=request.remote_addr,
+        )
+        audit.set_details({
+            "rfpo_id": rfpo.rfpo_id,
+            "workflow_name": workflow.name,
+            "instance_id": instance.instance_id,
+            "total_amount": rfpo_total,
+        })
+        db.session.add(audit)
+
         db.session.commit()
+
+        # Send email notifications to first approver(s) (non-blocking)
+        try:
+            from email_service import send_approval_notification
+            first_stage = stages_data[0] if stages_data else None
+            if first_stage:
+                for step_data in first_stage["steps"]:
+                    approver = User.query.filter_by(
+                        record_id=step_data["primary_approver_id"], active=True
+                    ).first()
+                    if approver and approver.email:
+                        send_approval_notification(
+                            approver.email, approver.get_display_name(),
+                            rfpo.rfpo_id, step_data["approval_type_name"]
+                        )
+        except Exception:
+            pass  # Email failure should not block the response
 
         return jsonify({
             "success": True,
@@ -880,6 +952,192 @@ def submit_for_approval(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/rfpos/<int:rfpo_id>/withdraw-approval", methods=["POST"])
+@require_auth
+def withdraw_approval(rfpo_id):
+    """Withdraw an RFPO from the approval process - admin only"""
+    try:
+        from models import RFPOApprovalInstance, AuditLog
+
+        user = request.current_user
+        user_perms = user.get_permissions() or []
+        if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+
+        if rfpo.status not in ("Pending Approval",):
+            return jsonify({
+                "success": False,
+                "message": f"Cannot withdraw RFPO with status '{rfpo.status}'"
+            }), 400
+
+        instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+        if not instance:
+            return jsonify({
+                "success": False, "message": "No approval instance found"
+            }), 404
+
+        # Delete the instance (cascades to actions)
+        db.session.delete(instance)
+
+        # Reset RFPO status to Draft
+        rfpo.status = "Draft"
+        rfpo.updated_by = user.get_display_name()
+        rfpo.updated_at = datetime.utcnow()
+
+        # Audit trail
+        audit = AuditLog(
+            user_id=user.id,
+            user_email=user.email,
+            action="withdraw_approval",
+            entity_type="rfpo",
+            entity_id=str(rfpo.id),
+            ip_address=request.remote_addr,
+        )
+        audit.set_details({
+            "rfpo_id": rfpo.rfpo_id,
+            "instance_id": instance.instance_id,
+            "reason": request.get_json().get("reason", "") if request.is_json else "",
+        })
+        db.session.add(audit)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Approval withdrawn. RFPO returned to Draft status.",
+            "rfpo_status": rfpo.status,
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/users/reassign-approval/<action_id>", methods=["POST"])
+@require_auth
+def reassign_approval_action(action_id):
+    """Reassign a pending approval action to a different user - GOD/admin only"""
+    try:
+        from models import RFPOApprovalAction, AuditLog
+
+        user = request.current_user
+        user_perms = user.get_permissions() or []
+        if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
+        data = request.get_json()
+        new_approver_id = data.get("new_approver_id")
+        reason = data.get("reason", "")
+
+        if not new_approver_id:
+            return jsonify({
+                "success": False, "message": "new_approver_id is required"
+            }), 400
+
+        action = RFPOApprovalAction.query.filter_by(action_id=action_id).first()
+        if not action:
+            return jsonify({"success": False, "message": "Action not found"}), 404
+
+        if action.status != "pending":
+            return jsonify({
+                "success": False, "message": "Can only reassign pending actions"
+            }), 400
+
+        new_approver = User.query.filter_by(
+            record_id=new_approver_id, active=True
+        ).first()
+        if not new_approver:
+            return jsonify({
+                "success": False, "message": "New approver not found or inactive"
+            }), 404
+
+        old_approver_id = action.approver_id
+        old_approver_name = action.approver_name
+
+        # Reassign
+        action.approver_id = new_approver.record_id
+        action.approver_name = new_approver.get_display_name()
+        action.assigned_at = datetime.utcnow()
+        action.updated_at = datetime.utcnow()
+
+        # Audit trail
+        audit = AuditLog(
+            user_id=user.id,
+            user_email=user.email,
+            action="reassign_approval",
+            entity_type="rfpo_approval",
+            entity_id=str(action.instance.rfpo_id),
+            ip_address=request.remote_addr,
+        )
+        audit.set_details({
+            "action_id": action.action_id,
+            "step_name": action.step_name,
+            "old_approver_id": old_approver_id,
+            "old_approver_name": old_approver_name,
+            "new_approver_id": new_approver.record_id,
+            "new_approver_name": new_approver.get_display_name(),
+            "reason": reason,
+        })
+        db.session.add(audit)
+
+        db.session.commit()
+
+        # Notify new approver (non-blocking)
+        try:
+            from email_service import send_approval_notification
+            rfpo = action.instance.rfpo
+            if new_approver.email and rfpo:
+                send_approval_notification(
+                    new_approver.email, new_approver.get_display_name(),
+                    rfpo.rfpo_id, f"Reassigned: {action.step_name}"
+                )
+        except Exception:
+            pass
+
+        return jsonify({
+            "success": True,
+            "message": f"Action reassigned from {old_approver_name} to {new_approver.get_display_name()}",
+            "action": {
+                "action_id": action.action_id,
+                "approver_id": action.approver_id,
+                "approver_name": action.approver_name,
+            },
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/users", methods=["GET"])
+@require_auth
+def list_users():
+    """List active users - admin only (used for reassignment dropdowns)"""
+    try:
+        user = request.current_user
+        user_perms = user.get_permissions() or []
+        if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
+        users = User.query.filter_by(active=True).all()
+        return jsonify({
+            "success": True,
+            "users": [
+                {
+                    "record_id": u.record_id,
+                    "email": u.email,
+                    "display_name": u.get_display_name(),
+                    "active": u.active,
+                }
+                for u in users
+            ],
+        })
+    except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
 
@@ -1617,6 +1875,14 @@ def update_rfpo(rfpo_id):
         rfpo = RFPO.query.get_or_404(rfpo_id)
         data = request.get_json()
 
+        # Block edits if RFPO is in approval or already approved
+        locked_statuses = ("Pending Approval", "Approved", "Completed")
+        if rfpo.status in locked_statuses:
+            return jsonify({
+                "success": False,
+                "message": f"Cannot edit RFPO with status '{rfpo.status}'. Withdraw the approval first."
+            }), 400
+
         # Check permissions (same logic as GET)
         user = request.current_user
         if not user.is_super_admin():
@@ -1742,6 +2008,14 @@ def add_line_item(rfpo_id):
         rfpo = RFPO.query.get_or_404(rfpo_id)
         data = request.get_json()
 
+        # Block edits if RFPO is in approval or already approved
+        locked_statuses = ("Pending Approval", "Approved", "Completed")
+        if rfpo.status in locked_statuses:
+            return jsonify({
+                "success": False,
+                "message": f"Cannot modify line items while RFPO status is '{rfpo.status}'"
+            }), 400
+
         # Only RFPO_ADMIN or GOD can add line items
         user = request.current_user
         user_perms = user.get_permissions() or []
@@ -1810,6 +2084,15 @@ def delete_line_item(rfpo_id, line_item_id):
     """Delete line item from RFPO"""
     try:
         rfpo = RFPO.query.get_or_404(rfpo_id)
+
+        # Block edits if RFPO is in approval or already approved
+        locked_statuses = ("Pending Approval", "Approved", "Completed")
+        if rfpo.status in locked_statuses:
+            return jsonify({
+                "success": False,
+                "message": f"Cannot modify line items while RFPO status is '{rfpo.status}'"
+            }), 400
+
         line_item = RFPOLineItem.query.get_or_404(line_item_id)
 
         if line_item.rfpo_id != rfpo.id:
@@ -1873,6 +2156,15 @@ def update_line_item(rfpo_id, line_item_id):
     """Update a line item"""
     try:
         rfpo = RFPO.query.get_or_404(rfpo_id)
+
+        # Block edits if RFPO is in approval or already approved
+        locked_statuses = ("Pending Approval", "Approved", "Completed")
+        if rfpo.status in locked_statuses:
+            return jsonify({
+                "success": False,
+                "message": f"Cannot modify line items while RFPO status is '{rfpo.status}'"
+            }), 400
+
         line_item = RFPOLineItem.query.get_or_404(line_item_id)
 
         if line_item.rfpo_id != rfpo.id:

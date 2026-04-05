@@ -25,6 +25,9 @@
         <button class="btn btn-primary me-2" id="submitForApprovalBtn" style="display: none;" onclick="submitForApproval()">
             <i class="fas fa-paper-plane"></i> Submit for Approval
         </button>
+        <button class="btn btn-outline-danger me-2" id="withdrawApprovalBtn" style="display: none;" onclick="withdrawApproval()">
+            <i class="fas fa-undo"></i> Withdraw
+        </button>
         {% endif %}
         <a href="/rfpos" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Back to List
@@ -355,6 +358,12 @@
         if (isAdmin && (rfpo.status === 'Draft' || rfpo.status === 'Refused')) {
             const submitBtn = document.getElementById('submitForApprovalBtn');
             if (submitBtn) submitBtn.style.display = 'inline-block';
+        }
+
+        // Show Withdraw button (admin only, Pending Approval status)
+        if (isAdmin && rfpo.status === 'Pending Approval') {
+            const withdrawBtn = document.getElementById('withdrawApprovalBtn');
+            if (withdrawBtn) withdrawBtn.style.display = 'inline-block';
         }
 
         // Load files into RFPO Information section
@@ -892,6 +901,35 @@
                         setTimeout(() => window.location.reload(), 1500);
                     } else {
                         showAlert(response.message || 'Failed to submit for approval', 'danger');
+                    }
+                } catch (error) {
+                    showAlert(`Error: ${error.message}`, 'danger');
+                }
+            }
+        );
+    }
+
+    // ─── Withdraw Approval ────────────────────────────────────────────
+
+    async function withdrawApproval() {
+        if (!currentRfpo) return;
+
+        showConfirmModal('Withdraw Approval',
+            `Withdraw <strong>${escapeHtml(currentRfpo.rfpo_id)}</strong> from the approval process? ` +
+            `This will cancel all pending approvals and return the RFPO to Draft status.`,
+            async function() {
+                try {
+                    const response = await makeApiCall(`/api/rfpos/${rfpoId}/withdraw-approval`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reason: 'Withdrawn by admin' })
+                    });
+
+                    if (response.success) {
+                        showAlert(response.message || 'Approval withdrawn. RFPO returned to Draft.', 'success');
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        showAlert(response.message || 'Failed to withdraw approval', 'danger');
                     }
                 } catch (error) {
                     showAlert(`Error: ${error.message}`, 'danger');

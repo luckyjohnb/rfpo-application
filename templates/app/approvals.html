@@ -172,6 +172,42 @@
         </div>
     </div>
 </div>
+
+{% if is_admin %}
+<!-- Reassign Approval Modal -->
+<div class="modal fade" id="reassignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-edit"></i> Reassign Approval
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Reassigning step: <strong id="reassignStepName"></strong></p>
+                <p>Current approver: <strong id="reassignCurrentApprover"></strong></p>
+                <div class="mb-3">
+                    <label for="reassignUserSelect" class="form-label">New Approver</label>
+                    <select class="form-select" id="reassignUserSelect">
+                        <option value="">Loading users...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="reassignReason" class="form-label">Reason (optional)</label>
+                    <input type="text" class="form-control" id="reassignReason" placeholder="Reason for reassignment">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="submitReassignBtn" onclick="submitReassign()">
+                    <i class="fas fa-user-edit"></i> Reassign
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -274,6 +310,12 @@
                                     <a href="/rfpos/${rfpo.id}/preview" class="btn btn-sm btn-outline-info me-1" target="_blank" title="Preview RFPO">
                                         <i class="fas fa-eye"></i>
                                     </a>
+                                    {% if is_admin %}
+                                    <button class="btn btn-sm btn-outline-warning me-1" title="Reassign"
+                                            onclick="openReassignModal('${escapeAttr(action.action_id)}', '${escapeAttr(action.step_name || '')}', '${escapeAttr(action.approver_name || '')}')">
+                                        <i class="fas fa-user-edit"></i>
+                                    </button>
+                                    {% endif %}
                                     <button class="btn btn-sm btn-success me-1"
                                             onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, ${JSON.stringify(escapeHtml(rfpo.title || '')).replace(/'/g, "\\'")}, '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}')">
                                         <i class="fas fa-check"></i> Approve
@@ -410,5 +452,79 @@
 
     // Load on page load
     document.addEventListener('DOMContentLoaded', loadApprovals);
+
+    // ─── Reassign Functions (admin only) ──────────────────────────────
+    {% if is_admin %}
+    let reassignActionId = null;
+    let usersLoaded = false;
+
+    async function openReassignModal(actionId, stepName, currentApprover) {
+        reassignActionId = actionId;
+        document.getElementById('reassignStepName').textContent = stepName;
+        document.getElementById('reassignCurrentApprover').textContent = currentApprover;
+        document.getElementById('reassignReason').value = '';
+
+        // Load users for the select dropdown (only once)
+        if (!usersLoaded) {
+            try {
+                const data = await makeApiCall('/api/users/list');
+                const select = document.getElementById('reassignUserSelect');
+                select.innerHTML = '<option value="">Select a user...</option>';
+                if (data.success && data.users) {
+                    data.users
+                        .filter(u => u.active)
+                        .sort((a, b) => (a.display_name || a.email).localeCompare(b.display_name || b.email))
+                        .forEach(u => {
+                            const opt = document.createElement('option');
+                            opt.value = u.record_id;
+                            opt.textContent = `${u.display_name || u.email} (${u.email})`;
+                            select.appendChild(opt);
+                        });
+                    usersLoaded = true;
+                }
+            } catch (e) {
+                console.error('Failed to load users:', e);
+            }
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById('reassignModal'));
+        modal.show();
+    }
+
+    async function submitReassign() {
+        if (!reassignActionId) return;
+        const newApproverId = document.getElementById('reassignUserSelect').value;
+        const reason = document.getElementById('reassignReason').value;
+
+        if (!newApproverId) {
+            alert('Please select a new approver');
+            return;
+        }
+
+        const btn = document.getElementById('submitReassignBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reassigning...';
+
+        try {
+            const response = await makeApiCall(`/api/users/reassign-approval/${reassignActionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_approver_id: newApproverId, reason: reason })
+            });
+
+            if (response.success) {
+                bootstrap.Modal.getInstance(document.getElementById('reassignModal')).hide();
+                loadApprovals();
+            } else {
+                alert(response.message || 'Reassignment failed');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-user-edit"></i> Reassign';
+        }
+    }
+    {% endif %}
 </script>
 {% endblock %}

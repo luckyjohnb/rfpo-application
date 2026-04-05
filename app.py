@@ -271,7 +271,13 @@ def create_user_app():
         if "auth_token" not in session:
             return redirect(url_for("login_page"))
 
-        return render_template("app/approvals.html")
+        is_admin = False
+        user_info = session.get("user_info", {})
+        roles = user_info.get("permissions", [])
+        if roles:
+            is_admin = "RFPO_ADMIN" in roles or "GOD" in roles
+
+        return render_template("app/approvals.html", is_admin=is_admin)
 
     @app.route("/first-login-password-reset")
     def first_login_password_reset():
@@ -407,6 +413,26 @@ def create_user_app():
     def api_submit_for_approval(rfpo_id):
         """Submit RFPO for approval API proxy"""
         response = make_api_request(f"/rfpos/{rfpo_id}/submit-for-approval", "POST")
+        return jsonify(response)
+
+    @app.route("/api/rfpos/<int:rfpo_id>/withdraw-approval", methods=["POST"])
+    def api_withdraw_approval(rfpo_id):
+        """Withdraw RFPO from approval process API proxy"""
+        data = request.get_json() if request.is_json else {}
+        response = make_api_request(f"/rfpos/{rfpo_id}/withdraw-approval", "POST", data)
+        return jsonify(response)
+
+    @app.route("/api/users/reassign-approval/<action_id>", methods=["POST"])
+    def api_reassign_approval(action_id):
+        """Reassign approval action to a different user API proxy"""
+        data = request.get_json()
+        response = make_api_request(f"/users/reassign-approval/{action_id}", "POST", data)
+        return jsonify(response)
+
+    @app.route("/api/users/list", methods=["GET"])
+    def api_list_users():
+        """List active users API proxy (admin only)"""
+        response = make_api_request("/users")
         return jsonify(response)
 
     @app.route("/api/rfpos/<int:rfpo_id>/line-items", methods=["GET", "POST"])

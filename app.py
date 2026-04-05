@@ -52,6 +52,26 @@ def create_user_app():
     API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:5003/api")
     ADMIN_API_URL = os.environ.get("ADMIN_API_URL", "http://127.0.0.1:5111/api")
 
+    # Context processor — inject nav context into every template
+    @app.context_processor
+    def inject_nav_context():
+        """Provide role-based navigation context to all templates."""
+        nav = {"is_admin": False, "is_approver": False, "show_rfpo_nav": False}
+        if "auth_token" not in session:
+            return {"nav": nav}
+        try:
+            resp = make_api_request("/auth/verify")
+            if resp.get("authenticated"):
+                roles = resp.get("user", {}).get("roles", [])
+                is_admin = "RFPO_ADMIN" in roles or "GOD" in roles
+                is_approver = resp.get("user", {}).get("is_approver", False)
+                nav["is_admin"] = is_admin
+                nav["is_approver"] = is_approver
+                nav["show_rfpo_nav"] = is_admin or is_approver
+        except Exception:
+            pass
+        return {"nav": nav}
+
     # Helper function to make API calls
     def make_api_request(endpoint, method="GET", data=None, use_admin_api=False):
         """Make API request with authentication"""

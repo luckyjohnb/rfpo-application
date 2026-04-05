@@ -885,9 +885,9 @@
     }
 
     function confirmDeleteLineItem(lineItemId, lineNumber) {
-        if (confirm(`Delete line item #${lineNumber}? This cannot be undone.`)) {
+        showConfirmModal('Delete', `Delete line item <strong>#${lineNumber}</strong>? This cannot be undone.`, function() {
             deleteLineItem(lineItemId);
-        }
+        });
     }
 
     async function deleteLineItem(lineItemId) {

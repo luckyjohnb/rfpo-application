@@ -176,16 +176,16 @@
                         <div class="col-md-6">
                             <h6 class="mb-1">
                                 <a href="/rfpos/${rfpo.id}" class="text-decoration-none">
-                                    ${rfpo.title}
+                                    ${escapeHtml(rfpo.title)}
                                 </a>
                             </h6>
                             <p class="text-muted small mb-1">
-                                <strong>ID:</strong> ${rfpo.rfpo_id} | 
+                                <strong>ID:</strong> ${escapeHtml(rfpo.rfpo_id)} | 
                                 <strong>Created:</strong> ${createdDate}
                             </p>
                             <p class="text-muted small mb-0">
                                 <strong>Due:</strong> ${dueDate} | 
-                                <strong>Vendor:</strong> ${rfpo.vendor || 'Not specified'}
+                                <strong>Vendor:</strong> ${escapeHtml(rfpo.vendor || 'Not specified')}
                             </p>
                         </div>
                         <div class="col-md-3">
@@ -302,21 +302,19 @@
     }
 
     async function deleteRfpo(rfpoId, title) {
-        if (!confirm(`Are you sure you want to delete "${title}"?`)) {
-            return;
-        }
-        
-        try {
-            const response = await makeApiCall(`/api/rfpos/${rfpoId}`, { method: 'DELETE' });
-            if (response.success) {
-                showAlert('RFPO deleted successfully', 'success');
-                loadRfpos(currentPage);
-            } else {
-                throw new Error(response.message || 'Failed to delete RFPO');
+        showConfirmModal('Delete', `Are you sure you want to delete <strong>${escapeHtml(title)}</strong>? This cannot be undone.`, async function() {
+            try {
+                const response = await makeApiCall(`/api/rfpos/${rfpoId}`, { method: 'DELETE' });
+                if (response.success) {
+                    showAlert('RFPO deleted successfully', 'success');
+                    loadRfpos(currentPage);
+                } else {
+                    throw new Error(response.message || 'Failed to delete RFPO');
+                }
+            } catch (error) {
+                showAlert(`Error deleting RFPO: ${error.message}`, 'danger');
             }
-        } catch (error) {
-            showAlert(`Error deleting RFPO: ${error.message}`, 'danger');
-        }
+        });
     }
 
     // Event listeners

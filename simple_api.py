@@ -28,6 +28,16 @@ from models import (
     VendorSite,
 )
 
+# Import approval and audit models at top level
+from models import (
+    RFPOApprovalWorkflow,
+    RFPOApprovalStage,
+    RFPOApprovalStep,
+    RFPOApprovalInstance,
+    RFPOApprovalAction,
+    AuditLog,
+)
+
 # Import admin routes
 import sys
 
@@ -241,6 +251,21 @@ def list_teams():
     # Build consortium lookup
     consortiums = {c.consort_id: c.name for c in Consortium.query.all()}
 
+    # Batch-load member counts and rfpo counts to avoid N+1
+    team_ids = [t.id for t in teams]
+    member_counts = dict(
+        db.session.query(UserTeam.team_id, db.func.count(UserTeam.id))
+        .filter(UserTeam.team_id.in_(team_ids))
+        .group_by(UserTeam.team_id)
+        .all()
+    ) if team_ids else {}
+    rfpo_counts = dict(
+        db.session.query(RFPO.team_id, db.func.count(RFPO.id))
+        .filter(RFPO.team_id.in_(team_ids))
+        .group_by(RFPO.team_id)
+        .all()
+    ) if team_ids else {}
+
     result = []
     for t in teams:
         result.append({
@@ -250,8 +275,8 @@ def list_teams():
             "description": t.description,
             "consortium_name": consortiums.get(t.consortium_consort_id, "Unknown"),
             "is_member": t.id in member_team_ids,
-            "member_count": len(t.team_users) if t.team_users else 0,
-            "rfpo_count": len(t.rfpos) if t.rfpos else 0,
+            "member_count": member_counts.get(t.id, 0),
+            "rfpo_count": rfpo_counts.get(t.id, 0),
         })
 
     return jsonify({"success": True, "teams": result})
@@ -358,6 +383,16 @@ def change_password():
                 ),
                 400,
             )
+
+        import re
+        if not re.search(r'[A-Z]', new_password):
+            return jsonify({"success": False, "message": "Password must contain at least one uppercase letter"}), 400
+        if not re.search(r'[a-z]', new_password):
+            return jsonify({"success": False, "message": "Password must contain at least one lowercase letter"}), 400
+        if not re.search(r'[0-9]', new_password):
+            return jsonify({"success": False, "message": "Password must contain at least one number"}), 400
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', new_password):
+            return jsonify({"success": False, "message": "Password must contain at least one special character"}), 400
 
         # Update password
         from werkzeug.security import generate_password_hash
@@ -485,10 +520,6 @@ def saml_match():
 def get_approver_rfpos():
     """Get RFPOs with pending approval actions for the current user"""
     try:
-        from models import (
-            RFPOApprovalInstance,
-            RFPOApprovalAction,
-        )
 
         user = request.current_user
 
@@ -584,7 +615,6 @@ def get_approver_rfpos():
 def take_approval_action(action_id):
     """Take an approval action (approve/reject)"""
     try:
-        from models import RFPOApprovalAction, RFPOApprovalInstance
 
         user = request.current_user
         data = request.get_json()
@@ -659,7 +689,6 @@ def take_approval_action(action_id):
         instance.updated_at = datetime.utcnow()
 
         # Audit trail
-        from models import AuditLog
         audit = AuditLog(
             user_id=user.id,
             user_email=user.email,
@@ -693,8 +722,8 @@ def take_approval_action(action_id):
                         requestor.email, requestor.get_display_name(),
                         instance.rfpo.rfpo_id, f"RFPO {instance.overall_status.title()}"
                     )
-        except Exception:
-            pass  # Email failure should not block the response
+        except Exception as email_err:
+            app.logger.warning(f"Email notification failed: {email_err}")
 
         return jsonify(
             {
@@ -722,7 +751,6 @@ def take_approval_action(action_id):
 def bulk_approval_action():
     """Approve or refuse multiple approval actions at once"""
     try:
-        from models import RFPOApprovalAction
 
         user = request.current_user
         data = request.get_json()
@@ -796,10 +824,6 @@ def submit_for_approval(rfpo_id):
     """Submit an RFPO for approval - admin only. Creates workflow instance and first actions."""
     try:
         import uuid as uuid_mod
-        from models import (
-            RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep,
-            RFPOApprovalInstance, RFPOApprovalAction, Consortium
-        )
 
         user = request.current_user
 
@@ -948,7 +972,6 @@ def submit_for_approval(rfpo_id):
         rfpo.updated_at = datetime.utcnow()
 
         # Audit trail
-        from models import AuditLog
         audit = AuditLog(
             user_id=user.id,
             user_email=user.email,
@@ -981,8 +1004,8 @@ def submit_for_approval(rfpo_id):
                             approver.email, approver.get_display_name(),
                             rfpo.rfpo_id, step_data["approval_type_name"]
                         )
-        except Exception:
-            pass  # Email failure should not block the response
+        except Exception as email_err:
+            app.logger.warning(f"Email notification failed: {email_err}")
 
         return jsonify({
             "success": True,
@@ -1001,7 +1024,6 @@ def submit_for_approval(rfpo_id):
 def withdraw_approval(rfpo_id):
     """Withdraw an RFPO from the approval process - admin only"""
     try:
-        from models import RFPOApprovalInstance, AuditLog
 
         user = request.current_user
         user_perms = user.get_permissions() or []
@@ -1064,7 +1086,6 @@ def withdraw_approval(rfpo_id):
 def reassign_approval_action(action_id):
     """Reassign a pending approval action to a different user - GOD/admin only"""
     try:
-        from models import RFPOApprovalAction, AuditLog
 
         user = request.current_user
         user_perms = user.get_permissions() or []
@@ -1137,8 +1158,8 @@ def reassign_approval_action(action_id):
                     new_approver.email, new_approver.get_display_name(),
                     rfpo.rfpo_id, f"Reassigned: {action.step_name}"
                 )
-        except Exception:
-            pass
+        except Exception as email_err:
+            app.logger.warning(f"Email notification failed: {email_err}")
 
         return jsonify({
             "success": True,
@@ -1335,7 +1356,6 @@ def update_user_profile():
 def get_user_permissions_summary():
     """Get comprehensive permissions summary for current user"""
     try:
-        from models import Team, Consortium, Project
 
         user = request.current_user
 
@@ -1538,15 +1558,17 @@ def get_user_permissions_summary():
 @app.route("/api/rfpos")
 @require_auth
 def list_rfpos():
-    """List RFPOs with permission filtering"""
+    """List RFPOs with permission filtering and pagination"""
     try:
-        from models import Team, Project
-
         user = request.current_user
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 50, type=int)
+        per_page = min(per_page, 200)  # Cap at 200
+        status_filter = request.args.get("status")
 
         # If user is super admin, they can see all RFPOs
         if user.is_super_admin():
-            rfpos = RFPO.query.all()
+            query = RFPO.query
         else:
             accessible_rfpo_ids = set()
 
@@ -1564,7 +1586,6 @@ def list_rfpos():
 
             # 3. Get RFPOs where user is an approver
             if user.is_approver:
-                from models import RFPOApprovalAction
 
                 user_actions = RFPOApprovalAction.query.filter_by(
                     approver_id=user.record_id
@@ -1585,15 +1606,23 @@ def list_rfpos():
             # Apply filters
             if filters:
                 if len(filters) > 1:
-                    rfpos = RFPO.query.filter(db.or_(*filters)).all()
+                    query = RFPO.query.filter(db.or_(*filters))
                 else:
-                    rfpos = RFPO.query.filter(filters[0]).all()
+                    query = RFPO.query.filter(filters[0])
             else:
                 # User has no access to any RFPOs
-                rfpos = []
+                return jsonify({"success": True, "rfpos": [], "total": 0, "page": page, "pages": 0})
+
+        # Apply status filter if provided
+        if status_filter:
+            query = query.filter(RFPO.status == status_filter)
+
+        # Order and paginate
+        query = query.order_by(RFPO.created_at.desc())
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        rfpos = pagination.items
 
         # Build a lookup of pending approval action_ids for this user
-        from models import RFPOApprovalAction, RFPOApprovalInstance
         pending_action_map = {}  # rfpo_id -> action_id
         try:
             user_pending = RFPOApprovalAction.query.filter_by(
@@ -1603,8 +1632,8 @@ def list_rfpos():
                 inst = RFPOApprovalInstance.query.get(pa.instance_id)
                 if inst and inst.rfpo_id:
                     pending_action_map[inst.rfpo_id] = pa.action_id
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.warning(f"Failed to load pending actions: {e}")
 
         return jsonify(
             {
@@ -1625,9 +1654,10 @@ def list_rfpos():
                     }
                     for r in rfpos
                 ],
-                "total": len(rfpos),
-                "page": 1,
-                "pages": 1,
+                "total": pagination.total,
+                "page": pagination.page,
+                "pages": pagination.pages,
+                "per_page": pagination.per_page,
             }
         )
 
@@ -1729,14 +1759,6 @@ def create_rfpo():
 def get_rfpo(rfpo_id):
     """Get RFPO details"""
     try:
-        from models import (
-            Project,
-            Consortium,
-            Vendor,
-            VendorSite,
-            RFPOApprovalInstance,
-            RFPOApprovalAction,
-        )
 
         rfpo = RFPO.query.get_or_404(rfpo_id)
 
@@ -2014,7 +2036,6 @@ def delete_rfpo(rfpo_id):
             return jsonify({"success": False, "message": "Admin access required"}), 403
 
         # Check if RFPO has approval instances
-        from models import RFPOApprovalInstance
 
         approval_instance = RFPOApprovalInstance.query.filter_by(
             rfpo_id=rfpo.id
@@ -2427,7 +2448,6 @@ def list_vendor_sites(vendor_id):
 def get_rfpo_rendered_view(rfpo_id):
     """Get RFPO rendered HTML view for approvers (like admin panel)"""
     try:
-        from models import Project, Consortium, Vendor, VendorSite
         from flask import render_template
 
         rfpo = RFPO.query.get_or_404(rfpo_id)
@@ -2455,7 +2475,6 @@ def get_rfpo_rendered_view(rfpo_id):
 
             # Check approver access
             if not has_access and user.is_approver:
-                from models import RFPOApprovalAction, RFPOApprovalInstance
 
                 user_action = (
                     RFPOApprovalAction.query.filter_by(approver_id=user.record_id)

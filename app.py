@@ -25,6 +25,9 @@ def create_user_app():
     app.config["SECRET_KEY"] = os.environ.get(
         "USER_APP_SECRET_KEY", "user-app-secret-change-in-production"
     )
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # Setup logging
     logger = setup_logging("user_app", log_to_file=True)
@@ -56,10 +59,15 @@ def create_user_app():
     # Context processor — inject nav context into every template
     @app.context_processor
     def inject_nav_context():
-        """Provide role-based navigation context to all templates."""
+        """Provide role-based navigation context to all templates (cached in session)."""
         nav = {"is_admin": False, "is_approver": False, "show_rfpo_nav": False}
         if "auth_token" not in session:
             return {"nav": nav}
+
+        # Use cached nav from session if available
+        if "nav_context" in session:
+            return {"nav": session["nav_context"]}
+
         try:
             resp = make_api_request("/auth/verify")
             if resp.get("authenticated"):
@@ -69,6 +77,7 @@ def create_user_app():
                 nav["is_admin"] = is_admin
                 nav["is_approver"] = is_approver
                 nav["show_rfpo_nav"] = is_admin or is_approver
+                session["nav_context"] = nav
         except Exception:
             pass
         return {"nav": nav}
@@ -296,16 +305,28 @@ def create_user_app():
         response = make_api_request("/auth/login", "POST", data)
 
         if response.get("success") and response.get("token"):
+            # Rotate session to prevent fixation
+            session.clear()
+            session.permanent = True
             session["auth_token"] = response["token"]
             session["user"] = response["user"]
+            # Cache nav context from login response
+            roles = response.get("user", {}).get("roles", [])
+            is_admin = "RFPO_ADMIN" in roles or "GOD" in roles
+            is_approver = response.get("user", {}).get("is_approver", False)
+            session["nav_context"] = {
+                "is_admin": is_admin,
+                "is_approver": is_approver,
+                "show_rfpo_nav": is_admin or is_approver,
+            }
+            session["user_info"] = response.get("user", {})
 
         return jsonify(response)
 
     @app.route("/api/auth/logout", methods=["POST"])
     def api_logout():
         """Logout API proxy"""
-        session.pop("auth_token", None)
-        session.pop("user", None)
+        session.clear()
         return jsonify({"success": True, "message": "Logged out successfully"})
 
     @app.route("/api/auth/verify", methods=["GET"])

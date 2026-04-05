@@ -21,6 +21,11 @@
         <p class="text-muted" id="rfpoSubtitle">Loading...</p>
     </div>
     <div class="col-md-6 text-end">
+        {% if is_admin %}
+        <button class="btn btn-primary me-2" id="submitForApprovalBtn" style="display: none;" onclick="submitForApproval()">
+            <i class="fas fa-paper-plane"></i> Submit for Approval
+        </button>
+        {% endif %}
         <a href="/rfpos" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Back to List
         </a>
@@ -51,6 +56,9 @@
                         <button class="btn btn-success me-2" onclick="showApprovalModal('approved')">
                             <i class="fas fa-check"></i> Approve
                         </button>
+                        <button class="btn btn-warning me-2" onclick="showApprovalModal('conditional')">
+                            <i class="fas fa-exclamation-triangle"></i> Conditional
+                        </button>
                         <button class="btn btn-danger" onclick="showApprovalModal('refused')">
                             <i class="fas fa-times"></i> Reject
                         </button>
@@ -60,38 +68,36 @@
         </div>
     </div>
 
-    <!-- Row 2: Approval Chain + Recent Activity -->
+    <!-- Row 2: Approval Progress + Activity Timeline -->
     <div class="row mb-4">
         <div class="col-lg-8">
-            <!-- Approval Chain Card -->
+            <!-- Approval Progress Card -->
             <div id="approvalChainSection" class="card h-100">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
-                        <i class="fas fa-route"></i> Approval Chain
+                        <i class="fas fa-route"></i> Approval Progress
                     </h5>
+                    <span id="approvalOverallStatus" class="badge bg-secondary">No Workflow</span>
                 </div>
                 <div class="card-body">
                     <div id="approvalChainContent">
-                        Loading approval chain...
+                        <p class="text-muted">No approval workflow has been started for this RFPO.</p>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="col-lg-4">
-            <!-- Recent Activity Card -->
+            <!-- Activity Timeline Card -->
             <div class="card h-100">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
-                        <i class="fas fa-history"></i> Recent Activity
+                        <i class="fas fa-history"></i> Activity Timeline
                     </h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
                     <div id="recentActivityContent">
-                        <div class="text-center py-4 text-muted">
-                            <i class="fas fa-clock fa-2x mb-2"></i>
-                            <p>Activity timeline coming soon</p>
-                        </div>
+                        <p class="text-muted text-center">No activity yet</p>
                     </div>
                 </div>
             </div>
@@ -334,14 +340,21 @@
         // Update page title
         document.title = `${rfpo.rfpo_id} - ${rfpo.title} - RFPO Application`;
 
-        // Handle approval data for approvers
+        // Handle approval data for approvers and admins
         if (data.approval_data) {
-            displayApprovalChain(data.approval_data);
+            displayApprovalProgress(data.approval_data);
+            displayActivityTimeline(data.approval_data);
         }
 
         // Handle user action for approvers
         if (data.user_action && data.user_action.can_take_action) {
             displayUserAction(data.user_action);
+        }
+
+        // Show Submit for Approval button (admin only, Draft or Refused status)
+        if (isAdmin && (rfpo.status === 'Draft' || rfpo.status === 'Refused')) {
+            const submitBtn = document.getElementById('submitForApprovalBtn');
+            if (submitBtn) submitBtn.style.display = 'inline-block';
         }
 
         // Load files into RFPO Information section
@@ -358,10 +371,13 @@
         const statusClasses = {
             'Draft': 'bg-secondary',
             'Pending': 'bg-warning',
+            'Pending Approval': 'bg-warning',
+            'Submitted': 'bg-info',
             'In Review': 'bg-info',
             'Approved': 'bg-success',
             'Completed': 'bg-success',
             'Rejected': 'bg-danger',
+            'Refused': 'bg-danger',
             'Cancelled': 'bg-dark'
         };
 
@@ -489,36 +505,206 @@
         `;
     }
 
-    function displayApprovalChain(approvalData) {
+    function displayApprovalProgress(approvalData) {
         const chainSection = document.getElementById('approvalChainSection');
         const chainContent = document.getElementById('approvalChainContent');
+        const overallBadge = document.getElementById('approvalOverallStatus');
 
         if (!approvalData || !approvalData.approval_chain) {
-            chainContent.innerHTML = '<p class="text-muted">No approval chain data available</p>';
+            chainContent.innerHTML = '<p class="text-muted">No approval workflow has been started for this RFPO.</p>';
             return;
         }
 
-        const chainHtml = approvalData.approval_chain.map(action => {
-            const statusBadge = getActionStatusBadge(action.status);
-            const userIndicator = action.is_user_action ? '<i class="fas fa-user text-primary" title="Your action"></i> ' : '';
+        // Overall status badge
+        const statusMap = {
+            'draft': { class: 'bg-secondary', label: 'Draft' },
+            'waiting': { class: 'bg-info', label: 'In Progress' },
+            'approved': { class: 'bg-success', label: 'Approved' },
+            'refused': { class: 'bg-danger', label: 'Refused' },
+        };
+        const statusInfo = statusMap[approvalData.overall_status] || { class: 'bg-secondary', label: approvalData.overall_status };
+        overallBadge.className = `badge ${statusInfo.class}`;
+        overallBadge.textContent = statusInfo.label;
 
-            return `
-                <div class="d-flex justify-content-between align-items-center border-bottom py-3">
-                    <div>
-                        <h6 class="mb-1">${userIndicator}${action.step_name}</h6>
-                        <small class="text-muted">${action.stage_name} • ${action.approver_name}</small>
-                        ${action.comments ? `<br><small class="text-info">Comments: ${action.comments}</small>` : ''}
-                    </div>
-                    <div class="text-end">
-                        ${statusBadge}
-                        ${action.completed_at ? `<br><small class="text-muted">${new Date(action.completed_at).toLocaleDateString()}</small>` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
+        // Group actions by stage
+        const stages = {};
+        approvalData.approval_chain.forEach(action => {
+            const key = `${action.stage_order || 0}_${action.stage_name}`;
+            if (!stages[key]) {
+                stages[key] = { stage_name: action.stage_name, stage_order: action.stage_order || 0, steps: [] };
+            }
+            stages[key].steps.push(action);
+        });
 
-        chainContent.innerHTML = chainHtml;
+        const sortedStages = Object.values(stages).sort((a, b) => a.stage_order - b.stage_order);
+
+        let html = '<div class="approval-progress">';
+
+        sortedStages.forEach((stage, stageIdx) => {
+            html += `<div class="mb-3">`;
+            html += `<h6 class="text-muted mb-2"><i class="fas fa-layer-group"></i> ${escapeHtml(stage.stage_name)}</h6>`;
+            html += `<div class="d-flex flex-wrap gap-2">`;
+
+            stage.steps.sort((a, b) => (a.step_order || 0) - (b.step_order || 0)).forEach(action => {
+                let stepClass, stepIcon;
+                if (action.status === 'approved') {
+                    stepClass = 'border-success bg-success bg-opacity-10';
+                    stepIcon = '<i class="fas fa-check-circle text-success"></i>';
+                } else if (action.status === 'conditional') {
+                    stepClass = 'border-warning bg-warning bg-opacity-10';
+                    stepIcon = '<i class="fas fa-exclamation-circle text-warning"></i>';
+                } else if (action.status === 'refused') {
+                    stepClass = 'border-danger bg-danger bg-opacity-10';
+                    stepIcon = '<i class="fas fa-times-circle text-danger"></i>';
+                } else {
+                    // pending
+                    stepClass = 'border-secondary';
+                    stepIcon = '<i class="fas fa-clock text-secondary"></i>';
+                }
+
+                const userMark = action.is_user_action ? ' <i class="fas fa-user text-primary" title="Your action"></i>' : '';
+
+                html += `
+                    <div class="card ${stepClass} flex-fill" style="min-width: 200px; max-width: 300px;">
+                        <div class="card-body py-2 px-3">
+                            <div class="d-flex align-items-center mb-1">
+                                ${stepIcon}
+                                <strong class="ms-2 small">${escapeHtml(action.step_name)}${userMark}</strong>
+                            </div>
+                            <div class="small text-muted">${escapeHtml(action.approver_name)}</div>
+                            ${action.completed_at ? `<div class="small text-muted">${new Date(action.completed_at).toLocaleDateString()}</div>` : ''}
+                            ${action.comments ? `<div class="small text-info mt-1"><i class="fas fa-comment"></i> ${escapeHtml(action.comments)}</div>` : ''}
+                            ${action.conditions ? `<div class="small text-warning mt-1"><i class="fas fa-exclamation-triangle"></i> ${escapeHtml(action.conditions)}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+
+            // Connector between stages
+            if (stageIdx < sortedStages.length - 1) {
+                html += `<div class="text-center my-2"><i class="fas fa-arrow-down text-muted"></i></div>`;
+            }
+        });
+
+        html += '</div>';
+
+        // Show submitted info
+        if (approvalData.submitted_at) {
+            html += `<div class="mt-3 small text-muted border-top pt-2">
+                <i class="fas fa-calendar-alt"></i> Submitted: ${new Date(approvalData.submitted_at).toLocaleString()}
+                ${approvalData.completed_at ? ` &bull; Completed: ${new Date(approvalData.completed_at).toLocaleString()}` : ''}
+            </div>`;
+        }
+
+        chainContent.innerHTML = html;
         chainSection.style.display = 'block';
+    }
+
+    function displayActivityTimeline(approvalData) {
+        const container = document.getElementById('recentActivityContent');
+
+        if (!approvalData || !approvalData.approval_chain) {
+            container.innerHTML = '<p class="text-muted text-center">No activity yet</p>';
+            return;
+        }
+
+        // Build timeline events from approval actions (completed ones first, then pending)
+        const events = [];
+
+        // Submission event
+        if (approvalData.submitted_at) {
+            events.push({
+                icon: 'fa-paper-plane',
+                color: 'text-primary',
+                title: 'Submitted for Approval',
+                detail: approvalData.workflow_name || 'Approval Workflow',
+                time: approvalData.submitted_at,
+            });
+        }
+
+        // Action events
+        approvalData.approval_chain.forEach(action => {
+            if (action.status === 'approved') {
+                events.push({
+                    icon: 'fa-check-circle',
+                    color: 'text-success',
+                    title: `${action.approver_name} approved`,
+                    detail: action.step_name + (action.comments ? `: "${action.comments}"` : ''),
+                    time: action.completed_at,
+                });
+            } else if (action.status === 'conditional') {
+                events.push({
+                    icon: 'fa-exclamation-circle',
+                    color: 'text-warning',
+                    title: `${action.approver_name} conditionally approved`,
+                    detail: action.step_name + (action.conditions ? `: "${action.conditions}"` : ''),
+                    time: action.completed_at,
+                });
+            } else if (action.status === 'refused') {
+                events.push({
+                    icon: 'fa-times-circle',
+                    color: 'text-danger',
+                    title: `${action.approver_name} rejected`,
+                    detail: action.step_name + (action.comments ? `: "${action.comments}"` : ''),
+                    time: action.completed_at,
+                });
+            } else if (action.status === 'pending') {
+                events.push({
+                    icon: 'fa-hourglass-half',
+                    color: 'text-secondary',
+                    title: `Awaiting ${action.approver_name}`,
+                    detail: action.step_name,
+                    time: action.assigned_at,
+                    isPending: true,
+                });
+            }
+        });
+
+        // Completion event
+        if (approvalData.completed_at) {
+            const finalStatus = approvalData.overall_status === 'approved' ? 'Approved' : 'Refused';
+            const finalIcon = approvalData.overall_status === 'approved' ? 'fa-trophy' : 'fa-ban';
+            const finalColor = approvalData.overall_status === 'approved' ? 'text-success' : 'text-danger';
+            events.push({
+                icon: finalIcon,
+                color: finalColor,
+                title: `Workflow ${finalStatus}`,
+                detail: '',
+                time: approvalData.completed_at,
+            });
+        }
+
+        // Sort: completed events by time desc, pending at end
+        events.sort((a, b) => {
+            if (a.isPending && !b.isPending) return 1;
+            if (!a.isPending && b.isPending) return -1;
+            if (!a.time && !b.time) return 0;
+            if (!a.time) return 1;
+            if (!b.time) return -1;
+            return new Date(b.time) - new Date(a.time);
+        });
+
+        if (events.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center">No activity yet</p>';
+            return;
+        }
+
+        const timelineHtml = events.map(evt => `
+            <div class="d-flex mb-3 ${evt.isPending ? 'opacity-50' : ''}">
+                <div class="me-3 pt-1">
+                    <i class="fas ${evt.icon} ${evt.color}"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="small fw-bold">${escapeHtml(evt.title)}</div>
+                    ${evt.detail ? `<div class="small text-muted">${escapeHtml(evt.detail)}</div>` : ''}
+                    ${evt.time ? `<div class="small text-muted">${new Date(evt.time).toLocaleString()}</div>` : ''}
+                </div>
+            </div>
+        `).join('');
+
+        container.innerHTML = timelineHtml;
     }
 
     function displayUserAction(userAction) {
@@ -534,6 +720,7 @@
         const statusClasses = {
             'pending': 'bg-warning',
             'approved': 'bg-success',
+            'conditional': 'bg-warning',
             'refused': 'bg-danger'
         };
 
@@ -556,13 +743,20 @@
     function showApprovalModal(action) {
         currentUserAction = action;
 
+        const actionLabels = {
+            'approved': { title: 'Approve', btnClass: 'btn-success', icon: 'fa-check' },
+            'conditional': { title: 'Conditionally Approve', btnClass: 'btn-warning', icon: 'fa-exclamation-triangle' },
+            'refused': { title: 'Reject', btnClass: 'btn-danger', icon: 'fa-times' },
+        };
+        const label = actionLabels[action] || actionLabels['approved'];
+
         // Create and show modal
         const modalHtml = `
             <div class="modal fade" id="approvalModal" tabindex="-1">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">${action === 'approved' ? 'Approve' : 'Reject'} RFPO</h5>
+                            <h5 class="modal-title">${label.title} RFPO</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
@@ -573,13 +767,20 @@
                             <div class="mb-3">
                                 <label for="approvalComments" class="form-label">Comments</label>
                                 <textarea class="form-control" id="approvalComments" rows="3"
-                                          placeholder="Enter your comments for this ${action} action..."></textarea>
+                                          placeholder="Enter your comments..."></textarea>
                             </div>
+                            ${action === 'conditional' ? `
+                            <div class="mb-3">
+                                <label for="approvalConditions" class="form-label">Conditions <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="approvalConditions" rows="3"
+                                          placeholder="Describe the conditions that must be met..." required></textarea>
+                                <small class="form-text text-muted">Specify what must be addressed before full approval.</small>
+                            </div>` : ''}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-${action === 'approved' ? 'success' : 'danger'}" onclick="submitApprovalAction()">
-                                <i class="fas fa-${action === 'approved' ? 'check' : 'times'}"></i> ${action === 'approved' ? 'Approve' : 'Reject'}
+                            <button type="button" class="btn ${label.btnClass}" onclick="submitApprovalAction()">
+                                <i class="fas ${label.icon}"></i> ${label.title}
                             </button>
                         </div>
                     </div>
@@ -611,6 +812,14 @@
         }
 
         const comments = document.getElementById('approvalComments').value;
+        const conditionsEl = document.getElementById('approvalConditions');
+        const conditions = conditionsEl ? conditionsEl.value : '';
+
+        // Require conditions for conditional approval
+        if (currentUserAction === 'conditional' && !conditions.trim()) {
+            showAlert('Please specify the conditions for conditional approval', 'warning');
+            return;
+        }
 
         // Get user's action ID from the loaded data
         fetch(`/api/rfpos/${rfpoId}`)
@@ -627,7 +836,8 @@
                         },
                         body: JSON.stringify({
                             status: currentUserAction,
-                            comments: comments
+                            comments: comments,
+                            conditions: conditions || undefined
                         })
                     });
                 } else {
@@ -655,6 +865,39 @@
             .catch(error => {
                 showAlert(`Error: ${error.message}`, 'danger');
             });
+    }
+
+    // ─── Submit for Approval ───────────────────────────────────────────
+
+    async function submitForApproval() {
+        if (!currentRfpo) return;
+
+        // Quick validation
+        if (!currentRfpo.line_items || currentRfpo.line_items.length === 0) {
+            showAlert('Cannot submit: RFPO has no line items', 'warning');
+            return;
+        }
+
+        showConfirmModal('Submit for Approval',
+            `Submit <strong>${escapeHtml(currentRfpo.rfpo_id)}</strong> for approval? ` +
+            `This will start the approval workflow and notify approvers.`,
+            async function() {
+                try {
+                    const response = await makeApiCall(`/api/rfpos/${rfpoId}/submit-for-approval`, {
+                        method: 'POST'
+                    });
+
+                    if (response.success) {
+                        showAlert(response.message || 'RFPO submitted for approval!', 'success');
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        showAlert(response.message || 'Failed to submit for approval', 'danger');
+                    }
+                } catch (error) {
+                    showAlert(`Error: ${error.message}`, 'danger');
+                }
+            }
+        );
     }
 
     // ─── Line Items CRUD ──────────────────────────────────────────────

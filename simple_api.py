@@ -576,18 +576,19 @@ def take_approval_action(action_id):
 
         # Validate status
         status = data.get("status")
-        if status not in ["approved", "refused"]:
+        if status not in ["approved", "conditional", "refused"]:
             return (
                 jsonify(
-                    {"success": False, "message": "Status must be approved or refused"}
+                    {"success": False, "message": "Status must be approved, conditional, or refused"}
                 ),
                 400,
             )
 
         comments = data.get("comments", "")
+        conditions = data.get("conditions", "")
 
         # Complete the action
-        action.complete_action(status, comments, None, user.record_id)
+        action.complete_action(status, comments, conditions if status == "conditional" else None, user.record_id)
 
         # Update instance status
         instance = action.instance
@@ -598,6 +599,12 @@ def take_approval_action(action_id):
             # Update RFPO status
             if instance.rfpo:
                 instance.rfpo.status = "Refused"
+                instance.rfpo.updated_by = user.get_display_name()
+        elif status == "conditional":
+            # Conditional approval: advance workflow but note conditions
+            instance.advance_to_next_step()
+            if instance.overall_status == "approved" and instance.rfpo:
+                instance.rfpo.status = "Approved"
                 instance.rfpo.updated_by = user.get_display_name()
         else:
             # For approvals, advance workflow and check for completion
@@ -699,6 +706,177 @@ def bulk_approval_action():
                        (f", {results['failed']} failed" if results["failed"] else ""),
             "results": results,
         })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/rfpos/<int:rfpo_id>/submit-for-approval", methods=["POST"])
+@require_auth
+def submit_for_approval(rfpo_id):
+    """Submit an RFPO for approval - admin only. Creates workflow instance and first actions."""
+    try:
+        import uuid as uuid_mod
+        from models import (
+            RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep,
+            RFPOApprovalInstance, RFPOApprovalAction, Consortium
+        )
+
+        user = request.current_user
+
+        # Admin-only check
+        user_perms = user.get_permissions() or []
+        if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+
+        # Only Draft RFPOs can be submitted
+        if rfpo.status not in ("Draft", "Refused"):
+            return jsonify({
+                "success": False,
+                "message": f"Cannot submit RFPO with status '{rfpo.status}'. Must be Draft or Refused."
+            }), 400
+
+        # Check if there's already an active approval instance
+        existing = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+        if existing and existing.overall_status not in ("refused",):
+            return jsonify({
+                "success": False,
+                "message": "This RFPO already has an active approval workflow"
+            }), 400
+
+        # If re-submitting after refusal, remove old instance
+        if existing and existing.overall_status == "refused":
+            db.session.delete(existing)
+            db.session.flush()
+
+        # Find the appropriate workflow template
+        # Priority: team → consortium (matching RFPO's team/consortium)
+        workflow = None
+
+        if rfpo.team_id:
+            workflow = RFPOApprovalWorkflow.query.filter_by(
+                team_id=rfpo.team_id, workflow_type="team", is_active=True, is_template=True
+            ).first()
+
+        if not workflow and rfpo.consortium_id:
+            workflow = RFPOApprovalWorkflow.query.filter_by(
+                consortium_id=rfpo.consortium_id, workflow_type="consortium",
+                is_active=True, is_template=True
+            ).first()
+
+        if not workflow:
+            return jsonify({
+                "success": False,
+                "message": "No active approval workflow found for this RFPO's team or consortium. "
+                           "Please configure a workflow in the admin panel first."
+            }), 400
+
+        # Determine which stage applies based on RFPO total amount
+        rfpo_total = float(rfpo.total_amount or 0)
+        applicable_stage = None
+        for stage in sorted(workflow.stages, key=lambda s: s.budget_bracket_amount or 0):
+            if rfpo_total <= float(stage.budget_bracket_amount or 0):
+                applicable_stage = stage
+                break
+        # If no bracket matches, use the highest bracket
+        if not applicable_stage and workflow.stages:
+            applicable_stage = sorted(workflow.stages, key=lambda s: s.budget_bracket_amount or 0)[-1]
+
+        if not applicable_stage or not applicable_stage.steps:
+            return jsonify({
+                "success": False,
+                "message": "No approval stages/steps configured for this workflow"
+            }), 400
+
+        # Build instance_data snapshot (all stages from the applicable one onward)
+        stages_data = []
+        for stage in sorted(workflow.stages, key=lambda s: s.stage_order):
+            if stage.stage_order >= applicable_stage.stage_order:
+                steps_data = []
+                for step in sorted(stage.steps, key=lambda s: s.step_order):
+                    steps_data.append({
+                        "step_id": step.step_id,
+                        "step_name": step.step_name,
+                        "step_order": step.step_order,
+                        "approval_type_key": step.approval_type_key,
+                        "approval_type_name": step.approval_type_name,
+                        "primary_approver_id": step.primary_approver_id,
+                        "backup_approver_id": step.backup_approver_id,
+                        "is_required": step.is_required,
+                        "timeout_days": step.timeout_days,
+                    })
+                stages_data.append({
+                    "stage_id": stage.stage_id,
+                    "stage_name": stage.stage_name,
+                    "stage_order": stage.stage_order,
+                    "budget_bracket_key": stage.budget_bracket_key,
+                    "budget_bracket_amount": float(stage.budget_bracket_amount or 0),
+                    "requires_all_steps": stage.requires_all_steps,
+                    "is_parallel": stage.is_parallel,
+                    "steps": steps_data,
+                })
+
+        # Create the approval instance
+        instance = RFPOApprovalInstance(
+            instance_id=uuid_mod.uuid4().hex[:16],
+            rfpo_id=rfpo.id,
+            template_workflow_id=workflow.id,
+            workflow_name=workflow.name,
+            workflow_version=workflow.version or "1.0",
+            consortium_id=rfpo.consortium_id or workflow.consortium_id or "",
+            current_stage_order=1,
+            current_step_order=1,
+            overall_status="waiting",
+            submitted_at=datetime.utcnow(),
+            created_by=user.get_display_name(),
+        )
+        instance.set_instance_data({"stages": stages_data})
+        db.session.add(instance)
+        db.session.flush()  # Get instance.id
+
+        # Create approval actions for ALL steps across all applicable stages
+        for stage_data in stages_data:
+            for step_data in stage_data["steps"]:
+                # Get approver name
+                approver = User.query.filter_by(
+                    record_id=step_data["primary_approver_id"], active=True
+                ).first()
+                approver_name = approver.get_display_name() if approver else "Unknown"
+
+                # First step of first stage is pending, rest are pending too
+                # (they get activated sequentially by advance_to_next_step)
+                action = RFPOApprovalAction(
+                    action_id=uuid_mod.uuid4().hex[:16],
+                    instance_id=instance.id,
+                    stage_order=stage_data["stage_order"],
+                    step_order=step_data["step_order"],
+                    stage_name=stage_data["stage_name"],
+                    step_name=step_data["step_name"],
+                    approval_type_key=step_data["approval_type_key"],
+                    approver_id=step_data["primary_approver_id"],
+                    approver_name=approver_name,
+                    status="pending",
+                    assigned_at=datetime.utcnow(),
+                    due_date=datetime.utcnow() + timedelta(days=step_data.get("timeout_days", 5)),
+                )
+                db.session.add(action)
+
+        # Update RFPO status
+        rfpo.status = "Pending Approval"
+        rfpo.updated_by = user.get_display_name()
+        rfpo.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"RFPO submitted for approval via '{workflow.name}'",
+            "instance": instance.to_dict(),
+            "rfpo_status": rfpo.status,
+        }), 201
 
     except Exception as e:
         db.session.rollback()
@@ -1299,11 +1477,13 @@ def get_rfpo(rfpo_id):
             if not has_access:
                 return jsonify({"success": False, "message": "Access denied"}), 403
 
-        # Get approval information if user is an approver
+        # Get approval information for approvers AND admins
         approval_data = None
         user_action = None
+        user_perms = user.get_permissions() or []
+        is_admin_user = "RFPO_ADMIN" in user_perms or "GOD" in user_perms
 
-        if user.is_approver:
+        if user.is_approver or is_admin_user:
             # Find approval instance for this RFPO
             approval_instance = RFPOApprovalInstance.query.filter_by(
                 rfpo_id=rfpo.id
@@ -1349,6 +1529,8 @@ def get_rfpo(rfpo_id):
                     approval_chain.append(
                         {
                             "action_id": action.action_id,
+                            "stage_order": action.stage_order,
+                            "step_order": action.step_order,
                             "stage_name": action.stage_name,
                             "step_name": action.step_name,
                             "approver_name": action.approver_name,
@@ -1365,6 +1547,7 @@ def get_rfpo(rfpo_id):
                                 else None
                             ),
                             "comments": action.comments,
+                            "conditions": action.conditions,
                             "is_user_action": action.approver_id == user.record_id,
                         }
                     )

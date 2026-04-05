@@ -342,7 +342,7 @@
                 document.getElementById('totalRfpos').textContent = rfpos.length;
 
                 const statusLower = rfpo => (rfpo.status || '').toLowerCase();
-                const pendingCount = rfpos.filter(rfpo => ['draft', 'pending', 'waiting'].includes(statusLower(rfpo))).length;
+                const pendingCount = rfpos.filter(rfpo => ['draft', 'pending', 'pending approval', 'submitted', 'waiting'].includes(statusLower(rfpo))).length;
                 const completedCount = rfpos.filter(rfpo => ['completed', 'approved'].includes(statusLower(rfpo))).length;
 
                 document.getElementById('pendingRfpos').textContent = pendingCount;
@@ -464,16 +464,30 @@
         }
     }
 
-    function loadApproverDashboard() {
+    async function loadApproverDashboard() {
+        // Load general RFPO stats (same source as the RFPO list page)
+        try {
+            const rfposResponse = await makeApiCall('/api/rfpos');
+            if (rfposResponse.success) {
+                const rfpos = rfposResponse.rfpos;
+                document.getElementById('totalRfpos').textContent = rfpos.length;
+
+                const statusLower = rfpo => (rfpo.status || '').toLowerCase();
+                const pendingCount = rfpos.filter(rfpo => ['draft', 'pending', 'pending approval', 'submitted', 'waiting'].includes(statusLower(rfpo))).length;
+                const completedCount = rfpos.filter(rfpo => ['completed', 'approved'].includes(statusLower(rfpo))).length;
+
+                document.getElementById('pendingRfpos').textContent = pendingCount;
+                document.getElementById('completedRfpos').textContent = completedCount;
+            }
+        } catch (e) {
+            console.error('Error loading RFPO stats:', e);
+        }
+
+        // Load approver-specific content for activity section
         fetch('/api/users/approver-rfpos')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update statistics for approver view
-                    document.getElementById('totalRfpos').textContent = data.summary.total || 0;
-                    document.getElementById('pendingRfpos').textContent = data.summary.pending || 0;
-                    document.getElementById('completedRfpos').textContent = (data.summary.completed || 0) + (data.summary.refused || 0);
-
                     // Show approval-focused content in recent RFPOs area
                     const container = document.getElementById('recentRfposContainer');
                     if (data.summary.pending > 0) {

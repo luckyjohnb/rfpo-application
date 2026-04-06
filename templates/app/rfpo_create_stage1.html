@@ -1,0 +1,195 @@
+{% extends "app/base.html" %}
+
+{% block title %}Create RFPO - Select Project - RFPO Application{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('rfpos_list') }}">RFPOs</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Create - Step 1</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-plus"></i> Create New RFPO
+        </h1>
+        <p class="text-muted">Step 1 of 2: Select Consortium &amp; Project</p>
+    </div>
+</div>
+
+<!-- Progress indicator -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="progress" style="height: 8px;">
+            <div class="progress-bar bg-primary" role="progressbar" style="width: 50%" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-2">
+            <small class="text-primary fw-bold">1. Select Project</small>
+            <small class="text-muted">2. RFPO Details</small>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <!-- Consortium Selection -->
+                    <div class="col-md-6 mb-3">
+                        <h5 class="mb-3"><i class="fas fa-building"></i> Select Consortium</h5>
+                        <label for="consortium_id" class="form-label">Consortium <span class="text-danger">*</span></label>
+                        <select class="form-select" id="consortium_id" required>
+                            <option value="">-- Select the consortium for this RFPO --</option>
+                            {% for c in consortiums %}
+                            <option value="{{ c.consort_id }}" data-abbrev="{{ c.abbrev }}">
+                                {{ c.abbrev }} - {{ c.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">The consortium that will finance this purchase order</div>
+                    </div>
+
+                    <!-- Project Selection -->
+                    <div class="col-md-6 mb-3">
+                        <h5 class="mb-3"><i class="fas fa-folder-open"></i> Select Project</h5>
+                        <label for="project_id" class="form-label">Project <span class="text-danger">*</span></label>
+                        <select class="form-select" id="project_id" disabled>
+                            <option value="">-- Select a consortium first --</option>
+                        </select>
+                        <div class="form-text">The project this RFPO belongs to</div>
+
+                        <div id="projectDetails" class="alert alert-info d-none mt-2">
+                            <strong>Project Details:</strong>
+                            <div id="projectDescription"></div>
+                            <div id="projectFlags"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-3">
+                    <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Cancel
+                    </a>
+                    <button type="button" class="btn btn-primary" id="continueBtn" disabled>
+                        Continue to RFPO Details <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-info-circle"></i> Help</h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    <strong>Consortium:</strong> The organization funding this purchase order.
+                </p>
+                <p class="small text-muted">
+                    <strong>Project:</strong> The specific project within the consortium. Available projects are filtered based on your consortium selection.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const consortiumSelect = document.getElementById('consortium_id');
+    const projectSelect = document.getElementById('project_id');
+    const continueBtn = document.getElementById('continueBtn');
+
+    // Consortium → Project cascading dropdown
+    consortiumSelect.addEventListener('change', async function() {
+        const consortiumId = this.value;
+        const projectDetails = document.getElementById('projectDetails');
+
+        projectSelect.innerHTML = '<option value="">Loading projects...</option>';
+        projectSelect.disabled = true;
+        projectDetails.classList.add('d-none');
+        continueBtn.disabled = true;
+
+        if (!consortiumId) {
+            projectSelect.innerHTML = '<option value="">-- Select a consortium first --</option>';
+            return;
+        }
+
+        try {
+            const response = await makeApiCall(`/api/projects/${consortiumId}`);
+            const projects = response.success ? response.projects : response;
+
+            projectSelect.innerHTML = '<option value="">-- Select the project for this RFPO --</option>';
+
+            if (Array.isArray(projects) && projects.length > 0) {
+                projects.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = `[${p.ref}] ${p.name}`;
+                    option.dataset.description = p.description || '';
+                    option.dataset.govFunded = p.gov_funded || false;
+                    option.dataset.uniProject = p.uni_project || false;
+                    projectSelect.appendChild(option);
+                });
+                projectSelect.disabled = false;
+            } else {
+                projectSelect.innerHTML = '<option value="">No projects available for this consortium</option>';
+            }
+        } catch (error) {
+            console.error('Error loading projects:', error);
+            projectSelect.innerHTML = '<option value="">Error loading projects</option>';
+        }
+    });
+
+    // Show project details on selection
+    projectSelect.addEventListener('change', function() {
+        const selected = this.options[this.selectedIndex];
+        const projectDetails = document.getElementById('projectDetails');
+        const projectDescription = document.getElementById('projectDescription');
+        const projectFlags = document.getElementById('projectFlags');
+
+        if (this.value) {
+            continueBtn.disabled = false;
+
+            if (selected.dataset.description) {
+                projectDescription.textContent = selected.dataset.description;
+                const flags = [];
+                if (selected.dataset.govFunded === 'true') {
+                    flags.push('<span class="badge bg-primary">Government Funded</span>');
+                }
+                if (selected.dataset.uniProject === 'true') {
+                    flags.push('<span class="badge bg-info">University Project</span>');
+                }
+                projectFlags.innerHTML = flags.length > 0 ? '<br>' + flags.join(' ') : '';
+                projectDetails.classList.remove('d-none');
+            } else {
+                projectDetails.classList.add('d-none');
+            }
+        } else {
+            continueBtn.disabled = true;
+            projectDetails.classList.add('d-none');
+        }
+    });
+
+    // Continue button navigates to stage 2
+    continueBtn.addEventListener('click', function() {
+        const consortiumId = consortiumSelect.value;
+        const projectId = projectSelect.value;
+
+        if (!consortiumId || !projectId) {
+            showAlert('Please select both a consortium and a project.', 'danger');
+            return;
+        }
+
+        window.location.href = `/rfpos/create/details?consortium_id=${encodeURIComponent(consortiumId)}&project_id=${encodeURIComponent(projectId)}`;
+    });
+</script>
+{% endblock %}

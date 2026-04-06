@@ -242,7 +242,7 @@ def create_user_app():
 
     @app.route("/rfpos/create")
     def rfpo_create():
-        """Create RFPO page"""
+        """Create RFPO - Stage 1: Select Consortium & Project"""
         if "auth_token" not in session:
             return redirect(url_for("login_page"))
 
@@ -253,15 +253,99 @@ def create_user_app():
             if "RFPO_ADMIN" not in roles and "GOD" not in roles:
                 return redirect(url_for("dashboard"))
 
-        # Get teams for dropdown
+        # Get consortiums for dropdown
+        consortiums_response = make_api_request("/consortiums")
+        consortiums = (
+            consortiums_response.get("consortiums", [])
+            if consortiums_response.get("success") else []
+        )
+
+        return render_template(
+            "app/rfpo_create_stage1.html",
+            consortiums=consortiums,
+        )
+
+    @app.route("/rfpos/create/details")
+    def rfpo_create_details():
+        """Create RFPO - Stage 2: RFPO Details"""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+
+        # Only admins can create RFPOs
+        user_info = make_api_request("/auth/verify")
+        if user_info.get("authenticated"):
+            roles = user_info.get("user", {}).get("roles", [])
+            if "RFPO_ADMIN" not in roles and "GOD" not in roles:
+                return redirect(url_for("dashboard"))
+
+        # Validate required query params from stage 1
+        consortium_id = request.args.get("consortium_id")
+        project_id = request.args.get("project_id")
+        if not consortium_id or not project_id:
+            return redirect(url_for("rfpo_create"))
+
+        # Fetch consortium and project details
+        consortiums_resp = make_api_request("/consortiums")
+        consortium = None
+        if consortiums_resp.get("success"):
+            for c in consortiums_resp.get("consortiums", []):
+                if c.get("consort_id") == consortium_id:
+                    consortium = c
+                    break
+
+        projects_resp = make_api_request(
+            f"/projects/{consortium_id}"
+        )
+        project = None
+        projects = (
+            projects_resp.get("projects", [])
+            if projects_resp.get("success")
+            else projects_resp if isinstance(projects_resp, list)
+            else []
+        )
+        for p in projects:
+            if str(p.get("id")) == str(project_id):
+                project = p
+                break
+
+        if not consortium or not project:
+            return redirect(url_for("rfpo_create"))
+
+        # Wrap dicts as SimpleNamespace for template dot access
+        from types import SimpleNamespace
+        consortium_obj = SimpleNamespace(**consortium)
+        project_obj = SimpleNamespace(**project)
+
+        # Get teams and vendors for dropdowns
         teams_response = make_api_request("/teams")
-        teams = teams_response.get("teams", []) if teams_response.get("success") else []
+        teams = (
+            teams_response.get("teams", [])
+            if teams_response.get("success") else []
+        )
 
-        # Get vendors for dropdown
         vendors_response = make_api_request("/vendors")
-        vendors = vendors_response.get("vendors", []) if vendors_response.get("success") else []
+        vendors = (
+            vendors_response.get("vendors", [])
+            if vendors_response.get("success") else []
+        )
 
-        return render_template("app/rfpo_create.html", teams=teams, vendors=vendors)
+        # Determine default team from project
+        default_team = None
+        team_record_id = project.get("team_record_id")
+        if team_record_id:
+            for t in teams:
+                if t.get("record_id") == team_record_id:
+                    default_team = t
+                    break
+
+        return render_template(
+            "app/rfpo_create_stage2.html",
+            consortium=consortium_obj,
+            project=project_obj,
+            teams=teams,
+            vendors=vendors,
+            default_team=default_team,
+        )
 
     @app.route("/rfpos/<int:rfpo_id>")
     def rfpo_detail(rfpo_id):

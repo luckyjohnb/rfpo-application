@@ -1,6 +1,6 @@
 {% extends "app/base.html" %}
 
-{% block title %}Create RFPO - Details - RFPO Application{% endblock %}
+{% block title %}Create RFPO - Stage 2 - RFPO Application{% endblock %}
 
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
@@ -8,18 +8,18 @@
         <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
         <li class="breadcrumb-item"><a href="{{ url_for('rfpos_list') }}">RFPOs</a></li>
         <li class="breadcrumb-item"><a href="{{ url_for('rfpo_create') }}">Create</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Details</li>
+        <li class="breadcrumb-item active" aria-current="page">Stage 2</li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col">
-        <h1 class="h2 mb-0">
-            <i class="fas fa-plus"></i> Create New RFPO
-        </h1>
-        <p class="text-muted">Step 2 of 2: RFPO Details</p>
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📄 Create RFPO - Stage 2: Basic Information</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to RFPOs
+        </a>
     </div>
 </div>
 
@@ -27,21 +27,23 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="progress" style="height: 8px;">
-            <div class="progress-bar bg-primary" role="progressbar" style="width: 100%" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+            <div class="progress-bar bg-primary" role="progressbar" style="width: 50%" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
         </div>
         <div class="d-flex justify-content-between mt-2">
-            <small class="text-success"><i class="fas fa-check"></i> 1. Select Project</small>
-            <small class="text-primary fw-bold">2. RFPO Details</small>
+            <small class="text-success">✓ 1. Select Project</small>
+            <small class="text-primary fw-bold">2. Basic Info</small>
+            <small class="text-muted">3. Line Items</small>
+            <small class="text-muted">4. Review</small>
         </div>
     </div>
 </div>
 
-<!-- Selected Consortium & Project Info -->
+<!-- Selected Project & Consortium Info -->
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="card bg-light">
             <div class="card-body py-2">
-                <small class="text-muted">Consortium:</small><br>
+                <small class="text-muted">Selected Consortium:</small><br>
                 <strong>{{ consortium.abbrev }} - {{ consortium.name }}</strong>
             </div>
         </div>
@@ -49,36 +51,30 @@
     <div class="col-md-6">
         <div class="card bg-light">
             <div class="card-body py-2">
-                <small class="text-muted">Project:</small><br>
+                <small class="text-muted">Selected Project:</small><br>
                 <strong>[{{ project.ref }}] {{ project.name }}</strong>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-body">
-                <form id="rfpoCreateForm">
-                    <!-- Hidden fields for consortium/project context -->
-                    <input type="hidden" id="consortium_id" value="{{ consortium.consort_id }}">
-                    <input type="hidden" id="project_id" value="{{ project.id }}">
+<div class="card">
+    <div class="card-body">
+        <form id="rfpoCreateForm">
+            <!-- Hidden fields for consortium/project context -->
+            <input type="hidden" id="consortium_id" value="{{ consortium.consort_id }}">
+            <input type="hidden" id="project_id" value="{{ project.id }}">
 
-                    <!-- RFPO Information -->
-                    <h5 class="mb-3"><i class="fas fa-clipboard-list"></i> RFPO Information</h5>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="title" class="form-label">RFPO Title <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="title" name="title" required
-                                   placeholder="Brief description of the purchase">
-                            <div class="form-text">Clear, concise title for this purchase order</div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="government_agreement_number" class="form-label">Government Agreement Number</label>
-                            <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number">
-                            <div class="form-text">If applicable, reference number for government agreements</div>
-                        </div>
+            <div class="row">
+                <!-- Left Column: Basic RFPO Info -->
+                <div class="col-md-6">
+                    <h5 class="mb-3">📋 RFPO Information</h5>
+
+                    <div class="mb-3">
+                        <label for="title" class="form-label">RFPO Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="title" name="title" required
+                               placeholder="Brief description of the purchase">
+                        <div class="form-text">Clear, concise title for this purchase order</div>
                     </div>
 
                     <div class="mb-3">
@@ -87,104 +83,92 @@
                                   placeholder="Detailed description of the purchase"></textarea>
                     </div>
 
-                    <hr>
+                    <div class="mb-3">
+                        <label for="government_agreement_number" class="form-label">Government Agreement Number</label>
+                        <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number">
+                        <div class="form-text">If applicable, reference number for government agreements</div>
+                    </div>
+                </div>
 
-                    <!-- PO Expiration -->
-                    <h5 class="mb-3"><i class="fas fa-calendar-alt"></i> PO Expiration</h5>
+                <!-- Right Column: PO Expiration -->
+                <div class="col-md-6">
+                    <h5 class="mb-3">PO Expiration</h5>
+
+                    <div class="mb-3">
+                        <label for="delivery_date" class="form-label">PO Expiration Date</label>
+                        <input type="date" class="form-control" id="delivery_date" name="delivery_date">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team Selection (Optional) -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3">👥 Team Assignment (Optional)</h5>
+                    <p class="text-muted">You can optionally assign this RFPO to a team. If not selected, the RFPO will be created without a team assignment.</p>
+
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="delivery_date" class="form-label">PO Expiration Date</label>
-                            <input type="date" class="form-control" id="delivery_date" name="delivery_date">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="team_id" class="form-label">Team</label>
+                                <select class="form-select" id="team_id" name="team_id">
+                                    <option value="">-- No team (optional) --</option>
+                                    {% for team in teams %}
+                                    <option value="{{ team.id }}" {% if default_team and team.id == default_team.id %}selected{% endif %}>
+                                        {{ team.name }} ({{ team.abbrev }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Leave empty to create RFPO without team assignment</div>
+                            </div>
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <hr>
+            <!-- Vendor Selection (Optional) -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3">🏢 Vendor Selection (Optional)</h5>
+                    <p class="text-muted">You can select a vendor.</p>
 
-                    <!-- Team Assignment -->
-                    <h5 class="mb-3"><i class="fas fa-users"></i> Team Assignment (Optional)</h5>
-                    <p class="text-muted small">Optionally assign this RFPO to a team. If not selected, the RFPO will be created without a team assignment.</p>
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="team_id" class="form-label">Team</label>
-                            <select class="form-select" id="team_id" name="team_id">
-                                <option value="">-- No team (optional) --</option>
-                                {% for team in teams %}
-                                <option value="{{ team.id }}" {% if default_team and team.id == default_team.id %}selected{% endif %}>
-                                    {{ team.name }} ({{ team.abbrev }})
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <div class="form-text">Leave empty to create RFPO without team assignment</div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="vendor_id" class="form-label">Vendor</label>
+                                <select class="form-select" id="vendor_id" name="vendor_id">
+                                    <option value="">-- Select approved vendor (optional) --</option>
+                                    {% for vendor in vendors %}
+                                    <option value="{{ vendor.id }}">{{ vendor.company_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="vendor_site_id" class="form-label">Vendor Contact/Site</label>
+                                <select class="form-select" id="vendor_site_id" name="vendor_site_id" disabled>
+                                    <option value="">-- Select vendor first --</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <hr>
-
-                    <!-- Vendor Selection -->
-                    <h5 class="mb-3"><i class="fas fa-truck"></i> Vendor Selection (Optional)</h5>
-                    <p class="text-muted small">Select an approved vendor for this purchase order.</p>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="vendor_id" class="form-label">Vendor</label>
-                            <select class="form-select" id="vendor_id" name="vendor_id">
-                                <option value="">-- Select approved vendor (optional) --</option>
-                                {% for vendor in vendors %}
-                                <option value="{{ vendor.id }}">{{ vendor.company_name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-3" id="vendorSiteGroup" style="display: none;">
-                            <label for="vendor_site_id" class="form-label">Vendor Contact/Site</label>
-                            <select class="form-select" id="vendor_site_id" name="vendor_site_id">
-                                <option value="">-- Select contact/site (optional) --</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <hr>
-
-                    <div class="d-flex justify-content-between mt-3">
-                        <a href="{{ url_for('rfpo_create') }}" class="btn btn-outline-secondary">
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('rfpo_create') }}" class="btn btn-secondary">
                             <i class="fas fa-arrow-left"></i> Back to Project Selection
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Create RFPO
-                            <span class="loading" style="display: none;">
-                                <i class="fas fa-spinner fa-spin"></i> Creating...
-                            </span>
+                            Create RFPO & Add Line Items <i class="fas fa-arrow-right"></i>
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
-        </div>
-    </div>
-
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="card-title mb-0"><i class="fas fa-info-circle"></i> Help</h6>
-            </div>
-            <div class="card-body">
-                <p class="small text-muted">
-                    <strong>Title:</strong> A clear, concise description of what you are purchasing.
-                </p>
-                <p class="small text-muted">
-                    <strong>Gov Agreement #:</strong> Reference number if this is tied to a government agreement.
-                </p>
-                <p class="small text-muted">
-                    <strong>PO Expiration:</strong> The date after which this purchase order expires.
-                </p>
-                <p class="small text-muted">
-                    <strong>Team:</strong> Optional — the team responsible for this RFPO.
-                </p>
-                <p class="small text-muted">
-                    <strong>Vendor:</strong> Select from approved vendors. Choose a vendor contact for specific site info.
-                </p>
-                <p class="small text-muted mt-3">
-                    <i class="fas fa-info-circle text-info"></i> Requestor details, shipping info, delivery terms, and payment terms are automatically set based on your consortium and user profile.
-                </p>
-            </div>
-        </div>
+        </form>
     </div>
 </div>
 {% endblock %}
@@ -194,37 +178,38 @@
     // Vendor → Vendor Site cascading dropdown
     document.getElementById('vendor_id').addEventListener('change', async function() {
         const vendorId = this.value;
-        const siteGroup = document.getElementById('vendorSiteGroup');
         const siteSelect = document.getElementById('vendor_site_id');
 
-        siteSelect.innerHTML = '<option value="">-- Select contact/site (optional) --</option>';
-
         if (!vendorId) {
-            siteGroup.style.display = 'none';
+            siteSelect.disabled = true;
+            siteSelect.innerHTML = '<option value="">-- Select vendor first --</option>';
             return;
         }
+
+        // Show loading
+        siteSelect.disabled = true;
+        siteSelect.innerHTML = '<option value="">Loading contacts...</option>';
 
         try {
             const response = await makeApiCall(`/api/vendor-sites/${vendorId}`);
             const sites = response.success ? response.vendor_sites : response;
 
+            siteSelect.innerHTML = '<option value="">-- Select contact/site (optional) --</option>';
+
             if (Array.isArray(sites) && sites.length > 0) {
                 sites.forEach(site => {
-                    const label = site.contact_name
-                        ? `${site.contact_name}${site.contact_city ? ' — ' + site.contact_city + (site.contact_state ? ', ' + site.contact_state : '') : ''}`
-                        : (site.vendor_site_id || 'Site');
                     const option = document.createElement('option');
                     option.value = site.id;
-                    option.textContent = label;
+                    option.textContent = `${site.contact_name} - ${site.contact_city}, ${site.contact_state}`;
                     siteSelect.appendChild(option);
                 });
-                siteGroup.style.display = '';
+                siteSelect.disabled = false;
             } else {
-                siteGroup.style.display = 'none';
+                siteSelect.innerHTML = '<option value="">No contacts available for this vendor</option>';
             }
         } catch (error) {
-            console.error('Failed to load vendor sites:', error);
-            siteGroup.style.display = 'none';
+            console.error('Error loading vendor sites:', error);
+            siteSelect.innerHTML = '<option value="">Error loading contacts</option>';
         }
     });
 
@@ -256,9 +241,8 @@
         };
 
         const submitBtn = this.querySelector('button[type="submit"]');
-        const loadingSpan = submitBtn.querySelector('.loading');
-        loadingSpan.style.display = 'inline';
         submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
 
         try {
             const response = await makeApiCall('/api/rfpos', {
@@ -267,7 +251,7 @@
             });
 
             if (response.success) {
-                showAlert('RFPO created successfully!', 'success');
+                showAlert('RFPO created successfully! You can now add line items.', 'success');
                 setTimeout(() => {
                     window.location.href = `/rfpos/${response.rfpo.id}`;
                 }, 1500);
@@ -276,9 +260,8 @@
             }
         } catch (error) {
             showAlert(`Error creating RFPO: ${error.message}`, 'danger');
-        } finally {
-            loadingSpan.style.display = 'none';
             submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Create RFPO & Add Line Items <i class="fas fa-arrow-right"></i>';
         }
     });
 </script>

@@ -452,6 +452,27 @@ def verify():
     )
 
 
+@app.route("/api/auth/sso-token", methods=["POST"])
+@require_auth
+def generate_sso_token():
+    """Generate a short-lived SSO token for admin panel cross-auth. Admin/GOD only."""
+    user = request.current_user
+    perms = user.get_permissions() or []
+    if "RFPO_ADMIN" not in perms and "GOD" not in perms:
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    sso_token = jwt.encode(
+        {
+            "user_id": user.id,
+            "purpose": "admin_sso",
+            "exp": datetime.utcnow() + timedelta(seconds=30),
+        },
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+    return jsonify({"success": True, "sso_token": sso_token})
+
+
 @app.route("/api/teams")
 @require_auth
 def list_teams():

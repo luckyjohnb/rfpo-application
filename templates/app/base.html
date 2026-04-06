@@ -191,6 +191,13 @@
                         </a>
                     </li>
                     {% endif %}
+                    {% if nav.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="launchAdminPanel(); return false;" title="Open Admin Panel">
+                            <i class="fas fa-cogs"></i> Admin Panel
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
 
@@ -473,6 +480,22 @@
                 loadNotifications();
             }
         });
+
+        {% if nav.is_admin %}
+        async function launchAdminPanel() {
+            try {
+                const resp = await fetch('/api/auth/sso-token', { method: 'POST' });
+                const data = await resp.json();
+                if (data.success && data.sso_token) {
+                    window.open('{{ admin_panel_url }}/sso-login?token=' + encodeURIComponent(data.sso_token), '_blank');
+                } else {
+                    alert(data.message || 'Failed to generate SSO token.');
+                }
+            } catch (e) {
+                alert('Could not connect to admin panel. Please try again.');
+            }
+        }
+        {% endif %}
     </script>
 
     {% block extra_js %}{% endblock %}

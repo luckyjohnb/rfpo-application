@@ -86,6 +86,7 @@ def create_user_app():
     # API Configuration
     API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:5002/api")
     ADMIN_API_URL = os.environ.get("ADMIN_API_URL", "http://127.0.0.1:5111/api")
+    ADMIN_PANEL_URL = os.environ.get("ADMIN_PANEL_URL", "http://127.0.0.1:5111")
     INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
     # Context processor — inject nav context into every template
@@ -116,7 +117,7 @@ def create_user_app():
                 session["nav_context_ts"] = _time()
         except Exception:
             pass
-        return {"nav": nav}
+        return {"nav": nav, "admin_panel_url": ADMIN_PANEL_URL}
 
     def _require_session_token(f):
         """Decorator to reject proxy requests without a session auth_token."""
@@ -564,6 +565,12 @@ def create_user_app():
         """Update user profile API proxy"""
         data = request.get_json()
         response = make_api_request("/users/profile", "PUT", data)
+        return jsonify(response)
+
+    @app.route("/api/auth/sso-token", methods=["POST"])
+    def api_sso_token():
+        """Generate SSO token for admin panel cross-auth"""
+        response = make_api_request("/auth/sso-token", "POST")
         return jsonify(response)
 
     @app.route("/api/auth/change-password", methods=["POST"])

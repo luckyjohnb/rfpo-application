@@ -1555,6 +1555,47 @@ def create_app():
         from auth_saml import is_saml_enabled
         return render_template("admin/login.html", saml_enabled=is_saml_enabled())
 
+    # ─── SSO Cross-Auth from User App ─────────────────────────────────
+
+    @app.route("/sso-login")
+    def sso_login():
+        """Accept a short-lived JWT from the User App to log the user into the admin panel."""
+        import jwt as pyjwt
+
+        token = request.args.get("token", "").strip()
+        if not token:
+            flash("❌ Invalid SSO request.", "error")
+            return redirect(url_for("login"))
+
+        jwt_secret = os.environ.get("JWT_SECRET_KEY", "simple-jwt-secret")
+        try:
+            payload = pyjwt.decode(token, jwt_secret, algorithms=["HS256"])
+        except pyjwt.ExpiredSignatureError:
+            flash("❌ SSO link has expired. Please try again from the User App.", "error")
+            return redirect(url_for("login"))
+        except pyjwt.InvalidTokenError:
+            flash("❌ Invalid SSO token.", "error")
+            return redirect(url_for("login"))
+
+        if payload.get("purpose") != "admin_sso":
+            flash("❌ Invalid SSO token.", "error")
+            return redirect(url_for("login"))
+
+        user = User.query.get(payload.get("user_id"))
+        if not user or not user.active:
+            flash("❌ User account not found or inactive.", "error")
+            return redirect(url_for("login"))
+
+        if not (user.is_super_admin() or user.is_rfpo_admin()):
+            flash("❌ You do not have admin privileges.", "error")
+            return redirect(url_for("login"))
+
+        login_user(user)
+        record_audit("login", "user", user.id, {"email": user.email, "method": "sso_crossauth"})
+        db.session.commit()
+        flash(f"Welcome {user.get_display_name()}! 🎉", "success")
+        return redirect(url_for("dashboard"))
+
     # ─── SAML SSO Routes (Admin) ─────────────────────────────────────────
 
     @app.route("/auth/login-microsoft")

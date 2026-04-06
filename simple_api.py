@@ -60,8 +60,11 @@ USER_ROUTES_AVAILABLE = False
 app = Flask(__name__, template_folder="templates")
 
 # Configuration
+_is_production = "postgresql" in os.environ.get("DATABASE_URL", "")
 app.config["SECRET_KEY"] = os.environ.get("API_SECRET_KEY", "simple-api-secret")
 if app.config["SECRET_KEY"] == "simple-api-secret":
+    if _is_production:
+        raise RuntimeError("API_SECRET_KEY must be set in production (DATABASE_URL contains postgresql)")
     import warnings
     warnings.warn("API_SECRET_KEY not set! Using insecure default.", stacklevel=1)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
@@ -127,30 +130,64 @@ if ADMIN_ROUTES_AVAILABLE:
 
 # JWT Secret - MUST be set via environment variable in production
 JWT_SECRET = os.environ.get("JWT_SECRET_KEY", "simple-jwt-secret")
-if JWT_SECRET == "simple-jwt-secret" and not os.environ.get("FLASK_ENV") == "development":
+if JWT_SECRET == "simple-jwt-secret":
+    if _is_production:
+        raise RuntimeError("JWT_SECRET_KEY must be set in production (DATABASE_URL contains postgresql)")
     import warnings
     warnings.warn("JWT_SECRET_KEY not set! Using insecure default. Set JWT_SECRET_KEY env var.", stacklevel=1)
 
-# --- Rate limiting for login ---
-_login_attempts = defaultdict(list)
-_login_lock = threading.Lock()
+# Internal API key for service-to-service calls (SAML match, etc.)
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+if not INTERNAL_API_KEY and _is_production:
+    import warnings
+    warnings.warn("INTERNAL_API_KEY not set. SAML match endpoint will reject requests.", stacklevel=1)
+
+# --- Rate limiting for login (DB-backed via AuditLog) ---
 _LOGIN_MAX_ATTEMPTS = 5
 _LOGIN_WINDOW_SECONDS = 300  # 5 minutes
 
+# In-memory fallback only used if DB query fails
+_login_attempts_fallback = defaultdict(list)
+_login_lock = threading.Lock()
+
 
 def _is_rate_limited(ip_address: str) -> bool:
-    now = time.time()
-    with _login_lock:
-        _login_attempts[ip_address] = [
-            ts for ts in _login_attempts[ip_address]
-            if now - ts < _LOGIN_WINDOW_SECONDS
-        ]
-        return len(_login_attempts[ip_address]) >= _LOGIN_MAX_ATTEMPTS
+    """Check if IP has exceeded login attempt limit using AuditLog (persistent across restarts)."""
+    try:
+        cutoff = datetime.utcnow() - timedelta(seconds=_LOGIN_WINDOW_SECONDS)
+        count = AuditLog.query.filter(
+            AuditLog.action == "failed_login",
+            AuditLog.ip_address == ip_address,
+            AuditLog.timestamp >= cutoff,
+        ).count()
+        return count >= _LOGIN_MAX_ATTEMPTS
+    except Exception:
+        # Fallback to in-memory if DB unavailable
+        now = time.time()
+        with _login_lock:
+            _login_attempts_fallback[ip_address] = [
+                ts for ts in _login_attempts_fallback[ip_address]
+                if now - ts < _LOGIN_WINDOW_SECONDS
+            ]
+            return len(_login_attempts_fallback[ip_address]) >= _LOGIN_MAX_ATTEMPTS
 
 
 def _record_login_attempt(ip_address: str) -> None:
-    with _login_lock:
-        _login_attempts[ip_address].append(time.time())
+    """Record a failed login attempt to AuditLog for persistent rate limiting."""
+    try:
+        entry = AuditLog(
+            action="failed_login",
+            entity_type="auth",
+            ip_address=ip_address,
+            user_agent=request.headers.get("User-Agent", "")[:512],
+        )
+        db.session.add(entry)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        # Fallback to in-memory
+        with _login_lock:
+            _login_attempts_fallback[ip_address].append(time.time())
 
 
 # Simple authentication decorator
@@ -476,6 +513,15 @@ def change_password():
 @app.route("/api/auth/saml-match", methods=["POST"])
 def saml_match():
     """Match a SAML-authenticated user to a local RFPO user and issue JWT."""
+    # Validate internal service-to-service API key
+    provided_key = request.headers.get("X-Internal-API-Key", "")
+    if INTERNAL_API_KEY:
+        if not provided_key or provided_key != INTERNAL_API_KEY:
+            return jsonify({"success": False, "message": "Unauthorized"}), 403
+    elif _is_production:
+        # No INTERNAL_API_KEY configured in production — reject all calls
+        return jsonify({"success": False, "message": "Endpoint not configured"}), 503
+
     try:
         data = request.get_json()
         email = data.get("email", "").strip().lower()
@@ -544,7 +590,7 @@ def saml_match():
     except Exception as e:
         db.session.rollback()
         app.logger.exception(f"SAML match error: {e}")
-        return jsonify({"success": False, "message": f"Internal server error: {str(e)}"}), 500
+        return jsonify({"success": False, "message": "Internal server error"}), 500
 
 
 @app.route("/api/users/approver-rfpos", methods=["GET"])
@@ -1589,9 +1635,8 @@ def list_rfpos():
     """List RFPOs with permission filtering, pagination, and search"""
     try:
         user = request.current_user
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 50, type=int)
-        per_page = min(per_page, 200)  # Cap at 200
+        page = max(1, request.args.get("page", 1, type=int))
+        per_page = max(1, min(request.args.get("per_page", 50, type=int), 200))
         status_filter = request.args.get("status")
         search_query = request.args.get("search", "").strip()
         team_id_filter = request.args.get("team_id", type=int)

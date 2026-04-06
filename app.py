@@ -6,6 +6,7 @@ API Consumer Only - All data operations go through API layer
 
 import os
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 
 import jwt as pyjwt
 import requests
@@ -22,10 +23,13 @@ def create_user_app():
     app = Flask(__name__)
 
     # Configuration
+    _is_production = "postgresql" in os.environ.get("DATABASE_URL", "")
     app.config["SECRET_KEY"] = os.environ.get(
         "USER_APP_SECRET_KEY", "user-app-secret-change-in-production"
     )
     if app.config["SECRET_KEY"] == "user-app-secret-change-in-production":
+        if _is_production:
+            raise RuntimeError("USER_APP_SECRET_KEY must be set in production (DATABASE_URL contains postgresql)")
         import warnings
         warnings.warn("USER_APP_SECRET_KEY not set! Using insecure default.", stacklevel=1)
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
@@ -78,6 +82,7 @@ def create_user_app():
     # API Configuration
     API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:5003/api")
     ADMIN_API_URL = os.environ.get("ADMIN_API_URL", "http://127.0.0.1:5111/api")
+    INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
     # Context processor — inject nav context into every template
     @app.context_processor
@@ -105,13 +110,25 @@ def create_user_app():
             pass
         return {"nav": nav}
 
+    def _require_session_token(f):
+        """Decorator to reject proxy requests without a session auth_token."""
+        from functools import wraps
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if "auth_token" not in session:
+                return jsonify({"authenticated": False, "message": "No token"}), 401
+            return f(*args, **kwargs)
+        return decorated
+
     # Helper function to make API calls
-    def make_api_request(endpoint, method="GET", data=None, use_admin_api=False):
+    def make_api_request(endpoint, method="GET", data=None, use_admin_api=False, extra_headers=None):
         """Make API request with authentication"""
         base_url = ADMIN_API_URL if use_admin_api else API_BASE_URL
         url = f"{base_url}{endpoint}"
 
         headers = {"Content-Type": "application/json"}
+        if extra_headers:
+            headers.update(extra_headers)
 
         # Add auth token if available
         if "auth_token" in session:
@@ -137,7 +154,8 @@ def create_user_app():
                 return {"success": False, "message": f"API returned non-JSON response (HTTP {response.status_code})"}
 
         except requests.exceptions.RequestException as e:
-            return {"success": False, "message": f"API Error: {str(e)}"}
+            app.logger.error(f"API request failed for {endpoint}: {e}")
+            return {"success": False, "message": "API service unavailable"}
 
     # Routes
     @app.route("/")
@@ -459,7 +477,7 @@ def create_user_app():
         """RFPOs API proxy"""
         if request.method == "GET":
             # Forward query parameters
-            params = "&".join([f"{k}={v}" for k, v in request.args.items()])
+            params = urlencode(request.args.to_dict(flat=False), doseq=True)
             endpoint = f"/rfpos?{params}" if params else "/rfpos"
             response = make_api_request(endpoint)
         else:
@@ -484,7 +502,7 @@ def create_user_app():
     @app.route("/api/teams", methods=["GET"])
     def api_teams():
         """Teams API proxy"""
-        params = "&".join([f"{k}={v}" for k, v in request.args.items()])
+        params = urlencode(request.args.to_dict(flat=False), doseq=True)
         endpoint = f"/teams?{params}" if params else "/teams"
         response = make_api_request(endpoint)
         return jsonify(response)
@@ -496,12 +514,14 @@ def create_user_app():
         return jsonify(response)
 
     @app.route("/api/consortiums", methods=["GET"])
+    @_require_session_token
     def api_consortiums():
         """Consortiums API proxy"""
         response = make_api_request("/consortiums")
         return jsonify(response)
 
     @app.route("/api/projects/<consortium_id>", methods=["GET"])
+    @_require_session_token
     def api_projects_for_consortium(consortium_id):
         """Projects for consortium API proxy"""
         response = make_api_request(
@@ -510,12 +530,14 @@ def create_user_app():
         return jsonify(response)
 
     @app.route("/api/vendors", methods=["GET"])
+    @_require_session_token
     def api_vendors():
         """Vendors API proxy"""
         response = make_api_request("/vendors")
         return jsonify(response)
 
     @app.route("/api/vendor-sites/<int:vendor_id>", methods=["GET"])
+    @_require_session_token
     def api_vendor_sites(vendor_id):
         """Vendor sites API proxy"""
         response = make_api_request(
@@ -679,6 +701,7 @@ def create_user_app():
         return jsonify(response)
 
     @app.route("/api/rfpos/doc-types", methods=["GET"])
+    @_require_session_token
     def api_doc_types():
         """Document types API proxy"""
         response = make_api_request("/rfpos/doc-types")
@@ -885,13 +908,14 @@ def create_user_app():
             ), 400
 
         # Match to local RFPO user by email (D3: block if not pre-provisioned)
+        internal_headers = {"X-Internal-API-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}
         match_response = make_api_request("/auth/saml-match", "POST", {
             "email": email,
             "entra_roles": user_attrs.get("roles", []),
             "first_name": user_attrs.get("first_name", ""),
             "last_name": user_attrs.get("last_name", ""),
             "name_id": user_attrs.get("name_id", ""),
-        })
+        }, extra_headers=internal_headers)
 
         if not match_response.get("success"):
             message = match_response.get("message", "Your account has not been set up in RFPO. Contact your USCAR administrator.")

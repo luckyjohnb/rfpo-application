@@ -50,7 +50,7 @@ class Config:
     # Security Headers
     FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "False").lower() == "true"
     SESSION_COOKIE_SECURE = (
-        os.environ.get("SESSION_COOKIE_SECURE", "False").lower() == "true"
+        os.environ.get("SESSION_COOKIE_SECURE", "True").lower() == "true"
     )
     SESSION_COOKIE_HTTPONLY = (
         os.environ.get("SESSION_COOKIE_HTTPONLY", "True").lower() == "true"

@@ -132,8 +132,32 @@
                     <div class="row">
                         <div class="col-md-8">
                             <div class="form-group">
-                                <label for="consortium_id">Consortium</label>
-                                <select class="form-control" id="consortium_id" name="consortium_id" required>
+                                {% if workflow.workflow_type == 'team' %}
+                                <label for="entity_id">Team</label>
+                                <select class="form-control" id="entity_id" name="entity_id" required>
+                                    <option value="">Select Team</option>
+                                    {% for team in teams %}
+                                    <option value="{{ team.id }}"
+                                            {% if workflow.team_id == team.id %}selected{% endif %}>
+                                        {{ team.abbrev }} - {{ team.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% elif workflow.workflow_type == 'project' %}
+                                <label for="entity_id">Project</label>
+                                <select class="form-control" id="entity_id" name="entity_id" required>
+                                    <option value="">Select Project</option>
+                                    {% for project in projects %}
+                                    <option value="{{ project.project_id }}"
+                                            {% if workflow.project_id == project.project_id %}selected{% endif %}>
+                                        {{ project.ref }} - {{ project.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% else %}
+                                <label for="entity_id">Consortium</label>
+                                <select class="form-control" id="entity_id" name="entity_id" required>
+                                    <option value="">Select Consortium</option>
                                     {% for consortium in consortiums %}
                                     <option value="{{ consortium.consort_id }}"
                                             {% if workflow.consortium_id == consortium.consort_id %}selected{% endif %}>
@@ -141,6 +165,7 @@
                                     </option>
                                     {% endfor %}
                                 </select>
+                                {% endif %}
                             </div>
                         </div>
                         <div class="col-md-4">

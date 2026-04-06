@@ -5509,7 +5509,15 @@ Southfield, MI  48075""",
                 workflow.name = request.form.get("name")
                 workflow.description = request.form.get("description")
                 workflow.version = request.form.get("version", "1.0")
-                workflow.consortium_id = request.form.get("consortium_id")
+
+                # Update entity association based on workflow type
+                if workflow.workflow_type == "consortium":
+                    workflow.consortium_id = request.form.get("entity_id")
+                elif workflow.workflow_type == "team":
+                    team_val = request.form.get("entity_id")
+                    workflow.team_id = int(team_val) if team_val else None
+                elif workflow.workflow_type == "project":
+                    workflow.project_id = request.form.get("entity_id")
 
                 # Handle activation
                 new_active_status = bool(request.form.get("is_active"))
@@ -5540,6 +5548,8 @@ Southfield, MI  48075""",
                 flash(f"❌ Error updating approval workflow: {str(e)}", "error")
 
         consortiums = Consortium.query.filter_by(active=True).all()
+        teams = Team.query.filter_by(active=True).all()
+        projects = Project.query.filter_by(active=True).all()
         # Case-insensitive lookups to support RFPO_BRACK / RFPO_APPRO
         budget_brackets = List.get_by_type_ci("RFPO_BRACK")
         approval_types = List.get_by_type_ci("RFPO_APPRO")
@@ -5550,6 +5560,8 @@ Southfield, MI  48075""",
             "admin/approval_workflow_edit.html",
             workflow=workflow,
             consortiums=consortiums,
+            teams=teams,
+            projects=projects,
             budget_brackets=budget_brackets,
             approval_types=approval_types,
             document_types=document_types,

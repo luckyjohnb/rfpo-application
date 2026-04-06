@@ -127,6 +127,7 @@ def verify_tables_created(app):
         "rfpo_approval_steps",
         "rfpo_approval_instances",
         "rfpo_approval_actions",
+        "audit_logs",
     ]
 
     try:

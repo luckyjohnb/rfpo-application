@@ -203,7 +203,7 @@ rfpo-application/
 ├── app.py                  # User-facing application (Port 5000)
 ├── custom_admin.py         # Admin panel (Port 5111)
 ├── simple_api.py           # API server (Port 5002)
-├── models.py               # Database models (17 SQLAlchemy models)
+├── models.py               # Database models (18 SQLAlchemy models)
 ├── env_config.py           # Centralized configuration management
 ├── exceptions.py           # Custom exception hierarchy
 ├── error_handlers.py       # Flask error handlers

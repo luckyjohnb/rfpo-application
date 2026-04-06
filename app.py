@@ -67,7 +67,7 @@ def create_user_app():
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
             "font-src 'self' https://cdnjs.cloudflare.com; "
             "img-src 'self' data:; "
-            "connect-src 'self' " + os.environ.get("API_BASE_URL", "http://127.0.0.1:5003/api").rsplit("/api", 1)[0]
+            "connect-src 'self' " + os.environ.get("API_BASE_URL", "http://127.0.0.1:5002/api").rsplit("/api", 1)[0]
         )
         return response
 
@@ -84,7 +84,7 @@ def create_user_app():
             return "$0.00"
 
     # API Configuration
-    API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:5003/api")
+    API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:5002/api")
     ADMIN_API_URL = os.environ.get("ADMIN_API_URL", "http://127.0.0.1:5111/api")
     INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
@@ -770,7 +770,7 @@ def create_user_app():
         # Get vendor site info
         if rfpo.get("vendor_site_id") and vendor:
             vendor_sites_response = make_api_request(f'/vendor-sites/{vendor["id"]}')
-            if vendor_sites_response:
+            if isinstance(vendor_sites_response, list):
                 for site in vendor_sites_response:
                     if site.get("id") == rfpo["vendor_site_id"]:
                         vendor_site = site

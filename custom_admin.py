@@ -1527,10 +1527,10 @@ def create_app():
                 flash("❌ Too many login attempts. Please try again in a few minutes.", "error")
                 return render_template("admin/login.html"), 429
 
-            email = request.form.get("email", "").strip()
+            email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
 
-            user = User.query.filter_by(email=email, active=True).first()
+            user = User.query.filter(db.func.lower(User.email) == email, User.active == True).first()
 
             if user and check_password_hash(user.password_hash, password):
                 if user.is_super_admin() or user.is_rfpo_admin():
@@ -2568,7 +2568,7 @@ def create_app():
                         errors.append(f"Row {idx}: missing email or fullname")
                         continue
 
-                    existing = User.query.filter_by(email=email).first()
+                    existing = User.query.filter(db.func.lower(User.email) == email.lower()).first()
 
                     # Normalize permissions and active flag
                     permissions = _import_parse_list(rec.get("permissions"))
@@ -2795,8 +2795,8 @@ def create_app():
             try:
                 # Check for email conflicts before making changes
                 new_email = request.form.get("email")
-                if new_email and new_email != user.email:
-                    existing_user = User.query.filter_by(email=new_email).first()
+                if new_email and new_email.lower() != user.email.lower():
+                    existing_user = User.query.filter(db.func.lower(User.email) == new_email.lower()).first()
                     if existing_user:
                         flash(
                             f'❌ Email address "{new_email}" is already in use by another user.',
@@ -2994,10 +2994,14 @@ def create_app():
                 # Generate RFPO ID based on project
                 today = datetime.now()
                 date_str = today.strftime("%Y-%m-%d")
-                existing_count = RFPO.query.filter(
-                    RFPO.rfpo_id.like(f"RFPO-{project.ref}-%{date_str}%")
-                ).count()
-                rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
+                # Use retry loop to handle concurrent RFPO ID generation
+                for _attempt in range(5):
+                    existing_count = RFPO.query.filter(
+                        RFPO.rfpo_id.like(f"RFPO-{project.ref}-%{date_str}%")
+                    ).count()
+                    rfpo_id = f"RFPO-{project.ref}-{date_str}-N{existing_count + 1:02d}"
+                    if not RFPO.query.filter_by(rfpo_id=rfpo_id).first():
+                        break
 
                 # Get team from form selection or from project's default team
                 # Team is now optional - do not auto-assign if not selected

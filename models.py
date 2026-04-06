@@ -328,6 +328,7 @@ class RFPO(db.Model):
             "updated_by": self.updated_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "file_count": len(self.files) if self.files else 0,
             "line_item_count": len(self.line_items) if self.line_items else 0,
         }
@@ -2178,11 +2179,12 @@ class RFPOApprovalAction(db.Model):
 
         if approver_id:
             # Update approver info if different (backup approver scenario)
+            original_approver_id = self.approver_id
             approver = User.query.filter_by(record_id=approver_id, active=True).first()
             if approver:
                 self.approver_id = approver_id
                 self.approver_name = approver.get_display_name()
-                self.is_backup_approver = approver_id != self.approver_id
+                self.is_backup_approver = approver_id != original_approver_id
 
     def escalate_action(self, reason=None):
         """Escalate this action to backup approver"""

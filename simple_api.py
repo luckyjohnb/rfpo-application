@@ -622,8 +622,7 @@ def get_approver_rfpos():
         for inst in all_active_instances:
             try:
                 data = inst.get_instance_data()
-                for phase in data.get("phases", []):
-                    stage = phase.get("stage", {})
+                for stage in data.get("stages", []):
                     for step in stage.get("steps", []):
                         if step.get("backup_approver_id") == user.record_id:
                             for act in inst.actions:
@@ -797,8 +796,8 @@ def take_approval_action(action_id):
             # Notify requestor if workflow completed
             if instance.overall_status in ("approved", "refused") and instance.rfpo:
                 requestor = User.query.filter_by(
-                    record_id=instance.rfpo.created_by_id
-                ).first() if hasattr(instance.rfpo, 'created_by_id') else None
+                    record_id=instance.rfpo.created_by
+                ).first() if instance.rfpo.created_by else None
                 if requestor and requestor.email:
                     send_approval_notification(
                         requestor.email, requestor.get_display_name(),
@@ -1808,11 +1807,14 @@ def create_rfpo():
         project = Project.query.filter_by(project_id=data["project_id"]).first()
         project_ref = project.ref if project else "PROJ"
 
-        # Count existing RFPOs for this project and date
-        existing_count = RFPO.query.filter(
-            RFPO.rfpo_id.like(f"RFPO-{project_ref}-%{date_str}%")
-        ).count()
-        rfpo_id = f"RFPO-{project_ref}-{date_str}-N{existing_count + 1:02d}"
+        # Count existing RFPOs for this project and date (retry to avoid duplicates)
+        for _attempt in range(5):
+            existing_count = RFPO.query.filter(
+                RFPO.rfpo_id.like(f"RFPO-{project_ref}-%{date_str}%")
+            ).count()
+            rfpo_id = f"RFPO-{project_ref}-{date_str}-N{existing_count + 1:02d}"
+            if not RFPO.query.filter_by(rfpo_id=rfpo_id).first():
+                break
 
         # Create RFPO
         rfpo = RFPO(

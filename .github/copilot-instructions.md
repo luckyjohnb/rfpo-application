@@ -18,13 +18,13 @@
 
 ## Database Models (models.py)
 
-**17 SQLAlchemy models** - always import ALL models for db.create_all() to work:
+**18 SQLAlchemy models** - always import ALL models for db.create_all() to work:
 ```python
 from models import (
     db, User, Consortium, RFPO, RFPOLineItem, UploadedFile,
     Team, UserTeam, Project, Vendor, VendorSite, PDFPositioning, List,
     RFPOApprovalWorkflow, RFPOApprovalStage, RFPOApprovalStep,
-    RFPOApprovalInstance, RFPOApprovalAction
+    RFPOApprovalInstance, RFPOApprovalAction, AuditLog
 )
 ```
 
@@ -44,7 +44,7 @@ from models import (
 ## Database Initialization
 
 **CRITICAL:** When initializing databases (especially Azure PostgreSQL), use `sqlalchemy_db_init.py`:
-- Imports all 17 models (required for table creation - missing even ONE will break db.create_all())
+- Imports all 18 models (required for table creation - missing even ONE will break db.create_all())
 - Creates admin user with werkzeug hashed password (NOT bcrypt! - admin panel uses werkzeug.security for verification)
 - Handles both SQLite and PostgreSQL via `DATABASE_URL` env var from `.env` file
 - **NEVER hardcode connection strings** - use `env_config.py` centralized configuration
@@ -97,10 +97,11 @@ DATABASE_URL=postgresql://rfpoadmin:PASSWORD@rfpo-db-{unique}.postgres.database.
 - File uploads stored in `uploads/logos/` and `uploads/terms/`
 - PDF generation via `RFPOPDFGenerator` (pdf_generator.py)
 
-### API Layer (api/api_server.py)
-- Blueprints: `auth_routes`, `team_routes`, `rfpo_routes`, `user_routes`
+### API Layer (simple_api.py)
+- Monolithic Flask app with all routes in `simple_api.py` (root directory)
+- Admin-specific routes in `api/admin_routes.py` blueprint
 - Database path: `instance/rfpo_admin.db` (configurable via `DATABASE_URL`)
-- CORS enabled for all origins (configure for production)
+- CORS restricted to known origins (configurable via `CORS_ORIGINS`)
 - Health check at `/api/health`
 
 ## Docker & Deployment

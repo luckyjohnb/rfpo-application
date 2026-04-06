@@ -44,6 +44,8 @@ jobs:
           echo "::add-mask::${{ secrets.SMTP_PASSWORD }}"
           echo "::add-mask::${{ secrets.ACR_PASSWORD }}"
           echo "::add-mask::${{ secrets.POSTGRES_PASSWORD }}"
+          echo "::add-mask::${{ secrets.INTERNAL_API_KEY }}"
+          echo "::add-mask::${{ secrets.JWT_SECRET_KEY }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -170,7 +172,7 @@ jobs:
           curl -f ${{ steps.get-urls.outputs.admin-url }}/health || echo "Admin health check failed"
 
           # Check User app
-          curl -f ${{ steps.get-urls.outputs.user-url }}/ || echo "User app health check failed"
+          curl -f ${{ steps.get-urls.outputs.user-url }}/health || echo "User app health check failed"
 
       - name: Create deployment summary
         run: |

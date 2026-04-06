@@ -308,6 +308,7 @@ class RFPO(db.Model):
             "delivery_payment": self.delivery_payment,
             "delivery_routing": self.delivery_routing,
             "payment_terms": self.payment_terms,
+            "team_name": self.team.name if self.team else None,
             "vendor_id": self.vendor_id,
             "vendor_site_id": self.vendor_site_id,
             "vendor_name": self.vendor.company_name if self.vendor else None,

@@ -3331,7 +3331,6 @@ Southfield, MI  48075""",
                 description=description if description else None,
                 rfpo_id=rfpo.id,
                 uploaded_by=current_user.get_display_name(),
-                processing_status="completed",  # No RAG processing for now
             )
 
             db.session.add(uploaded_file)

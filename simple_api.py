@@ -126,6 +126,141 @@ def _error_response(e, status_code=500):
     app.logger.error("Request error: %s", str(e), exc_info=True)
     return jsonify({"success": False, "message": "An internal error occurred"}), status_code
 
+
+def _validate_rfpo_for_approval(rfpo):
+    """Validate an RFPO is ready for submission — checks fields, line items, files, workflow."""
+    result = {
+        "is_valid": True,
+        "errors": [],
+        "warnings": [],
+        "sections": {
+            "basic_info": {"complete": bool(rfpo.title and rfpo.title.strip()), "label": "Basic Information"},
+            "vendor": {"complete": rfpo.vendor_id is not None, "label": "Vendor"},
+            "line_items": {"complete": bool(rfpo.line_items and len(rfpo.line_items) > 0), "label": "Line Items"},
+            "total": {"complete": bool(rfpo.total_amount and float(rfpo.total_amount) > 0), "label": "Total Amount"},
+        },
+        "files": {
+            "uploaded_count": len(rfpo.files) if rfpo.files else 0,
+            "required_documents": [],
+            "missing_documents": [],
+            "document_status": [],
+        },
+        "workflow_info": None,
+    }
+
+    # Basic field validation
+    if not result["sections"]["basic_info"]["complete"]:
+        result["errors"].append("RFPO title is required")
+        result["is_valid"] = False
+    if not result["sections"]["vendor"]["complete"]:
+        result["warnings"].append("No vendor selected")
+    if not result["sections"]["line_items"]["complete"]:
+        result["errors"].append("RFPO must have at least one line item")
+        result["is_valid"] = False
+    if not result["sections"]["total"]["complete"]:
+        result["errors"].append("RFPO total amount must be greater than zero")
+        result["is_valid"] = False
+
+    # Find applicable workflow
+    workflow = None
+    rfpo_total = float(rfpo.total_amount or 0)
+
+    if rfpo.team_id:
+        workflow = RFPOApprovalWorkflow.query.filter_by(
+            team_id=rfpo.team_id, workflow_type="team", is_active=True, is_template=True
+        ).first()
+    if not workflow and rfpo.consortium_id:
+        workflow = RFPOApprovalWorkflow.query.filter_by(
+            consortium_id=rfpo.consortium_id, workflow_type="consortium",
+            is_active=True, is_template=True
+        ).first()
+
+    if not workflow:
+        result["errors"].append("No active approval workflow found for this RFPO")
+        result["is_valid"] = False
+        return result
+
+    # Determine which stage applies based on amount
+    applicable_stage = None
+    for stage in sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0)):
+        if rfpo_total <= float(stage.budget_bracket_amount or 0):
+            applicable_stage = stage
+            break
+    if not applicable_stage and workflow.stages:
+        applicable_stage = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0))[-1]
+
+    if not applicable_stage or not applicable_stage.steps:
+        result["errors"].append("No approval stages/steps configured for this workflow")
+        result["is_valid"] = False
+        return result
+
+    # Workflow info
+    approver_info = []
+    for step in sorted(applicable_stage.steps, key=lambda s: s.step_order):
+        approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
+        approver_info.append({
+            "step_name": step.step_name,
+            "approval_type": step.approval_type_name,
+            "approver_name": approver.get_display_name() if approver else "Unknown",
+            "approver_valid": approver is not None,
+        })
+        if not approver:
+            result["errors"].append(f"Approver not found for step: {step.step_name}")
+            result["is_valid"] = False
+
+    result["workflow_info"] = {
+        "workflow_name": workflow.name,
+        "stage_name": applicable_stage.stage_name,
+        "budget_bracket": float(applicable_stage.budget_bracket_amount or 0),
+        "rfpo_amount": rfpo_total,
+        "approval_steps": approver_info,
+    }
+
+    # Required document validation
+    required_doc_keys = applicable_stage.get_required_document_types() if hasattr(applicable_stage, 'get_required_document_types') else []
+    if required_doc_keys:
+        uploaded_doc_types = [f.document_type for f in rfpo.files if f.document_type]
+
+        for key in required_doc_keys:
+            doc_item = List.query.filter_by(type="doc_types", key=key, active=True).first()
+            doc_name = doc_item.value if doc_item and doc_item.value and doc_item.value.strip() else key
+            is_uploaded = key in uploaded_doc_types or doc_name in uploaded_doc_types
+
+            result["files"]["required_documents"].append(doc_name)
+            result["files"]["document_status"].append({
+                "key": key,
+                "name": doc_name,
+                "is_uploaded": is_uploaded,
+            })
+            if not is_uploaded:
+                result["files"]["missing_documents"].append(doc_name)
+
+        if result["files"]["missing_documents"]:
+            missing = ", ".join(result["files"]["missing_documents"])
+            result["errors"].append(f"Missing required documents: {missing}")
+            result["is_valid"] = False
+
+    # Count complete sections
+    sections_done = sum(1 for s in result["sections"].values() if s["complete"])
+    sections_total = len(result["sections"])
+    # Include files section
+    has_doc_req = len(result["files"]["required_documents"]) > 0
+    files_complete = (not has_doc_req) or (len(result["files"]["missing_documents"]) == 0)
+    result["sections"]["files"] = {
+        "complete": files_complete,
+        "label": "Required Documents",
+        "has_requirements": has_doc_req,
+    }
+    sections_done = sum(1 for s in result["sections"].values() if s["complete"])
+    sections_total = len(result["sections"])
+    result["completeness"] = {
+        "done": sections_done,
+        "total": sections_total,
+        "percent": int(sections_done / sections_total * 100) if sections_total > 0 else 0,
+    }
+
+    return result
+
 # Register admin routes if available
 if ADMIN_ROUTES_AVAILABLE:
     app.register_blueprint(admin_api)
@@ -930,6 +1065,18 @@ def bulk_approval_action():
         return _error_response(e)
 
 
+@app.route("/api/rfpos/<int:rfpo_id>/validate", methods=["GET"])
+@require_auth
+def validate_rfpo(rfpo_id):
+    """Check if an RFPO is ready for submission."""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        result = _validate_rfpo_for_approval(rfpo)
+        return jsonify({"success": True, "validation": result})
+    except Exception as e:
+        return _error_response(e)
+
+
 @app.route("/api/rfpos/<int:rfpo_id>/submit-for-approval", methods=["POST"])
 @require_auth
 def submit_for_approval(rfpo_id):
@@ -951,6 +1098,16 @@ def submit_for_approval(rfpo_id):
             return jsonify({
                 "success": False,
                 "message": f"Cannot submit RFPO with status '{rfpo.status}'. Must be Draft or Refused."
+            }), 400
+
+        # Validate RFPO readiness before submission
+        validation = _validate_rfpo_for_approval(rfpo)
+        if not validation["is_valid"]:
+            return jsonify({
+                "success": False,
+                "message": "RFPO is not ready for submission",
+                "errors": validation["errors"],
+                "validation": validation,
             }), 400
 
         # Check if there's already an active approval instance

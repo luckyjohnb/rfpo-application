@@ -343,6 +343,21 @@ def require_auth(f):
             user = User.query.get(payload["user_id"])
             if not user or not user.active:
                 return jsonify({"error": "Invalid user"}), 401
+
+            # Check permissions_version — reject tokens issued before a
+            # restrictive permission change so stale privileges can't be used.
+            token_pv = payload.get("pv", 0)
+            current_pv = user.permissions_version or 0
+            if token_pv < current_pv:
+                app.logger.warning(
+                    "Token rejected for %s: permissions_version mismatch "
+                    "(token=%s, current=%s)", user.email, token_pv, current_pv,
+                )
+                return jsonify({
+                    "error": "permissions_changed",
+                    "message": "Your permissions have been updated. Please log in again.",
+                }), 401
+
             request.current_user = user
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception) as e:
             app.logger.warning(f"Token validation failed: {type(e).__name__}")
@@ -408,9 +423,13 @@ def login():
 
     app.logger.info(f"Login successful: {email}")
 
-    # Create token
+    # Create token (pv = permissions_version for forced re-auth on restriction)
     token = jwt.encode(
-        {"user_id": user.id, "exp": datetime.utcnow() + timedelta(hours=24)},
+        {
+            "user_id": user.id,
+            "pv": user.permissions_version or 0,
+            "exp": datetime.utcnow() + timedelta(hours=24),
+        },
         JWT_SECRET,
         algorithm="HS256",
     )
@@ -465,6 +484,7 @@ def generate_sso_token():
         {
             "user_id": user.id,
             "purpose": "admin_sso",
+            "pv": user.permissions_version or 0,
             "exp": datetime.utcnow() + timedelta(seconds=30),
         },
         JWT_SECRET,
@@ -731,9 +751,13 @@ def saml_match():
         user.last_visit = datetime.utcnow()
         db.session.commit()
 
-        # Issue JWT
+        # Issue JWT (pv = permissions_version for forced re-auth on restriction)
         token = jwt.encode(
-            {"user_id": user.id, "exp": datetime.utcnow() + timedelta(hours=24)},
+            {
+                "user_id": user.id,
+                "pv": user.permissions_version or 0,
+                "exp": datetime.utcnow() + timedelta(hours=24),
+            },
             JWT_SECRET,
             algorithm="HS256",
         )

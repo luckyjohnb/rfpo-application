@@ -614,6 +614,9 @@ class User(UserMixin, db.Model):
         db.String(255), unique=True, nullable=True
     )  # Entra ID Object ID or UPN (stable, survives email changes)
 
+    # Token invalidation — incremented when permissions become more restrictive
+    permissions_version = db.Column(db.Integer, default=0, nullable=False)
+
     # Status and Audit
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

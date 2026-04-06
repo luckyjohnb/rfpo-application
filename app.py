@@ -155,6 +155,25 @@ def create_user_app():
             else:
                 return {"success": False, "message": "Unsupported method"}
 
+            # If the API reports permissions changed, force re-login immediately
+            # so the user cannot continue with stale elevated privileges.
+            if response.status_code == 401:
+                try:
+                    body = response.json()
+                    if body.get("error") == "permissions_changed":
+                        # Remove all auth/session-cache data but keep the
+                        # session alive so routes can redirect with context.
+                        session.pop("auth_token", None)
+                        session.pop("nav_context", None)
+                        session.pop("nav_context_ts", None)
+                        return {
+                            "success": False,
+                            "error": "permissions_changed",
+                            "message": body.get("message", "Your permissions have been updated. Please log in again."),
+                        }
+                except ValueError:
+                    pass
+
             if not response.content:
                 return {"success": True}
             try:
@@ -187,6 +206,8 @@ def create_user_app():
 
         # Get user info
         user_info = make_api_request("/auth/verify")
+        if user_info.get("error") == "permissions_changed":
+            return redirect(url_for("login_page", reason="permissions_changed"))
         if not user_info.get("authenticated"):
             session.pop("auth_token", None)
             return redirect(url_for("login_page"))
@@ -280,6 +301,8 @@ def create_user_app():
 
         # Only admins can create RFPOs
         user_info = make_api_request("/auth/verify")
+        if user_info.get("error") == "permissions_changed":
+            return redirect(url_for("login_page", reason="permissions_changed"))
         if user_info.get("authenticated"):
             roles = user_info.get("user", {}).get("roles", [])
             if "RFPO_ADMIN" not in roles and "GOD" not in roles:
@@ -305,6 +328,8 @@ def create_user_app():
 
         # Only admins can create RFPOs
         user_info = make_api_request("/auth/verify")
+        if user_info.get("error") == "permissions_changed":
+            return redirect(url_for("login_page", reason="permissions_changed"))
         if user_info.get("authenticated"):
             roles = user_info.get("user", {}).get("roles", [])
             if "RFPO_ADMIN" not in roles and "GOD" not in roles:
@@ -387,6 +412,8 @@ def create_user_app():
 
         # Get user info for role-based UI
         user_info = make_api_request("/auth/verify")
+        if user_info.get("error") == "permissions_changed":
+            return redirect(url_for("login_page", reason="permissions_changed"))
         is_admin = False
         if user_info.get("authenticated"):
             roles = user_info.get("user", {}).get("roles", [])
@@ -479,6 +506,8 @@ def create_user_app():
             return jsonify({"authenticated": False, "message": "No token"}), 401
 
         response = make_api_request("/auth/verify")
+        if response.get("error") == "permissions_changed":
+            return jsonify(response), 401
         return jsonify(response)
 
     @app.route("/api/rfpos", methods=["GET", "POST"])

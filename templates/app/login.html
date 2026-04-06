@@ -263,6 +263,12 @@
                 showAlert(message, 'success');
             }
 
+            // Show warning when kicked out due to permission restriction
+            const reason = urlParams.get('reason');
+            if (reason === 'permissions_changed') {
+                showAlert('<i class="fas fa-shield-alt"></i> Your permissions have been updated. Please log in again.', 'warning', 0);
+            }
+
             try {
                 const response = await fetch('/api/auth/verify');
                 const data = await response.json();

@@ -831,7 +831,7 @@ def create_app():
         return filtered, warnings
 
     def _log_permission_change(target_user, old_permissions, new_permissions, context="edit"):
-        """Audit-log a permission change."""
+        """Audit-log a permission change and invalidate tokens if permissions were restricted."""
         app.logger.info(
             "AUDIT: Permission change by %s (id=%s) on user %s (id=%s) "
             "[%s]: %s → %s",
@@ -840,6 +840,22 @@ def create_app():
             context,
             old_permissions, new_permissions,
         )
+
+        # Detect if permissions became more restrictive (any permission removed
+        # or user deactivated). If so, bump permissions_version to force token
+        # rejection so stale SSO/JWT sessions cannot carry elevated privileges.
+        old_set = set(old_permissions) if old_permissions else set()
+        new_set = set(new_permissions) if new_permissions else set()
+        revoked = old_set - new_set
+        if revoked:
+            target_user.permissions_version = (target_user.permissions_version or 0) + 1
+            app.logger.info(
+                "SECURITY: Permissions restricted for %s (id=%s) — "
+                "revoked: %s — permissions_version bumped to %s. "
+                "Active tokens for this user are now invalid.",
+                target_user.email, target_user.id,
+                revoked, target_user.permissions_version,
+            )
 
     def _create_next_sequential_action(instance, completed_action):
         """Create the next sequential action after a step is approved.
@@ -2807,8 +2823,8 @@ def create_app():
                 user.set_permissions(safe_perms)
 
                 db.session.add(user)
-                db.session.commit()
                 _log_permission_change(user, [], safe_perms, context="user-create")
+                db.session.commit()
 
                 # Send welcome email via extracted helper
                 if user_email and user_fullname:
@@ -2900,8 +2916,8 @@ def create_app():
                     flash(f"⚠️ {w}", "warning")
                 user.set_permissions(safe_perms)
 
-                db.session.commit()
                 _log_permission_change(user, old_perms, safe_perms, context="user-edit")
+                db.session.commit()
 
                 flash("✅ User updated successfully!", "success")
                 return redirect(url_for("users"))

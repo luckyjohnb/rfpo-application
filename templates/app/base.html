@@ -308,6 +308,12 @@
 
                 const data = await response.json();
 
+                // Forced re-login when permissions were restricted by admin
+                if (data.error === 'permissions_changed') {
+                    window.location.href = '/login?reason=permissions_changed';
+                    return data;  // won't be used; page is navigating away
+                }
+
                 if (!response.ok) {
                     throw new Error(data.message || 'API call failed');
                 }

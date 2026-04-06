@@ -322,7 +322,6 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
 <!-- Upload File Modal -->
 <div class="modal fade" id="uploadFileModal" tabindex="-1">
@@ -390,6 +389,7 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
 {% block extra_js %}
 <script>
@@ -632,7 +632,9 @@
     }
 
     // File upload form handler
-    document.getElementById('uploadFileForm').addEventListener('submit', async function(e) {
+    const uploadForm = document.getElementById('uploadFileForm');
+    if (uploadForm) {
+    uploadForm.addEventListener('submit', async function(e) {
         e.preventDefault();
 
         const fileInput = document.getElementById('uploadFile');
@@ -687,6 +689,7 @@
             submitBtn.innerHTML = '<i class="fas fa-upload"></i> Upload File';
         }
     });
+    }
 
     function loadRfpoDocument() {
         const container = document.getElementById('rfpoDocumentContainer');

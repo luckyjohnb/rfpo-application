@@ -129,7 +129,12 @@ def create_user_app():
             else:
                 return {"success": False, "message": "Unsupported method"}
 
-            return response.json() if response.content else {"success": True}
+            if not response.content:
+                return {"success": True}
+            try:
+                return response.json()
+            except ValueError:
+                return {"success": False, "message": f"API returned non-JSON response (HTTP {response.status_code})"}
 
         except requests.exceptions.RequestException as e:
             return {"success": False, "message": f"API Error: {str(e)}"}

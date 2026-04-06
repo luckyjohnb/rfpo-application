@@ -29,6 +29,18 @@ def register_error_handlers(app, app_name="rfpo"):
     """
     logger = get_logger(app_name)
 
+    # API-only services (like simple_api) have no HTML templates.
+    # Always return JSON when error.html is unavailable.
+    _has_error_template = True
+    try:
+        app.jinja_env.get_template("error.html")
+    except Exception:
+        _has_error_template = False
+
+    def _is_json_response():
+        """Return True when the error response should be JSON."""
+        return not _has_error_template or request.path.startswith("/api/")
+
     @app.errorhandler(RFPOException)
     def handle_rfpo_exception(error):
         """Handle custom RFPO exceptions"""
@@ -49,7 +61,7 @@ def register_error_handlers(app, app_name="rfpo"):
             response["details"] = error.payload
 
         # Return JSON for API requests, HTML for web requests
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return jsonify(response), error.status_code
         else:
             return (
@@ -73,7 +85,7 @@ def register_error_handlers(app, app_name="rfpo"):
             "error_type": "DatabaseException",
         }
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return jsonify(response), 500
         else:
             return (
@@ -96,7 +108,7 @@ def register_error_handlers(app, app_name="rfpo"):
             "error_type": "SQLAlchemyError",
         }
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return jsonify(response), 500
         else:
             return (
@@ -122,7 +134,7 @@ def register_error_handlers(app, app_name="rfpo"):
             "error_type": "AuthenticationException",
         }
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return jsonify(response), 401
         else:
             return (
@@ -144,7 +156,7 @@ def register_error_handlers(app, app_name="rfpo"):
             "error_type": "AuthorizationException",
         }
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return jsonify(response), 403
         else:
             return (
@@ -166,7 +178,7 @@ def register_error_handlers(app, app_name="rfpo"):
         if error.payload:
             response["validation_errors"] = error.payload
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return jsonify(response), 400
         else:
             return (
@@ -187,7 +199,7 @@ def register_error_handlers(app, app_name="rfpo"):
             "error_type": "ResourceNotFoundException",
         }
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return jsonify(response), 404
         else:
             return (
@@ -200,7 +212,7 @@ def register_error_handlers(app, app_name="rfpo"):
         """Handle 404 Not Found"""
         logger.info(f"404 Not Found: {request.path}")
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return (
                 jsonify(
                     {
@@ -222,7 +234,7 @@ def register_error_handlers(app, app_name="rfpo"):
         """Handle 500 Internal Server Error"""
         log_exception(logger, error, {"path": request.path, "method": request.method})
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return (
                 jsonify(
                     {
@@ -250,7 +262,7 @@ def register_error_handlers(app, app_name="rfpo"):
             f"HTTP {error.code}: {error.description}", extra={"path": request.path}
         )
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return (
                 jsonify(
                     {
@@ -278,7 +290,7 @@ def register_error_handlers(app, app_name="rfpo"):
             {"path": request.path, "method": request.method, "ip": request.remote_addr},
         )
 
-        if request.path.startswith("/api/"):
+        if _is_json_response():
             return (
                 jsonify(
                     {

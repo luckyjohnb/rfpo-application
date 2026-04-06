@@ -4,6 +4,55 @@
 
 {% block content %}
 <div class="container py-3">
+
+  <!-- Email Test Mode Settings -->
+  <div class="card mb-4 {% if email_test_mode %}border-warning{% endif %}" style="max-width: 720px;">
+    <div class="card-header {% if email_test_mode %}bg-warning text-dark{% else %}bg-light{% endif %}">
+      <h5 class="mb-0">
+        <i class="fas fa-flask"></i> Email Test Mode
+        {% if email_test_mode %}
+          <span class="badge bg-dark ms-2">ACTIVE</span>
+        {% else %}
+          <span class="badge bg-secondary ms-2">OFF</span>
+        {% endif %}
+      </h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        When enabled, <strong>all</strong> emails from RFPO are redirected to the test recipient below.
+        Subject lines are prefixed with <code>--TEST EMAIL FROM RFPO</code> and original recipients are shown in the email body.
+      </p>
+      <form method="post">
+        <input type="hidden" name="_action" value="save_test_settings">
+        <div class="row g-3 align-items-end">
+          <div class="col-auto">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="email_test_mode" name="email_test_mode" value="1"
+                     {% if email_test_mode %}checked{% endif %}>
+              <label class="form-check-label" for="email_test_mode">
+                <strong>Enable Test Mode</strong>
+              </label>
+            </div>
+          </div>
+          <div class="col">
+            <label for="email_test_recipient" class="form-label mb-0">
+              <small>Test Recipient</small>
+            </label>
+            <input type="email" class="form-control form-control-sm" id="email_test_recipient"
+                   name="email_test_recipient" placeholder="test@example.com"
+                   value="{{ email_test_recipient or '' }}">
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-sm {% if email_test_mode %}btn-warning{% else %}btn-primary{% endif %}">
+              <i class="fas fa-save"></i> Save
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <h3 class="mb-1">Send Test Email</h3>
   {% set mode = ADMIN_EMAIL_SENDER_MODE or 'Email: disabled' %}
   {% set label = ADMIN_EMAIL_SENDER_LABEL or 'Email: disabled' %}

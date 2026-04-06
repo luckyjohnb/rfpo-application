@@ -996,7 +996,7 @@ def take_approval_action(action_id):
                         entity_id=str(instance.rfpo.id),
                     )
             else:
-                # Notify next approver(s) when workflow advances
+                # Notify next approver(s) when workflow advances to their stage/step
                 if instance.rfpo:
                     next_actions = RFPOApprovalAction.query.filter_by(
                         instance_id=instance.id, status="pending"
@@ -1004,6 +1004,20 @@ def take_approval_action(action_id):
                     for na in next_actions:
                         next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
                         if next_approver:
+                            # Email notification
+                            try:
+                                send_approval_notification(
+                                    next_approver.email,
+                                    next_approver.get_display_name(),
+                                    instance.rfpo.rfpo_id,
+                                    na.step_name or "Approval Required",
+                                )
+                            except Exception as adv_email_err:
+                                app.logger.warning(
+                                    "Stage-advance email to %s failed: %s",
+                                    next_approver.email, adv_email_err,
+                                )
+                            # In-app notification
                             _create_notification(
                                 user_id=next_approver.id,
                                 notif_type="approval_request",
@@ -1097,6 +1111,44 @@ def bulk_approval_action():
                 results["errors"].append(f"{action_id}: {str(action_err)}")
 
         db.session.commit()
+
+        # Send notifications for all affected instances (non-blocking)
+        try:
+            from email_service import send_approval_notification
+            processed_instances = set()
+            for action_id in action_ids:
+                act = RFPOApprovalAction.query.filter_by(action_id=action_id).first()
+                if not act or act.instance_id in processed_instances:
+                    continue
+                processed_instances.add(act.instance_id)
+                inst = act.instance
+                if not inst or not inst.rfpo:
+                    continue
+                if inst.overall_status in ("approved", "refused"):
+                    # Workflow completed — notify requestor
+                    requestor = User.query.filter_by(
+                        record_id=inst.rfpo.created_by
+                    ).first() if inst.rfpo.created_by else None
+                    if requestor and requestor.email:
+                        send_approval_notification(
+                            requestor.email, requestor.get_display_name(),
+                            inst.rfpo.rfpo_id, f"RFPO {inst.overall_status.title()}"
+                        )
+                else:
+                    # Workflow advanced — notify next approver(s)
+                    next_actions = RFPOApprovalAction.query.filter_by(
+                        instance_id=inst.id, status="pending"
+                    ).all()
+                    for na in next_actions:
+                        next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
+                        if next_approver and next_approver.email:
+                            send_approval_notification(
+                                next_approver.email, next_approver.get_display_name(),
+                                inst.rfpo.rfpo_id, na.step_name or "Approval Required",
+                            )
+            db.session.commit()  # persist any notification records
+        except Exception as notif_err:
+            app.logger.warning(f"Bulk approval notifications failed: {notif_err}")
 
         return jsonify({
             "success": True,

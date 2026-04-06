@@ -80,6 +80,63 @@ def load_env_file(env_file=".env"):
 load_env_file()
 
 
+# ------------------------------------------------------------------
+# Email test-mode settings (DB-backed with short TTL cache)
+# ------------------------------------------------------------------
+
+_test_settings_cache: Optional[Dict[str, Any]] = None
+_test_settings_ts: float = 0.0
+_TEST_SETTINGS_TTL = 5.0  # seconds
+
+
+def _get_email_test_settings() -> Dict[str, Any]:
+    """Read email test-mode settings from the database (List model).
+
+    Returns dict with 'test_mode' (bool) and 'test_recipient' (str).
+    Cached for 5 seconds to avoid DB hits on burst sends.
+    """
+    global _test_settings_cache, _test_settings_ts
+
+    now = time.time()
+    if (
+        _test_settings_cache is not None
+        and (now - _test_settings_ts) < _TEST_SETTINGS_TTL
+    ):
+        return _test_settings_cache
+
+    defaults = {"test_mode": False, "test_recipient": ""}
+    try:
+        # Import here to avoid circular imports (models → email_service)
+        from models import List as ListModel
+
+        mode_row = ListModel.query.filter_by(
+            type="email_settings", key="test_mode"
+        ).first()
+        recipient_row = ListModel.query.filter_by(
+            type="email_settings", key="test_recipient"
+        ).first()
+
+        result = {
+            "test_mode": (
+                mode_row.value.lower() in ("true", "1", "yes")
+                if mode_row and mode_row.value
+                else False
+            ),
+            "test_recipient": (
+                recipient_row.value.strip()
+                if recipient_row and recipient_row.value
+                else ""
+            ),
+        }
+    except Exception as exc:
+        logger.debug("Could not load email test settings: %s", exc)
+        result = defaults
+
+    _test_settings_cache = result
+    _test_settings_ts = now
+    return result
+
+
 class EmailService:
     """Email service for sending templated emails"""
 
@@ -430,6 +487,76 @@ class EmailService:
             )
             self.last_sender = sender_email
             self.last_recipients = list(to_emails)
+
+            # =============================================================
+            # Test-mode interception (before any provider logic)
+            # =============================================================
+            test_settings = _get_email_test_settings()
+            if test_settings["test_mode"] and test_settings["test_recipient"]:
+                original_to = list(to_emails)
+                original_cc = list(cc_emails) if cc_emails else []
+                original_bcc = list(bcc_emails) if bcc_emails else []
+                test_addr = test_settings["test_recipient"]
+
+                logger.info(
+                    "TEST MODE: Redirecting email for %s → %s",
+                    original_to, test_addr,
+                )
+
+                subject = f"--TEST EMAIL FROM RFPO {subject}"
+                to_emails = [test_addr]
+                cc_emails = None
+                bcc_emails = None
+
+                # Prepend info block showing original recipients
+                info_plain = (
+                    "\n══════════════════════════════════"
+                    "══════════════\n"
+                    "⚠️  TEST MODE — Email Redirected\n"
+                    "══════════════════════════════════"
+                    "══════════════\n"
+                    f"Original TO:  {', '.join(original_to)}\n"
+                )
+                if original_cc:
+                    info_plain += (
+                        f"Original CC:  {', '.join(original_cc)}\n"
+                    )
+                if original_bcc:
+                    info_plain += (
+                        f"Original BCC: {', '.join(original_bcc)}\n"
+                    )
+                info_plain += (
+                    "══════════════════════════════════"
+                    "══════════════\n\n"
+                )
+
+                info_html = (
+                    '<div style="background:#fff3cd;border:2px solid '
+                    '#ffc107;border-radius:8px;padding:16px;'
+                    'margin-bottom:24px;font-family:Arial,sans-serif;">'
+                    "<strong>⚠️ TEST MODE — Email Redirected"
+                    "</strong><br>"
+                    "<strong>Original TO:</strong> "
+                    f"{', '.join(original_to)}<br>"
+                )
+                if original_cc:
+                    info_html += (
+                        "<strong>Original CC:</strong> "
+                        f"{', '.join(original_cc)}<br>"
+                    )
+                if original_bcc:
+                    info_html += (
+                        "<strong>Original BCC:</strong> "
+                        f"{', '.join(original_bcc)}<br>"
+                    )
+                info_html += "</div>"
+
+                if body_text:
+                    body_text = info_plain + body_text
+                if body_html:
+                    body_html = info_html + body_html
+
+                self.last_recipients = [test_addr]
 
             # =============================================================
             # ACS attempt (with retry)

@@ -688,6 +688,19 @@ def create_app():
             return []
         return [p.strip() for p in s.split(",") if p.strip()]
 
+    def _email_test_mode_active():
+        """Quick DB check: is email test mode currently on?"""
+        try:
+            row = List.query.filter_by(
+                type="email_settings", key="test_mode"
+            ).first()
+            return (
+                row.value.lower() in ("true", "1", "yes")
+                if row and row.value else False
+            )
+        except Exception:
+            return False
+
     # Expose build/version info to all admin templates
     @app.context_processor
     def inject_build_info():
@@ -725,6 +738,7 @@ def create_app():
             "ADMIN_EMAIL_SENDER_MODE": sender_mode,
             "ADMIN_EMAIL_SENDER_LABEL": sender_label,
             "USER_APP_URL": os.environ.get("USER_APP_URL", "http://127.0.0.1:5001"),
+            "EMAIL_TEST_MODE": _email_test_mode_active(),
         }
 
     @login_manager.user_loader
@@ -1465,6 +1479,45 @@ def create_app():
     def email_test_tool():
         from email_service import email_service
 
+        # Handle test-mode settings save
+        if request.method == "POST" and request.form.get("_action") == "save_test_settings":
+            test_mode_val = "true" if request.form.get("email_test_mode") == "1" else "false"
+            test_recipient_val = (request.form.get("email_test_recipient") or "").strip()
+
+            if test_mode_val == "true" and not test_recipient_val:
+                flash("❌ Test recipient email is required when test mode is enabled.", "error")
+                return redirect(url_for("email_test_tool"))
+
+            # Upsert into List table (type='email_settings')
+            for key, value in [("test_mode", test_mode_val), ("test_recipient", test_recipient_val)]:
+                row = List.query.filter_by(type="email_settings", key=key).first()
+                if row:
+                    row.value = value
+                    row.updated_by = current_user.email
+                else:
+                    import uuid as _uuid
+                    row = List(
+                        list_id=str(_uuid.uuid4())[:10],
+                        type="email_settings",
+                        key=key,
+                        value=value,
+                        active=True,
+                        created_by=current_user.email,
+                        updated_by=current_user.email,
+                    )
+                    db.session.add(row)
+            db.session.commit()
+
+            # Clear the cached settings in email_service
+            import email_service as _esm
+            _esm._test_settings_cache = None
+
+            if test_mode_val == "true":
+                flash(f"✅ Email test mode ENABLED — all emails redirect to {test_recipient_val}", "success")
+            else:
+                flash("✅ Email test mode DISABLED — emails will be sent to real recipients.", "success")
+            return redirect(url_for("email_test_tool"))
+
         if request.method == "POST":
             raw_emails = request.form.get("to_emails", "")
             subject = request.form.get("subject") or "Test Email from RFPO"
@@ -1513,7 +1566,39 @@ def create_app():
                 flash(f"❌ Failed to send test email via {prov}: {err}", "error")
             return redirect(url_for("email_test_tool"))
 
-        return render_template("admin/tools/email_test.html")
+        # Load current test-mode settings for the form (seed defaults on first visit)
+        import uuid as _uuid
+        test_mode_row = List.query.filter_by(type="email_settings", key="test_mode").first()
+        if not test_mode_row:
+            test_mode_row = List(
+                list_id=str(_uuid.uuid4())[:10], type="email_settings",
+                key="test_mode", value="true", active=True,
+                created_by="system", updated_by="system",
+            )
+            db.session.add(test_mode_row)
+        test_recipient_row = List.query.filter_by(type="email_settings", key="test_recipient").first()
+        if not test_recipient_row:
+            test_recipient_row = List(
+                list_id=str(_uuid.uuid4())[:10], type="email_settings",
+                key="test_recipient", value="johnbouchard@icloud.com", active=True,
+                created_by="system", updated_by="system",
+            )
+            db.session.add(test_recipient_row)
+            db.session.commit()
+        email_test_mode = (
+            test_mode_row.value.lower() in ("true", "1", "yes")
+            if test_mode_row and test_mode_row.value else False
+        )
+        email_test_recipient = (
+            test_recipient_row.value.strip()
+            if test_recipient_row and test_recipient_row.value else ""
+        )
+
+        return render_template(
+            "admin/tools/email_test.html",
+            email_test_mode=email_test_mode,
+            email_test_recipient=email_test_recipient,
+        )
 
     # Test route for API integration (safe - doesn't break anything)
     @app.route("/api-test")

@@ -34,6 +34,10 @@ COPY static/ ./static/
 # Create necessary directories
 RUN mkdir -p instance uploads logs
 
+# Create non-root user and set ownership
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 # Expose port
 EXPOSE 5111
 

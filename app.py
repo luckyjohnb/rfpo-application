@@ -12,6 +12,7 @@ import jwt as pyjwt
 import requests
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for, make_response
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import error handling
 from error_handlers import register_error_handlers
@@ -21,6 +22,9 @@ from logging_config import setup_logging
 def create_user_app():
     """Create user-facing Flask application"""
     app = Flask(__name__)
+
+    # Apply ProxyFix for correct IP/proto detection behind Azure Load Balancer
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
     # Configuration
     _is_production = "postgresql" in os.environ.get("DATABASE_URL", "")
@@ -988,8 +992,7 @@ def create_user_app():
     @app.route("/health")
     def health_check():
         """Health check endpoint"""
-        # Keep this lightweight and non-blocking: do not call external services here
-        return jsonify(
+        resp = jsonify(
             {
                 "status": "healthy",
                 "service": "RFPO User App",
@@ -997,6 +1000,8 @@ def create_user_app():
                 "version": "1.0.0",
             }
         )
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return resp
 
     # Error handlers
     @app.errorhandler(404)

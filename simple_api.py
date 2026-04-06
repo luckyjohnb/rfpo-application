@@ -7,6 +7,7 @@ Just Flask + Database connection - nothing fancy
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 import jwt
 import logging
 from datetime import datetime, timedelta
@@ -58,6 +59,9 @@ USER_ROUTES_AVAILABLE = False
 
 # Create Flask app with template folder
 app = Flask(__name__, template_folder="templates")
+
+# Apply ProxyFix for correct IP/proto detection behind Azure Load Balancer
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Configuration
 _is_production = "postgresql" in os.environ.get("DATABASE_URL", "")
@@ -232,7 +236,9 @@ def require_admin(f):
 # Routes
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "healthy", "service": "Simple RFPO API"})
+    resp = jsonify({"status": "healthy", "service": "Simple RFPO API"})
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 @app.route("/api/auth/login", methods=["POST"])
@@ -2654,6 +2660,38 @@ ALLOWED_UPLOAD_EXTENSIONS = {
 }
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
+# Magic-byte signatures for file-header validation (extension → byte prefix)
+_MAGIC_BYTES = {
+    ".pdf":  [b"%PDF"],
+    ".png":  [b"\x89PNG"],
+    ".jpg":  [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".gif":  [b"GIF87a", b"GIF89a"],
+    ".bmp":  [b"BM"],
+    ".tiff": [b"II\x2a\x00", b"MM\x00\x2a"],
+    ".doc":  [b"\xd0\xcf\x11\xe0"],           # OLE2 (shared with .xls, .ppt)
+    ".xls":  [b"\xd0\xcf\x11\xe0"],
+    ".ppt":  [b"\xd0\xcf\x11\xe0"],
+    ".docx": [b"PK\x03\x04"],                  # ZIP-based (shared with .xlsx, .pptx, .odt, .ods)
+    ".xlsx": [b"PK\x03\x04"],
+    ".pptx": [b"PK\x03\x04"],
+    ".odt":  [b"PK\x03\x04"],
+    ".ods":  [b"PK\x03\x04"],
+    ".rtf":  [b"{\\rtf"],
+}
+
+
+def _validate_file_header(file_storage, extension):
+    """Check that a file's leading bytes match expected magic for its extension.
+    Returns True when the extension has no registered signature (e.g. .csv, .txt)."""
+    sigs = _MAGIC_BYTES.get(extension)
+    if not sigs:
+        return True  # No signature to check (plain-text formats)
+    pos = file_storage.tell()
+    header = file_storage.read(8)
+    file_storage.seek(pos)
+    return any(header.startswith(sig) for sig in sigs)
+
 
 @app.route("/api/rfpos/<int:rfpo_id>/files/upload", methods=["POST"])
 @require_auth
@@ -2685,6 +2723,10 @@ def upload_rfpo_file(rfpo_id):
         file_extension = os.path.splitext(original_filename)[1].lower()
         if file_extension not in ALLOWED_UPLOAD_EXTENSIONS:
             return jsonify({"success": False, "message": f"File type '{file_extension}' is not allowed"}), 400
+
+        # Validate file header matches claimed extension
+        if not _validate_file_header(file, file_extension):
+            return jsonify({"success": False, "message": f"File content does not match '{file_extension}' format"}), 400
 
         file.seek(0, 2)
         file_size = file.tell()

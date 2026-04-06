@@ -425,6 +425,39 @@ def _allowed_file(filename, allowed_extensions=None):
     return ext in exts
 
 
+# Magic-byte signatures for file-header validation (extension → byte prefix)
+_MAGIC_BYTES = {
+    ".pdf":  [b"%PDF"],
+    ".png":  [b"\x89PNG"],
+    ".jpg":  [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".gif":  [b"GIF87a", b"GIF89a"],
+    ".bmp":  [b"BM"],
+    ".tiff": [b"II\x2a\x00", b"MM\x00\x2a"],
+    ".doc":  [b"\xd0\xcf\x11\xe0"],
+    ".xls":  [b"\xd0\xcf\x11\xe0"],
+    ".ppt":  [b"\xd0\xcf\x11\xe0"],
+    ".docx": [b"PK\x03\x04"],
+    ".xlsx": [b"PK\x03\x04"],
+    ".pptx": [b"PK\x03\x04"],
+    ".odt":  [b"PK\x03\x04"],
+    ".ods":  [b"PK\x03\x04"],
+    ".rtf":  [b"{\\rtf"],
+    ".svg":  [b"<svg", b"<?xml"],
+}
+
+
+def _validate_file_header(file_storage, extension):
+    """Check that a file's leading bytes match expected magic for its extension."""
+    sigs = _MAGIC_BYTES.get(extension)
+    if not sigs:
+        return True
+    pos = file_storage.tell()
+    header = file_storage.read(8)
+    file_storage.seek(pos)
+    return any(header.startswith(sig) for sig in sigs)
+
+
 # In-memory login rate limiter (thread-safe)
 _login_attempts: dict = defaultdict(list)
 _login_lock = Lock()
@@ -1016,6 +1049,15 @@ def create_app():
                     )
                     return None
 
+                # Validate file header matches claimed extension
+                ext = os.path.splitext(filename)[1].lower()
+                if not _validate_file_header(file, ext):
+                    app.logger.warning(
+                        "File upload rejected: content does not match extension '%s' for file '%s'",
+                        ext, filename,
+                    )
+                    return None
+
                 # Add timestamp to avoid conflicts
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_")
                 filename = f"{timestamp}{filename}"
@@ -1371,7 +1413,7 @@ def create_app():
     @app.route("/health", methods=["GET"])
     def health_check():
         """Health check endpoint"""
-        return jsonify(
+        resp = jsonify(
             {
                 "status": "healthy",
                 "service": "RFPO Admin Panel",
@@ -1379,6 +1421,8 @@ def create_app():
                 "version": "1.0.0",
             }
         )
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return resp
 
     # Email test form (admin-only) — supports multiple recipients and HTML
     @app.route("/tools/email-test", methods=["GET", "POST"])

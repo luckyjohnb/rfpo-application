@@ -54,10 +54,22 @@
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="vendor" class="form-label">Vendor</label>
-                            <input type="text" class="form-control" id="vendor" name="vendor">
+                            <label for="vendor_id" class="form-label">Vendor</label>
+                            <select class="form-select" id="vendor_id" name="vendor_id">
+                                <option value="">Select a vendor (optional)</option>
+                                {% for vendor in vendors %}
+                                <option value="{{ vendor.id }}">{{ vendor.company_name }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-6 mb-3" id="vendorSiteGroup" style="display: none;">
+                            <label for="vendor_site_id" class="form-label">Vendor Site</label>
+                            <select class="form-select" id="vendor_site_id" name="vendor_site_id">
+                                <option value="">Select a site (optional)</option>
+                            </select>
+                            <div class="form-text">Contact/site for this vendor</div>
+                        </div>
+                        <div class="col-md-6 mb-3" id="dueDateGroup">
                             <label for="due_date" class="form-label">Due Date</label>
                             <input type="date" class="form-control" id="due_date" name="due_date">
                         </div>
@@ -106,7 +118,7 @@
                     <strong>Description:</strong> Additional details about the request
                 </p>
                 <p class="small text-muted">
-                    <strong>Vendor:</strong> The preferred or selected vendor
+                    <strong>Vendor:</strong> Select from approved vendors. Choose a vendor site for specific contact info.
                 </p>
             </div>
         </div>
@@ -116,16 +128,58 @@
 
 {% block extra_js %}
 <script>
+    // Vendor site cascading dropdown
+    document.getElementById('vendor_id').addEventListener('change', async function() {
+        const vendorId = this.value;
+        const siteGroup = document.getElementById('vendorSiteGroup');
+        const siteSelect = document.getElementById('vendor_site_id');
+        const dueDateGroup = document.getElementById('dueDateGroup');
+
+        // Reset site dropdown
+        siteSelect.innerHTML = '<option value="">Select a site (optional)</option>';
+
+        if (!vendorId) {
+            siteGroup.style.display = 'none';
+            // Move due date back beside vendor
+            dueDateGroup.classList.remove('offset-md-6');
+            return;
+        }
+
+        try {
+            const response = await makeApiCall(`/api/vendor-sites/${vendorId}`);
+            if (response.success && response.vendor_sites && response.vendor_sites.length > 0) {
+                response.vendor_sites.forEach(site => {
+                    const label = site.contact_name
+                        ? `${site.contact_name}${site.contact_city ? ' — ' + site.contact_city + (site.contact_state ? ', ' + site.contact_state : '') : ''}`
+                        : site.vendor_site_id;
+                    const option = document.createElement('option');
+                    option.value = site.id;
+                    option.textContent = label;
+                    siteSelect.appendChild(option);
+                });
+                siteGroup.style.display = '';
+            } else {
+                siteGroup.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Failed to load vendor sites:', error);
+            siteGroup.style.display = 'none';
+        }
+    });
+
     document.getElementById('rfpoCreateForm').addEventListener('submit', async function(e) {
         e.preventDefault();
 
         const formData = new FormData(this);
         const teamIdValue = formData.get('team_id');
+        const vendorIdValue = formData.get('vendor_id');
+        const vendorSiteIdValue = formData.get('vendor_site_id');
         const rfpoData = {
             title: formData.get('title'),
-            team_id: teamIdValue ? parseInt(teamIdValue) : null,  // Team is optional
+            team_id: teamIdValue ? parseInt(teamIdValue) : null,
             description: formData.get('description'),
-            vendor: formData.get('vendor'),
+            vendor_id: vendorIdValue ? parseInt(vendorIdValue) : null,
+            vendor_site_id: vendorSiteIdValue ? parseInt(vendorSiteIdValue) : null,
             due_date: formData.get('due_date'),
             status: formData.get('status')
         };

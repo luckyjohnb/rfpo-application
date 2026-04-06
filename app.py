@@ -257,7 +257,11 @@ def create_user_app():
         teams_response = make_api_request("/teams")
         teams = teams_response.get("teams", []) if teams_response.get("success") else []
 
-        return render_template("app/rfpo_create.html", teams=teams)
+        # Get vendors for dropdown
+        vendors_response = make_api_request("/vendors")
+        vendors = vendors_response.get("vendors", []) if vendors_response.get("success") else []
+
+        return render_template("app/rfpo_create.html", teams=teams, vendors=vendors)
 
     @app.route("/rfpos/<int:rfpo_id>")
     def rfpo_detail(rfpo_id):

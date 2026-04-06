@@ -94,18 +94,24 @@ def create_user_app():
     def inject_nav_context():
         """Provide role-based navigation context to all templates (re-verified periodically)."""
         from time import time as _time
+        base = {"admin_panel_url": ADMIN_PANEL_URL}
         nav = {"is_admin": False, "is_approver": False, "show_rfpo_nav": False}
         if "auth_token" not in session:
-            return {"nav": nav}
+            return {**base, "nav": nav}
 
         # Re-verify roles every 60 seconds to pick up permission changes
         cached = session.get("nav_context")
         cached_at = session.get("nav_context_ts", 0)
         if cached and (_time() - cached_at) < 60:
-            return {"nav": cached}
+            return {**base, "nav": cached}
 
         try:
             resp = make_api_request("/auth/verify")
+            if resp.get("error") == "permissions_changed":
+                # Token is stale — clear cache so next load hits login
+                session.pop("nav_context", None)
+                session.pop("nav_context_ts", None)
+                return {**base, "nav": nav}
             if resp.get("authenticated"):
                 roles = resp.get("user", {}).get("roles", [])
                 is_admin = "RFPO_ADMIN" in roles or "GOD" in roles
@@ -117,7 +123,7 @@ def create_user_app():
                 session["nav_context_ts"] = _time()
         except Exception:
             pass
-        return {"nav": nav, "admin_panel_url": ADMIN_PANEL_URL}
+        return {**base, "nav": nav}
 
     def _require_session_token(f):
         """Decorator to reject proxy requests without a session auth_token."""

@@ -792,7 +792,8 @@ def create_app():
         """Filter requested permissions based on the current user's authority.
 
         Rules:
-        1. A user can NEVER change their own permissions.
+        1. A user can remove their own permissions (self-restriction) but
+           CANNOT grant themselves new permissions (self-elevation).
         2. Only GOD users can grant/revoke the GOD permission.
         3. All permission changes are audit-logged.
 
@@ -802,14 +803,31 @@ def create_app():
         warnings = []
         actor = current_user
 
-        # Rule 1 — self-edit guard
-        if target_user and hasattr(target_user, 'id') and target_user.id == actor.id:
-            app.logger.warning(
-                "SECURITY: User %s (id=%s) attempted to modify their own permissions",
-                actor.email, actor.id,
-            )
-            warnings.append("You cannot modify your own permissions.")
-            return None, warnings  # caller should skip permission update entirely
+        # Rule 1 — self-edit guard: allow restriction, block elevation
+        is_self_edit = (
+            target_user
+            and hasattr(target_user, 'id')
+            and target_user.id == actor.id
+        )
+        if is_self_edit:
+            current_perms = set(target_user.get_permissions())
+            requested_set = set(requested_permissions)
+            added = requested_set - current_perms
+            if added:
+                # Strip any permissions the user is trying to grant themselves
+                filtered = [p for p in requested_permissions if p in current_perms]
+                app.logger.warning(
+                    "SECURITY: User %s (id=%s) attempted to grant themselves "
+                    "permissions %s — stripped (self-restriction only)",
+                    actor.email, actor.id, added,
+                )
+                warnings.append(
+                    f"You cannot grant yourself new permissions ({', '.join(sorted(added))}). "
+                    f"Only permission removal is allowed on your own account."
+                )
+                return filtered, warnings
+            # Pure restriction (subset of current) — allowed
+            return list(requested_permissions), warnings
 
         # Rule 2 — only GOD can assign GOD
         filtered = list(requested_permissions)  # copy

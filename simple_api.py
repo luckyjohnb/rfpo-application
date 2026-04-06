@@ -921,33 +921,31 @@ def submit_for_approval(rfpo_id):
                 "message": "No approval stages/steps configured for this workflow"
             }), 400
 
-        # Build instance_data snapshot (all stages from the applicable one onward)
-        stages_data = []
-        for stage in sorted(workflow.stages, key=lambda s: s.stage_order):
-            if stage.stage_order >= applicable_stage.stage_order:
-                steps_data = []
-                for step in sorted(stage.steps, key=lambda s: s.step_order):
-                    steps_data.append({
-                        "step_id": step.step_id,
-                        "step_name": step.step_name,
-                        "step_order": step.step_order,
-                        "approval_type_key": step.approval_type_key,
-                        "approval_type_name": step.approval_type_name,
-                        "primary_approver_id": step.primary_approver_id,
-                        "backup_approver_id": step.backup_approver_id,
-                        "is_required": step.is_required,
-                        "timeout_days": step.timeout_days,
-                    })
-                stages_data.append({
-                    "stage_id": stage.stage_id,
-                    "stage_name": stage.stage_name,
-                    "stage_order": stage.stage_order,
-                    "budget_bracket_key": stage.budget_bracket_key,
-                    "budget_bracket_amount": float(stage.budget_bracket_amount or 0),
-                    "requires_all_steps": stage.requires_all_steps,
-                    "is_parallel": stage.is_parallel,
-                    "steps": steps_data,
-                })
+        # Build instance_data snapshot for ONLY the applicable stage
+        # (the stage whose budget bracket covers the RFPO total amount)
+        steps_data = []
+        for step in sorted(applicable_stage.steps, key=lambda s: s.step_order):
+            steps_data.append({
+                "step_id": step.step_id,
+                "step_name": step.step_name,
+                "step_order": step.step_order,
+                "approval_type_key": step.approval_type_key,
+                "approval_type_name": step.approval_type_name,
+                "primary_approver_id": step.primary_approver_id,
+                "backup_approver_id": step.backup_approver_id,
+                "is_required": step.is_required,
+                "timeout_days": step.timeout_days,
+            })
+        stages_data = [{
+            "stage_id": applicable_stage.stage_id,
+            "stage_name": applicable_stage.stage_name,
+            "stage_order": applicable_stage.stage_order,
+            "budget_bracket_key": applicable_stage.budget_bracket_key,
+            "budget_bracket_amount": float(applicable_stage.budget_bracket_amount or 0),
+            "requires_all_steps": applicable_stage.requires_all_steps,
+            "is_parallel": applicable_stage.is_parallel,
+            "steps": steps_data,
+        }]
 
         # Create the approval instance
         instance = RFPOApprovalInstance(
@@ -967,7 +965,7 @@ def submit_for_approval(rfpo_id):
         db.session.add(instance)
         db.session.flush()  # Get instance.id
 
-        # Create approval actions for ALL steps across all applicable stages
+        # Create approval actions for all steps in the applicable stage
         for stage_data in stages_data:
             for step_data in stage_data["steps"]:
                 # Get approver name

@@ -490,6 +490,34 @@ def create_user_app():
         response = make_api_request(f"/teams/{team_id}")
         return jsonify(response)
 
+    @app.route("/api/consortiums", methods=["GET"])
+    def api_consortiums():
+        """Consortiums API proxy"""
+        response = make_api_request("/consortiums")
+        return jsonify(response)
+
+    @app.route("/api/projects/<consortium_id>", methods=["GET"])
+    def api_projects_for_consortium(consortium_id):
+        """Projects for consortium API proxy"""
+        response = make_api_request(
+            f"/projects/{consortium_id}"
+        )
+        return jsonify(response)
+
+    @app.route("/api/vendors", methods=["GET"])
+    def api_vendors():
+        """Vendors API proxy"""
+        response = make_api_request("/vendors")
+        return jsonify(response)
+
+    @app.route("/api/vendor-sites/<int:vendor_id>", methods=["GET"])
+    def api_vendor_sites(vendor_id):
+        """Vendor sites API proxy"""
+        response = make_api_request(
+            f"/vendor-sites/{vendor_id}"
+        )
+        return jsonify(response)
+
     @app.route("/api/users/profile", methods=["GET"])
     def api_user_profile():
         """User profile API proxy"""

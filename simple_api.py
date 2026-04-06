@@ -1706,7 +1706,7 @@ def list_rfpos():
                         "title": r.title,
                         "status": r.status,
                         "total_amount": float(r.total_amount) if r.total_amount else 0,
-                        "vendor": r.vendor.name if r.vendor else None,
+                        "vendor": r.vendor.company_name if r.vendor else None,
                         "due_date": r.due_date.isoformat() if r.due_date else None,
                         "created_at": (
                             r.created_at.isoformat() if r.created_at else None

@@ -616,6 +616,69 @@ def create_user_app():
             response = make_api_request(f"/rfpos/{rfpo_id}/line-items/{line_item_id}", "DELETE")
         return jsonify(response)
 
+    @app.route("/api/rfpos/<int:rfpo_id>/files/upload", methods=["POST"])
+    def api_rfpo_upload_file(rfpo_id):
+        """RFPO file upload proxy - forwards multipart form data to API"""
+        if "auth_token" not in session:
+            return jsonify({"success": False, "message": "Not authenticated"}), 401
+
+        url = f"{API_BASE_URL}/rfpos/{rfpo_id}/files/upload"
+        headers = {"Authorization": f"Bearer {session['auth_token']}"}
+
+        try:
+            # Forward the multipart form data as-is
+            files = {}
+            if "file" in request.files:
+                f = request.files["file"]
+                files["file"] = (f.filename, f.stream, f.content_type)
+
+            form_data = {
+                "document_type": request.form.get("document_type", ""),
+                "description": request.form.get("description", ""),
+            }
+
+            resp = requests.post(url, headers=headers, files=files, data=form_data, timeout=30)
+            return jsonify(resp.json()), resp.status_code
+        except requests.exceptions.RequestException as e:
+            return jsonify({"success": False, "message": f"API Error: {str(e)}"}), 500
+
+    @app.route("/api/rfpos/<int:rfpo_id>/files/<file_id>/view", methods=["GET"])
+    def api_rfpo_view_file(rfpo_id, file_id):
+        """RFPO file view proxy - streams file content from API"""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+
+        url = f"{API_BASE_URL}/rfpos/{rfpo_id}/files/{file_id}/view"
+        headers = {"Authorization": f"Bearer {session['auth_token']}"}
+
+        try:
+            resp = requests.get(url, headers=headers, stream=True, timeout=30)
+            if resp.status_code != 200:
+                return jsonify({"success": False, "message": "File not found"}), resp.status_code
+
+            from flask import Response
+            return Response(
+                resp.iter_content(chunk_size=8192),
+                content_type=resp.headers.get("Content-Type", "application/octet-stream"),
+                headers={
+                    "Content-Disposition": resp.headers.get("Content-Disposition", ""),
+                },
+            )
+        except requests.exceptions.RequestException as e:
+            return jsonify({"success": False, "message": f"API Error: {str(e)}"}), 500
+
+    @app.route("/api/rfpos/<int:rfpo_id>/files/<file_id>", methods=["DELETE"])
+    def api_rfpo_delete_file(rfpo_id, file_id):
+        """RFPO file delete proxy"""
+        response = make_api_request(f"/rfpos/{rfpo_id}/files/{file_id}", "DELETE")
+        return jsonify(response)
+
+    @app.route("/api/rfpos/doc-types", methods=["GET"])
+    def api_doc_types():
+        """Document types API proxy"""
+        response = make_api_request("/rfpos/doc-types")
+        return jsonify(response)
+
     @app.route("/api/rfpos/<int:rfpo_id>/rendered-view", methods=["GET"])
     def api_rfpo_rendered_view(rfpo_id):
         """RFPO rendered view API proxy"""

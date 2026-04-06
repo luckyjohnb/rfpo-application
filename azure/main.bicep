@@ -251,6 +251,10 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
               volumeName: 'data-volume'
               mountPath: '/app/data'
             }
+            {
+              volumeName: 'uploads-volume'
+              mountPath: '/app/uploads'
+            }
           ]
         }
       ]
@@ -271,6 +275,11 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
       volumes: [
         {
           name: 'data-volume'
+          storageType: 'AzureFile'
+          storageName: storageConfig.name
+        }
+        {
+          name: 'uploads-volume'
           storageType: 'AzureFile'
           storageName: storageConfig.name
         }

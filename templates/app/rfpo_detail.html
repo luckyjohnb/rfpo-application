@@ -155,10 +155,6 @@
                             <dt class="mb-2">Description:</dt>
                             <dd id="rfpoDescription" class="mb-3">-</dd>
                         </div>
-                        <div class="col-md-6">
-                            <dt class="mb-2">Attached Files:</dt>
-                            <dd id="attachedFiles">Loading files...</dd>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -192,7 +188,34 @@
         </div>
     </div>
 
-    <!-- Row 5: RFPO Document -->
+    <!-- Row 5: Files / Attachments -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-paperclip"></i> Files & Attachments
+                        <span class="badge bg-secondary ms-2" id="fileCount">0</span>
+                    </h5>
+                    {% if is_admin %}
+                    <button class="btn btn-primary btn-sm" onclick="showUploadFileModal()" id="uploadFileBtn">
+                        <i class="fas fa-upload"></i> Upload File
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div id="filesContent">
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                            <p class="mt-2">Loading files...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 6: RFPO Document -->
     <div class="row">
         <div class="col-12">
             <div class="card">
@@ -301,6 +324,73 @@
 </div>
 {% endblock %}
 
+<!-- Upload File Modal -->
+<div class="modal fade" id="uploadFileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">📁 Upload File</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="uploadFileForm" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="uploadDocType" class="form-label">Document Type <span class="text-danger">*</span></label>
+                        <select class="form-select" id="uploadDocType" name="document_type" required>
+                            <option value="">-- Select document type --</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="uploadFile" class="form-label">Select File <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="uploadFile" name="file" required
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif">
+                        <div class="form-text">
+                            Supported formats: PDF, Word, Excel, Text, Images (JPG, PNG, GIF)<br>
+                            Maximum file size: 10 MB
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="uploadDescription" class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="uploadDescription" name="description" rows="2"
+                                  placeholder="Brief description of the file contents"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="uploadFileSubmitBtn">
+                        <i class="fas fa-upload"></i> Upload File
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete File Confirmation Modal -->
+<div class="modal fade" id="deleteFileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">⚠️ Confirm File Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteFileName"></strong>?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteFileBtn" onclick="confirmDeleteFile()">
+                    <i class="fas fa-trash"></i> Delete File
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% block extra_js %}
 <script>
     const rfpoId = {{ rfpo_id }};
@@ -366,8 +456,8 @@
             if (withdrawBtn) withdrawBtn.style.display = 'inline-block';
         }
 
-        // Load files into RFPO Information section
-        loadAttachedFiles(data.files || []);
+        // Load files into Files card
+        loadFiles(data.files || []);
 
         // Load line items
         displayLineItems(rfpo.line_items || []);
@@ -394,33 +484,209 @@
         return `<span class="badge ${badgeClass}">${status}</span>`;
     }
 
-    function loadAttachedFiles(files) {
-        const container = document.getElementById('attachedFiles');
+    // ===== FILE MANAGEMENT =====
+    let pendingDeleteFileId = null;
+
+    function loadFiles(files) {
+        const container = document.getElementById('filesContent');
+        const countBadge = document.getElementById('fileCount');
+        countBadge.textContent = files ? files.length : 0;
+
         if (!files || files.length === 0) {
-            container.innerHTML = '<span class="text-muted">No files attached</span>';
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No files uploaded yet</h5>
+                    <p class="text-muted">Click "Upload File" to add supporting documents to this RFPO.</p>
+                </div>`;
             return;
         }
 
-        // Display files list in RFPO Information section
-        const filesList = files.map(file => {
-            const fileSize = (file.file_size / 1024).toFixed(1) + ' KB';
-            return `
-                <div class="d-flex justify-content-between align-items-center py-1">
-                    <div>
-                        <strong>${file.original_filename}</strong>
-                        <br><small class="text-muted">${file.document_type || 'Document'} • ${fileSize}</small>
-                    </div>
-                    <div>
-                        <button class="btn btn-sm btn-outline-primary" onclick="viewFile('${file.file_id}', '${file.original_filename}')">
-                            <i class="fas fa-eye"></i> View
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        const getFileIcon = (ext) => {
+            if (ext === '.pdf') return 'fa-file-pdf';
+            if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff'].includes(ext)) return 'fa-file-image';
+            if (['.doc', '.docx'].includes(ext)) return 'fa-file-word';
+            if (['.xls', '.xlsx', '.csv'].includes(ext)) return 'fa-file-excel';
+            if (['.ppt', '.pptx'].includes(ext)) return 'fa-file-powerpoint';
+            return 'fa-file-alt';
+        };
 
-        container.innerHTML = filesList;
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Document Type</th>
+                            <th>Size</th>
+                            <th>Uploaded By</th>
+                            <th>Upload Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+        files.forEach(file => {
+            const fileSize = (file.file_size / 1024).toFixed(1) + ' KB';
+            const uploadDate = file.uploaded_at ? new Date(file.uploaded_at).toLocaleDateString() : 'Unknown';
+            const icon = getFileIcon(file.file_extension || '');
+            const safeFilename = file.original_filename.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+            html += `
+                <tr>
+                    <td>
+                        <i class="fas ${icon} me-1"></i>
+                        ${file.original_filename}
+                    </td>
+                    <td>
+                        ${file.document_type
+                            ? `<span class="badge bg-info">${file.document_type}</span>`
+                            : '<span class="text-muted">Not specified</span>'}
+                    </td>
+                    <td>${fileSize}</td>
+                    <td>${file.uploaded_by || 'Unknown'}</td>
+                    <td>${uploadDate}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-primary btn-sm" onclick="viewFile('${file.file_id}')" title="View File">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${isAdmin ? `
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteFile('${file.file_id}', '${safeFilename}')" title="Delete File">
+                                <i class="fas fa-trash"></i>
+                            </button>` : ''}
+                        </div>
+                    </td>
+                </tr>`;
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
     }
+
+    function viewFile(fileId) {
+        window.open(`/api/rfpos/${rfpoId}/files/${fileId}/view`, '_blank');
+    }
+
+    function deleteFile(fileId, fileName) {
+        pendingDeleteFileId = fileId;
+        document.getElementById('deleteFileName').textContent = fileName;
+        new bootstrap.Modal(document.getElementById('deleteFileModal')).show();
+    }
+
+    async function confirmDeleteFile() {
+        if (!pendingDeleteFileId) return;
+
+        const btn = document.getElementById('confirmDeleteFileBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+        try {
+            const response = await makeApiCall(`/api/rfpos/${rfpoId}/files/${pendingDeleteFileId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.success) {
+                showAlert(response.message || 'File deleted successfully', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('deleteFileModal')).hide();
+                // Reload RFPO to refresh file list
+                loadRfpoDetails();
+            } else {
+                throw new Error(response.message || 'Failed to delete file');
+            }
+        } catch (error) {
+            showAlert(`Error deleting file: ${error.message}`, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-trash"></i> Delete File';
+            pendingDeleteFileId = null;
+        }
+    }
+
+    async function showUploadFileModal() {
+        // Load doc types into dropdown
+        const docTypeSelect = document.getElementById('uploadDocType');
+        try {
+            const response = await makeApiCall('/api/rfpos/doc-types');
+            if (response.success && response.doc_types) {
+                docTypeSelect.innerHTML = '<option value="">-- Select document type --</option>';
+                response.doc_types.forEach(dt => {
+                    const option = document.createElement('option');
+                    option.value = dt.value;
+                    option.textContent = dt.value;
+                    docTypeSelect.appendChild(option);
+                });
+                // Add "Other" at the end
+                const otherOption = document.createElement('option');
+                otherOption.value = 'Other';
+                otherOption.textContent = 'Other';
+                docTypeSelect.appendChild(otherOption);
+            }
+        } catch (e) {
+            console.error('Failed to load doc types:', e);
+        }
+
+        // Reset form
+        document.getElementById('uploadFileForm').reset();
+        new bootstrap.Modal(document.getElementById('uploadFileModal')).show();
+    }
+
+    // File upload form handler
+    document.getElementById('uploadFileForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const fileInput = document.getElementById('uploadFile');
+        const docType = document.getElementById('uploadDocType').value;
+
+        if (!fileInput.files.length) {
+            showAlert('Please select a file to upload.', 'danger');
+            return;
+        }
+        if (!docType) {
+            showAlert('Please select a document type.', 'danger');
+            return;
+        }
+
+        // Check file size client-side
+        if (fileInput.files[0].size > 10 * 1024 * 1024) {
+            showAlert('File exceeds the 10 MB limit.', 'danger');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('document_type', docType);
+        formData.append('description', document.getElementById('uploadDescription').value);
+
+        const submitBtn = document.getElementById('uploadFileSubmitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+        try {
+            const token = document.cookie.split(';').find(c => c.trim().startsWith('auth_token='));
+            const response = await fetch(`/api/rfpos/${rfpoId}/files/upload`, {
+                method: 'POST',
+                body: formData,
+                // Don't set Content-Type - browser sets it with boundary for multipart
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showAlert(result.message || 'File uploaded successfully!', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('uploadFileModal')).hide();
+                // Reload RFPO to refresh file list
+                loadRfpoDetails();
+            } else {
+                throw new Error(result.message || 'Upload failed');
+            }
+        } catch (error) {
+            showAlert(`Error uploading file: ${error.message}`, 'danger');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-upload"></i> Upload File';
+        }
+    });
 
     function loadRfpoDocument() {
         const container = document.getElementById('rfpoDocumentContainer');
@@ -735,11 +1001,6 @@
 
         const badgeClass = statusClasses[status] || 'bg-secondary';
         return `<span class="badge ${badgeClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
-    }
-
-    function viewFile(fileId, filename) {
-        // Open file in new tab for viewing
-        window.open(`/api/rfpos/${rfpoId}/files/${fileId}/view`, '_blank');
     }
 
     function openRfpoInNewTab() {

@@ -29,7 +29,7 @@ COPY email_service.py .
 COPY api/ ./api/
 
 # Create necessary directories
-RUN mkdir -p instance logs
+RUN mkdir -p instance logs uploads/rfpo_files
 
 # Expose port
 EXPOSE 5002

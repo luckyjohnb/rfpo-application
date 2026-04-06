@@ -27,6 +27,8 @@ from models import (
     Project,
     Vendor,
     VendorSite,
+    UploadedFile,
+    List,
 )
 
 # Import approval and audit models at top level
@@ -2594,6 +2596,173 @@ def get_rfpo_rendered_view(rfpo_id):
                 }
             )
 
+    except Exception as e:
+        return _error_response(e)
+
+
+# ─── FILE UPLOAD / VIEW / DELETE ─────────────────────────────────────────────
+
+ALLOWED_UPLOAD_EXTENSIONS = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt",
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff",
+    ".ppt", ".pptx", ".rtf", ".odt", ".ods",
+}
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+@app.route("/api/rfpos/<int:rfpo_id>/files/upload", methods=["POST"])
+@require_auth
+def upload_rfpo_file(rfpo_id):
+    """Upload a file to an RFPO"""
+    try:
+        rfpo = RFPO.query.get(rfpo_id)
+        if not rfpo:
+            return jsonify({"success": False, "message": "RFPO not found"}), 404
+
+        if "file" not in request.files:
+            return jsonify({"success": False, "message": "No file provided"}), 400
+
+        file = request.files["file"]
+        if not file.filename:
+            return jsonify({"success": False, "message": "No file selected"}), 400
+
+        document_type = request.form.get("document_type", "")
+        description = request.form.get("description", "")
+
+        from werkzeug.utils import secure_filename
+        import uuid
+        import mimetypes
+
+        original_filename = secure_filename(file.filename)
+        if not original_filename:
+            return jsonify({"success": False, "message": "Invalid filename"}), 400
+
+        file_extension = os.path.splitext(original_filename)[1].lower()
+        if file_extension not in ALLOWED_UPLOAD_EXTENSIONS:
+            return jsonify({"success": False, "message": f"File type '{file_extension}' is not allowed"}), 400
+
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > MAX_UPLOAD_SIZE_BYTES:
+            return jsonify({"success": False, "message": "File exceeds 10 MB limit"}), 400
+
+        mime_type, _ = mimetypes.guess_type(original_filename)
+
+        file_id = str(uuid.uuid4())
+        stored_filename = f"{file_id}_{original_filename}"
+
+        rfpo_dir = os.path.join("uploads", "rfpo_files", f"rfpo_{rfpo.id}")
+        os.makedirs(rfpo_dir, exist_ok=True)
+
+        file_path = os.path.join(rfpo_dir, stored_filename)
+        file.save(file_path)
+
+        user = request.current_user
+        user_name = user.get_display_name() if hasattr(user, "get_display_name") else str(user)
+
+        uploaded_file = UploadedFile(
+            file_id=file_id,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            file_path=file_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            file_extension=file_extension,
+            document_type=document_type if document_type else None,
+            description=description if description else None,
+            rfpo_id=rfpo.id,
+            uploaded_by=user_name,
+        )
+
+        db.session.add(uploaded_file)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f'File "{original_filename}" uploaded successfully',
+            "file": uploaded_file.to_dict(),
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/rfpos/<int:rfpo_id>/files/<file_id>/view", methods=["GET"])
+@require_auth
+def view_rfpo_file(rfpo_id, file_id):
+    """View/download an uploaded file"""
+    try:
+        rfpo = RFPO.query.get(rfpo_id)
+        if not rfpo:
+            return jsonify({"success": False, "message": "RFPO not found"}), 404
+
+        uploaded_file = UploadedFile.query.filter_by(
+            file_id=file_id, rfpo_id=rfpo.id
+        ).first()
+        if not uploaded_file:
+            return jsonify({"success": False, "message": "File not found"}), 404
+
+        if not os.path.exists(uploaded_file.file_path):
+            return jsonify({"success": False, "message": "File not found on disk"}), 404
+
+        from flask import send_file
+        return send_file(
+            uploaded_file.file_path,
+            mimetype=uploaded_file.mime_type,
+            as_attachment=False,
+            download_name=uploaded_file.original_filename,
+        )
+
+    except Exception as e:
+        return _error_response(e)
+
+
+@app.route("/api/rfpos/<int:rfpo_id>/files/<file_id>", methods=["DELETE"])
+@require_auth
+def delete_rfpo_file(rfpo_id, file_id):
+    """Delete an uploaded file"""
+    try:
+        rfpo = RFPO.query.get(rfpo_id)
+        if not rfpo:
+            return jsonify({"success": False, "message": "RFPO not found"}), 404
+
+        uploaded_file = UploadedFile.query.filter_by(
+            file_id=file_id, rfpo_id=rfpo.id
+        ).first()
+        if not uploaded_file:
+            return jsonify({"success": False, "message": "File not found"}), 404
+
+        if os.path.exists(uploaded_file.file_path):
+            os.remove(uploaded_file.file_path)
+
+        filename = uploaded_file.original_filename
+        db.session.delete(uploaded_file)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f'File "{filename}" deleted successfully',
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/rfpos/doc-types", methods=["GET"])
+@require_auth
+def get_doc_types():
+    """Get document type options for file upload"""
+    try:
+        doc_types = List.get_by_type("doc_types")
+        types = [
+            {"key": dt.key, "value": dt.value}
+            for dt in doc_types
+            if dt.value and dt.value.strip()
+        ]
+        return jsonify({"success": True, "doc_types": types})
     except Exception as e:
         return _error_response(e)
 

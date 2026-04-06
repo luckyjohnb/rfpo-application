@@ -6,8 +6,8 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">📄 RFPOs</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <a href="{{ url_for('rfpo_new') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> New RFPO
+        <a href="{{ USER_APP_URL }}/rfpos/create" target="_blank" class="btn btn-primary">
+            <i class="fas fa-plus"></i> New RFPO <i class="fas fa-external-link-alt fa-xs"></i>
         </a>
     </div>
 </div>
@@ -145,8 +145,8 @@
                 <i class="fas fa-file-contract fa-3x text-muted mb-3"></i>
                 <h5 class="text-muted">No RFPOs Found</h5>
                 <p class="text-muted">Get started by creating your first RFPO.</p>
-                <a href="{{ url_for('rfpo_new') }}" class="btn btn-primary">
-                    <i class="fas fa-plus"></i> Create First RFPO
+                <a href="{{ USER_APP_URL }}/rfpos/create" target="_blank" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create First RFPO <i class="fas fa-external-link-alt fa-xs"></i>
                 </a>
             </div>
         {% endif %}

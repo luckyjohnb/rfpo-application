@@ -724,6 +724,7 @@ def create_app():
             "APP_BUILD_SHA_SHORT": short_sha,
             "ADMIN_EMAIL_SENDER_MODE": sender_mode,
             "ADMIN_EMAIL_SENDER_LABEL": sender_label,
+            "USER_APP_URL": os.environ.get("USER_APP_URL", "http://127.0.0.1:5001"),
         }
 
     @login_manager.user_loader

@@ -40,6 +40,7 @@ from models import (
     RFPOApprovalInstance,
     RFPOApprovalAction,
     AuditLog,
+    Notification,
 )
 
 # Import admin routes
@@ -803,6 +804,36 @@ def take_approval_action(action_id):
                         requestor.email, requestor.get_display_name(),
                         instance.rfpo.rfpo_id, f"RFPO {instance.overall_status.title()}"
                     )
+                # In-app notification for requestor
+                if requestor:
+                    _create_notification(
+                        user_id=requestor.id,
+                        notif_type="rfpo_status",
+                        title=f"RFPO {instance.overall_status.title()}",
+                        message=f"RFPO {instance.rfpo.rfpo_id} has been {instance.overall_status}.",
+                        link=f"/rfpos/{instance.rfpo.id}",
+                        entity_type="rfpo",
+                        entity_id=str(instance.rfpo.id),
+                    )
+            else:
+                # Notify next approver(s) when workflow advances
+                if instance.rfpo:
+                    next_actions = RFPOApprovalAction.query.filter_by(
+                        instance_id=instance.id, status="pending"
+                    ).all()
+                    for na in next_actions:
+                        next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
+                        if next_approver:
+                            _create_notification(
+                                user_id=next_approver.id,
+                                notif_type="approval_request",
+                                title="Approval Step Ready",
+                                message=f"RFPO {instance.rfpo.rfpo_id} is ready for your review ({na.step_name}).",
+                                link=f"/rfpos/{instance.rfpo.id}",
+                                entity_type="rfpo",
+                                entity_id=str(instance.rfpo.id),
+                            )
+            db.session.commit()  # persist notifications
         except Exception as email_err:
             app.logger.warning(f"Email notification failed: {email_err}")
 
@@ -1083,6 +1114,18 @@ def submit_for_approval(rfpo_id):
                             approver.email, approver.get_display_name(),
                             rfpo.rfpo_id, step_data["approval_type_name"]
                         )
+                    # In-app notification for approver
+                    if approver:
+                        _create_notification(
+                            user_id=approver.id,
+                            notif_type="approval_request",
+                            title="New Approval Required",
+                            message=f"RFPO {rfpo.rfpo_id} ({rfpo.title}) needs your approval.",
+                            link=f"/rfpos/{rfpo.id}",
+                            entity_type="rfpo",
+                            entity_id=str(rfpo.id),
+                        )
+            db.session.commit()  # persist notifications
         except Exception as email_err:
             app.logger.warning(f"Email notification failed: {email_err}")
 
@@ -2852,6 +2895,248 @@ def get_doc_types():
             if dt.value and dt.value.strip()
         ]
         return jsonify({"success": True, "doc_types": types})
+    except Exception as e:
+        return _error_response(e)
+
+
+# ─── Notification Endpoints ──────────────────────────────────────────────
+
+def _create_notification(user_id, notif_type, title, message, link=None, entity_type=None, entity_id=None):
+    """Helper: create and persist a Notification row."""
+    notif = Notification(
+        user_id=user_id,
+        type=notif_type,
+        title=title,
+        message=message,
+        link=link,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+    db.session.add(notif)
+    return notif
+
+
+@app.route("/api/notifications", methods=["GET"])
+@require_auth
+def get_notifications():
+    """List current user's notifications (newest first, unread first)."""
+    try:
+        user = request.current_user
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 20, type=int), 100)
+        unread_only = request.args.get("unread_only", "").lower() == "true"
+
+        query = Notification.query.filter_by(user_id=user.id)
+        if unread_only:
+            query = query.filter_by(is_read=False)
+        query = query.order_by(Notification.is_read.asc(), Notification.created_at.desc())
+
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+
+        return jsonify({
+            "success": True,
+            "notifications": [n.to_dict() for n in paginated.items],
+            "total": paginated.total,
+            "page": paginated.page,
+            "pages": paginated.pages,
+            "unread_count": Notification.query.filter_by(user_id=user.id, is_read=False).count(),
+        })
+    except Exception as e:
+        return _error_response(e)
+
+
+@app.route("/api/notifications/unread-count", methods=["GET"])
+@require_auth
+def get_unread_notification_count():
+    """Return unread notification count for the badge."""
+    try:
+        count = Notification.query.filter_by(user_id=request.current_user.id, is_read=False).count()
+        return jsonify({"success": True, "unread_count": count})
+    except Exception as e:
+        return _error_response(e)
+
+
+@app.route("/api/notifications/<int:notif_id>/read", methods=["PUT"])
+@require_auth
+def mark_notification_read(notif_id):
+    """Mark a single notification as read."""
+    try:
+        notif = Notification.query.filter_by(id=notif_id, user_id=request.current_user.id).first()
+        if not notif:
+            return jsonify({"success": False, "message": "Notification not found"}), 404
+        notif.mark_read()
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/notifications/mark-all-read", methods=["POST"])
+@require_auth
+def mark_all_notifications_read():
+    """Mark all of the current user's notifications as read."""
+    try:
+        Notification.query.filter_by(
+            user_id=request.current_user.id, is_read=False
+        ).update({"is_read": True, "read_at": datetime.utcnow()})
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+# ─── Audit Trail Endpoint ────────────────────────────────────────────────
+
+@app.route("/api/rfpos/<int:rfpo_id>/audit-trail", methods=["GET"])
+@require_auth
+def get_rfpo_audit_trail(rfpo_id):
+    """Return the AuditLog entries for a given RFPO (newest first)."""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        logs = (
+            AuditLog.query
+            .filter_by(entity_type="rfpo", entity_id=str(rfpo.id))
+            .order_by(AuditLog.created_at.desc())
+            .all()
+        )
+        # Also include approval-related audit logs
+        approval_logs = (
+            AuditLog.query
+            .filter_by(entity_type="rfpo_approval", entity_id=str(rfpo.id))
+            .order_by(AuditLog.created_at.desc())
+            .all()
+        )
+        all_logs = sorted(logs + approval_logs, key=lambda l: l.created_at, reverse=True)
+        return jsonify({
+            "success": True,
+            "audit_trail": [l.to_dict() for l in all_logs],
+        })
+    except Exception as e:
+        return _error_response(e)
+
+
+# ─── CSV Export Endpoint ─────────────────────────────────────────────────
+
+@app.route("/api/rfpos/export", methods=["GET"])
+@require_auth
+def export_rfpos_csv():
+    """Export the user's visible RFPOs as a CSV file."""
+    import csv
+    import io
+
+    try:
+        user = request.current_user
+        user_perms = user.get_permissions() or []
+        is_admin = "RFPO_ADMIN" in user_perms or "GOD" in user_perms
+
+        if is_admin:
+            rfpos = RFPO.query.filter(RFPO.deleted_at.is_(None)).order_by(RFPO.created_at.desc()).all()
+        else:
+            accessible_team_ids = [ut.team_id for ut in UserTeam.query.filter_by(user_id=user.id).all()]
+            rfpos = RFPO.query.filter(
+                RFPO.deleted_at.is_(None),
+                RFPO.team_id.in_(accessible_team_ids)
+            ).order_by(RFPO.created_at.desc()).all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "RFPO ID", "Title", "Status", "Vendor", "Team",
+            "Subtotal", "Cost Share", "Total Amount",
+            "Created By", "Created At", "Due Date",
+        ])
+
+        for r in rfpos:
+            writer.writerow([
+                r.rfpo_id or "",
+                r.title or "",
+                r.status or "",
+                r.vendor_name or "",
+                r.team_name or "",
+                f"{float(r.subtotal or 0):.2f}",
+                f"{float(r.cost_share_amount or 0):.2f}",
+                f"{float(r.total_amount or 0):.2f}",
+                r.created_by or "",
+                r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+                r.delivery_date.strftime("%Y-%m-%d") if r.delivery_date else "",
+            ])
+
+        from flask import Response
+        resp = Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=rfpos_export.csv"},
+        )
+        return resp
+    except Exception as e:
+        return _error_response(e)
+
+
+# ─── Cost Analytics Endpoint ─────────────────────────────────────────────
+
+@app.route("/api/rfpos/analytics", methods=["GET"])
+@require_auth
+def get_rfpo_analytics():
+    """Return cost analytics: totals by status, team, and monthly trend."""
+    try:
+        user = request.current_user
+        user_perms = user.get_permissions() or []
+        is_admin = "RFPO_ADMIN" in user_perms or "GOD" in user_perms
+
+        if is_admin:
+            rfpos = RFPO.query.filter(RFPO.deleted_at.is_(None)).all()
+        else:
+            accessible_team_ids = [ut.team_id for ut in UserTeam.query.filter_by(user_id=user.id).all()]
+            rfpos = RFPO.query.filter(
+                RFPO.deleted_at.is_(None),
+                RFPO.team_id.in_(accessible_team_ids)
+            ).all()
+
+        total_spend = sum(float(r.total_amount or 0) for r in rfpos)
+        avg_amount = total_spend / len(rfpos) if rfpos else 0.0
+
+        # By status
+        by_status = {}
+        for r in rfpos:
+            s = r.status or "Unknown"
+            if s not in by_status:
+                by_status[s] = {"count": 0, "total": 0.0}
+            by_status[s]["count"] += 1
+            by_status[s]["total"] += float(r.total_amount or 0)
+
+        # By team
+        by_team = {}
+        for r in rfpos:
+            t = r.team_name or "Unassigned"
+            if t not in by_team:
+                by_team[t] = {"count": 0, "total": 0.0}
+            by_team[t]["count"] += 1
+            by_team[t]["total"] += float(r.total_amount or 0)
+
+        # Monthly trend (last 12 months)
+        from collections import OrderedDict
+        monthly = OrderedDict()
+        for r in rfpos:
+            if r.created_at:
+                key = r.created_at.strftime("%Y-%m")
+                if key not in monthly:
+                    monthly[key] = {"count": 0, "total": 0.0}
+                monthly[key]["count"] += 1
+                monthly[key]["total"] += float(r.total_amount or 0)
+
+        return jsonify({
+            "success": True,
+            "analytics": {
+                "total_rfpos": len(rfpos),
+                "total_spend": round(total_spend, 2),
+                "average_amount": round(avg_amount, 2),
+                "by_status": by_status,
+                "by_team": by_team,
+                "monthly_trend": monthly,
+            },
+        })
     except Exception as e:
         return _error_response(e)
 

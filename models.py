@@ -2276,3 +2276,46 @@ class AuditLog(db.Model):
 
     def __repr__(self):
         return f"<AuditLog {self.id}: {self.action} {self.entity_type}:{self.entity_id} by {self.user_email}>"
+
+
+class Notification(db.Model):
+    """In-app notifications for users (approval requests, status changes, overdue alerts)."""
+
+    __tablename__ = "notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    type = db.Column(db.String(64), nullable=False, index=True)  # approval_request, approval_complete, rfpo_status, overdue
+    title = db.Column(db.String(255), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    link = db.Column(db.String(512), nullable=True)  # URL to navigate to (e.g., /rfpos/123)
+    is_read = db.Column(db.Boolean, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    read_at = db.Column(db.DateTime, nullable=True)
+
+    # Optional reference to source entity
+    entity_type = db.Column(db.String(64), nullable=True)  # rfpo, approval_action, etc.
+    entity_id = db.Column(db.String(64), nullable=True)
+
+    user = db.relationship("User", backref=db.backref("notifications", lazy=True, cascade="all, delete-orphan"))
+
+    def mark_read(self):
+        self.is_read = True
+        self.read_at = datetime.utcnow()
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "type": self.type,
+            "title": self.title,
+            "message": self.message,
+            "link": self.link,
+            "is_read": self.is_read,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "read_at": self.read_at.isoformat() if self.read_at else None,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+        }
+
+    def __repr__(self):
+        return f"<Notification {self.id}: {self.type} for user {self.user_id}>"

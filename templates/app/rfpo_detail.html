@@ -29,6 +29,9 @@
             <i class="fas fa-undo"></i> Withdraw
         </button>
         {% endif %}
+        <a href="/rfpos/{{ rfpo_id }}/download-pdf" class="btn btn-outline-success me-2" title="Download PDF">
+            <i class="fas fa-file-pdf"></i> Download
+        </a>
         <a href="/rfpos" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Back to List
         </a>
@@ -216,7 +219,7 @@
     </div>
 
     <!-- Row 6: RFPO Document -->
-    <div class="row">
+    <div class="row mb-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -232,6 +235,26 @@
                         <div class="text-center py-4">
                             <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
                             <p class="text-muted mt-2">Loading RFPO document...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 7: Audit Trail -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-clipboard-list"></i> Audit Trail
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="auditTrailContent">
+                        <div class="text-center py-3 text-muted">
+                            <i class="fas fa-spinner fa-spin"></i> Loading audit trail...
                         </div>
                     </div>
                 </div>
@@ -1476,9 +1499,37 @@
         }
     }
 
+    // ─── Audit Trail ─────────────────────────────────────────────────
+    async function loadAuditTrail() {
+        const container = document.getElementById('auditTrailContent');
+        try {
+            const resp = await makeApiCall(`/api/rfpos/${rfpoId}/audit-trail`);
+            if (!resp.success || !resp.audit_trail || resp.audit_trail.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center mb-0">No audit entries yet.</p>';
+                return;
+            }
+            const rows = resp.audit_trail.map(log => {
+                const ts = log.created_at ? new Date(log.created_at).toLocaleString() : '';
+                const details = log.details || {};
+                const extraInfo = details.comments ? ` — "${escapeHtml(details.comments)}"` : '';
+                return `<tr>
+                    <td class="small">${ts}</td>
+                    <td><span class="badge bg-secondary">${escapeHtml(log.action)}</span></td>
+                    <td class="small">${escapeHtml(log.user_email || '')}${extraInfo}</td>
+                </tr>`;
+            }).join('');
+            container.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover mb-0">
+                <thead><tr><th>Time</th><th>Action</th><th>Details</th></tr></thead>
+                <tbody>${rows}</tbody></table></div>`;
+        } catch (e) {
+            container.innerHTML = '<p class="text-muted text-center mb-0">Could not load audit trail.</p>';
+        }
+    }
+
     // Initialize page
     document.addEventListener('DOMContentLoaded', function() {
         loadRfpoDetails();
+        loadAuditTrail();
 
         // Live-update calculated total in modal
         document.getElementById('liQuantity').addEventListener('input', updateCalculatedTotal);

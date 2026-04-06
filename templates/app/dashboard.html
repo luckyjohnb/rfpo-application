@@ -280,7 +280,7 @@
 </div>
 
 <!-- My Teams -->
-<div class="row">
+<div class="row mb-4">
     <div class="col">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -319,6 +319,29 @@
         </div>
     </div>
 </div>
+
+<!-- Cost Analytics -->
+{% if dashboard_type in ('admin', 'approver') %}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-bar"></i> Cost Analytics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="analyticsContainer">
+                    <div class="text-center py-3">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading analytics...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -599,9 +622,59 @@
         `;
     }
 
+    // ─── Cost Analytics ──────────────────────────────────────────────
+    async function loadAnalytics() {
+        const container = document.getElementById('analyticsContainer');
+        if (!container) return;
+        try {
+            const resp = await makeApiCall('/api/rfpos/analytics');
+            if (!resp.success) { container.innerHTML = '<p class="text-muted">Analytics unavailable.</p>'; return; }
+            const a = resp.analytics;
+            const fmt = v => '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+            let html = `
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4 text-center">
+                        <h4 class="text-primary mb-0">${fmt(a.total_spend)}</h4>
+                        <small class="text-muted">Total Spend</small>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <h4 class="text-success mb-0">${fmt(a.average_amount)}</h4>
+                        <small class="text-muted">Average RFPO</small>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <h4 class="text-info mb-0">${a.total_rfpos}</h4>
+                        <small class="text-muted">Total RFPOs</small>
+                    </div>
+                </div>`;
+
+            // Spend by status
+            if (Object.keys(a.by_status).length) {
+                html += '<h6 class="mb-2"><i class="fas fa-chart-pie"></i> Spend by Status</h6><div class="row g-2 mb-3">';
+                for (const [st, d] of Object.entries(a.by_status)) {
+                    html += `<div class="col-md-3"><div class="border rounded p-2 text-center"><strong>${escapeHtml(st)}</strong><br><span class="text-muted small">${d.count} RFPOs</span><br>${fmt(d.total)}</div></div>`;
+                }
+                html += '</div>';
+            }
+
+            // Spend by team
+            if (Object.keys(a.by_team).length) {
+                html += '<h6 class="mb-2"><i class="fas fa-users"></i> Spend by Team</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Team</th><th class="text-end">RFPOs</th><th class="text-end">Total</th></tr></thead><tbody>';
+                for (const [tm, d] of Object.entries(a.by_team)) {
+                    html += `<tr><td>${escapeHtml(tm)}</td><td class="text-end">${d.count}</td><td class="text-end">${fmt(d.total)}</td></tr>`;
+                }
+                html += '</tbody></table></div>';
+            }
+
+            container.innerHTML = html;
+        } catch (e) {
+            container.innerHTML = '<p class="text-muted">Could not load analytics.</p>';
+        }
+    }
+
     // Load dashboard data when page loads
     document.addEventListener('DOMContentLoaded', function() {
         loadUserSpecificDashboard();
+        loadAnalytics();
     });
 </script>
 {% endblock %}

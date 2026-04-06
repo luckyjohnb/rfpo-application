@@ -173,8 +173,7 @@
     </div>
 </div>
 
-{% if is_admin %}
-<!-- Reassign Approval Modal -->
+<!-- Reassign Approval Modal (available to admins and approvers) -->
 <div class="modal fade" id="reassignModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -207,7 +206,6 @@
         </div>
     </div>
 </div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -310,12 +308,10 @@
                                     <a href="/rfpos/${rfpo.id}/preview" class="btn btn-sm btn-outline-info me-1" target="_blank" title="Preview RFPO">
                                         <i class="fas fa-eye"></i>
                                     </a>
-                                    {% if is_admin %}
                                     <button class="btn btn-sm btn-outline-warning me-1" title="Reassign"
                                             onclick="openReassignModal('${escapeAttr(action.action_id)}', '${escapeAttr(action.step_name || '')}', '${escapeAttr(action.approver_name || '')}')">
                                         <i class="fas fa-user-edit"></i>
                                     </button>
-                                    {% endif %}
                                     <button class="btn btn-sm btn-success me-1"
                                             onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, ${JSON.stringify(escapeHtml(rfpo.title || '')).replace(/'/g, "\\'")}, '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}')">
                                         <i class="fas fa-check"></i> Approve
@@ -453,8 +449,7 @@
     // Load on page load
     document.addEventListener('DOMContentLoaded', loadApprovals);
 
-    // ─── Reassign Functions (admin only) ──────────────────────────────
-    {% if is_admin %}
+    // ─── Reassign Functions (admins & approvers) ─────────────────────
     let reassignActionId = null;
     let usersLoaded = false;
 
@@ -525,6 +520,5 @@
             btn.innerHTML = '<i class="fas fa-user-edit"></i> Reassign';
         }
     }
-    {% endif %}
 </script>
 {% endblock %}

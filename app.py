@@ -717,6 +717,110 @@ def create_user_app():
         response = make_api_request(f"/rfpos/{rfpo_id}/rendered-view")
         return jsonify(response)
 
+    # ─── Notification Proxy Routes ────────────────────────────────────
+
+    @app.route("/api/notifications", methods=["GET"])
+    @_require_session_token
+    def api_notifications():
+        """Notifications list API proxy"""
+        params = urlencode(request.args.to_dict(flat=False), doseq=True)
+        endpoint = f"/notifications?{params}" if params else "/notifications"
+        response = make_api_request(endpoint)
+        return jsonify(response)
+
+    @app.route("/api/notifications/unread-count", methods=["GET"])
+    @_require_session_token
+    def api_notifications_unread_count():
+        """Unread notification count API proxy"""
+        response = make_api_request("/notifications/unread-count")
+        return jsonify(response)
+
+    @app.route("/api/notifications/<int:notif_id>/read", methods=["PUT"])
+    @_require_session_token
+    def api_notification_mark_read(notif_id):
+        """Mark notification as read API proxy"""
+        response = make_api_request(f"/notifications/{notif_id}/read", "PUT")
+        return jsonify(response)
+
+    @app.route("/api/notifications/mark-all-read", methods=["POST"])
+    @_require_session_token
+    def api_notifications_mark_all_read():
+        """Mark all notifications as read API proxy"""
+        response = make_api_request("/notifications/mark-all-read", "POST")
+        return jsonify(response)
+
+    # ─── Audit Trail Proxy Route ──────────────────────────────────────
+
+    @app.route("/api/rfpos/<int:rfpo_id>/audit-trail", methods=["GET"])
+    @_require_session_token
+    def api_rfpo_audit_trail(rfpo_id):
+        """RFPO audit trail API proxy"""
+        response = make_api_request(f"/rfpos/{rfpo_id}/audit-trail")
+        return jsonify(response)
+
+    # ─── CSV Export Proxy Route ───────────────────────────────────────
+
+    @app.route("/api/rfpos/export", methods=["GET"])
+    @_require_session_token
+    def api_rfpos_export():
+        """RFPO CSV export proxy — streams CSV from API"""
+        url = f"{API_BASE_URL}/rfpos/export"
+        headers = {"Authorization": f"Bearer {session['auth_token']}"}
+        try:
+            resp = requests.get(url, headers=headers, stream=True, timeout=30)
+            from flask import Response
+            return Response(
+                resp.iter_content(chunk_size=8192),
+                mimetype=resp.headers.get("Content-Type", "text/csv"),
+                headers={"Content-Disposition": resp.headers.get("Content-Disposition", "attachment; filename=rfpos_export.csv")},
+            )
+        except requests.exceptions.RequestException as e:
+            return jsonify({"success": False, "message": f"Export failed: {str(e)}"}), 500
+
+    # ─── Cost Analytics Proxy Route ───────────────────────────────────
+
+    @app.route("/api/rfpos/analytics", methods=["GET"])
+    @_require_session_token
+    def api_rfpos_analytics():
+        """RFPO analytics API proxy"""
+        response = make_api_request("/rfpos/analytics")
+        return jsonify(response)
+
+    # ─── PDF Download Route ───────────────────────────────────────────
+
+    @app.route("/rfpos/<int:rfpo_id>/download-pdf", methods=["GET"])
+    def rfpo_download_pdf(rfpo_id):
+        """Generate a PDF from the RFPO rendered view and send as download."""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+
+        # Fetch the rendered HTML from the API
+        rendered = make_api_request(f"/rfpos/{rfpo_id}/rendered-view")
+        if not rendered.get("success"):
+            return jsonify({"success": False, "message": "Could not load RFPO view"}), 404
+
+        html_content = rendered.get("html", "")
+
+        # Convert to PDF using a simple HTML-to-PDF approach
+        try:
+            from weasyprint import HTML
+            pdf_bytes = HTML(string=html_content).write_pdf()
+        except ImportError:
+            # Fallback: serve HTML as downloadable file
+            from flask import Response
+            return Response(
+                html_content,
+                mimetype="text/html",
+                headers={"Content-Disposition": f"attachment; filename=RFPO_{rfpo_id}.html"},
+            )
+
+        from flask import Response
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=RFPO_{rfpo_id}.pdf"},
+        )
+
     @app.route("/rfpos/<int:rfpo_id>/preview")
     def rfpo_preview(rfpo_id):
         """Render RFPO preview HTML (same as admin panel)"""

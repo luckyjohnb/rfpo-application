@@ -35,6 +35,7 @@ from models import (
     RFPOApprovalInstance,
     RFPOApprovalAction,
     AuditLog,
+    Notification,
 )
 
 
@@ -128,6 +129,7 @@ def verify_tables_created(app):
         "rfpo_approval_instances",
         "rfpo_approval_actions",
         "audit_logs",
+        "notifications",
     ]
 
     try:

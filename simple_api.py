@@ -127,6 +127,58 @@ def _error_response(e, status_code=500):
     return jsonify({"success": False, "message": "An internal error occurred"}), status_code
 
 
+def _find_applicable_workflow_and_stage(rfpo):
+    """Find the best applicable workflow + stage for an RFPO.
+
+    Lookup priority: team → consortium → project.
+    A workflow is only accepted if it has at least one stage with steps.
+    Falls through to the next level if the found workflow is incomplete.
+
+    Returns (workflow, applicable_stage) or (None, None).
+    """
+    rfpo_total = float(rfpo.total_amount or 0)
+
+    candidates = []
+    if rfpo.team_id:
+        w = RFPOApprovalWorkflow.query.filter_by(
+            team_id=rfpo.team_id, workflow_type="team", is_active=True, is_template=True
+        ).first()
+        if w:
+            candidates.append(w)
+    if rfpo.consortium_id:
+        w = RFPOApprovalWorkflow.query.filter_by(
+            consortium_id=rfpo.consortium_id, workflow_type="consortium",
+            is_active=True, is_template=True
+        ).first()
+        if w:
+            candidates.append(w)
+    if rfpo.project_id:
+        w = RFPOApprovalWorkflow.query.filter_by(
+            project_id=rfpo.project_id, workflow_type="project",
+            is_active=True, is_template=True
+        ).first()
+        if w:
+            candidates.append(w)
+
+    for workflow in candidates:
+        if not workflow.stages:
+            continue
+
+        # Find applicable stage based on amount
+        applicable_stage = None
+        for stage in sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0)):
+            if rfpo_total <= float(stage.budget_bracket_amount or 0):
+                applicable_stage = stage
+                break
+        if not applicable_stage:
+            applicable_stage = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0))[-1]
+
+        if applicable_stage and applicable_stage.steps:
+            return workflow, applicable_stage
+
+    return None, None
+
+
 def _validate_rfpo_for_approval(rfpo):
     """Validate an RFPO is ready for submission — checks fields, line items, files, workflow."""
     result = {
@@ -162,32 +214,12 @@ def _validate_rfpo_for_approval(rfpo):
         result["is_valid"] = False
 
     # Find applicable workflow
-    workflow = None
-    rfpo_total = float(rfpo.total_amount or 0)
-
-    if rfpo.team_id:
-        workflow = RFPOApprovalWorkflow.query.filter_by(
-            team_id=rfpo.team_id, workflow_type="team", is_active=True, is_template=True
-        ).first()
-    if not workflow and rfpo.consortium_id:
-        workflow = RFPOApprovalWorkflow.query.filter_by(
-            consortium_id=rfpo.consortium_id, workflow_type="consortium",
-            is_active=True, is_template=True
-        ).first()
+    workflow, applicable_stage = _find_applicable_workflow_and_stage(rfpo)
 
     if not workflow:
         result["errors"].append("No active approval workflow found for this RFPO")
         result["is_valid"] = False
         return result
-
-    # Determine which stage applies based on amount
-    applicable_stage = None
-    for stage in sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0)):
-        if rfpo_total <= float(stage.budget_bracket_amount or 0):
-            applicable_stage = stage
-            break
-    if not applicable_stage and workflow.stages:
-        applicable_stage = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0))[-1]
 
     if not applicable_stage or not applicable_stage.steps:
         result["errors"].append("No approval stages/steps configured for this workflow")
@@ -1221,19 +1253,8 @@ def submit_for_approval(rfpo_id):
             db.session.flush()
 
         # Find the appropriate workflow template
-        # Priority: team → consortium (matching RFPO's team/consortium)
-        workflow = None
-
-        if rfpo.team_id:
-            workflow = RFPOApprovalWorkflow.query.filter_by(
-                team_id=rfpo.team_id, workflow_type="team", is_active=True, is_template=True
-            ).first()
-
-        if not workflow and rfpo.consortium_id:
-            workflow = RFPOApprovalWorkflow.query.filter_by(
-                consortium_id=rfpo.consortium_id, workflow_type="consortium",
-                is_active=True, is_template=True
-            ).first()
+        # Priority: team → consortium → project (falls through if workflow has no usable stages)
+        workflow, applicable_stage = _find_applicable_workflow_and_stage(rfpo)
 
         if not workflow:
             return jsonify({
@@ -1241,17 +1262,6 @@ def submit_for_approval(rfpo_id):
                 "message": "No active approval workflow found for this RFPO's team or consortium. "
                            "Please configure a workflow in the admin panel first."
             }), 400
-
-        # Determine which stage applies based on RFPO total amount
-        rfpo_total = float(rfpo.total_amount or 0)
-        applicable_stage = None
-        for stage in sorted(workflow.stages, key=lambda s: s.budget_bracket_amount or 0):
-            if rfpo_total <= float(stage.budget_bracket_amount or 0):
-                applicable_stage = stage
-                break
-        # If no bracket matches, use the highest bracket
-        if not applicable_stage and workflow.stages:
-            applicable_stage = sorted(workflow.stages, key=lambda s: s.budget_bracket_amount or 0)[-1]
 
         if not applicable_stage or not applicable_stage.steps:
             return jsonify({

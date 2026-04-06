@@ -1246,13 +1246,16 @@ def create_app():
 
                         # Add summary warnings for document issues
                         if document_validation["missing_documents"]:
-                            # Missing required documents should be an error, not a warning
+                            # Missing required documents block submission
                             missing_count = len(
                                 document_validation["missing_documents"]
                             )
+                            missing_names = ", ".join(
+                                document_validation["missing_documents"]
+                            )
                             msg = (
-                                f"{workflow_type.title()}: Missing {missing_count} "
-                                "required documents"
+                                f"{workflow_type.title()}: {missing_count} required "
+                                f"document(s) still needed: {missing_names}"
                             )
                             validation_result["errors"].append(msg)
                             validation_result["is_valid"] = False
@@ -3151,6 +3154,9 @@ Southfield, MI  48075""",
             rfpo_id=rfpo.id
         ).first()
 
+        # Pre-compute validation for submit-readiness display
+        validation = validate_rfpo_for_approval(rfpo)
+
         return render_template(
             "admin/rfpo_edit.html",
             rfpo=rfpo,
@@ -3160,6 +3166,7 @@ Southfield, MI  48075""",
             consortium=consortium,
             doc_types=doc_types,
             active_instance=active_instance,
+            validation=validation,
         )
 
     @app.route("/rfpo/<int:rfpo_id>/line-item/add", methods=["POST"])

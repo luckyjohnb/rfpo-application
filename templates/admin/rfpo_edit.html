@@ -35,10 +35,17 @@
             {% endif %}
         </a>
         {% elif rfpo.status == 'Draft' %}
+        {% if submit_ready %}
         <button type="button" class="btn btn-sm btn-success" id="submitForApprovalBtn"
                 onclick="submitForApproval({{ rfpo.id }})">
             <i class="fas fa-paper-plane"></i> Submit for Approval
         </button>
+        {% else %}
+        <button type="button" class="btn btn-sm btn-secondary" id="submitForApprovalBtn"
+                disabled title="Resolve requirements on the Review tab before submitting">
+            <i class="fas fa-lock"></i> Submit for Approval
+        </button>
+        {% endif %}
         {% endif %}
         <a href="{{ url_for('rfpos') }}" class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Back to List
@@ -94,6 +101,36 @@
 {% set sections_done = [basic_complete, shipping_complete, vendor_complete, items_complete] | select | list | length %}
 {% set sections_total = 4 %}
 
+{# Extract required document info from validation context #}
+{% set ns = namespace(required_docs=[], missing_docs=[], doc_statuses=[], has_doc_requirements=false) %}
+{% if validation and validation.workflow_phases %}
+    {% for phase in validation.workflow_phases %}
+        {% if phase.stage_info and phase.stage_info.document_validation %}
+            {% set dv = phase.stage_info.document_validation %}
+            {% if dv.document_status|length > 0 %}
+                {% set ns.has_doc_requirements = true %}
+                {% for ds in dv.document_status %}
+                    {% if ds not in ns.doc_statuses %}
+                        {% set ns.doc_statuses = ns.doc_statuses + [ds] %}
+                    {% endif %}
+                {% endfor %}
+                {% for d in dv.required_documents %}
+                    {% if d not in ns.required_docs %}
+                        {% set ns.required_docs = ns.required_docs + [d] %}
+                    {% endif %}
+                {% endfor %}
+                {% for d in dv.missing_documents %}
+                    {% if d not in ns.missing_docs %}
+                        {% set ns.missing_docs = ns.missing_docs + [d] %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+{% set files_complete = (not ns.has_doc_requirements) or (ns.missing_docs|length == 0) %}
+{% set submit_ready = validation and validation.is_valid and rfpo.status == 'Draft' and not active_instance %}
+
 <!-- Progress Bar -->
 <div class="mb-3">
     <div class="d-flex justify-content-between align-items-center mb-1">
@@ -136,13 +173,24 @@
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button" role="tab">
+            {% if ns.has_doc_requirements and not files_complete %}
+                <i class="fas fa-exclamation-triangle text-danger"></i>
+            {% elif files_complete and ns.has_doc_requirements %}
+                <i class="fas fa-check-circle text-success"></i>
+            {% endif %}
             📁 Files ({{ rfpo.files|length }})
+            {% if ns.missing_docs|length > 0 %}
+                <span class="badge bg-danger ms-1">{{ ns.missing_docs|length }} needed</span>
+            {% endif %}
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="review-tab" data-bs-toggle="tab" data-bs-target="#review" type="button" role="tab">
-            {% if sections_done == sections_total %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="fas fa-clipboard-list text-muted"></i>{% endif %}
-            Review
+        <button class="nav-link" id="review-tab" data-bs-toggle="tab" data-bs-target="#review" type="button" role="tab"
+                {% if not submit_ready and rfpo.status == 'Draft' and not active_instance %}
+                    title="Resolve all requirements before reviewing submission"
+                {% endif %}>
+            {% if submit_ready %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="fas fa-clipboard-list text-muted"></i>{% endif %}
+            Review & Submit
         </button>
     </li>
 </ul>
@@ -478,6 +526,50 @@
 
     <!-- Files Tab -->
     <div class="tab-pane fade" id="files" role="tabpanel">
+        {% if ns.has_doc_requirements %}
+        <!-- Required Documents Checklist -->
+        <div class="card mt-3 {% if files_complete %}border-success{% else %}border-danger{% endif %}">
+            <div class="card-header py-2 {% if files_complete %}bg-success bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+                <h6 class="mb-0">
+                    {% if files_complete %}
+                        <i class="fas fa-check-circle text-success"></i> All Required Documents Uploaded
+                    {% else %}
+                        <i class="fas fa-exclamation-triangle text-danger"></i> Required Documents ({{ ns.missing_docs|length }} of {{ ns.required_docs|length }} still needed)
+                    {% endif %}
+                </h6>
+                <small class="text-muted">
+                    These documents are required by the approval workflow for the
+                    {% for phase in validation.workflow_phases if phase.stage_info %}
+                        <strong>"{{ phase.stage_info.stage_name }}"</strong> bracket
+                    {% endfor %}
+                </small>
+            </div>
+            <div class="card-body py-2">
+                <div class="list-group list-group-flush">
+                    {% for ds in ns.doc_statuses %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-1 border-0">
+                        <span>
+                            {% if ds.is_uploaded %}
+                                <i class="fas fa-check-circle text-success"></i>
+                            {% else %}
+                                <i class="fas fa-times-circle text-danger"></i>
+                            {% endif %}
+                            {{ ds.name }}
+                        </span>
+                        {% if not ds.is_uploaded %}
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadFileModal">
+                                <i class="fas fa-upload"></i> Upload
+                            </button>
+                        {% else %}
+                            <span class="badge bg-success">Uploaded</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="card mt-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">📁 Uploaded Files</h5>
@@ -563,17 +655,27 @@
     <div class="tab-pane fade" id="review" role="tabpanel">
         <div class="card mt-3">
             <div class="card-body">
-                <h5 class="mb-3"><i class="fas fa-clipboard-list"></i> RFPO Review Summary</h5>
+                <h5 class="mb-3"><i class="fas fa-clipboard-list"></i> RFPO Review & Submit</h5>
 
-                {% if sections_done < sections_total %}
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>{{ sections_total - sections_done }} section(s) still need attention</strong> before this RFPO is ready to submit.
-                </div>
-                {% else %}
+                {# Overall readiness banner #}
+                {% if submit_ready %}
                 <div class="alert alert-success">
                     <i class="fas fa-check-circle"></i>
-                    <strong>All sections complete!</strong> This RFPO is ready to submit for approval.
+                    <strong>Ready to submit!</strong> All requirements are met. You can submit this RFPO for approval.
+                </div>
+                {% elif rfpo.status != 'Draft' or active_instance %}
+                    {# Non-draft or already has workflow — no action needed #}
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Not ready to submit.</strong> The following items must be resolved:
+                    <ul class="mb-0 mt-2">
+                        {% if validation and validation.errors %}
+                            {% for err in validation.errors %}
+                                <li>{{ err }}</li>
+                            {% endfor %}
+                        {% endif %}
+                    </ul>
                 </div>
                 {% endif %}
 
@@ -675,15 +777,24 @@
                     </div>
                 </div>
 
-                <!-- Files Summary -->
-                <div class="card mb-3">
+                <!-- Files & Documents Summary -->
+                <div class="card mb-3 {% if files_complete %}border-success{% elif ns.has_doc_requirements %}border-danger{% endif %}">
                     <div class="card-header d-flex justify-content-between align-items-center py-2">
                         <span>
-                            <i class="fas fa-paperclip text-muted"></i>
-                            <strong>Files</strong> <small class="text-muted">(optional)</small>
+                            {% if ns.has_doc_requirements and not files_complete %}
+                                <i class="fas fa-exclamation-triangle text-danger"></i>
+                            {% elif files_complete and ns.has_doc_requirements %}
+                                <i class="fas fa-check-circle text-success"></i>
+                            {% else %}
+                                <i class="fas fa-paperclip text-muted"></i>
+                            {% endif %}
+                            <strong>Files & Documents</strong>
+                            {% if ns.has_doc_requirements and not files_complete %}
+                                <span class="badge bg-danger ms-1">Action Required</span>
+                            {% endif %}
                         </span>
                         <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('files-tab').click()">
-                            <i class="fas fa-edit"></i> Edit
+                            <i class="fas fa-edit"></i> Go to Files
                         </button>
                     </div>
                     <div class="card-body py-2">
@@ -692,15 +803,75 @@
                         {% else %}
                             <span class="text-muted">No files attached</span>
                         {% endif %}
+                        {% if ns.has_doc_requirements %}
+                            <hr class="my-2">
+                            <small class="text-muted fw-bold">Required Documents:</small>
+                            {% for ds in ns.doc_statuses %}
+                            <div class="d-flex align-items-center mt-1">
+                                {% if ds.is_uploaded %}
+                                    <i class="fas fa-check-circle text-success me-2"></i>
+                                {% else %}
+                                    <i class="fas fa-times-circle text-danger me-2"></i>
+                                {% endif %}
+                                <span>{{ ds.name }}</span>
+                                {% if not ds.is_uploaded %}
+                                    <span class="text-danger ms-2 small">— Upload this document on the Files tab</span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        {% endif %}
                     </div>
                 </div>
 
+                <!-- Approval Workflow Info -->
+                {% if validation and validation.workflow_phases %}
+                <div class="card mb-3 border-info">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2 bg-info bg-opacity-10">
+                        <span>
+                            <i class="fas fa-project-diagram text-info"></i>
+                            <strong>Approval Workflow</strong>
+                        </span>
+                    </div>
+                    <div class="card-body py-2">
+                        {% for phase in validation.workflow_phases if phase.has_workflow and phase.stage_info %}
+                            <div class="mb-2">
+                                <small class="text-muted">{{ phase.display_name }}:</small>
+                                <strong>{{ phase.name }}</strong> — Stage: <em>{{ phase.stage_info.stage_name }}</em>
+                                (up to {{ phase.stage_info.budget_bracket_amount|currency }})
+                            </div>
+                            {% if phase.stage_info.approval_steps %}
+                            <div class="ms-3 mb-2">
+                                {% for step in phase.stage_info.approval_steps %}
+                                <small>
+                                    <i class="fas fa-user{% if not step.approver_valid %}-slash text-danger{% else %} text-muted{% endif %}"></i>
+                                    {{ step.step_name }}: <strong>{{ step.primary_approver }}</strong>
+                                    {% if step.backup_approver %}(backup: {{ step.backup_approver }}){% endif %}
+                                </small><br>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        {% if validation.total_phases == 0 %}
+                            <span class="text-danger"><i class="fas fa-exclamation-triangle"></i> No active workflows found. Configure one in the Approval Workflows admin section.</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Submit Action -->
-                {% if sections_done == sections_total and rfpo.status == 'Draft' and not active_instance %}
+                {% if rfpo.status == 'Draft' and not active_instance %}
                 <div class="text-center mt-4">
+                    {% if submit_ready %}
                     <button type="button" class="btn btn-success btn-lg" onclick="submitForApproval({{ rfpo.id }})">
                         <i class="fas fa-paper-plane"></i> Submit for Approval
                     </button>
+                    {% else %}
+                    <button type="button" class="btn btn-secondary btn-lg" disabled
+                            title="Resolve all requirements listed above before submitting">
+                        <i class="fas fa-lock"></i> Submit for Approval
+                    </button>
+                    <p class="text-muted mt-2 small">Resolve the issues listed above to enable submission.</p>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>

@@ -91,14 +91,17 @@ def create_user_app():
     # Context processor — inject nav context into every template
     @app.context_processor
     def inject_nav_context():
-        """Provide role-based navigation context to all templates (cached in session)."""
+        """Provide role-based navigation context to all templates (re-verified periodically)."""
+        from time import time as _time
         nav = {"is_admin": False, "is_approver": False, "show_rfpo_nav": False}
         if "auth_token" not in session:
             return {"nav": nav}
 
-        # Use cached nav from session if available
-        if "nav_context" in session:
-            return {"nav": session["nav_context"]}
+        # Re-verify roles every 60 seconds to pick up permission changes
+        cached = session.get("nav_context")
+        cached_at = session.get("nav_context_ts", 0)
+        if cached and (_time() - cached_at) < 60:
+            return {"nav": cached}
 
         try:
             resp = make_api_request("/auth/verify")
@@ -110,6 +113,7 @@ def create_user_app():
                 nav["is_approver"] = is_approver
                 nav["show_rfpo_nav"] = is_admin or is_approver
                 session["nav_context"] = nav
+                session["nav_context_ts"] = _time()
         except Exception:
             pass
         return {"nav": nav}

@@ -1364,7 +1364,7 @@ def submit_for_approval(rfpo_id):
             "rfpo_id": rfpo.rfpo_id,
             "workflow_name": workflow.name,
             "instance_id": instance.instance_id,
-            "total_amount": rfpo_total,
+            "total_amount": float(rfpo.total_amount or 0),
         })
         db.session.add(audit)
 

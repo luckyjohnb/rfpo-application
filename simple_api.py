@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timedelta
 import os
 import time
+import re
 import threading
 from collections import defaultdict
 
@@ -589,13 +590,15 @@ def create_team():
             return jsonify({"success": False, "message": "No data provided"}), 400
 
         name = (data.get("name") or "").strip()
-        abbrev = (data.get("abbrev") or "").strip()
+        abbrev = (data.get("abbrev") or "").strip().upper()
         consortium_id = (data.get("consortium_id") or "").strip()
 
         if not name:
             return jsonify({"success": False, "message": "Team name is required"}), 400
         if not abbrev:
             return jsonify({"success": False, "message": "Abbreviation is required"}), 400
+        if not re.match(r'^[A-Z0-9\-]+$', abbrev):
+            return jsonify({"success": False, "message": "Abbreviation must contain only letters, numbers, and hyphens"}), 400
         if not consortium_id:
             return jsonify({"success": False, "message": "Consortium is required"}), 400
 
@@ -2822,7 +2825,7 @@ def create_consortium():
             return jsonify({"success": False, "message": "No data provided"}), 400
 
         name = (data.get("name") or "").strip()
-        abbrev = (data.get("abbrev") or "").strip()
+        abbrev = (data.get("abbrev") or "").strip().upper()
 
         if not name:
             return jsonify({"success": False, "message": "Consortium name is required"}), 400
@@ -2830,6 +2833,8 @@ def create_consortium():
             return jsonify({"success": False, "message": "Abbreviation is required"}), 400
         if len(abbrev) > 20:
             return jsonify({"success": False, "message": "Abbreviation must be 20 characters or less"}), 400
+        if not re.match(r'^[A-Z0-9\-]+$', abbrev):
+            return jsonify({"success": False, "message": "Abbreviation must contain only letters, numbers, and hyphens"}), 400
 
         # Check uniqueness
         if Consortium.query.filter(db.func.lower(Consortium.name) == name.lower()).first():
@@ -2879,7 +2884,7 @@ def create_project():
             return jsonify({"success": False, "message": "No data provided"}), 400
 
         name = (data.get("name") or "").strip()
-        ref = (data.get("ref") or "").strip()
+        ref = (data.get("ref") or "").strip().upper()
         consortium_id = (data.get("consortium_id") or "").strip()
         description = (data.get("description") or "").strip() or None
         gov_funded = data.get("gov_funded", True)
@@ -2891,6 +2896,8 @@ def create_project():
             return jsonify({"success": False, "message": "Reference code is required"}), 400
         if len(ref) > 20:
             return jsonify({"success": False, "message": "Reference code must be 20 characters or less"}), 400
+        if not re.match(r'^[A-Z0-9\-]+$', ref):
+            return jsonify({"success": False, "message": "Reference code must contain only letters, numbers, and hyphens"}), 400
         if not consortium_id:
             return jsonify({"success": False, "message": "Consortium is required"}), 400
 

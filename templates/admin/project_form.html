@@ -34,9 +34,10 @@
 
                     <div class="mb-3">
                         <label for="ref" class="form-label">Reference <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="ref" name="ref"
+                        <input type="text" class="form-control text-uppercase" id="ref" name="ref"
                                value="{{ project.ref if project else '' }}" required
-                               placeholder="e.g., PROJ-2024-001">
+                               placeholder="e.g., PROJ-2026-001" pattern="[A-Za-z0-9\-]+"
+                               title="Letters, numbers, and hyphens only" style="text-transform: uppercase;">
                     </div>
 
                     <div class="mb-3">

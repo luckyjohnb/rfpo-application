@@ -123,8 +123,10 @@
                     </div>
                     <div class="mb-3">
                         <label for="newConsortiumAbbrev" class="form-label">Abbreviation <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="newConsortiumAbbrev" maxlength="20" required>
-                        <div class="form-text">Short code (max 20 characters)</div>
+                        <input type="text" class="form-control text-uppercase" id="newConsortiumAbbrev" maxlength="20" required
+                               placeholder="e.g., USCAR" pattern="[A-Za-z0-9\-]+" title="Letters, numbers, and hyphens only"
+                               style="text-transform: uppercase;">
+                        <div class="form-text">Short code — letters, numbers, hyphens only (max 20 characters)</div>
                     </div>
                 </form>
             </div>
@@ -155,8 +157,10 @@
                     </div>
                     <div class="mb-3">
                         <label for="newProjectRef" class="form-label">Reference Code <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="newProjectRef" maxlength="20" required>
-                        <div class="form-text">Short reference code (max 20 characters)</div>
+                        <input type="text" class="form-control text-uppercase" id="newProjectRef" maxlength="20" required
+                               placeholder="e.g., PROJ-2026-001" pattern="[A-Za-z0-9\-]+" title="Letters, numbers, and hyphens only"
+                               style="text-transform: uppercase;">
+                        <div class="form-text">Short reference code — letters, numbers, hyphens only (max 20 characters). Used in RFPO IDs.</div>
                     </div>
                     <div class="mb-3">
                         <label for="newProjectDescription" class="form-label">Description</label>

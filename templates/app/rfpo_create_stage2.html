@@ -204,8 +204,10 @@
                     </div>
                     <div class="mb-3">
                         <label for="new_team_abbrev" class="form-label">Abbreviation <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="new_team_abbrev" required maxlength="32" placeholder="e.g., PTE">
-                        <div class="form-text">Short unique identifier for the team</div>
+                        <input type="text" class="form-control text-uppercase" id="new_team_abbrev" required maxlength="32"
+                               placeholder="e.g., PTE" pattern="[A-Za-z0-9\-]+" title="Letters, numbers, and hyphens only"
+                               style="text-transform: uppercase;">
+                        <div class="form-text">Short unique identifier — letters, numbers, hyphens only</div>
                     </div>
                     <div class="mb-3">
                         <label for="new_team_description" class="form-label">Description</label>

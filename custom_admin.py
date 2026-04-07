@@ -4133,7 +4133,7 @@ Southfield, MI  48075""",
 
                 project = Project(
                     project_id=project_id,
-                    ref=request.form.get("ref"),
+                    ref=(request.form.get("ref") or "").strip().upper(),
                     name=request.form.get("name"),
                     description=request.form.get("description"),
                     team_record_id=request.form.get("team_record_id") or None,
@@ -4190,7 +4190,7 @@ Southfield, MI  48075""",
 
         if request.method == "POST":
             try:
-                project.ref = request.form.get("ref")
+                project.ref = (request.form.get("ref") or "").strip().upper()
                 project.name = request.form.get("name")
                 project.description = request.form.get("description")
                 project.team_record_id = request.form.get("team_record_id") or None

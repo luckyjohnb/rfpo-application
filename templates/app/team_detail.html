@@ -168,7 +168,7 @@
 
             // Meta
             document.getElementById('teamCreated').textContent = team.created_at
-                ? new Date(team.created_at).toLocaleDateString()
+                ? formatDate(team.created_at)
                 : 'Unknown';
             document.getElementById('teamStatus').innerHTML = team.active
                 ? '<span class="badge bg-success">Active</span>'
@@ -263,7 +263,7 @@
                     <td>${escapeHtml(r.title)}</td>
                     <td><span class="badge bg-${statusClass}">${escapeHtml(r.status)}</span></td>
                     <td class="text-end">${amount}</td>
-                    <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
+                    <td>${r.created_at ? formatDate(r.created_at) : '-'}</td>
                 </tr>
             `;
         }).join('');

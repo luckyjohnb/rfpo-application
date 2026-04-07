@@ -1081,7 +1081,7 @@
                 <div class="flex-grow-1">
                     <div class="small fw-bold">${escapeHtml(evt.title)}</div>
                     ${evt.detail ? `<div class="small text-muted">${escapeHtml(evt.detail)}</div>` : ''}
-                    ${evt.time ? `<div class="small text-muted">${new Date(evt.time).toLocaleString()}</div>` : ''}
+                    ${evt.time ? `<div class="small text-muted">${formatDateTime(evt.time)}</div>` : ''}
                 </div>
             </div>
         `).join('');
@@ -1711,7 +1711,7 @@
                 return;
             }
             const rows = resp.audit_trail.map(log => {
-                const ts = log.created_at ? new Date(log.created_at).toLocaleString() : '';
+                const ts = log.created_at ? formatDateTime(log.created_at) : '';
                 const details = log.details || {};
                 const extraInfo = details.comments ? ` — "${escapeHtml(details.comments)}"` : '';
                 return `<tr>

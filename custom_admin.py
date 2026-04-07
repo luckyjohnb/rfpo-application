@@ -972,6 +972,7 @@ def create_app():
                     user_name=approver.get_display_name(),
                     rfpo_id=rfpo.rfpo_id,
                     approval_type=action.step_name,
+                    rfpo_db_id=rfpo.id,
                 )
                 app.logger.info(
                     "NOTIFY: Approval email sent to %s for RFPO %s (step: %s)",
@@ -998,9 +999,9 @@ def create_app():
                 return
 
             admin_url = (
-                os.environ.get("ADMIN_APP_URL")
+                os.environ.get("USER_APP_URL")
                 or os.environ.get("APP_URL")
-                or "http://localhost:5111"
+                or "http://localhost:5000"
             )
             _email_svc.send_templated_email(
                 to_emails=[creator.email],
@@ -1010,7 +1011,7 @@ def create_app():
                     "rfpo_id": rfpo.rfpo_id,
                     "po_number": rfpo.po_number,
                     "outcome": outcome,
-                    "rfpo_url": f"{admin_url}/rfpo/{rfpo.id}/edit",
+                    "rfpo_url": f"{admin_url}/rfpos/{rfpo.id}",
                 },
                 subject=f"RFPO {outcome} - {rfpo.rfpo_id}",
             )

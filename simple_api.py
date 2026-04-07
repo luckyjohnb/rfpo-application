@@ -105,8 +105,9 @@ except ImportError:
 
 # Enable CORS - restrict to known origins in production
 _cors_default = (
-    "https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io,"
-    "https://rfpo-admin.livelyforest-d06a98a0.eastus.azurecontainerapps.io"
+    "https://rfpo.uscar.org,"
+    "https://rfpo-admin.uscar.org,"
+    "https://rfpo-api.uscar.org"
 )
 _allowed_origins = os.environ.get("CORS_ORIGINS", _cors_default).split(",")
 CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
@@ -1015,7 +1016,8 @@ def take_approval_action(action_id):
                 if requestor and requestor.email:
                     send_approval_notification(
                         requestor.email, requestor.get_display_name(),
-                        instance.rfpo.rfpo_id, f"RFPO {instance.overall_status.title()}"
+                        instance.rfpo.rfpo_id, f"RFPO {instance.overall_status.title()}",
+                        rfpo_db_id=instance.rfpo.id,
                     )
                 # In-app notification for requestor
                 if requestor:
@@ -1044,6 +1046,7 @@ def take_approval_action(action_id):
                                     next_approver.get_display_name(),
                                     instance.rfpo.rfpo_id,
                                     na.step_name or "Approval Required",
+                                    rfpo_db_id=instance.rfpo.id,
                                 )
                             except Exception as adv_email_err:
                                 app.logger.warning(
@@ -1165,7 +1168,8 @@ def bulk_approval_action():
                     if requestor and requestor.email:
                         send_approval_notification(
                             requestor.email, requestor.get_display_name(),
-                            inst.rfpo.rfpo_id, f"RFPO {inst.overall_status.title()}"
+                            inst.rfpo.rfpo_id, f"RFPO {inst.overall_status.title()}",
+                            rfpo_db_id=inst.rfpo.id,
                         )
                 else:
                     # Workflow advanced — notify next approver(s)
@@ -1178,6 +1182,7 @@ def bulk_approval_action():
                             send_approval_notification(
                                 next_approver.email, next_approver.get_display_name(),
                                 inst.rfpo.rfpo_id, na.step_name or "Approval Required",
+                                rfpo_db_id=inst.rfpo.id,
                             )
             db.session.commit()  # persist any notification records
         except Exception as notif_err:
@@ -1377,7 +1382,8 @@ def submit_for_approval(rfpo_id):
                     if approver and approver.email:
                         send_approval_notification(
                             approver.email, approver.get_display_name(),
-                            rfpo.rfpo_id, step_data["approval_type_name"]
+                            rfpo.rfpo_id, step_data["approval_type_name"],
+                            rfpo_db_id=rfpo.id,
                         )
                     # In-app notification for approver
                     if approver:
@@ -1543,7 +1549,8 @@ def reassign_approval_action(action_id):
             if new_approver.email and rfpo:
                 send_approval_notification(
                     new_approver.email, new_approver.get_display_name(),
-                    rfpo.rfpo_id, f"Reassigned: {action.step_name}"
+                    rfpo.rfpo_id, f"Reassigned: {action.step_name}",
+                    rfpo_db_id=rfpo.id,
                 )
         except Exception as email_err:
             app.logger.warning(f"Email notification failed: {email_err}")

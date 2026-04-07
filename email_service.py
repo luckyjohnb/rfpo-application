@@ -960,6 +960,7 @@ class EmailService:
         user_name: str,
         rfpo_id: str,
         approval_type: str,
+        rfpo_db_id: Optional[int] = None,
     ) -> bool:
         """
         Send approval notification email
@@ -969,20 +970,23 @@ class EmailService:
             user_name: User's display name
             rfpo_id: RFPO ID requiring approval
             approval_type: Type of approval needed
+            rfpo_db_id: Database ID of the RFPO (for user app link)
 
         Returns:
             bool: True if email sent successfully, False otherwise
         """
+        user_app_base = (
+            os.environ.get("USER_APP_URL")
+            or os.environ.get("APP_URL")
+            or "http://localhost:5000"
+        )
+        # Link to user app detail page if db ID available, else dashboard
+        rfpo_link = f"{user_app_base}/rfpos/{rfpo_db_id}" if rfpo_db_id else f"{user_app_base}/rfpos"
         template_data = {
             "user_name": user_name,
             "rfpo_id": rfpo_id,
             "approval_type": approval_type,
-            "rfpo_url": (
-                os.environ.get("ADMIN_APP_URL")
-                or os.environ.get("APP_URL")
-                or "http://localhost:5111"
-            )
-            + f"/admin/rfpo/{rfpo_id}/edit",
+            "rfpo_url": rfpo_link,
             "subject": f"RFPO Approval Required - {rfpo_id}",
         }
 
@@ -1017,11 +1021,11 @@ class EmailService:
             "project_name": project_name,
             "role": role,
             "projects_url": (
-                os.environ.get("ADMIN_APP_URL")
+                os.environ.get("USER_APP_URL")
                 or os.environ.get("APP_URL")
-                or "http://localhost:5111"
+                or "http://localhost:5000"
             )
-            + "/admin/projects",
+            + "/dashboard",
             "subject": f"Added to Project: {project_name}",
         }
 
@@ -1095,10 +1099,11 @@ def send_approval_notification(
     user_name: str,
     rfpo_id: str,
     approval_type: str,
+    rfpo_db_id: Optional[int] = None,
 ) -> bool:
     """Send approval notification email"""
     return email_service.send_approval_notification(
-        user_email, user_name, rfpo_id, approval_type
+        user_email, user_name, rfpo_id, approval_type, rfpo_db_id=rfpo_db_id
     )
 
 

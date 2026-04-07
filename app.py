@@ -50,7 +50,7 @@ def create_user_app():
     register_error_handlers(app, "user_app")
 
     # Enable CORS - restrict to known origins in production
-    _cors_default = "https://rfpo-user.livelyforest-d06a98a0.eastus.azurecontainerapps.io"
+    _cors_default = "https://rfpo.uscar.org"
     _allowed_origins = os.environ.get("CORS_ORIGINS", _cors_default).split(",")
     CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
 

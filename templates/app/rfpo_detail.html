@@ -1695,6 +1695,8 @@
                 displayLineItems(currentRfpo.line_items || []);
                 // Refresh the document preview too
                 loadRfpoDocument();
+                // Re-run submission readiness check so errors/button update
+                loadValidation();
             }
         } catch (error) {
             console.error('Error refreshing line items:', error);

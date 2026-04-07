@@ -27,6 +27,7 @@ COPY exceptions.py .
 COPY logging_config.py .
 COPY email_service.py .
 COPY api/ ./api/
+COPY templates/email/ ./templates/email/
 
 # Create necessary directories
 RUN mkdir -p instance logs uploads/rfpo_files

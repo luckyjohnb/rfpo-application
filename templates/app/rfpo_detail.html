@@ -1249,6 +1249,12 @@
             if (!response.success || !response.validation) {
                 document.getElementById('readinessStatusBadge').textContent = 'Error';
                 document.getElementById('readinessStatusBadge').className = 'badge bg-danger';
+                const errDiv = document.getElementById('readinessErrors');
+                if (errDiv) {
+                    errDiv.style.display = '';
+                    document.getElementById('readinessErrorsList').innerHTML =
+                        `<li>${response.message || 'Failed to load validation data'}</li>`;
+                }
                 return;
             }
 

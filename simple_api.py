@@ -181,6 +181,7 @@ def _find_applicable_workflow_and_stage(rfpo):
 
 def _validate_rfpo_for_approval(rfpo):
     """Validate an RFPO is ready for submission — checks fields, line items, files, workflow."""
+    rfpo_total = float(rfpo.total_amount or 0)
     result = {
         "is_valid": True,
         "errors": [],

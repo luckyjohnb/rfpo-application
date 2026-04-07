@@ -8,6 +8,7 @@ import os
 import io
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -371,7 +372,7 @@ class RFPOPDFGenerator:
         # DATE OF ORDER — template label at x=394, baseline y=728; value to right of label
         # Label ends at x≈463; start value at x=476 for ~13px gap (matches NUMBER field)
         self._draw_text_with_positioning(
-            canvas, "po_date", datetime.now().strftime("%m/%d/%Y"), 476, 728
+            canvas, "po_date", datetime.now(ZoneInfo("America/New_York")).strftime("%m/%d/%Y"), 476, 728
         )
 
         # === VENDOR SECTION (Box: 46,535 to 244,679 — label "VENDOR:" at y=669) ===

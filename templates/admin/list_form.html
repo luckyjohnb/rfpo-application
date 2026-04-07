@@ -177,10 +177,10 @@
                             <h6 class="mb-0">📊 Item Information</h6>
                         </div>
                         <div class="card-body">
-                            <p><strong>Created:</strong> {{ list_item.created_at.strftime('%Y-%m-%d %H:%M:%S') if list_item.created_at else 'Unknown' }}</p>
+                            <p><strong>Created:</strong> {{ list_item.created_at|est('%Y-%m-%d %H:%M:%S') if list_item.created_at else 'Unknown' }}</p>
                             <p><strong>Created By:</strong> {{ list_item.created_by or 'Unknown' }}</p>
                             {% if list_item.updated_at %}
-                            <p><strong>Updated:</strong> {{ list_item.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                            <p><strong>Updated:</strong> {{ list_item.updated_at|est('%Y-%m-%d %H:%M:%S') }}</p>
                             <p><strong>Updated By:</strong> {{ list_item.updated_by or 'Unknown' }}</p>
                             {% endif %}
                         </div>

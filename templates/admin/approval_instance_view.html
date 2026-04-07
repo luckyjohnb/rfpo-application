@@ -71,7 +71,7 @@
                     <dt class="col-sm-4">Submitted:</dt>
                     <dd class="col-sm-8">
                         {% if instance.submitted_at %}
-                            {{ instance.submitted_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                            {{ instance.submitted_at|est('%Y-%m-%d %H:%M:%S') }}
                         {% else %}
                             <em class="text-muted">Not submitted</em>
                         {% endif %}
@@ -80,7 +80,7 @@
                     <dt class="col-sm-4">Completed:</dt>
                     <dd class="col-sm-8">
                         {% if instance.completed_at %}
-                            {{ instance.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                            {{ instance.completed_at|est('%Y-%m-%d %H:%M:%S') }}
                         {% else %}
                             <em class="text-muted">In progress</em>
                         {% endif %}
@@ -140,7 +140,7 @@
                     {% endif %}
 
                     <dt class="col-sm-4">Created:</dt>
-                    <dd class="col-sm-8">{{ rfpo.created_at.strftime('%Y-%m-%d %H:%M:%S') if rfpo.created_at else 'Unknown' }}</dd>
+                    <dd class="col-sm-8">{{ rfpo.created_at|est('%Y-%m-%d %H:%M:%S') if rfpo.created_at else 'Unknown' }}</dd>
 
                     <dt class="col-sm-4">Created By:</dt>
                     <dd class="col-sm-8">{{ rfpo.created_by or 'Unknown' }}</dd>
@@ -222,14 +222,14 @@
                                 </td>
                                 <td>
                                     {% if action.assigned_at %}
-                                        {{ action.assigned_at.strftime('%m/%d %H:%M') }}
+                                        {{ action.assigned_at|est('%m/%d %H:%M') }}
                                     {% else %}
                                         <em class="text-muted">N/A</em>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if action.completed_at %}
-                                        {{ action.completed_at.strftime('%m/%d %H:%M') }}
+                                        {{ action.completed_at|est('%m/%d %H:%M') }}
                                     {% else %}
                                         <em class="text-muted">Pending</em>
                                     {% endif %}

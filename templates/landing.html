@@ -101,10 +101,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Update current time
+        // Update current time (Eastern)
         function updateTime() {
             const now = new Date();
-            document.getElementById('current-time').textContent = now.toLocaleString();
+            document.getElementById('current-time').textContent = now.toLocaleString('en-US', {timeZone: 'America/New_York'});
         }
         updateTime();
         setInterval(updateTime, 1000);

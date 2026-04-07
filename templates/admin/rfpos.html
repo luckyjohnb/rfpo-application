@@ -97,7 +97,7 @@
                                 {% endif %}
                             </td>
                             <td>{{ rfpo.created_by }}</td>
-                            <td><small>{{ rfpo.created_at.strftime('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
+                            <td><small>{{ rfpo.created_at|est('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <a href="{{ url_for('rfpo_edit', id=rfpo.id) }}"

@@ -134,10 +134,10 @@
                             <h6 class="mb-0">📊 Contact Information</h6>
                         </div>
                         <div class="card-body">
-                            <p><strong>Created:</strong> {{ vendor_site.created_at.strftime('%Y-%m-%d %H:%M:%S') if vendor_site.created_at else 'Unknown' }}</p>
+                            <p><strong>Created:</strong> {{ vendor_site.created_at|est('%Y-%m-%d %H:%M:%S') if vendor_site.created_at else 'Unknown' }}</p>
                             <p><strong>Created By:</strong> {{ vendor_site.created_by or 'Unknown' }}</p>
                             {% if vendor_site.updated_at %}
-                            <p><strong>Updated:</strong> {{ vendor_site.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                            <p><strong>Updated:</strong> {{ vendor_site.updated_at|est('%Y-%m-%d %H:%M:%S') }}</p>
                             <p><strong>Updated By:</strong> {{ vendor_site.updated_by or 'Unknown' }}</p>
                             {% endif %}
                         </div>

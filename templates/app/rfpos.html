@@ -208,8 +208,8 @@
 
         const rfposList = rfpos.map(rfpo => {
             const statusBadge = getStatusBadge(rfpo.status);
-            const createdDate = new Date(rfpo.created_at).toLocaleDateString();
-            const dueDate = rfpo.due_date ? new Date(rfpo.due_date).toLocaleDateString() : 'Not set';
+            const createdDate = formatDate(rfpo.created_at);
+            const dueDate = rfpo.due_date ? formatDate(rfpo.due_date) : 'Not set';
             const amount = rfpo.total_amount
                 ? `$${rfpo.total_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
                 : '$0.00';

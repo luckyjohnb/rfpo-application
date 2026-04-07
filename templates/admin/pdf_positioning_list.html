@@ -73,9 +73,9 @@
                                 </td>
                                 <td>
                                     {% if config.updated_at %}
-                                        {{ config.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                                        {{ config.updated_at|est('%Y-%m-%d %H:%M') }}
                                     {% else %}
-                                        {{ config.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                        {{ config.created_at|est('%Y-%m-%d %H:%M') }}
                                     {% endif %}
                                 </td>
                                 <td>{{ config.updated_by or config.created_by }}</td>

@@ -6441,6 +6441,10 @@
         }
 
         function getStatusBadgeClass(status) {
+            // Date formatting helpers — always US Eastern
+            const _EST = 'America/New_York';
+            function formatDate(val) { if (!val) return ''; return new Date(val).toLocaleDateString('en-US', {timeZone: _EST}); }
+            function formatDateTime(val) { if (!val) return ''; return new Date(val).toLocaleString('en-US', {timeZone: _EST}); }
             switch (status) {
                 case 'pending': return 'bg-warning';
                 case 'processing': return 'bg-info';
@@ -8515,7 +8519,7 @@ Need help? Check the AI Configuration section to update settings.
             let html = '';
             rfpos.forEach(rfpo => {
                 const statusBadge = getStatusBadge(rfpo.status);
-                const dueDateFormatted = rfpo.due_date ? new Date(rfpo.due_date).toLocaleDateString() : 'Not set';
+                const dueDateFormatted = rfpo.due_date ? formatDate(rfpo.due_date) : 'Not set';
                 
                 html += `
                     <tr>
@@ -8594,7 +8598,7 @@ Need help? Check the AI Configuration section to update settings.
                     details += `Description: ${rfpo.description || 'None'}\n`;
                     details += `Vendor: ${rfpo.vendor || 'Not specified'}\n`;
                     details += `Status: ${rfpo.status}\n`;
-                    details += `Created: ${new Date(rfpo.created_at).toLocaleString()}\n`;
+                    details += `Created: ${formatDateTime(rfpo.created_at)}\n`;
                     details += `Files: ${rfpo.files ? rfpo.files.length : 0} attached\n`;
                     
                     alert(details);
@@ -8782,7 +8786,7 @@ Need help? Check the AI Configuration section to update settings.
                             ${team.viewer_user_ids.length + team.limited_admin_user_ids.length} members
                         </span>
                     </td>
-                    <td>${new Date(team.created_at).toLocaleDateString()}</td>
+                    <td>${formatDate(team.created_at)}</td>
                     <td>
                         <button class="btn btn-sm btn-outline-primary me-1" onclick="editTeam(${team.id})" title="Edit">
                             <i class="fas fa-edit"></i>

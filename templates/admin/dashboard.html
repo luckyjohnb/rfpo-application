@@ -342,7 +342,7 @@
                                         </small>
                                     </td>
                                     <td><span class="badge bg-primary">{{ rfpo.status }}</span></td>
-                                    <td><small>{{ rfpo.created_at.strftime('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
+                                    <td><small>{{ rfpo.created_at|est('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -389,7 +389,7 @@
                                         {% endif %}
                                     </td>
                                     <td><small>{{ "%.1f"|format(file.file_size / 1024) }} KB</small></td>
-                                    <td><small>{{ file.uploaded_at.strftime('%Y-%m-%d') if file.uploaded_at else '' }}</small></td>
+                                    <td><small>{{ file.uploaded_at|est('%Y-%m-%d') if file.uploaded_at else '' }}</small></td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

@@ -220,7 +220,7 @@
                     {% if requestor and requestor.email %}Email:<a href="mailto:{{ requestor.email }}">{{ requestor.email }}</a>{% endif %}
                 </p></td>
                 <td style="text-align:right"><p><b>Raised:</b></p></td>
-                <td><p>{{ rfpo.created_at.strftime('%B %d, %Y') if rfpo.created_at }}</p></td>
+                <td><p>{{ rfpo.created_at|est('%B %d, %Y') if rfpo.created_at }}</p></td>
             </tr>
 
             <tr class="cell">

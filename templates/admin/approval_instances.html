@@ -75,7 +75,7 @@
                         </td>
                         <td>
                             {% if instance.submitted_at %}
-                                {{ instance.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                                {{ instance.submitted_at|est('%Y-%m-%d %H:%M') }}
                             {% else %}
                                 <em class="text-muted">Not submitted</em>
                             {% endif %}

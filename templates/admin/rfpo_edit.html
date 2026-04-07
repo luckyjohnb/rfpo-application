@@ -608,7 +608,7 @@
                                 </td>
                                 <td>{{ "%.1f"|format(file.file_size / 1024) }} KB</td>
                                 <td>{{ file.uploaded_by }}</td>
-                                <td>{{ file.uploaded_at.strftime('%Y-%m-%d %H:%M') if file.uploaded_at else 'Unknown' }}</td>
+                                <td>{{ file.uploaded_at|est('%Y-%m-%d %H:%M') if file.uploaded_at else 'Unknown' }}</td>
                                 <td>
                                     {% if file.processing_status == 'completed' %}
                                         <span class="badge bg-success">Ready</span>

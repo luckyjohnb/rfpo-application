@@ -11,6 +11,9 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_eastern = ZoneInfo("America/New_York")
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -809,8 +812,8 @@ class EmailService:
             data = template_data or {}
             data.update(
                 {
-                    "current_date": datetime.now().strftime("%Y-%m-%d"),
-                    "current_year": datetime.now().year,
+                    "current_date": datetime.now(_eastern).strftime("%Y-%m-%d"),
+                    "current_year": datetime.now(_eastern).year,
                 }
             )
 
@@ -933,10 +936,10 @@ class EmailService:
             "user_name": user_name,
             "user_email": user_email,
             "change_ip": change_ip,
-            "change_timestamp": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
-            "current_date": datetime.now().strftime("%B %d, %Y"),
-            "current_time": datetime.now().strftime("%I:%M %p"),
-            "current_year": datetime.now().year,
+            "change_timestamp": datetime.now(_eastern).strftime("%B %d, %Y at %I:%M %p %Z"),
+            "current_date": datetime.now(_eastern).strftime("%B %d, %Y"),
+            "current_time": datetime.now(_eastern).strftime("%I:%M %p %Z"),
+            "current_year": datetime.now(_eastern).year,
             "login_url": (
                 os.environ.get("USER_APP_URL")
                 or os.environ.get("APP_URL")

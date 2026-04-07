@@ -412,7 +412,7 @@
 
         const rfposList = rfpos.map(rfpo => {
             const statusBadge = getStatusBadge(rfpo.status);
-            const createdDate = new Date(rfpo.created_at).toLocaleDateString();
+            const createdDate = formatDate(rfpo.created_at);
 
             return `
                 <div class="border-bottom pb-3 mb-3">

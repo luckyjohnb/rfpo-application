@@ -93,7 +93,7 @@
                                     <span class="badge bg-danger">Inactive</span>
                                 {% endif %}
                             </td>
-                            <td><small>{{ consortium.created_at.strftime('%Y-%m-%d') if consortium.created_at else '' }}</small></td>
+                            <td><small>{{ consortium.created_at|est('%Y-%m-%d') if consortium.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <a href="{{ url_for('consortium_edit', id=consortium.id) }}"

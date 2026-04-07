@@ -124,7 +124,7 @@
                                     <span class="badge bg-danger">Inactive</span>
                                 {% endif %}
                             </td>
-                            <td><small>{{ team.created_at.strftime('%Y-%m-%d') if team.created_at else '' }}</small></td>
+                            <td><small>{{ team.created_at|est('%Y-%m-%d') if team.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <a href="{{ url_for('team_edit', id=team.id) }}"

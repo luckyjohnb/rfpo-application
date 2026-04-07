@@ -135,10 +135,10 @@
                             <h6 class="mb-0">📊 Team Statistics</h6>
                         </div>
                         <div class="card-body">
-                            <p><strong>Created:</strong> {{ team.created_at.strftime('%Y-%m-%d %H:%M:%S') if team.created_at else 'Unknown' }}</p>
+                            <p><strong>Created:</strong> {{ team.created_at|est('%Y-%m-%d %H:%M:%S') if team.created_at else 'Unknown' }}</p>
                             <p><strong>Created By:</strong> {{ team.created_by or 'Unknown' }}</p>
                             {% if team.updated_at %}
-                            <p><strong>Updated:</strong> {{ team.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                            <p><strong>Updated:</strong> {{ team.updated_at|est('%Y-%m-%d %H:%M:%S') }}</p>
                             <p><strong>Updated By:</strong> {{ team.updated_by or 'Unknown' }}</p>
                             {% endif %}
                         </div>

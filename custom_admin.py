@@ -15,6 +15,7 @@ import time
 import uuid
 from collections import defaultdict
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from functools import wraps
 from threading import Lock
 
@@ -756,6 +757,19 @@ def create_app():
             return f"${float_value:,.2f}"
         except (ValueError, TypeError):
             return "$0.00"
+
+    _eastern = ZoneInfo("America/New_York")
+
+    @app.template_filter("est")
+    def format_est(value, fmt="%Y-%m-%d %H:%M"):
+        """Convert a naive-UTC datetime to Eastern and format it."""
+        if value is None:
+            return ""
+        try:
+            utc_dt = value.replace(tzinfo=ZoneInfo("UTC"))
+            return utc_dt.astimezone(_eastern).strftime(fmt)
+        except Exception:
+            return value.strftime(fmt) if hasattr(value, "strftime") else str(value)
 
     # -----------------------------------------------------------------------
     # Auto-audit data exports (any /*/export* route that returns a download)

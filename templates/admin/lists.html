@@ -82,7 +82,7 @@
                                     <span class="badge bg-danger">Inactive</span>
                                 {% endif %}
                             </td>
-                            <td><small>{{ item.created_at.strftime('%Y-%m-%d') if item.created_at else '' }}</small></td>
+                            <td><small>{{ item.created_at|est('%Y-%m-%d') if item.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <a href="{{ url_for('list_edit', id=item.id) }}" 

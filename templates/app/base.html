@@ -246,6 +246,21 @@
             }
         }, true);
 
+        // Global date formatting — always display in US Eastern time
+        const _EST = 'America/New_York';
+        function formatDate(val) {
+            if (!val) return '';
+            return new Date(val).toLocaleDateString('en-US', {timeZone: _EST});
+        }
+        function formatDateTime(val) {
+            if (!val) return '';
+            return new Date(val).toLocaleString('en-US', {timeZone: _EST});
+        }
+        function formatTime(val) {
+            if (!val) return '';
+            return new Date(val).toLocaleTimeString('en-US', {timeZone: _EST, hour: '2-digit', minute: '2-digit'});
+        }
+
         // Global functions
         function escapeHtml(text) {
             if (text == null) return '';
@@ -447,7 +462,7 @@
                         : 'fa-bell text-secondary';
                     const readClass = n.is_read ? 'text-muted' : 'fw-semibold';
                     const bg = n.is_read ? '' : 'bg-light';
-                    const time = n.created_at ? new Date(n.created_at).toLocaleDateString() : '';
+                    const time = n.created_at ? formatDate(n.created_at) : '';
                     return `<a class="dropdown-item d-flex align-items-start ${bg} py-2 border-bottom" href="${n.link || '#'}" onclick="markNotifRead(${n.id})">
                         <i class="fas ${icon} me-2 mt-1"></i>
                         <div class="flex-grow-1">

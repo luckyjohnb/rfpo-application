@@ -5749,13 +5749,15 @@ Southfield, MI  48075""",
                     if bracket_amount > 0
                     else f"Budget Bracket {bracket_key}"
                 )
+                bracket_display = bracket_item.value or bracket_key
+                stage_description = f"{stage_name} - {workflow.name} ({bracket_display})"
 
                 # Create new stage copying source properties
                 new_stage = RFPOApprovalStage(
                     stage_id=new_stage_id,
                     stage_name=stage_name,
                     stage_order=next_order,
-                    description=source_stage.description,
+                    description=stage_description,
                     budget_bracket_key=bracket_key,
                     budget_bracket_amount=bracket_amount,
                     workflow_id=workflow.id,
@@ -6175,6 +6177,9 @@ Southfield, MI  48075""",
                     }
                 )
 
+            # Sort by ascending amount
+            available_brackets.sort(key=lambda b: b["amount"])
+
             return jsonify({"success": True, "brackets": available_brackets})
 
         except Exception as e:
@@ -6212,6 +6217,9 @@ Southfield, MI  48075""",
                         "amount": amount,
                     }
                 )
+
+            # Sort by ascending amount
+            available_brackets.sort(key=lambda b: b["amount"])
 
             return jsonify({"success": True, "brackets": available_brackets})
 

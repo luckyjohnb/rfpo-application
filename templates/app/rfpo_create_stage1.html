@@ -177,6 +177,20 @@
                             <label class="form-check-label" for="newProjectUniProject">University Project</label>
                         </div>
                     </div>
+
+                    <!-- Consortium associations -->
+                    <hr>
+                    <h6 class="mb-2"><i class="fas fa-building"></i> Consortium Associations</h6>
+                    <p class="text-muted small mb-2">The selected consortium is included automatically. You may associate additional consortiums.</p>
+                    <div id="projectConsortiumsLoading" class="text-center py-2 d-none">
+                        <i class="fas fa-spinner fa-spin"></i> Loading consortiums...
+                    </div>
+                    <div id="projectConsortiumsContainer" class="d-none">
+                        <div style="max-height: 160px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: .375rem; padding: .5rem;"
+                             id="projectConsortiumsList">
+                        </div>
+                        <small class="text-muted" id="projectConsortiumsCount">1 consortium selected</small>
+                    </div>
                     <input type="hidden" id="newProjectConsortiumId">
                 </form>
             </div>
@@ -351,7 +365,9 @@
     }
 
     // ---- Project inline create ----
-    function openCreateProjectModal() {
+    let _projectConsortiums = [];
+
+    async function openCreateProjectModal() {
         const consortiumId = consortiumSelect.value;
         const alertEl = document.getElementById('projectModalAlert');
 
@@ -365,7 +381,72 @@
         document.getElementById('newProjectConsortiumId').value = consortiumId;
         alertEl.classList.add('d-none');
         alertEl.textContent = '';
+
+        // Load consortiums for multi-select
+        const loadingEl = document.getElementById('projectConsortiumsLoading');
+        const containerEl = document.getElementById('projectConsortiumsContainer');
+        loadingEl.classList.remove('d-none');
+        containerEl.classList.add('d-none');
+
         new bootstrap.Modal(document.getElementById('createProjectModal')).show();
+
+        try {
+            const response = await makeApiCall('/api/consortiums');
+            if (response.success && response.consortiums) {
+                _projectConsortiums = response.consortiums;
+                renderProjectConsortiums(_projectConsortiums, consortiumId);
+                containerEl.classList.remove('d-none');
+            }
+        } catch (e) {
+            console.error('Failed to load consortiums:', e);
+        } finally {
+            loadingEl.classList.add('d-none');
+        }
+    }
+
+    function renderProjectConsortiums(consortiums, selectedConsortId) {
+        const list = document.getElementById('projectConsortiumsList');
+        list.innerHTML = '';
+        consortiums.forEach(c => {
+            const isPrimary = c.consort_id === selectedConsortId;
+            const div = document.createElement('div');
+            div.className = 'form-check py-1';
+            div.innerHTML = `
+                <input class="form-check-input project-consortium-cb" type="checkbox"
+                       value="${c.consort_id}" id="pc_${c.consort_id}"
+                       ${isPrimary ? 'checked disabled' : ''}
+                       onchange="updateProjectConsortiumCount()">
+                <label class="form-check-label" for="pc_${c.consort_id}">
+                    <strong>${c.abbrev}</strong> — ${c.name}
+                    ${isPrimary ? '<span class="badge bg-primary ms-1">Primary</span>' : ''}
+                </label>
+            `;
+            list.appendChild(div);
+        });
+        updateProjectConsortiumCount();
+    }
+
+    function updateProjectConsortiumCount() {
+        const count = document.querySelectorAll('.project-consortium-cb:checked').length +
+                      document.querySelectorAll('.project-consortium-cb:disabled:checked').length -
+                      document.querySelectorAll('.project-consortium-cb:checked:disabled').length +
+                      document.querySelectorAll('.project-consortium-cb:checked:disabled').length;
+        // Simpler: just count all checked (including disabled primary)
+        const total = document.querySelectorAll('.project-consortium-cb:checked').length;
+        document.getElementById('projectConsortiumsCount').textContent =
+            `${total} consortium${total !== 1 ? 's' : ''} selected`;
+    }
+
+    function getSelectedConsortiumIds() {
+        const ids = [];
+        // Always include the primary (disabled+checked)
+        const primaryId = document.getElementById('newProjectConsortiumId').value;
+        if (primaryId) ids.push(primaryId);
+        // Add any additional checked
+        document.querySelectorAll('.project-consortium-cb:checked:not(:disabled)').forEach(cb => {
+            if (!ids.includes(cb.value)) ids.push(cb.value);
+        });
+        return ids;
     }
 
     async function submitCreateProject() {
@@ -375,6 +456,7 @@
         const govFunded = document.getElementById('newProjectGovFunded').checked;
         const uniProject = document.getElementById('newProjectUniProject').checked;
         const consortiumId = document.getElementById('newProjectConsortiumId').value;
+        const consortiumIds = getSelectedConsortiumIds();
         const alertEl = document.getElementById('projectModalAlert');
         const btn = document.getElementById('submitProjectBtn');
 
@@ -396,6 +478,7 @@
                 body: JSON.stringify({
                     name, ref, description: description || null,
                     consortium_id: consortiumId,
+                    consortium_ids: consortiumIds,
                     gov_funded: govFunded,
                     uni_project: uniProject
                 })

@@ -862,36 +862,10 @@ def create_user_app():
 
     @app.route("/rfpos/<int:rfpo_id>/download-pdf", methods=["GET"])
     def rfpo_download_pdf(rfpo_id):
-        """Generate a PDF from the RFPO rendered view and send as download."""
+        """Redirect to preview page with print mode enabled."""
         if "auth_token" not in session:
             return redirect(url_for("login_page"))
-
-        # Fetch the rendered HTML from the API
-        rendered = make_api_request(f"/rfpos/{rfpo_id}/rendered-view")
-        if not rendered.get("success"):
-            return jsonify({"success": False, "message": "Could not load RFPO view"}), 404
-
-        html_content = rendered.get("html", "")
-
-        # Convert to PDF using a simple HTML-to-PDF approach
-        try:
-            from weasyprint import HTML
-            pdf_bytes = HTML(string=html_content).write_pdf()
-        except ImportError:
-            # Fallback: serve HTML as downloadable file
-            from flask import Response
-            return Response(
-                html_content,
-                mimetype="text/html",
-                headers={"Content-Disposition": f"attachment; filename=RFPO_{rfpo_id}.html"},
-            )
-
-        from flask import Response
-        return Response(
-            pdf_bytes,
-            mimetype="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=RFPO_{rfpo_id}.pdf"},
-        )
+        return redirect(f"/rfpos/{rfpo_id}/preview?print=1")
 
     @app.route("/rfpos/<int:rfpo_id>/preview")
     def rfpo_preview(rfpo_id):

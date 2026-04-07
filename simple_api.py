@@ -618,6 +618,15 @@ def create_team():
             active=True,
             created_by=user.email,
         )
+
+        # Set team member IDs if provided
+        viewer_ids = data.get("rfpo_viewer_user_ids")
+        admin_ids = data.get("rfpo_admin_user_ids")
+        if viewer_ids and isinstance(viewer_ids, list):
+            team.set_rfpo_viewer_users(viewer_ids)
+        if admin_ids and isinstance(admin_ids, list):
+            team.set_rfpo_admin_users(admin_ids)
+
         db.session.add(team)
         db.session.commit()
 
@@ -2025,52 +2034,130 @@ def list_rfpos():
         date_from = request.args.get("date_from")  # YYYY-MM-DD
         date_to = request.args.get("date_to")  # YYYY-MM-DD
 
-        # If user is super admin, they can see all RFPOs
-        if user.is_super_admin():
-            query = RFPO.query
+        # Admins (GOD or RFPO_ADMIN) can see all RFPOs
+        user_perms = user.get_permissions() or []
+        is_admin = "GOD" in user_perms or "RFPO_ADMIN" in user_perms
+
+        if is_admin:
+            query = RFPO.query.filter(RFPO.deleted_at.is_(None))
         else:
             accessible_rfpo_ids = set()
 
-            # 1. Get user's accessible team IDs
+            # 1. RFPOs the user created (requestor)
+            own_rfpos = RFPO.query.filter(
+                RFPO.requestor_id == user.record_id,
+                RFPO.deleted_at.is_(None)
+            ).with_entities(RFPO.id).all()
+            accessible_rfpo_ids.update(r.id for r in own_rfpos)
+
+            # 2. Team access — via UserTeam junction table
             user_teams = user.get_teams()
             team_ids = [team.id for team in user_teams]
 
-            # 2. Get user's accessible project IDs
-            all_projects = Project.query.all()
+            # Also check team-level viewer/admin JSON arrays
+            all_teams = Team.query.filter_by(active=True).all()
+            for team in all_teams:
+                viewers = team.get_rfpo_viewer_users()
+                admins = team.get_rfpo_admin_users()
+                if user.record_id in viewers or \
+                   user.record_id in admins:
+                    if team.id not in team_ids:
+                        team_ids.append(team.id)
+
+            # 3. Consortium access — viewer/admin JSON arrays
+            accessible_consortium_ids = []
+            all_consortiums = Consortium.query.filter_by(
+                active=True
+            ).all()
+            for consortium in all_consortiums:
+                viewers = consortium.get_rfpo_viewer_users()
+                admins = consortium.get_rfpo_admin_users()
+                if user.record_id in viewers or \
+                   user.record_id in admins:
+                    accessible_consortium_ids.append(
+                        consortium.consort_id
+                    )
+
+            # 4. Project access — viewer JSON arrays
+            all_projects = Project.query.filter_by(active=True).all()
             accessible_project_ids = []
             for project in all_projects:
                 viewer_users = project.get_rfpo_viewer_users()
                 if user.record_id in viewer_users:
-                    accessible_project_ids.append(project.project_id)
+                    accessible_project_ids.append(
+                        project.project_id
+                    )
 
-            # 3. Get RFPOs where user is an approver
-            if user.is_approver:
+            # 5. Approver access — assigned in workflow steps
+            #    (primary or backup approver)
+            approver_step_rfpo_ids = set()
+            try:
+                steps = RFPOApprovalStep.query.filter(
+                    db.or_(
+                        RFPOApprovalStep.primary_approver_id
+                        == user.record_id,
+                        RFPOApprovalStep.backup_approver_id
+                        == user.record_id,
+                    )
+                ).all()
+                for step in steps:
+                    stage = step.stage
+                    if stage and stage.workflow:
+                        wf = stage.workflow
+                        instances = (
+                            RFPOApprovalInstance.query
+                            .filter_by(workflow_id=wf.id)
+                            .all()
+                        )
+                        for inst in instances:
+                            if inst.rfpo_id:
+                                approver_step_rfpo_ids.add(
+                                    inst.rfpo_id
+                                )
+            except Exception:
+                pass
 
+            # Also check existing approval actions
+            try:
                 user_actions = RFPOApprovalAction.query.filter_by(
                     approver_id=user.record_id
                 ).all()
                 for action in user_actions:
-                    if action.instance and action.instance.rfpo:
-                        accessible_rfpo_ids.add(action.instance.rfpo.id)
+                    if action.instance and action.instance.rfpo_id:
+                        approver_step_rfpo_ids.add(
+                            action.instance.rfpo_id
+                        )
+            except Exception:
+                pass
+
+            accessible_rfpo_ids.update(approver_step_rfpo_ids)
 
             # Build query filters
             filters = []
             if team_ids:
                 filters.append(RFPO.team_id.in_(team_ids))
+            if accessible_consortium_ids:
+                filters.append(
+                    RFPO.consortium_id.in_(accessible_consortium_ids)
+                )
             if accessible_project_ids:
-                filters.append(RFPO.project_id.in_(accessible_project_ids))
+                filters.append(
+                    RFPO.project_id.in_(accessible_project_ids)
+                )
             if accessible_rfpo_ids:
                 filters.append(RFPO.id.in_(accessible_rfpo_ids))
 
             # Apply filters
             if filters:
-                if len(filters) > 1:
-                    query = RFPO.query.filter(db.or_(*filters))
-                else:
-                    query = RFPO.query.filter(filters[0])
+                query = RFPO.query.filter(
+                    RFPO.deleted_at.is_(None),
+                    db.or_(*filters)
+                )
             else:
-                # User has no access to any RFPOs
-                return jsonify({"success": True, "rfpos": [], "total": 0, "page": page, "pages": 0})
+                return jsonify({
+                    "success": True, "rfpos": [],
+                    "total": 0, "page": page, "pages": 0
+                })
 
         # Apply status filter if provided
         if status_filter:
@@ -2923,7 +3010,17 @@ def create_project():
             active=True,
             created_by=user.email,
         )
-        project.set_consortium_ids([consortium_id])
+
+        # Support consortium_ids array (multi-consortium) or single consortium_id
+        consortium_ids_list = data.get("consortium_ids")
+        if consortium_ids_list and isinstance(consortium_ids_list, list):
+            # Validate all consortium IDs exist
+            for cid in consortium_ids_list:
+                if not Consortium.query.filter_by(consort_id=cid).first():
+                    return jsonify({"success": False, "message": f"Consortium '{cid}' not found"}), 400
+            project.set_consortium_ids(consortium_ids_list)
+        else:
+            project.set_consortium_ids([consortium_id])
         db.session.add(project)
         db.session.commit()
 

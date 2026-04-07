@@ -213,6 +213,30 @@
                         <label for="new_team_description" class="form-label">Description</label>
                         <textarea class="form-control" id="new_team_description" rows="2" placeholder="Optional description"></textarea>
                     </div>
+
+                    <!-- Team Members -->
+                    <hr>
+                    <h6 class="mb-2"><i class="fas fa-user-plus"></i> Team Members</h6>
+                    <p class="text-muted small mb-2">Select users to add as viewers or admins of this team.</p>
+                    <div id="teamMembersLoading" class="text-center py-2 d-none">
+                        <i class="fas fa-spinner fa-spin"></i> Loading users...
+                    </div>
+                    <div id="teamMembersContainer" class="d-none">
+                        <div class="mb-2">
+                            <input type="text" class="form-control form-control-sm" id="teamMemberSearch"
+                                   placeholder="Search users..." oninput="filterTeamMembers()">
+                        </div>
+                        <div style="max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: .375rem; padding: .5rem;"
+                             id="teamMembersList">
+                        </div>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small class="text-muted" id="teamMembersCount">0 users selected</small>
+                            <small>
+                                <a href="#" onclick="selectAllTeamMembers(true); return false;">All</a> |
+                                <a href="#" onclick="selectAllTeamMembers(false); return false;">None</a>
+                            </small>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -280,13 +304,95 @@
 <script>
     // ===== Create Team/Vendor Modal Functions =====
     {% if nav.is_admin %}
-    function openCreateTeamModal() {
+    let _teamMemberUsers = [];
+
+    async function openCreateTeamModal() {
         document.getElementById('createTeamForm').reset();
         const alert = document.getElementById('teamModalAlert');
         alert.classList.add('d-none');
         document.getElementById('submitTeamBtn').disabled = false;
         document.getElementById('submitTeamBtn').innerHTML = '<i class="fas fa-plus"></i> Create Team';
+        document.getElementById('teamMemberSearch').value = '';
+
+        // Load users for member picker
+        const loadingEl = document.getElementById('teamMembersLoading');
+        const containerEl = document.getElementById('teamMembersContainer');
+        loadingEl.classList.remove('d-none');
+        containerEl.classList.add('d-none');
+
         new bootstrap.Modal(document.getElementById('createTeamModal')).show();
+
+        try {
+            const response = await makeApiCall('/api/users/list');
+            if (response.success && response.users) {
+                _teamMemberUsers = response.users.filter(u => u.active);
+                renderTeamMembers(_teamMemberUsers);
+                containerEl.classList.remove('d-none');
+            }
+        } catch (e) {
+            console.error('Failed to load users for team members:', e);
+        } finally {
+            loadingEl.classList.add('d-none');
+        }
+    }
+
+    function renderTeamMembers(users) {
+        const list = document.getElementById('teamMembersList');
+        list.innerHTML = '';
+        users.forEach(u => {
+            const div = document.createElement('div');
+            div.className = 'form-check d-flex align-items-center gap-2 py-1 team-member-row';
+            div.dataset.name = (u.display_name || u.email).toLowerCase();
+            div.innerHTML = `
+                <input class="form-check-input mt-0 team-member-cb" type="checkbox"
+                       value="${u.record_id}" id="tm_${u.record_id}" onchange="updateTeamMemberCount()">
+                <label class="form-check-label flex-grow-1" for="tm_${u.record_id}">
+                    ${u.display_name || u.email}
+                    <small class="text-muted d-block">${u.email}</small>
+                </label>
+                <select class="form-select form-select-sm" style="width: 100px;" id="tmrole_${u.record_id}">
+                    <option value="viewer">Viewer</option>
+                    <option value="admin">Admin</option>
+                </select>
+            `;
+            list.appendChild(div);
+        });
+        updateTeamMemberCount();
+    }
+
+    function filterTeamMembers() {
+        const search = document.getElementById('teamMemberSearch').value.toLowerCase();
+        document.querySelectorAll('.team-member-row').forEach(row => {
+            row.style.display = row.dataset.name.includes(search) ? '' : 'none';
+        });
+    }
+
+    function selectAllTeamMembers(select) {
+        document.querySelectorAll('.team-member-cb').forEach(cb => {
+            if (cb.closest('.team-member-row').style.display !== 'none') {
+                cb.checked = select;
+            }
+        });
+        updateTeamMemberCount();
+    }
+
+    function updateTeamMemberCount() {
+        const count = document.querySelectorAll('.team-member-cb:checked').length;
+        document.getElementById('teamMembersCount').textContent = `${count} user${count !== 1 ? 's' : ''} selected`;
+    }
+
+    function getSelectedTeamMembers() {
+        const viewers = [];
+        const admins = [];
+        document.querySelectorAll('.team-member-cb:checked').forEach(cb => {
+            const roleSelect = document.getElementById(`tmrole_${cb.value}`);
+            if (roleSelect && roleSelect.value === 'admin') {
+                admins.push(cb.value);
+            } else {
+                viewers.push(cb.value);
+            }
+        });
+        return { viewers, admins };
     }
 
     function openCreateVendorModal() {
@@ -317,13 +423,16 @@
         alertEl.classList.add('d-none');
 
         try {
+            const members = getSelectedTeamMembers();
             const response = await makeApiCall('/api/teams', {
                 method: 'POST',
                 body: JSON.stringify({
                     name: name,
                     abbrev: abbrev,
                     description: description || null,
-                    consortium_id: document.getElementById('consortium_id').value
+                    consortium_id: document.getElementById('consortium_id').value,
+                    rfpo_viewer_user_ids: members.viewers,
+                    rfpo_admin_user_ids: members.admins
                 })
             });
 

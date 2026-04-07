@@ -574,6 +574,56 @@ def list_teams():
     return jsonify({"success": True, "teams": result})
 
 
+@app.route("/api/teams", methods=["POST"])
+@require_auth
+def create_team():
+    """Create a new team (admin only)"""
+    user = request.current_user
+    user_perms = user.get_permissions() or []
+    if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        name = (data.get("name") or "").strip()
+        abbrev = (data.get("abbrev") or "").strip()
+        consortium_id = (data.get("consortium_id") or "").strip()
+
+        if not name:
+            return jsonify({"success": False, "message": "Team name is required"}), 400
+        if not abbrev:
+            return jsonify({"success": False, "message": "Abbreviation is required"}), 400
+        if not consortium_id:
+            return jsonify({"success": False, "message": "Consortium is required"}), 400
+
+        # Check uniqueness
+        if Team.query.filter_by(abbrev=abbrev).first():
+            return jsonify({"success": False, "message": "Abbreviation already in use"}), 400
+
+        from api.utils import generate_next_id
+        record_id = generate_next_id(Team, "record_id", "", 8)
+
+        team = Team(
+            record_id=record_id,
+            name=name,
+            abbrev=abbrev,
+            description=(data.get("description") or "").strip() or None,
+            consortium_consort_id=consortium_id,
+            active=True,
+            created_by=user.email,
+        )
+        db.session.add(team)
+        db.session.commit()
+
+        return jsonify({"success": True, "team": team.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
 @app.route("/api/teams/<int:team_id>")
 @require_auth
 def get_team_detail(team_id):
@@ -2837,6 +2887,57 @@ def list_vendors():
             }
         )
     except Exception as e:
+        return _error_response(e)
+
+
+@app.route("/api/vendors", methods=["POST"])
+@require_auth
+def create_vendor():
+    """Create a new vendor (admin only)"""
+    user = request.current_user
+    user_perms = user.get_permissions() or []
+    if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        company_name = (data.get("company_name") or "").strip()
+        if not company_name:
+            return jsonify({"success": False, "message": "Company name is required"}), 400
+
+        from api.utils import generate_next_id
+        vendor_id = generate_next_id(Vendor, "vendor_id", "", 8)
+
+        vendor = Vendor(
+            vendor_id=vendor_id,
+            company_name=company_name,
+            contact_name=(data.get("contact_name") or "").strip() or None,
+            contact_tel=(data.get("contact_tel") or "").strip() or None,
+            contact_city=(data.get("contact_city") or "").strip() or None,
+            contact_state=(data.get("contact_state") or "").strip() or None,
+            status="live",
+            active=True,
+            created_by=user.email,
+        )
+        db.session.add(vendor)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "vendor": {
+                "id": vendor.id,
+                "vendor_id": vendor.vendor_id,
+                "company_name": vendor.company_name,
+                "contact_name": vendor.contact_name,
+                "contact_tel": vendor.contact_tel,
+                "active": vendor.active,
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
         return _error_response(e)
 
 

@@ -166,3 +166,50 @@ def validate_required_fields(data, required_fields):
         return f"Missing required fields: {', '.join(missing_fields)}"
 
     return None
+
+
+def generate_next_id(model_class, id_field, prefix="", length=8):
+    """Generate next auto-incremented ID for external ID fields.
+
+    Shared utility used by both admin panel and API endpoints.
+    """
+    from models import db
+    from datetime import datetime
+
+    try:
+        max_record = (
+            db.session.query(model_class)
+            .order_by(getattr(model_class, id_field).desc())
+            .first()
+        )
+        if max_record:
+            current_id = getattr(max_record, id_field)
+            try:
+                current_num = int(current_id.replace(prefix, "").lstrip("0") or "0")
+                next_num = current_num + 1
+            except (ValueError, AttributeError):
+                next_num = db.session.query(model_class).count() + 1
+        else:
+            next_num = 1
+
+        for attempt in range(100):
+            candidate_id = (
+                f"{prefix}{(next_num + attempt):0{length}d}"
+                if prefix
+                else f"{(next_num + attempt):0{length}d}"
+            )
+            existing = (
+                db.session.query(model_class)
+                .filter(getattr(model_class, id_field) == candidate_id)
+                .first()
+            )
+            if not existing:
+                return candidate_id
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        return f"{prefix}{timestamp}" if prefix else timestamp
+
+    except Exception:
+        from datetime import datetime as dt
+        timestamp = dt.now().strftime("%Y%m%d%H%M%S")
+        return f"{prefix}{timestamp}" if prefix else timestamp

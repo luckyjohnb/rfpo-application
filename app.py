@@ -543,9 +543,13 @@ def create_user_app():
 
         return jsonify(response)
 
-    @app.route("/api/teams", methods=["GET"])
+    @app.route("/api/teams", methods=["GET", "POST"])
     def api_teams():
         """Teams API proxy"""
+        if request.method == "POST":
+            data = request.get_json()
+            response = make_api_request("/teams", "POST", data)
+            return jsonify(response)
         params = urlencode(request.args.to_dict(flat=False), doseq=True)
         endpoint = f"/teams?{params}" if params else "/teams"
         response = make_api_request(endpoint)
@@ -573,10 +577,14 @@ def create_user_app():
         )
         return jsonify(response)
 
-    @app.route("/api/vendors", methods=["GET"])
+    @app.route("/api/vendors", methods=["GET", "POST"])
     @_require_session_token
     def api_vendors():
         """Vendors API proxy"""
+        if request.method == "POST":
+            data = request.get_json()
+            response = make_api_request("/vendors", "POST", data)
+            return jsonify(response)
         response = make_api_request("/vendors")
         return jsonify(response)
 

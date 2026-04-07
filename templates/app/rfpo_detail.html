@@ -538,6 +538,7 @@
 
         // Handle user action for approvers
         if (data.user_action && data.user_action.can_take_action) {
+            currentActionId = data.user_action.action_id;
             displayUserAction(data.user_action);
         }
 
@@ -1115,6 +1116,7 @@
     }
 
     let currentUserAction = null;
+    let currentActionId = null;
 
     function showApprovalModal(action) {
         currentUserAction = action;
@@ -1181,9 +1183,9 @@
         modal.show();
     }
 
-    function submitApprovalAction() {
-        if (!currentUserAction || !currentRfpo) {
-            showAlert('Error: No action selected', 'danger');
+    async function submitApprovalAction() {
+        if (!currentUserAction || !currentRfpo || !currentActionId) {
+            showAlert('Error: No action available. Please reload the page.', 'danger');
             return;
         }
 
@@ -1197,50 +1199,39 @@
             return;
         }
 
-        // Get user's action ID from the loaded data
-        fetch(`/api/rfpos/${rfpoId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.user_action) {
-                    const actionId = data.user_action.action_id;
+        // Disable submit button to prevent double-clicks
+        const submitBtn = document.querySelector('#approvalModal .modal-footer .btn:not(.btn-secondary)');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        }
 
-                    // Submit the approval action
-                    return fetch(`/api/users/approval-action/${actionId}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            status: currentUserAction,
-                            comments: comments,
-                            conditions: conditions || undefined
-                        })
-                    });
-                } else {
-                    throw new Error('Could not find user action');
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Close modal
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
-                    modal.hide();
-
-                    // Show success message
-                    showAlert(`RFPO ${currentUserAction} successfully!`, 'success');
-
-                    // Reload page to show updated status
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
-                } else {
-                    showAlert(`Error: ${data.message}`, 'danger');
-                }
-            })
-            .catch(error => {
-                showAlert(`Error: ${error.message}`, 'danger');
+        try {
+            const data = await makeApiCall(`/api/users/approval-action/${currentActionId}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    status: currentUserAction,
+                    comments: comments,
+                    conditions: conditions || undefined
+                })
             });
+
+            // Close modal first so alerts are visible
+            const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
+            if (modal) modal.hide();
+
+            if (data.success) {
+                showAlert(`RFPO ${currentUserAction} successfully!`, 'success');
+                setTimeout(() => { window.location.reload(); }, 1500);
+            } else {
+                showAlert(`Error: ${data.message || 'Action failed'}`, 'danger');
+            }
+        } catch (error) {
+            // Close modal so the user can see the error alert
+            const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
+            if (modal) modal.hide();
+            // makeApiCall already called showAlert, so no need to duplicate
+        }
     }
 
     // ─── Submit for Approval ───────────────────────────────────────────

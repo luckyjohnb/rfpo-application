@@ -3849,11 +3849,13 @@ Southfield, MI  48075""",
         """Soft-delete RFPO (marks deleted_at instead of permanent removal)"""
         rfpo = RFPO.query.get_or_404(id)
 
+        force = request.args.get("force") == "1"
+
         # Check for approval instances that might prevent deletion
         approval_instance = RFPOApprovalInstance.query.filter_by(
             rfpo_id=rfpo.id
         ).first()
-        if approval_instance and not approval_instance.is_complete():
+        if approval_instance and not approval_instance.is_complete() and not force:
             msg = (
                 "❌ Cannot delete RFPO: It has an active approval workflow "
                 f"(Instance: {approval_instance.instance_id}, "
@@ -3864,6 +3866,11 @@ Southfield, MI  48075""",
             return redirect(url_for("rfpos"))
 
         try:
+            # If force-deleting with active workflow, cancel the approval instance
+            if approval_instance and not approval_instance.is_complete() and force:
+                approval_instance.overall_status = "cancelled"
+                approval_instance.completed_at = datetime.utcnow()
+
             # Soft delete — preserve data for audit trail
             rfpo.soft_delete()
             rfpo.updated_by = current_user.get_display_name()

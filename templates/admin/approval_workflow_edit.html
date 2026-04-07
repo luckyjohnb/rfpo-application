@@ -461,7 +461,7 @@
 
 <!-- Clone Stage Modal -->
 <div class="modal fade" id="cloneStageModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('approval_workflow_clone_stage', workflow_id=workflow.id) }}" id="cloneStageForm">
                 <div class="modal-header">
@@ -485,7 +485,7 @@
                     <div class="form-group mb-3">
                         <label><strong>Target Budget Brackets *</strong></label>
                         <small class="form-text text-muted d-block mb-2">Select one or more brackets to create new stages for</small>
-                        <div id="cloneBracketCheckboxes" class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
+                        <div id="cloneBracketCheckboxes" class="border rounded p-2" style="max-height: 400px; overflow-y: auto;">
                             <div class="text-muted p-2">Select a source stage first</div>
                         </div>
                         <input type="hidden" id="budget_bracket_keys" name="budget_bracket_keys" value="">

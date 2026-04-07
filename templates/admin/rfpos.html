@@ -16,21 +16,21 @@
     <div class="card-body">
         {% if rfpos %}
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover table-sm" style="font-size: 0.85rem;">
                     <thead>
                         <tr>
-                            <th scope="col">RFPO ID</th>
+                            <th scope="col" style="white-space:nowrap">RFPO ID</th>
                             <th scope="col">Title</th>
                             <th scope="col">Vendor</th>
-                            <th scope="col">Total Amount</th>
+                            <th scope="col" style="white-space:nowrap">Amount</th>
                             <th scope="col">Status</th>
                             <th scope="col">Team</th>
-                            <th scope="col">Items</th>
-                            <th scope="col">Files</th>
+                            <th scope="col" class="text-center" style="width:40px">#</th>
+                            <th scope="col" class="text-center" style="width:40px"><i class="fas fa-paperclip" title="Files"></i></th>
                             <th scope="col">Approval</th>
                             <th scope="col">Created By</th>
                             <th scope="col">Created</th>
-                            <th scope="col">Actions</th>
+                            <th scope="col" style="white-space:nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -42,8 +42,8 @@
                                     <br><small class="text-success"><i class="fas fa-file-invoice"></i> {{ rfpo.po_number }}</small>
                                 {% endif %}
                             </td>
-                            <td class="text-truncate-cell">{{ rfpo.title }}</td>
-                            <td class="text-truncate-cell-sm">{{ rfpo.vendor.company_name if rfpo.vendor else 'N/A' }}</td>
+                            <td class="text-truncate-cell" style="max-width:150px">{{ rfpo.title }}</td>
+                            <td class="text-truncate-cell-sm" style="max-width:100px">{{ rfpo.vendor.company_name if rfpo.vendor else 'N/A' }}</td>
                             <td>
                                 {% if rfpo.total_amount %}
                                     <strong>${{ "{:,.2f}".format(rfpo.total_amount) }}</strong>
@@ -71,14 +71,14 @@
                                     <span class="text-muted">No team</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="text-center">
                                 {% if rfpo.line_item_count > 0 %}
                                     <span class="badge bg-success">{{ rfpo.line_item_count }}</span>
                                 {% else %}
                                     <span class="text-muted">0</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="text-center">
                                 {% if rfpo.file_count > 0 %}
                                     <span class="badge bg-info">{{ rfpo.file_count }}</span>
                                 {% else %}
@@ -96,7 +96,7 @@
                                     <span class="text-muted">None</span>
                                 {% endif %}
                             </td>
-                            <td>{{ rfpo.created_by }}</td>
+                            <td class="text-truncate-cell-sm" style="max-width:90px">{{ rfpo.created_by }}</td>
                             <td><small>{{ rfpo.created_at|est('%Y-%m-%d') if rfpo.created_at else '' }}</small></td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
@@ -121,15 +121,15 @@
                                     {% endif %}
                                     {% if rfpo.can_delete %}
                                         <button type="button" class="btn btn-outline-danger btn-sm"
-                                                onclick="deleteRFPO({{ rfpo.id }}, '{{ rfpo.title }}')"
+                                                onclick="deleteRFPO({{ rfpo.id }}, '{{ rfpo.title }}', false)"
                                                 data-bs-toggle="tooltip" title="Delete RFPO">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     {% else %}
-                                        <button type="button" class="btn btn-outline-secondary btn-sm"
-                                                disabled
+                                        <button type="button" class="btn btn-outline-warning btn-sm"
+                                                onclick="deleteRFPO({{ rfpo.id }}, '{{ rfpo.title }}', true)"
                                                 data-bs-toggle="tooltip"
-                                                title="Cannot delete: RFPO has active workflow">
+                                                title="Force delete (has active workflow)">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     {% endif %}
@@ -163,7 +163,10 @@
             </div>
             <div class="modal-body">
                 <p>Are you sure you want to delete RFPO <strong id="rfpoTitle"></strong>?</p>
-                <p class="text-muted">This will archive the RFPO and hide it from the active list.</p>
+                <p class="text-muted" id="deleteNote">This will archive the RFPO and hide it from the active list.</p>
+                <div id="forceWarning" class="alert alert-warning d-none">
+                    <i class="fas fa-exclamation-triangle"></i> This RFPO has an active approval workflow. Force-deleting will cancel the workflow.
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -186,9 +189,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function deleteRFPO(id, title) {
+function deleteRFPO(id, title, force) {
     document.getElementById('rfpoTitle').textContent = title;
-    document.getElementById('deleteForm').action = '/rfpo/' + id + '/delete';
+    var url = '/rfpo/' + id + '/delete';
+    if (force) url += '?force=1';
+    document.getElementById('deleteForm').action = url;
+    document.getElementById('forceWarning').classList.toggle('d-none', !force);
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 </script>

@@ -561,11 +561,23 @@ def create_user_app():
         response = make_api_request(f"/teams/{team_id}")
         return jsonify(response)
 
-    @app.route("/api/consortiums", methods=["GET"])
+    @app.route("/api/consortiums", methods=["GET", "POST"])
     @_require_session_token
     def api_consortiums():
         """Consortiums API proxy"""
+        if request.method == "POST":
+            data = request.get_json()
+            response = make_api_request("/consortiums", "POST", data)
+            return jsonify(response)
         response = make_api_request("/consortiums")
+        return jsonify(response)
+
+    @app.route("/api/projects", methods=["POST"])
+    @_require_session_token
+    def api_create_project():
+        """Create project API proxy"""
+        data = request.get_json()
+        response = make_api_request("/projects", "POST", data)
         return jsonify(response)
 
     @app.route("/api/projects/<consortium_id>", methods=["GET"])

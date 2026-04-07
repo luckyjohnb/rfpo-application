@@ -44,7 +44,14 @@
                 <h5 class="mb-3">🏢 Select Consortium</h5>
 
                 <div class="mb-3">
-                    <label for="consortium_id" class="form-label">Consortium <span class="text-danger">*</span></label>
+                    <label for="consortium_id" class="form-label">
+                        Consortium <span class="text-danger">*</span>
+                        {% if nav.is_admin %}
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="openCreateConsortiumModal()" title="Create new consortium">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        {% endif %}
+                    </label>
                     <select class="form-select" id="consortium_id" required>
                         <option value="">-- Select the consortium for this RFPO --</option>
                         {% for c in consortiums %}
@@ -61,7 +68,14 @@
                 <h5 class="mb-3">📂 Select Project</h5>
 
                 <div class="mb-3">
-                    <label for="project_id" class="form-label">Project <span class="text-danger">*</span></label>
+                    <label for="project_id" class="form-label">
+                        Project <span class="text-danger">*</span>
+                        {% if nav.is_admin %}
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="openCreateProjectModal()" title="Create new project">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        {% endif %}
+                    </label>
                     <select class="form-select" id="project_id" disabled>
                         <option value="">-- Select a consortium first --</option>
                     </select>
@@ -90,6 +104,88 @@
         </div>
     </div>
 </div>
+
+{% if nav.is_admin %}
+<!-- Create Consortium Modal -->
+<div class="modal fade" id="createConsortiumModal" tabindex="-1" aria-labelledby="createConsortiumModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createConsortiumModalLabel"><i class="fas fa-plus"></i> Create New Consortium</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="consortiumModalAlert" class="alert d-none"></div>
+                <form id="createConsortiumForm">
+                    <div class="mb-3">
+                        <label for="newConsortiumName" class="form-label">Consortium Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newConsortiumName" maxlength="255" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newConsortiumAbbrev" class="form-label">Abbreviation <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newConsortiumAbbrev" maxlength="20" required>
+                        <div class="form-text">Short code (max 20 characters)</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreateConsortium()" id="submitConsortiumBtn">
+                    <i class="fas fa-save"></i> Create Consortium
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Project Modal -->
+<div class="modal fade" id="createProjectModal" tabindex="-1" aria-labelledby="createProjectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createProjectModalLabel"><i class="fas fa-plus"></i> Create New Project</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="projectModalAlert" class="alert d-none"></div>
+                <form id="createProjectForm">
+                    <div class="mb-3">
+                        <label for="newProjectName" class="form-label">Project Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newProjectName" maxlength="255" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newProjectRef" class="form-label">Reference Code <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newProjectRef" maxlength="20" required>
+                        <div class="form-text">Short reference code (max 20 characters)</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newProjectDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="newProjectDescription" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label d-block">Project Flags</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="newProjectGovFunded" checked>
+                            <label class="form-check-label" for="newProjectGovFunded">Government Funded</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="newProjectUniProject">
+                            <label class="form-check-label" for="newProjectUniProject">University Project</label>
+                        </div>
+                    </div>
+                    <input type="hidden" id="newProjectConsortiumId">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreateProject()" id="submitProjectBtn">
+                    <i class="fas fa-save"></i> Create Project
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -125,8 +221,8 @@
                     option.value = p.id;
                     option.textContent = `[${p.ref}] ${p.name}`;
                     option.dataset.description = p.description || '';
-                    option.dataset.govFunded = p.gov_funded || false;
-                    option.dataset.uniProject = p.uni_project || false;
+                    option.dataset.govFunded = String(p.gov_funded || false);
+                    option.dataset.uniProject = String(p.uni_project || false);
                     projectSelect.appendChild(option);
                 });
                 projectSelect.disabled = false;
@@ -141,12 +237,16 @@
 
     // Show project details on selection
     projectSelect.addEventListener('change', function() {
-        const selected = this.options[this.selectedIndex];
+        updateProjectDetails();
+    });
+
+    function updateProjectDetails() {
+        const selected = projectSelect.options[projectSelect.selectedIndex];
         const projectDetails = document.getElementById('project_details');
         const projectDescription = document.getElementById('project_description');
         const projectFlags = document.getElementById('project_flags');
 
-        if (this.value) {
+        if (projectSelect.value) {
             continueBtn.disabled = false;
 
             if (selected.dataset.description) {
@@ -167,7 +267,7 @@
             continueBtn.disabled = true;
             projectDetails.classList.add('d-none');
         }
-    });
+    }
 
     // Continue button navigates to stage 2
     continueBtn.addEventListener('click', function() {
@@ -181,5 +281,153 @@
 
         window.location.href = `/rfpos/create/details?consortium_id=${encodeURIComponent(consortiumId)}&project_id=${encodeURIComponent(projectId)}`;
     });
+
+    {% if nav.is_admin %}
+    // ---- Consortium inline create ----
+    function openCreateConsortiumModal() {
+        document.getElementById('createConsortiumForm').reset();
+        const alertEl = document.getElementById('consortiumModalAlert');
+        alertEl.classList.add('d-none');
+        alertEl.textContent = '';
+        new bootstrap.Modal(document.getElementById('createConsortiumModal')).show();
+    }
+
+    async function submitCreateConsortium() {
+        const name = document.getElementById('newConsortiumName').value.trim();
+        const abbrev = document.getElementById('newConsortiumAbbrev').value.trim();
+        const alertEl = document.getElementById('consortiumModalAlert');
+        const btn = document.getElementById('submitConsortiumBtn');
+
+        alertEl.classList.add('d-none');
+
+        if (!name || !abbrev) {
+            alertEl.textContent = 'Name and abbreviation are required.';
+            alertEl.className = 'alert alert-danger';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+        try {
+            const response = await makeApiCall('/api/consortiums', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, abbrev })
+            });
+
+            if (response.success) {
+                const c = response.consortium;
+                // Add new option to dropdown
+                const newOption = document.createElement('option');
+                newOption.value = c.consort_id;
+                newOption.textContent = `${c.abbrev} - ${c.name}`;
+                newOption.dataset.name = c.name;
+                newOption.dataset.abbrev = c.abbrev;
+                consortiumSelect.appendChild(newOption);
+
+                // Select the new consortium
+                consortiumSelect.value = c.consort_id;
+                // Trigger change to reload projects (empty for new consortium)
+                consortiumSelect.dispatchEvent(new Event('change'));
+
+                bootstrap.Modal.getInstance(document.getElementById('createConsortiumModal')).hide();
+                showAlert(`Consortium "${c.name}" created successfully.`, 'success');
+            } else {
+                alertEl.textContent = response.message || 'Failed to create consortium.';
+                alertEl.className = 'alert alert-danger';
+            }
+        } catch (error) {
+            alertEl.textContent = 'Error creating consortium. Please try again.';
+            alertEl.className = 'alert alert-danger';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Create Consortium';
+        }
+    }
+
+    // ---- Project inline create ----
+    function openCreateProjectModal() {
+        const consortiumId = consortiumSelect.value;
+        const alertEl = document.getElementById('projectModalAlert');
+
+        if (!consortiumId) {
+            showAlert('Please select a consortium first before creating a project.', 'warning');
+            return;
+        }
+
+        document.getElementById('createProjectForm').reset();
+        document.getElementById('newProjectGovFunded').checked = true;
+        document.getElementById('newProjectConsortiumId').value = consortiumId;
+        alertEl.classList.add('d-none');
+        alertEl.textContent = '';
+        new bootstrap.Modal(document.getElementById('createProjectModal')).show();
+    }
+
+    async function submitCreateProject() {
+        const name = document.getElementById('newProjectName').value.trim();
+        const ref = document.getElementById('newProjectRef').value.trim();
+        const description = document.getElementById('newProjectDescription').value.trim();
+        const govFunded = document.getElementById('newProjectGovFunded').checked;
+        const uniProject = document.getElementById('newProjectUniProject').checked;
+        const consortiumId = document.getElementById('newProjectConsortiumId').value;
+        const alertEl = document.getElementById('projectModalAlert');
+        const btn = document.getElementById('submitProjectBtn');
+
+        alertEl.classList.add('d-none');
+
+        if (!name || !ref) {
+            alertEl.textContent = 'Project name and reference code are required.';
+            alertEl.className = 'alert alert-danger';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+        try {
+            const response = await makeApiCall('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name, ref, description: description || null,
+                    consortium_id: consortiumId,
+                    gov_funded: govFunded,
+                    uni_project: uniProject
+                })
+            });
+
+            if (response.success) {
+                const p = response.project;
+                // Add new option to project dropdown
+                const newOption = document.createElement('option');
+                newOption.value = p.id;
+                newOption.textContent = `[${p.ref}] ${p.name}`;
+                newOption.dataset.description = p.description || '';
+                newOption.dataset.govFunded = String(p.gov_funded || false);
+                newOption.dataset.uniProject = String(p.uni_project || false);
+                projectSelect.appendChild(newOption);
+
+                // Enable dropdown and select the new project
+                projectSelect.disabled = false;
+                projectSelect.value = p.id;
+                // Update project details display
+                updateProjectDetails();
+
+                bootstrap.Modal.getInstance(document.getElementById('createProjectModal')).hide();
+                showAlert(`Project "${p.name}" created successfully.`, 'success');
+            } else {
+                alertEl.textContent = response.message || 'Failed to create project.';
+                alertEl.className = 'alert alert-danger';
+            }
+        } catch (error) {
+            alertEl.textContent = 'Error creating project. Please try again.';
+            alertEl.className = 'alert alert-danger';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Create Project';
+        }
+    }
+    {% endif %}
 </script>
 {% endblock %}

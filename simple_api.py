@@ -2807,6 +2807,135 @@ def list_consortiums():
         return _error_response(e)
 
 
+@app.route("/api/consortiums", methods=["POST"])
+@require_auth
+def create_consortium():
+    """Create a new consortium (admin only)"""
+    user = request.current_user
+    user_perms = user.get_permissions() or []
+    if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        name = (data.get("name") or "").strip()
+        abbrev = (data.get("abbrev") or "").strip()
+
+        if not name:
+            return jsonify({"success": False, "message": "Consortium name is required"}), 400
+        if not abbrev:
+            return jsonify({"success": False, "message": "Abbreviation is required"}), 400
+        if len(abbrev) > 20:
+            return jsonify({"success": False, "message": "Abbreviation must be 20 characters or less"}), 400
+
+        # Check uniqueness
+        if Consortium.query.filter(db.func.lower(Consortium.name) == name.lower()).first():
+            return jsonify({"success": False, "message": "A consortium with this name already exists"}), 400
+        if Consortium.query.filter(db.func.lower(Consortium.abbrev) == abbrev.lower()).first():
+            return jsonify({"success": False, "message": "This abbreviation is already in use"}), 400
+
+        from api.utils import generate_next_id
+        consort_id = generate_next_id(Consortium, "consort_id", "", 8)
+
+        consortium = Consortium(
+            consort_id=consort_id,
+            name=name,
+            abbrev=abbrev,
+            active=True,
+            created_by=user.email,
+        )
+        db.session.add(consortium)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "consortium": {
+                "id": consortium.id,
+                "consort_id": consortium.consort_id,
+                "name": consortium.name,
+                "abbrev": consortium.abbrev,
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/projects", methods=["POST"])
+@require_auth
+def create_project():
+    """Create a new project (admin only)"""
+    user = request.current_user
+    user_perms = user.get_permissions() or []
+    if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        name = (data.get("name") or "").strip()
+        ref = (data.get("ref") or "").strip()
+        consortium_id = (data.get("consortium_id") or "").strip()
+        description = (data.get("description") or "").strip() or None
+        gov_funded = data.get("gov_funded", True)
+        uni_project = data.get("uni_project", False)
+
+        if not name:
+            return jsonify({"success": False, "message": "Project name is required"}), 400
+        if not ref:
+            return jsonify({"success": False, "message": "Reference code is required"}), 400
+        if len(ref) > 20:
+            return jsonify({"success": False, "message": "Reference code must be 20 characters or less"}), 400
+        if not consortium_id:
+            return jsonify({"success": False, "message": "Consortium is required"}), 400
+
+        # Verify consortium exists
+        consortium = Consortium.query.filter_by(consort_id=consortium_id).first()
+        if not consortium:
+            return jsonify({"success": False, "message": "Consortium not found"}), 400
+
+        # Check ref uniqueness
+        if Project.query.filter(db.func.lower(Project.ref) == ref.lower()).first():
+            return jsonify({"success": False, "message": "This reference code is already in use"}), 400
+
+        from api.utils import generate_next_id
+        project_id = generate_next_id(Project, "project_id", "", 8)
+
+        project = Project(
+            project_id=project_id,
+            name=name,
+            ref=ref,
+            description=description,
+            gov_funded=bool(gov_funded),
+            uni_project=bool(uni_project),
+            active=True,
+            created_by=user.email,
+        )
+        project.set_consortium_ids([consortium_id])
+        db.session.add(project)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "project": {
+                "id": project.project_id,
+                "ref": project.ref,
+                "name": project.name,
+                "description": project.description,
+                "gov_funded": project.gov_funded,
+                "uni_project": project.uni_project,
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
 @app.route("/api/projects")
 @require_auth
 def list_projects():

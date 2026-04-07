@@ -224,9 +224,16 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5><i class="fas fa-layer-group"></i> Approval Stages</h5>
-        <button class="btn btn-sm btn-success" onclick="showAddStageModal()">
-            <i class="fas fa-plus"></i> Add Stage
-        </button>
+        <div>
+            <button class="btn btn-sm btn-success" onclick="showAddStageModal()">
+                <i class="fas fa-plus"></i> Add Stage
+            </button>
+            {% if workflow.stages %}
+            <button class="btn btn-sm btn-outline-primary" onclick="showCloneStageModal()">
+                <i class="fas fa-clone"></i> Clone Stage
+            </button>
+            {% endif %}
+        </div>
     </div>
     <div class="card-body">
         {% if workflow.stages %}
@@ -446,6 +453,54 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-success">Add Stage</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Clone Stage Modal -->
+<div class="modal fade" id="cloneStageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('approval_workflow_clone_stage', workflow_id=workflow.id) }}" id="cloneStageForm">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-clone"></i> Clone Approval Stage</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group mb-3">
+                        <label for="source_stage_id"><strong>Source Stage to Clone *</strong></label>
+                        <select class="form-control" id="source_stage_id" name="source_stage_id" required onchange="onSourceStageChange()">
+                            <option value="">Select stage to clone from</option>
+                            {% for stage in workflow.stages %}
+                            <option value="{{ stage.id }}" data-bracket-key="{{ stage.budget_bracket_key }}" data-step-count="{{ stage.steps|length }}">
+                                {{ stage.stage_name }} ({{ stage.steps|length }} step{{ 's' if stage.steps|length != 1 else '' }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">All steps from this stage will be copied to the new stage(s)</small>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label><strong>Target Budget Brackets *</strong></label>
+                        <small class="form-text text-muted d-block mb-2">Select one or more brackets to create new stages for</small>
+                        <div id="cloneBracketCheckboxes" class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
+                            <div class="text-muted p-2">Select a source stage first</div>
+                        </div>
+                        <input type="hidden" id="budget_bracket_keys" name="budget_bracket_keys" value="">
+                    </div>
+
+                    <div id="clonePreview" class="alert alert-info d-none">
+                        <i class="fas fa-info-circle"></i>
+                        <span id="clonePreviewText"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="cloneSubmitBtn" disabled onclick="this.disabled=true; this.form.submit();">
+                        <i class="fas fa-clone"></i> Clone Stage(s)
+                    </button>
                 </div>
             </form>
         </div>
@@ -698,6 +753,96 @@ function showAddStageModal() {
             console.error('Error loading budget brackets:', error);
             alert('Error loading available budget brackets.');
         });
+}
+
+function showCloneStageModal() {
+    // Reset the form
+    document.getElementById('source_stage_id').value = '';
+    document.getElementById('budget_bracket_keys').value = '';
+    document.getElementById('cloneSubmitBtn').disabled = true;
+    document.getElementById('clonePreview').classList.add('d-none');
+    document.getElementById('cloneBracketCheckboxes').innerHTML = '<div class="text-muted p-2">Select a source stage first</div>';
+
+    const modal = new bootstrap.Modal(document.getElementById('cloneStageModal'));
+    modal.show();
+}
+
+function onSourceStageChange() {
+    const select = document.getElementById('source_stage_id');
+    const selectedOption = select.options[select.selectedIndex];
+    const sourceBracketKey = selectedOption ? selectedOption.dataset.bracketKey : '';
+
+    if (!select.value) {
+        document.getElementById('cloneBracketCheckboxes').innerHTML = '<div class="text-muted p-2">Select a source stage first</div>';
+        document.getElementById('cloneSubmitBtn').disabled = true;
+        document.getElementById('clonePreview').classList.add('d-none');
+        return;
+    }
+
+    // Fetch available brackets and filter out the source bracket
+    fetch(`/api/approval-workflow/{{ workflow.id }}/available-budget-brackets`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('cloneBracketCheckboxes');
+            container.innerHTML = '';
+
+            if (data.success && data.brackets.length > 0) {
+                // Filter out the source stage's bracket
+                const available = data.brackets.filter(b => b.key !== sourceBracketKey);
+
+                if (available.length === 0) {
+                    container.innerHTML = '<div class="text-muted p-2">No available budget brackets remaining</div>';
+                    document.getElementById('cloneSubmitBtn').disabled = true;
+                    return;
+                }
+
+                available.forEach(bracket => {
+                    const div = document.createElement('div');
+                    div.className = 'form-check p-2 border-bottom';
+                    div.innerHTML = `
+                        <input class="form-check-input" type="checkbox" value="${bracket.key}"
+                               id="clone_bracket_${bracket.key}" onchange="updateCloneSelection()">
+                        <label class="form-check-label" for="clone_bracket_${bracket.key}">
+                            <strong>$${bracket.amount.toLocaleString()}</strong>
+                            <small class="text-muted ms-1">(${bracket.value})</small>
+                        </label>
+                    `;
+                    container.appendChild(div);
+                });
+            } else {
+                container.innerHTML = '<div class="text-muted p-2">No available budget brackets</div>';
+                document.getElementById('cloneSubmitBtn').disabled = true;
+            }
+
+            updateCloneSelection();
+        })
+        .catch(error => {
+            console.error('Error loading budget brackets:', error);
+            document.getElementById('cloneBracketCheckboxes').innerHTML = '<div class="text-danger p-2">Error loading brackets</div>';
+        });
+}
+
+function updateCloneSelection() {
+    const checked = document.querySelectorAll('#cloneBracketCheckboxes input[type="checkbox"]:checked');
+    const keys = Array.from(checked).map(cb => cb.value);
+    document.getElementById('budget_bracket_keys').value = keys.join(',');
+
+    const submitBtn = document.getElementById('cloneSubmitBtn');
+    submitBtn.disabled = keys.length === 0;
+
+    const preview = document.getElementById('clonePreview');
+    const previewText = document.getElementById('clonePreviewText');
+    const sourceSelect = document.getElementById('source_stage_id');
+    const selectedOption = sourceSelect.options[sourceSelect.selectedIndex];
+    const stepCount = selectedOption ? parseInt(selectedOption.dataset.stepCount || '0') : 0;
+
+    if (keys.length > 0) {
+        preview.classList.remove('d-none');
+        const totalSteps = keys.length * stepCount;
+        previewText.textContent = `Will create ${keys.length} new stage(s) with ${totalSteps} total step(s)`;
+    } else {
+        preview.classList.add('d-none');
+    }
 }
 
 function showEditStepModal(stageId, stepId) {

@@ -5666,6 +5666,161 @@ Southfield, MI  48075""",
         return redirect(url_for("approval_workflow_edit", id=workflow_id))
 
     @app.route(
+        "/approval-workflow/<int:workflow_id>/stage/clone", methods=["POST"]
+    )
+    @login_required
+    def approval_workflow_clone_stage(workflow_id):
+        """Clone an existing stage to one or more budget brackets"""
+        workflow = RFPOApprovalWorkflow.query.get_or_404(workflow_id)
+
+        try:
+            # Validate source stage
+            source_stage_id = request.form.get("source_stage_id")
+            if not source_stage_id:
+                flash("❌ No source stage selected.", "error")
+                return redirect(url_for("approval_workflow_edit", id=workflow_id))
+
+            source_stage = RFPOApprovalStage.query.get_or_404(int(source_stage_id))
+            if source_stage.workflow_id != workflow.id:
+                flash("❌ Source stage does not belong to this workflow.", "error")
+                return redirect(url_for("approval_workflow_edit", id=workflow_id))
+
+            # Parse target budget bracket keys
+            bracket_keys_str = request.form.get("budget_bracket_keys", "")
+            selected_bracket_keys = [
+                k.strip() for k in bracket_keys_str.split(",") if k.strip()
+            ]
+            if not selected_bracket_keys:
+                flash("❌ No target budget brackets selected.", "error")
+                return redirect(url_for("approval_workflow_edit", id=workflow_id))
+
+            # Get used bracket keys for validation
+            used_bracket_keys = [stage.budget_bracket_key for stage in workflow.stages]
+
+            # Get source steps for copying
+            source_steps = (
+                RFPOApprovalStep.query.filter_by(stage_id=source_stage.id)
+                .order_by(RFPOApprovalStep.step_order)
+                .all()
+            )
+
+            if not source_steps:
+                flash(
+                    "⚠️ Source stage has no steps — empty stage(s) will be created.",
+                    "warning",
+                )
+
+            stages_created = 0
+            steps_created = 0
+
+            for bracket_key in selected_bracket_keys:
+                # Validate bracket is not already used
+                if bracket_key in used_bracket_keys:
+                    flash(
+                        f"⚠️ Budget bracket '{bracket_key}' already used — skipped.",
+                        "warning",
+                    )
+                    continue
+
+                # Validate bracket exists
+                bracket_item = List.get_item_ci("RFPO_BRACK", bracket_key)
+                if not bracket_item:
+                    flash(
+                        f"⚠️ Invalid budget bracket '{bracket_key}' — skipped.",
+                        "warning",
+                    )
+                    continue
+
+                # Calculate fresh stage_order each iteration (unique constraint)
+                max_order = (
+                    db.session.query(db.func.max(RFPOApprovalStage.stage_order))
+                    .filter_by(workflow_id=workflow.id)
+                    .scalar()
+                )
+                next_order = (max_order or 0) + 1
+
+                # Generate stage ID and parse bracket amount
+                new_stage_id = generate_next_id(
+                    RFPOApprovalStage, "stage_id", "STG-", 8
+                )
+                bracket_amount = _parse_budget_amount(bracket_item.value)
+                stage_name = (
+                    f"Up to ${bracket_amount:,.0f}"
+                    if bracket_amount > 0
+                    else f"Budget Bracket {bracket_key}"
+                )
+
+                # Create new stage copying source properties
+                new_stage = RFPOApprovalStage(
+                    stage_id=new_stage_id,
+                    stage_name=stage_name,
+                    stage_order=next_order,
+                    description=source_stage.description,
+                    budget_bracket_key=bracket_key,
+                    budget_bracket_amount=bracket_amount,
+                    workflow_id=workflow.id,
+                    requires_all_steps=True,
+                    is_parallel=False,
+                )
+
+                # Copy required document types from source
+                source_doc_types = source_stage.get_required_document_types()
+                if source_doc_types:
+                    new_stage.set_required_document_types(source_doc_types)
+
+                db.session.add(new_stage)
+                db.session.flush()  # Get new_stage.id for step FK
+
+                # Track used brackets to prevent duplicates within same clone batch
+                used_bracket_keys.append(bracket_key)
+                stages_created += 1
+
+                # Clone each step from source stage
+                for source_step in source_steps:
+                    new_step_id = generate_next_id(
+                        RFPOApprovalStep, "step_id", "STP-", 8
+                    )
+                    new_step = RFPOApprovalStep(
+                        step_id=new_step_id,
+                        step_name=source_step.step_name,
+                        step_order=source_step.step_order,
+                        description=source_step.description,
+                        approval_type_key=source_step.approval_type_key,
+                        approval_type_name=source_step.approval_type_name,
+                        stage_id=new_stage.id,
+                        primary_approver_id=source_step.primary_approver_id,
+                        backup_approver_id=source_step.backup_approver_id,
+                        is_required=source_step.is_required,
+                        timeout_days=source_step.timeout_days,
+                        auto_escalate=source_step.auto_escalate,
+                    )
+                    db.session.add(new_step)
+                    steps_created += 1
+
+            db.session.commit()
+
+            # Sync approver status
+            try:
+                sync_user_approver_status_for_workflow(
+                    workflow_id, updated_by=current_user.get_display_name()
+                )
+            except Exception as e:
+                app.logger.warning(
+                    "Could not sync approver status after clone: %s", e
+                )
+
+            flash(
+                f"✅ Successfully cloned {stages_created} stage(s) with {steps_created} total step(s)!",
+                "success",
+            )
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f"❌ Error cloning stage: {str(e)}", "error")
+
+        return redirect(url_for("approval_workflow_edit", id=workflow_id))
+
+    @app.route(
         "/approval-workflow/<int:workflow_id>/stage/<int:stage_id>/step/add",
         methods=["POST"],
     )

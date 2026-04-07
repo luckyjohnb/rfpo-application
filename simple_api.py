@@ -41,9 +41,8 @@ from models import (
     RFPOApprovalAction,
     AuditLog,
     Notification,
+    EmailLog,
 )
-
-# Import admin routes
 import sys
 
 sys.path.append("api")
@@ -84,6 +83,9 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 # Initialize database
 db.init_app(app)
+
+with app.app_context():
+    db.create_all()
 
 
 @app.teardown_appcontext
@@ -707,7 +709,8 @@ def change_password():
                 from email_service import send_password_changed_email
 
                 email_sent = send_password_changed_email(
-                    user.email, user.fullname, user_ip
+                    user.email, user.fullname, user_ip,
+                    context={'user_id': user.id},
                 )
                 if email_sent:
                     app.logger.info(f"Password change notification sent to {user.email}")
@@ -1018,6 +1021,7 @@ def take_approval_action(action_id):
                         requestor.email, requestor.get_display_name(),
                         instance.rfpo.rfpo_id, f"RFPO {instance.overall_status.title()}",
                         rfpo_db_id=instance.rfpo.id,
+                        context={'rfpo_id': instance.rfpo.id, 'project_id': instance.rfpo.project_id, 'consortium_id': instance.rfpo.consortium_id, 'team_id': instance.rfpo.team_id},
                     )
                 # In-app notification for requestor
                 if requestor:
@@ -1047,6 +1051,7 @@ def take_approval_action(action_id):
                                     instance.rfpo.rfpo_id,
                                     na.step_name or "Approval Required",
                                     rfpo_db_id=instance.rfpo.id,
+                                    context={'rfpo_id': instance.rfpo.id, 'project_id': instance.rfpo.project_id, 'consortium_id': instance.rfpo.consortium_id, 'team_id': instance.rfpo.team_id},
                                 )
                             except Exception as adv_email_err:
                                 app.logger.warning(
@@ -1170,6 +1175,7 @@ def bulk_approval_action():
                             requestor.email, requestor.get_display_name(),
                             inst.rfpo.rfpo_id, f"RFPO {inst.overall_status.title()}",
                             rfpo_db_id=inst.rfpo.id,
+                            context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
                         )
                 else:
                     # Workflow advanced — notify next approver(s)
@@ -1183,6 +1189,7 @@ def bulk_approval_action():
                                 next_approver.email, next_approver.get_display_name(),
                                 inst.rfpo.rfpo_id, na.step_name or "Approval Required",
                                 rfpo_db_id=inst.rfpo.id,
+                                context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
                             )
             db.session.commit()  # persist any notification records
         except Exception as notif_err:
@@ -1384,6 +1391,7 @@ def submit_for_approval(rfpo_id):
                             approver.email, approver.get_display_name(),
                             rfpo.rfpo_id, step_data["approval_type_name"],
                             rfpo_db_id=rfpo.id,
+                            context={'rfpo_id': rfpo.id, 'project_id': rfpo.project_id, 'consortium_id': rfpo.consortium_id, 'team_id': rfpo.team_id},
                         )
                     # In-app notification for approver
                     if approver:
@@ -1551,6 +1559,7 @@ def reassign_approval_action(action_id):
                     new_approver.email, new_approver.get_display_name(),
                     rfpo.rfpo_id, f"Reassigned: {action.step_name}",
                     rfpo_db_id=rfpo.id,
+                    context={'rfpo_id': rfpo.id, 'project_id': rfpo.project_id, 'consortium_id': rfpo.consortium_id, 'team_id': rfpo.team_id},
                 )
         except Exception as email_err:
             app.logger.warning(f"Email notification failed: {email_err}")

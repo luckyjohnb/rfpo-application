@@ -2322,3 +2322,106 @@ class Notification(db.Model):
 
     def __repr__(self):
         return f"<Notification {self.id}: {self.type} for user {self.user_id}>"
+
+
+class EmailLog(db.Model):
+    """Persistent log of all outbound email attempts for audit and troubleshooting."""
+
+    __tablename__ = "email_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.String(255), nullable=True)
+    email_type = db.Column(db.String(64), nullable=False)
+    subject = db.Column(db.String(512), nullable=False)
+    from_email = db.Column(db.String(255), nullable=False)
+    to_emails = db.Column(db.Text, nullable=False)  # JSON array
+    cc_emails = db.Column(db.Text, nullable=True)  # JSON array
+    bcc_emails = db.Column(db.Text, nullable=True)  # JSON array
+    status = db.Column(db.String(32), nullable=False)  # sent, failed, queued, retried
+    provider = db.Column(db.String(32), nullable=True)  # ACS, SMTP
+    error_message = db.Column(db.String(1024), nullable=True)
+    retry_count = db.Column(db.Integer, nullable=False, default=0)
+    rfpo_id = db.Column(db.Integer, db.ForeignKey("rfpos.id", ondelete="SET NULL"), nullable=True)
+    project_id = db.Column(db.String(32), nullable=True)
+    consortium_id = db.Column(db.String(32), nullable=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id", ondelete="SET NULL"), nullable=True)
+    triggered_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    template_name = db.Column(db.String(128), nullable=True)
+    body_preview = db.Column(db.Text, nullable=True)
+    test_mode = db.Column(db.Boolean, nullable=False, default=False)
+    original_recipients = db.Column(db.Text, nullable=True)  # JSON object
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        db.Index("idx_email_log_type", "email_type"),
+        db.Index("idx_email_log_status", "status"),
+        db.Index("idx_email_log_rfpo", "rfpo_id"),
+        db.Index("idx_email_log_project", "project_id"),
+        db.Index("idx_email_log_consortium", "consortium_id"),
+        db.Index("idx_email_log_status_created", "status", "created_at"),
+        db.Index("idx_email_log_triggered_by", "triggered_by_user_id"),
+        db.Index("idx_email_log_template", "template_name"),
+    )
+
+    rfpo = db.relationship("RFPO", foreign_keys=[rfpo_id])
+    team = db.relationship("Team", foreign_keys=[team_id])
+    triggered_by = db.relationship("User", foreign_keys=[triggered_by_user_id])
+
+    def get_to_emails(self):
+        if self.to_emails:
+            return json.loads(self.to_emails)
+        return []
+
+    def get_original_recipients(self):
+        if self.original_recipients:
+            return json.loads(self.original_recipients)
+        return {}
+
+    def get_cc_emails(self):
+        if self.cc_emails:
+            return json.loads(self.cc_emails)
+        return []
+
+    def get_context(self):
+        """Return context dict reconstructed from stored FK fields."""
+        ctx = {}
+        if self.rfpo_id:
+            ctx["rfpo_id"] = self.rfpo_id
+        if self.project_id:
+            ctx["project_id"] = self.project_id
+        if self.consortium_id:
+            ctx["consortium_id"] = self.consortium_id
+        if self.team_id:
+            ctx["team_id"] = self.team_id
+        if self.triggered_by_user_id:
+            ctx["triggered_by_user_id"] = self.triggered_by_user_id
+        return ctx or None
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "message_id": self.message_id,
+            "email_type": self.email_type,
+            "subject": self.subject,
+            "from_email": self.from_email,
+            "to_emails": self.get_to_emails(),
+            "cc_emails": json.loads(self.cc_emails) if self.cc_emails else [],
+            "bcc_emails": json.loads(self.bcc_emails) if self.bcc_emails else [],
+            "status": self.status,
+            "provider": self.provider,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+            "rfpo_id": self.rfpo_id,
+            "project_id": self.project_id,
+            "consortium_id": self.consortium_id,
+            "team_id": self.team_id,
+            "triggered_by_user_id": self.triggered_by_user_id,
+            "template_name": self.template_name,
+            "body_preview": self.body_preview,
+            "test_mode": self.test_mode,
+            "original_recipients": self.get_original_recipients(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def __repr__(self):
+        return f"<EmailLog {self.id}: {self.email_type} {self.status} to {self.to_emails}>"

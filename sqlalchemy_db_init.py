@@ -36,6 +36,7 @@ from models import (
     RFPOApprovalAction,
     AuditLog,
     Notification,
+    EmailLog,
 )
 
 

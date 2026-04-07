@@ -53,6 +53,7 @@ from models import (
     RFPO,
     AuditLog,
     Consortium,
+    EmailLog,
     List,
     PDFPositioning,
     Project,
@@ -524,6 +525,9 @@ def create_app():
     # Initialize extensions
     db.init_app(app)
 
+    with app.app_context():
+        db.create_all()
+
     @app.teardown_appcontext
     def shutdown_session(exception=None):
         db.session.remove()
@@ -987,6 +991,7 @@ def create_app():
                     rfpo_id=rfpo.rfpo_id,
                     approval_type=action.step_name,
                     rfpo_db_id=rfpo.id,
+                    context={'rfpo_id': rfpo.id, 'project_id': rfpo.project_id, 'consortium_id': rfpo.consortium_id, 'team_id': rfpo.team_id},
                 )
                 app.logger.info(
                     "NOTIFY: Approval email sent to %s for RFPO %s (step: %s)",
@@ -1028,6 +1033,8 @@ def create_app():
                     "rfpo_url": f"{admin_url}/rfpos/{rfpo.id}",
                 },
                 subject=f"RFPO {outcome} - {rfpo.rfpo_id}",
+                email_type='approval_complete',
+                context={'rfpo_id': rfpo.id, 'project_id': rfpo.project_id, 'consortium_id': rfpo.consortium_id, 'team_id': rfpo.team_id},
             )
             app.logger.info(
                 "NOTIFY: Completion email sent to %s for RFPO %s (%s)",
@@ -2840,6 +2847,7 @@ def create_app():
                 temp_password=user_password,
                 show_user_link=show_user_link,
                 show_admin_link=show_admin_link,
+                context={'triggered_by': current_user.email if current_user else None},
             )
             diag = (
                 email_service.get_last_send_result()
@@ -7526,6 +7534,183 @@ Southfield, MI  48075""",
 
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 400
+
+    # ── Email Log Routes ───────────────────────────────────────────────
+    @app.route("/tools/email-log")
+    @login_required
+    def email_log_list():
+        """Searchable, filterable list of all outbound emails."""
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 50, type=int)
+        per_page = min(per_page, 200)
+
+        query = EmailLog.query
+
+        # Filters
+        status = request.args.get("status")
+        if status:
+            query = query.filter(EmailLog.status == status)
+
+        email_type = request.args.get("email_type")
+        if email_type:
+            query = query.filter(EmailLog.email_type == email_type)
+
+        search = request.args.get("q", "").strip()
+        if search:
+            like = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    EmailLog.to_emails.ilike(like),
+                    EmailLog.subject.ilike(like),
+                    EmailLog.template_name.ilike(like),
+                    EmailLog.error_message.ilike(like),
+                )
+            )
+
+        rfpo_id = request.args.get("rfpo_id", type=int)
+        if rfpo_id:
+            query = query.filter(EmailLog.rfpo_id == rfpo_id)
+
+        project_id = request.args.get("project_id", type=int)
+        if project_id:
+            query = query.filter(EmailLog.project_id == project_id)
+
+        consortium_id = request.args.get("consortium_id", type=int)
+        if consortium_id:
+            query = query.filter(EmailLog.consortium_id == consortium_id)
+
+        date_from = request.args.get("date_from")
+        if date_from:
+            try:
+                query = query.filter(EmailLog.created_at >= datetime.fromisoformat(date_from))
+            except ValueError:
+                pass
+
+        date_to = request.args.get("date_to")
+        if date_to:
+            try:
+                query = query.filter(EmailLog.created_at <= datetime.fromisoformat(date_to + "T23:59:59"))
+            except ValueError:
+                pass
+
+        # Totals for badge counts
+        total_all = EmailLog.query.count()
+        total_sent = EmailLog.query.filter_by(status="sent").count()
+        total_failed = EmailLog.query.filter_by(status="failed").count()
+        total_queued = EmailLog.query.filter_by(status="queued").count()
+
+        # Distinct email types for filter dropdown
+        email_types = [
+            r[0] for r in db.session.query(EmailLog.email_type).distinct().order_by(EmailLog.email_type).all()
+            if r[0]
+        ]
+
+        pagination = query.order_by(EmailLog.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+
+        return render_template(
+            "admin/email_log.html",
+            logs=pagination.items,
+            pagination=pagination,
+            total_all=total_all,
+            total_sent=total_sent,
+            total_failed=total_failed,
+            total_queued=total_queued,
+            email_types=email_types,
+            filters={
+                "status": status,
+                "email_type": email_type,
+                "q": search,
+                "rfpo_id": rfpo_id,
+                "project_id": project_id,
+                "consortium_id": consortium_id,
+                "date_from": date_from,
+                "date_to": date_to,
+            },
+        )
+
+    @app.route("/tools/email-log/<int:log_id>")
+    @login_required
+    def email_log_detail(log_id):
+        """Detail view for a single email log entry."""
+        log = EmailLog.query.get_or_404(log_id)
+        return render_template("admin/email_log_detail.html", log=log)
+
+    @app.route("/tools/email-log/<int:log_id>/resend", methods=["POST"])
+    @login_required
+    def email_log_resend(log_id):
+        """Re-send a previously failed or sent email."""
+        log = EmailLog.query.get_or_404(log_id)
+        try:
+            from email_service import email_service as _esvc
+            success = _esvc.send_email(
+                to_emails=log.get_to_emails(),
+                subject=log.subject or "(no subject)",
+                html_body=log.body_preview or "",
+                email_type=log.email_type,
+                context=log.get_context() or {},
+            )
+            if success:
+                flash(f"Email re-sent successfully to {', '.join(log.get_to_emails())}.", "success")
+            else:
+                flash("Re-send attempted but may have been queued. Check logs.", "warning")
+        except Exception as e:
+            flash(f"Re-send failed: {e}", "error")
+        return redirect(url_for("email_log_detail", log_id=log_id))
+
+    @app.route("/tools/email-log/export")
+    @login_required
+    def email_log_export():
+        """Export email logs as CSV."""
+        import csv
+
+        query = EmailLog.query
+
+        status = request.args.get("status")
+        if status:
+            query = query.filter(EmailLog.status == status)
+        email_type = request.args.get("email_type")
+        if email_type:
+            query = query.filter(EmailLog.email_type == email_type)
+        search = request.args.get("q", "").strip()
+        if search:
+            like = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    EmailLog.to_emails.ilike(like),
+                    EmailLog.subject.ilike(like),
+                )
+            )
+
+        logs = query.order_by(EmailLog.created_at.desc()).limit(5000).all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "ID", "Sent At", "Status", "Type", "To", "Subject",
+            "Provider", "RFPO", "Test Mode", "Error",
+        ])
+        for log in logs:
+            writer.writerow([
+                log.id,
+                log.created_at.isoformat() if log.created_at else "",
+                log.status,
+                log.email_type or "",
+                ", ".join(log.get_to_emails()),
+                log.subject or "",
+                log.provider or "",
+                log.rfpo.rfpo_id if log.rfpo else "",
+                "Yes" if log.test_mode else "No",
+                log.error_message or "",
+            ])
+
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=email_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"},
+        )
 
     return app
 

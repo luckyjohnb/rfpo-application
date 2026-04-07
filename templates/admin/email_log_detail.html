@@ -1,0 +1,180 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Email Log #{{ log.id }} - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <a href="{{ url_for('email_log_list') }}" class="text-muted text-decoration-none">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        Email Log #{{ log.id }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <form method="post" action="{{ url_for('email_log_resend', log_id=log.id) }}" class="d-inline"
+              onsubmit="return confirm('Re-send this email to {{ ', '.join(log.get_to_emails()) }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-warning btn-sm">
+                <i class="fas fa-redo"></i> Re-send
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="row">
+    {# Left column: metadata #}
+    <div class="col-md-5">
+        <div class="card mb-3">
+            <div class="card-header"><strong>Details</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th class="ps-3" style="width:140px;">Status</th>
+                            <td>
+                                {% if log.status == 'sent' %}
+                                    <span class="badge bg-success">Sent</span>
+                                {% elif log.status == 'failed' %}
+                                    <span class="badge bg-danger">Failed</span>
+                                {% elif log.status == 'queued' %}
+                                    <span class="badge bg-warning text-dark">Queued</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ log.status }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">Sent At</th>
+                            <td>{{ log.created_at|est('%Y-%m-%d %H:%M:%S %Z') if log.created_at else 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">Type</th>
+                            <td>{{ log.email_type or 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">Template</th>
+                            <td>{{ log.template_name or 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">Provider</th>
+                            <td>{{ log.provider or 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">Message ID</th>
+                            <td><small class="text-break">{{ log.message_id or 'N/A' }}</small></td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">To</th>
+                            <td>{{ ', '.join(log.get_to_emails()) }}</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">CC</th>
+                            <td>{{ ', '.join(log.get_cc_emails()) if log.get_cc_emails() else 'None' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">Subject</th>
+                            <td>{{ log.subject or 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-3">Sender</th>
+                            <td>{{ log.from_email or 'N/A' }}</td>
+                        </tr>
+                        {% if log.test_mode %}
+                        <tr>
+                            <th class="ps-3">Test Mode</th>
+                            <td>
+                                <span class="badge bg-info">Yes</span>
+                                {% if log.get_original_recipients() %}
+                                    &mdash; Original: {{ ', '.join(log.get_original_recipients()) }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {# Related entities #}
+        {% if log.rfpo or log.project_id or log.consortium_id or log.team_id %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Related Entities</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        {% if log.rfpo %}
+                        <tr>
+                            <th class="ps-3">RFPO</th>
+                            <td>
+                                {{ log.rfpo.rfpo_id }}
+                                {% if log.rfpo_id %}
+                                    <a href="{{ url_for('email_log_list', rfpo_id=log.rfpo_id) }}"
+                                       class="ms-2 badge bg-outline-primary text-primary" title="Filter by this RFPO">
+                                        <i class="fas fa-filter"></i>
+                                    </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% if log.project_id %}
+                        <tr>
+                            <th class="ps-3">Project ID</th>
+                            <td>{{ log.project_id }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if log.consortium_id %}
+                        <tr>
+                            <th class="ps-3">Consortium ID</th>
+                            <td>{{ log.consortium_id }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if log.team_id %}
+                        <tr>
+                            <th class="ps-3">Team ID</th>
+                            <td>{{ log.team_id }}</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Error message #}
+        {% if log.error_message %}
+        <div class="card mb-3 border-danger">
+            <div class="card-header bg-danger text-white"><strong>Error</strong></div>
+            <div class="card-body">
+                <pre class="mb-0 text-danger" style="white-space: pre-wrap;">{{ log.error_message }}</pre>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Context data #}
+        {% if log.get_context() %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Context</strong></div>
+            <div class="card-body">
+                <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.85em;">{{ log.get_context()|tojson(indent=2) }}</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Right column: body preview #}
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header"><strong>Body Preview</strong></div>
+            <div class="card-body">
+                {% if log.body_preview %}
+                    <iframe srcdoc="{{ log.body_preview|e }}"
+                            style="width: 100%; height: 600px; border: 1px solid #dee2e6; border-radius: .375rem; background: #fff;"
+                            sandbox="allow-same-origin"></iframe>
+                {% else %}
+                    <p class="text-muted">No body content recorded.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -55,6 +55,9 @@ class FailedEmail:
     attempts: int = 0
     last_error: str = ""
     created_at: datetime = field(default_factory=datetime.now)
+    context: Optional[Dict[str, Any]] = None
+    email_type: str = "custom"
+    template_name: Optional[str] = None
 
 
 def load_env_file(env_file=".env"):
@@ -348,6 +351,9 @@ class EmailService:
         cc_emails: Optional[List[str]],
         bcc_emails: Optional[List[str]],
         attachments: Optional[List[Dict[str, Any]]],
+        context: Optional[Dict[str, Any]] = None,
+        email_type: str = "custom",
+        template_name: Optional[str] = None,
     ) -> None:
         """Add a failed email to the retry queue (thread-safe)."""
         entry = FailedEmail(
@@ -361,6 +367,9 @@ class EmailService:
             attachments=attachments,
             attempts=self.max_retries,
             last_error=self.last_error or "unknown",
+            context=context,
+            email_type=email_type,
+            template_name=template_name,
         )
         with self._queue_lock:
             self._failed_queue.append(entry)
@@ -421,6 +430,9 @@ class EmailService:
                 cc_emails=entry.cc_emails,
                 bcc_emails=entry.bcc_emails,
                 attachments=entry.attachments,
+                context=entry.context,
+                email_type=entry.email_type,
+                template_name=entry.template_name,
             )
             if ok:
                 succeeded += 1
@@ -462,6 +474,9 @@ class EmailService:
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        email_type: str = "custom",
+        template_name: Optional[str] = None,
     ) -> bool:
         """Send email with retry and exponential backoff.
 
@@ -470,6 +485,9 @@ class EmailService:
         exhaust all retries are placed on the failed-email queue for later
         retry via :meth:`retry_failed`.
         """
+        _is_test_mode = False
+        _original_recipients = None
+
         try:
             self._reset_last_result()
 
@@ -496,6 +514,12 @@ class EmailService:
             # =============================================================
             test_settings = _get_email_test_settings()
             if test_settings["test_mode"] and test_settings["test_recipient"]:
+                _is_test_mode = True
+                _original_recipients = {
+                    "to": list(to_emails),
+                    "cc": list(cc_emails) if cc_emails else [],
+                    "bcc": list(bcc_emails) if bcc_emails else [],
+                }
                 original_to = list(to_emails)
                 original_cc = list(cc_emails) if cc_emails else []
                 original_bcc = list(bcc_emails) if bcc_emails else []
@@ -640,6 +664,16 @@ class EmailService:
                                 subject,
                                 message_id,
                             )
+                            self._log_email(
+                                to_emails=to_emails, subject=subject, status="sent",
+                                body_text=body_text, body_html=body_html,
+                                from_email=sender_email,
+                                cc_emails=cc_emails, bcc_emails=bcc_emails,
+                                context=context, email_type=email_type,
+                                template_name=template_name,
+                                test_mode=_is_test_mode,
+                                original_recipients=_original_recipients,
+                            )
                             return True
 
                         # Non-retryable status — fall through to SMTP
@@ -691,9 +725,22 @@ class EmailService:
                     "(or GMAIL_USER/GMAIL_APP_PASSWORD)."
                 )
                 self.last_error = "Missing SMTP credentials"
+                self._log_email(
+                    to_emails=to_emails, subject=subject, status="queued",
+                    body_text=body_text, body_html=body_html,
+                    from_email=sender_email,
+                    cc_emails=cc_emails, bcc_emails=bcc_emails,
+                    context=context, email_type=email_type,
+                    template_name=template_name,
+                    error_message=self.last_error,
+                    test_mode=_is_test_mode,
+                    original_recipients=_original_recipients,
+                )
                 self._enqueue_failed(
                     to_emails, subject, body_text, body_html,
                     from_email, cc_emails, bcc_emails, attachments,
+                    context=context, email_type=email_type,
+                    template_name=template_name,
                 )
                 return False
 
@@ -742,6 +789,16 @@ class EmailService:
                         subject,
                     )
                     self.last_status = "sent"
+                    self._log_email(
+                        to_emails=to_emails, subject=subject, status="sent",
+                        body_text=body_text, body_html=body_html,
+                        from_email=sender_email,
+                        cc_emails=cc_emails, bcc_emails=bcc_emails,
+                        context=context, email_type=email_type,
+                        template_name=template_name,
+                        test_mode=_is_test_mode,
+                        original_recipients=_original_recipients,
+                    )
                     return True
                 except Exception as e:
                     self.last_error = str(e)
@@ -764,20 +821,103 @@ class EmailService:
                         )
 
             # Both providers exhausted — queue for later retry
+            self._log_email(
+                to_emails=to_emails, subject=subject, status="queued",
+                body_text=body_text, body_html=body_html,
+                from_email=sender_email,
+                cc_emails=cc_emails, bcc_emails=bcc_emails,
+                context=context, email_type=email_type,
+                template_name=template_name,
+                error_message=self.last_error,
+                test_mode=_is_test_mode,
+                original_recipients=_original_recipients,
+            )
             self._enqueue_failed(
                 to_emails, subject, body_text, body_html,
                 from_email, cc_emails, bcc_emails, attachments,
+                context=context, email_type=email_type,
+                template_name=template_name,
             )
             return False
 
         except Exception as e:
             self.last_error = str(e)
             logger.error("Failed to send email: %s", e)
+            self._log_email(
+                to_emails=to_emails, subject=subject, status="failed",
+                body_text=body_text, body_html=body_html,
+                from_email=from_email or "",
+                cc_emails=cc_emails, bcc_emails=bcc_emails,
+                context=context, email_type=email_type,
+                template_name=template_name,
+                error_message=str(e)[:1024],
+                test_mode=_is_test_mode,
+                original_recipients=_original_recipients,
+            )
             self._enqueue_failed(
                 to_emails, subject, body_text, body_html,
                 from_email, cc_emails, bcc_emails, attachments,
+                context=context, email_type=email_type,
+                template_name=template_name,
             )
             return False
+
+    def _log_email(
+        self,
+        to_emails: List[str],
+        subject: str,
+        status: str,
+        body_text: Optional[str] = None,
+        body_html: Optional[str] = None,
+        from_email: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        email_type: str = "custom",
+        template_name: Optional[str] = None,
+        error_message: Optional[str] = None,
+        test_mode: bool = False,
+        original_recipients: Optional[Dict] = None,
+    ) -> None:
+        """Persist email send attempt to database. Never raises."""
+        try:
+            from flask import has_app_context
+            if not has_app_context():
+                logger.info(
+                    "Email log (no app context): status=%s type=%s to=%s subject=%s",
+                    status, email_type, to_emails, subject,
+                )
+                return
+
+            import json as _json
+            from models import EmailLog, db
+
+            ctx = context or {}
+            log = EmailLog(
+                message_id=self.last_message_id,
+                email_type=email_type,
+                subject=subject[:512] if subject else "",
+                from_email=from_email or self.last_sender or "",
+                to_emails=_json.dumps(to_emails),
+                cc_emails=_json.dumps(cc_emails) if cc_emails else None,
+                bcc_emails=_json.dumps(bcc_emails) if bcc_emails else None,
+                status=status,
+                provider=self.last_provider,
+                error_message=str(error_message)[:1024] if error_message else None,
+                rfpo_id=ctx.get("rfpo_id"),
+                project_id=ctx.get("project_id"),
+                consortium_id=ctx.get("consortium_id"),
+                team_id=ctx.get("team_id"),
+                triggered_by_user_id=ctx.get("triggered_by_user_id"),
+                template_name=template_name,
+                body_preview=body_html or body_text or None,
+                test_mode=test_mode,
+                original_recipients=_json.dumps(original_recipients) if original_recipients else None,
+            )
+            db.session.add(log)
+            db.session.commit()
+        except Exception as exc:
+            logger.error("Failed to log email to database: %s", exc)
 
     def send_templated_email(
         self,
@@ -788,6 +928,8 @@ class EmailService:
         from_email: Optional[str] = None,
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        email_type: Optional[str] = None,
     ) -> bool:
         """
         Send email using Jinja2 template
@@ -852,6 +994,9 @@ class EmailService:
                 from_email=from_email,
                 cc_emails=cc_emails,
                 bcc_emails=bcc_emails,
+                context=context,
+                email_type=email_type or template_name,
+                template_name=template_name,
             )
 
         except Exception as e:
@@ -865,6 +1010,7 @@ class EmailService:
         temp_password: Optional[str] = None,
         show_user_link: Optional[bool] = None,
         show_admin_link: Optional[bool] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Send welcome email to new user
@@ -913,6 +1059,7 @@ class EmailService:
             template_name="welcome",
             template_data=template_data,
             subject=template_data["subject"],
+            context=context,
         )
 
     def send_password_changed_email(
@@ -920,6 +1067,7 @@ class EmailService:
         user_email: str,
         user_name: str,
         change_ip: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Send password change notification email
@@ -955,6 +1103,7 @@ class EmailService:
             template_name="password_changed",
             template_data=template_data,
             subject=template_data["subject"],
+            context=context,
         )
 
     def send_approval_notification(
@@ -964,6 +1113,7 @@ class EmailService:
         rfpo_id: str,
         approval_type: str,
         rfpo_db_id: Optional[int] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Send approval notification email
@@ -998,6 +1148,7 @@ class EmailService:
             template_name="approval_notification",
             template_data=template_data,
             subject=template_data["subject"],
+            context=context,
         )
 
     def send_user_added_to_project_email(
@@ -1072,6 +1223,7 @@ def send_welcome_email(
     temp_password: Optional[str] = None,
     show_user_link: Optional[bool] = None,
     show_admin_link: Optional[bool] = None,
+    context: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """
     Send welcome email to new user, optionally controlling which links show.
@@ -1085,6 +1237,7 @@ def send_welcome_email(
         temp_password,
         show_user_link,
         show_admin_link,
+        context=context,
     )
 
 
@@ -1092,9 +1245,12 @@ def send_password_changed_email(
     user_email: str,
     user_name: str,
     change_ip: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Send password change notification email"""
-    return email_service.send_password_changed_email(user_email, user_name, change_ip)
+    return email_service.send_password_changed_email(
+        user_email, user_name, change_ip, context=context,
+    )
 
 
 def send_approval_notification(
@@ -1103,10 +1259,12 @@ def send_approval_notification(
     rfpo_id: str,
     approval_type: str,
     rfpo_db_id: Optional[int] = None,
+    context: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Send approval notification email"""
     return email_service.send_approval_notification(
-        user_email, user_name, rfpo_id, approval_type, rfpo_db_id=rfpo_db_id
+        user_email, user_name, rfpo_id, approval_type,
+        rfpo_db_id=rfpo_db_id, context=context,
     )
 
 

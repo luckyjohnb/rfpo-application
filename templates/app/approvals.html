@@ -313,11 +313,11 @@
                                         <i class="fas fa-user-edit"></i>
                                     </button>
                                     <button class="btn btn-sm btn-success me-1"
-                                            onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, ${JSON.stringify(escapeHtml(rfpo.title || '')).replace(/'/g, "\\'")}, '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}')">
+                                            onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, '${escapeAttr(rfpo.title || '')}', '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}')">
                                         <i class="fas fa-check"></i> Approve
                                     </button>
                                     <button class="btn btn-sm btn-danger"
-                                            onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, ${JSON.stringify(escapeHtml(rfpo.title || '')).replace(/'/g, "\\'")}, '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}', true)">
+                                            onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, '${escapeAttr(rfpo.title || '')}', '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}', true)">
                                         <i class="fas fa-times"></i> Refuse
                                     </button>
                                 </div>

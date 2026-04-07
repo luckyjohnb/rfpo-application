@@ -247,18 +247,26 @@
         }, true);
 
         // Global date formatting — always display in US Eastern time
+        // API returns naive-UTC strings (no "Z"), so we append "Z" to
+        // ensure the browser parses them as UTC before converting to Eastern.
         const _EST = 'America/New_York';
+        function _utc(val) {
+            const s = String(val);
+            // Already has timezone info (Z, +, or -)? Leave it alone.
+            if (/Z|[+-]\d{2}:\d{2}$/.test(s)) return s;
+            return s + 'Z';
+        }
         function formatDate(val) {
             if (!val) return '';
-            return new Date(val).toLocaleDateString('en-US', {timeZone: _EST});
+            return new Date(_utc(val)).toLocaleDateString('en-US', {timeZone: _EST});
         }
         function formatDateTime(val) {
             if (!val) return '';
-            return new Date(val).toLocaleString('en-US', {timeZone: _EST});
+            return new Date(_utc(val)).toLocaleString('en-US', {timeZone: _EST});
         }
         function formatTime(val) {
             if (!val) return '';
-            return new Date(val).toLocaleTimeString('en-US', {timeZone: _EST, hour: '2-digit', minute: '2-digit'});
+            return new Date(_utc(val)).toLocaleTimeString('en-US', {timeZone: _EST, hour: '2-digit', minute: '2-digit'});
         }
 
         // Global functions

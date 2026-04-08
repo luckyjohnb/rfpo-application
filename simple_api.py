@@ -928,9 +928,9 @@ def get_approver_rfpos():
         user = request.current_user
 
         # Find all pending actions assigned to this user (primary approver)
-        # Only include actions whose stage_order and step_order match the
-        # instance's current pointer so approvers only see their turn.
-        pending_actions = (
+        # Filter by current stage; for parallel stages allow any step in the stage,
+        # for sequential stages also require step_order to match.
+        pending_actions_raw = (
             RFPOApprovalAction.query
             .join(RFPOApprovalInstance, RFPOApprovalAction.instance_id == RFPOApprovalInstance.id)
             .filter(
@@ -938,10 +938,18 @@ def get_approver_rfpos():
                 RFPOApprovalAction.status == "pending",
                 RFPOApprovalInstance.overall_status == "waiting",
                 RFPOApprovalAction.stage_order == RFPOApprovalInstance.current_stage_order,
-                RFPOApprovalAction.step_order == RFPOApprovalInstance.current_step_order,
             )
             .all()
         )
+        # Post-filter: for non-parallel stages, also require step_order match
+        pending_actions = []
+        for pa in pending_actions_raw:
+            inst = pa.instance
+            stage_data = inst.get_current_stage()
+            if stage_data and stage_data.get("is_parallel"):
+                pending_actions.append(pa)  # parallel: any step in stage
+            elif pa.step_order == inst.current_step_order:
+                pending_actions.append(pa)  # sequential: must match step
 
         # Also find actions where user is backup approver (from instance snapshots)
         # Only for the current stage/step of active instances
@@ -954,11 +962,13 @@ def get_approver_rfpos():
             try:
                 data = inst.get_instance_data()
                 for stage in data.get("stages", []):
-                    # Only check the current stage/step
+                    # Only check the current stage
                     if stage.get("stage_order") != inst.current_stage_order:
                         continue
+                    is_parallel = stage.get("is_parallel", False)
                     for step in stage.get("steps", []):
-                        if step.get("step_order") != inst.current_step_order:
+                        # For sequential stages, also require step_order match
+                        if not is_parallel and step.get("step_order") != inst.current_step_order:
                             continue
                         if step.get("backup_approver_id") == user.record_id:
                             for act in inst.actions:
@@ -1062,10 +1072,10 @@ def take_approval_action(action_id):
                 400,
             )
 
-        # Enforce sequential ordering — action must match the current stage/step pointer
+        # Enforce sequential ordering — action must match the current stage pointer.
+        # For parallel stages, any step within the stage is allowed.
         instance = action.instance
-        if (action.stage_order != instance.current_stage_order
-                or action.step_order != instance.current_step_order):
+        if action.stage_order != instance.current_stage_order:
             return (
                 jsonify(
                     {"success": False,
@@ -1074,6 +1084,17 @@ def take_approval_action(action_id):
                 ),
                 409,
             )
+        if action.step_order != instance.current_step_order:
+            current_stage_data = instance.get_current_stage()
+            if not current_stage_data or not current_stage_data.get("is_parallel"):
+                return (
+                    jsonify(
+                        {"success": False,
+                         "message": "This approval step is not yet active. "
+                                    "Earlier steps must be completed first."}
+                    ),
+                    409,
+                )
 
         # Validate status
         status = data.get("status")
@@ -1188,13 +1209,21 @@ def take_approval_action(action_id):
                         entity_id=str(instance.rfpo.id),
                     )
             else:
-                # Notify only the next active approver (matching current stage/step pointer)
+                # Notify the next active approver(s)
+                # For parallel stages, notify all pending in the stage
                 if instance.rfpo:
-                    next_actions = RFPOApprovalAction.query.filter_by(
-                        instance_id=instance.id, status="pending",
-                        stage_order=instance.current_stage_order,
-                        step_order=instance.current_step_order,
-                    ).all()
+                    adv_stage_data = instance.get_current_stage()
+                    if adv_stage_data and adv_stage_data.get("is_parallel"):
+                        next_actions = RFPOApprovalAction.query.filter_by(
+                            instance_id=instance.id, status="pending",
+                            stage_order=instance.current_stage_order,
+                        ).all()
+                    else:
+                        next_actions = RFPOApprovalAction.query.filter_by(
+                            instance_id=instance.id, status="pending",
+                            stage_order=instance.current_stage_order,
+                            step_order=instance.current_step_order,
+                        ).all()
                     for na in next_actions:
                         next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
                         if next_approver:
@@ -1284,13 +1313,18 @@ def bulk_approval_action():
                     results["errors"].append(f"{action_id}: already completed")
                     continue
 
-                # Enforce sequential ordering
+                # Enforce sequential ordering (parallel stages allow any step)
                 bulk_instance = action.instance
-                if (action.stage_order != bulk_instance.current_stage_order
-                        or action.step_order != bulk_instance.current_step_order):
+                if action.stage_order != bulk_instance.current_stage_order:
                     results["failed"] += 1
                     results["errors"].append(f"{action_id}: step not yet active")
                     continue
+                if action.step_order != bulk_instance.current_step_order:
+                    bulk_stage_data = bulk_instance.get_current_stage()
+                    if not bulk_stage_data or not bulk_stage_data.get("is_parallel"):
+                        results["failed"] += 1
+                        results["errors"].append(f"{action_id}: step not yet active")
+                        continue
 
                 action.complete_action(status, comments, None, user.record_id)
 
@@ -1341,12 +1375,19 @@ def bulk_approval_action():
                             context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
                         )
                 else:
-                    # Workflow advanced — notify only the next active approver
-                    next_actions = RFPOApprovalAction.query.filter_by(
-                        instance_id=inst.id, status="pending",
-                        stage_order=inst.current_stage_order,
-                        step_order=inst.current_step_order,
-                    ).all()
+                    # Workflow advanced — notify next active approver(s)
+                    bulk_notif_stage = inst.get_current_stage()
+                    if bulk_notif_stage and bulk_notif_stage.get("is_parallel"):
+                        next_actions = RFPOApprovalAction.query.filter_by(
+                            instance_id=inst.id, status="pending",
+                            stage_order=inst.current_stage_order,
+                        ).all()
+                    else:
+                        next_actions = RFPOApprovalAction.query.filter_by(
+                            instance_id=inst.id, status="pending",
+                            stage_order=inst.current_stage_order,
+                            step_order=inst.current_step_order,
+                        ).all()
                     for na in next_actions:
                         next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
                         if next_approver and next_approver.email:

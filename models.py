@@ -2024,7 +2024,12 @@ class RFPOApprovalInstance(db.Model):
         return "approved"
 
     def advance_to_next_step(self):
-        """Advance workflow to next step or stage, with proper completion logic"""
+        """Advance workflow to next step or stage, with proper completion logic.
+
+        For parallel stages (is_parallel=True), all steps within the stage must
+        be completed before advancing to the next stage.  For sequential stages,
+        the pointer moves one step at a time.
+        """
         # First, check if the workflow should be completed based on action status
         completion_status = self.check_completion_status()
 
@@ -2042,23 +2047,48 @@ class RFPOApprovalInstance(db.Model):
         # If not complete, advance to next step/stage
         current_stage = self.get_current_stage()
         if current_stage:
-            steps = current_stage.get("steps", [])
-            if self.current_step_order < len(steps):
-                # Move to next step in current stage
-                self.current_step_order += 1
+            if current_stage.get("is_parallel"):
+                # Parallel stage: only advance when ALL actions in this stage
+                # are completed (approved/conditional/refused).
+                stage_actions = [
+                    a for a in self.actions
+                    if a.stage_order == self.current_stage_order
+                ]
+                pending_in_stage = [
+                    a for a in stage_actions if a.status == "pending"
+                ]
+                if not pending_in_stage:
+                    # All approvers in this stage are done — move to next stage
+                    data = self.get_instance_data()
+                    stages = data.get("stages", [])
+                    if self.current_stage_order < len(stages):
+                        self.current_stage_order += 1
+                        self.current_step_order = 1
+                    else:
+                        final_status = self.check_completion_status()
+                        if final_status:
+                            self.overall_status = final_status
+                            self.completed_at = datetime.utcnow()
+                # else: still waiting for other approvers — don't move pointer
             else:
-                # Move to next stage
-                data = self.get_instance_data()
-                stages = data.get("stages", [])
-                if self.current_stage_order < len(stages):
-                    self.current_stage_order += 1
-                    self.current_step_order = 1
+                # Sequential stage: advance one step at a time
+                steps = current_stage.get("steps", [])
+                if self.current_step_order < len(steps):
+                    # Move to next step in current stage
+                    self.current_step_order += 1
                 else:
-                    # Reached end of workflow structure - check completion again
-                    final_status = self.check_completion_status()
-                    if final_status:
-                        self.overall_status = final_status
-                        self.completed_at = datetime.utcnow()
+                    # Move to next stage
+                    data = self.get_instance_data()
+                    stages = data.get("stages", [])
+                    if self.current_stage_order < len(stages):
+                        self.current_stage_order += 1
+                        self.current_step_order = 1
+                    else:
+                        # Reached end of workflow structure - check completion again
+                        final_status = self.check_completion_status()
+                        if final_status:
+                            self.overall_status = final_status
+                            self.completed_at = datetime.utcnow()
 
     def to_dict(self):
         return {

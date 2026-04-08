@@ -361,8 +361,7 @@
     </div>
 </div>
 
-<!-- Overdue Approvals Table -->
-{% if overdue_actions %}
+<!-- Overdue Approvals & Reminder Controls -->
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
@@ -373,6 +372,7 @@
                 </button>
             </div>
             <div class="card-body">
+                {% if overdue_actions %}
                 <div class="table-responsive">
                     <table class="table table-sm table-hover">
                         <thead>
@@ -415,11 +415,13 @@
                         </tbody>
                     </table>
                 </div>
+                {% else %}
+                <p class="text-muted mb-0"><i class="fas fa-check-circle text-success"></i> No overdue approvals at this time.</p>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
-{% endif %}
 
 <!-- Recent Activity -->
 <div class="row">

@@ -158,9 +158,10 @@ def _get_authorized_approver_ids(instance, action):
 
 
 def _generate_and_save_pdf_snapshot(rfpo):
-    """Generate a PO PDF and save it as an immutable snapshot tied to the RFPO.
+    """Generate an RFPO PDF snapshot and save it as an immutable file tied to the RFPO.
 
     Called at submission time so the PDF is frozen regardless of future data changes.
+    Uses the RFPO format (REQUEST FOR PURCHASE ORDER) — not the PO format.
     Returns the relative path to the saved file, or None on failure.
     """
     try:
@@ -184,15 +185,13 @@ def _generate_and_save_pdf_snapshot(rfpo):
             )
             return None
 
-        from models import PDFPositioning
-        positioning_config = PDFPositioning.query.filter_by(
-            consortium_id=consortium.consort_id,
-            template_name="po_template",
-            active=True,
-        ).first()
+        # Look up requestor for display name
+        requestor = None
+        if rfpo.requestor_id:
+            requestor = User.query.filter_by(record_id=rfpo.requestor_id).first()
 
-        gen = RFPOPDFGenerator(positioning_config=positioning_config)
-        pdf_buffer = gen.generate_po_pdf(rfpo, consortium, project, vendor, vendor_site)
+        gen = RFPOPDFGenerator(positioning_config=None)
+        pdf_buffer = gen.generate_rfpo_pdf(rfpo, consortium, project, vendor, vendor_site, requestor=requestor)
 
         # Save to uploads/snapshots/<uuid>_<rfpo_id>.pdf
         snapshots_dir = os.path.join(app.root_path, "uploads", "snapshots")
@@ -1906,7 +1905,7 @@ def get_pdf_snapshot(rfpo_id):
         return send_file(
             filepath,
             mimetype="application/pdf",
-            download_name=f"PO_SNAPSHOT_{rfpo.rfpo_id}.pdf",
+            download_name=f"RFPO_SNAPSHOT_{rfpo.rfpo_id}.pdf",
             as_attachment=False,
         )
     except Exception as e:

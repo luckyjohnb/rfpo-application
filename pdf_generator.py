@@ -58,6 +58,267 @@ class RFPOPDFGenerator:
                 "PDF Generator initialized WITHOUT positioning config - will use defaults"
             )
 
+    def generate_rfpo_pdf(self, rfpo, consortium, project, vendor=None, vendor_site=None, requestor=None):
+        """Generate RFPO (Request for Purchase Order) PDF — NOT a PO.
+
+        This creates a standalone PDF matching the RFPO HTML preview layout
+        with the "REQUEST FOR PURCHASE ORDER" header and disclaimer.
+        Used for snapshots at submission time.
+        """
+        buffer = io.BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+
+        self._draw_rfpo_page(c, rfpo, consortium, project, vendor, vendor_site, requestor, width, height)
+        c.showPage()
+        c.save()
+        buffer.seek(0)
+
+        # Append consortium terms pages (same as PO flow)
+        if consortium:
+            terms_file = self._get_consortium_terms_file(consortium.abbrev, consortium)
+            if terms_file:
+                if terms_file.startswith(".."):
+                    terms_path = os.path.normpath(os.path.join(self.static_path, terms_file))
+                else:
+                    terms_path = os.path.join(self.static_path, terms_file)
+                if os.path.exists(terms_path):
+                    try:
+                        output = PdfWriter()
+                        main_reader = PdfReader(buffer)
+                        for page in main_reader.pages:
+                            output.add_page(page)
+                        terms_reader = PdfReader(terms_path, strict=False)
+                        for page in terms_reader.pages:
+                            output.add_page(page)
+                        combined = io.BytesIO()
+                        output.write(combined)
+                        combined.seek(0)
+                        return combined
+                    except Exception as e:
+                        logger.warning("Could not append terms to RFPO PDF: %s", e)
+                        buffer.seek(0)
+
+        return buffer
+
+    def _draw_rfpo_page(self, c, rfpo, consortium, project, vendor, vendor_site, requestor, width, height):
+        """Draw the RFPO page layout matching the HTML preview template."""
+        margin_left = 50
+        margin_right = width - 50
+        usable_width = margin_right - margin_left
+
+        # --- HEADER ---
+        # Consortium logo (right-aligned)
+        logo_drawn = False
+        if consortium and hasattr(consortium, "logo") and consortium.logo:
+            logo_file = os.path.join("uploads", "logos", consortium.logo)
+            if os.path.exists(logo_file):
+                try:
+                    c.drawImage(logo_file, margin_right - 180, height - 75, width=170, height=45, preserveAspectRatio=True)
+                    logo_drawn = True
+                except Exception:
+                    pass
+        if not logo_drawn:
+            fallback = os.path.join("static", "po_files", "uscar_logo.jpg")
+            if os.path.exists(fallback):
+                try:
+                    c.drawImage(fallback, margin_right - 180, height - 75, width=170, height=45, preserveAspectRatio=True)
+                except Exception:
+                    pass
+
+        # Title
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(margin_left, height - 45, "REQUEST FOR PURCHASE ORDER")
+        c.setFont("Helvetica-Bold", 18)
+        c.drawString(margin_left, height - 68, rfpo.rfpo_id)
+        c.setFont("Helvetica", 8)
+        c.drawString(margin_left, height - 80, "THIS IS NOT A PO NUMBER - you cannot use this with any vendor.")
+
+        # Horizontal rule
+        y = height - 90
+        c.setStrokeColorRGB(0, 0, 0)
+        c.line(margin_left, y, margin_right, y)
+        y -= 18
+
+        # --- INFO TABLE ---
+        label_x = margin_left
+        value_x = margin_left + 145
+        right_label_x = margin_left + 310
+        right_value_x = margin_left + 385
+        row_height = 14
+        font_size = 9
+
+        def draw_row(label, value, label2=None, value2=None):
+            nonlocal y
+            c.setFont("Helvetica-Bold", font_size)
+            c.drawString(label_x, y, label)
+            c.setFont("Helvetica", font_size)
+            # Handle multi-line values
+            if value:
+                lines = str(value).split("\n")
+                for i, line in enumerate(lines):
+                    c.drawString(value_x, y - (i * row_height), line.strip())
+                if label2:
+                    c.setFont("Helvetica-Bold", font_size)
+                    c.drawString(right_label_x, y, label2)
+                    c.setFont("Helvetica", font_size)
+                    if value2:
+                        c.drawString(right_value_x, y, str(value2))
+                line_count = max(1, len(lines))
+                y -= row_height * line_count
+            else:
+                if label2:
+                    c.setFont("Helvetica-Bold", font_size)
+                    c.drawString(right_label_x, y, label2)
+                    c.setFont("Helvetica", font_size)
+                    if value2:
+                        c.drawString(right_value_x, y, str(value2))
+                y -= row_height
+
+        # Government Agreement Number
+        draw_row("Government Agreement Number:", rfpo.government_agreement_number or "")
+
+        # Project
+        project_text = f"{project.name} ({project.ref})" if project else ""
+        draw_row("Project:", project_text)
+
+        # Requestor + Raised date
+        requestor_name = ""
+        if requestor:
+            requestor_name = requestor.get_display_name()
+        elif rfpo.requestor_id:
+            try:
+                from models import User
+                req_user = User.query.filter_by(record_id=rfpo.requestor_id).first()
+                if req_user:
+                    requestor_name = req_user.get_display_name()
+            except Exception:
+                requestor_name = rfpo.requestor_id
+        raised_date = rfpo.created_at.strftime("%B %d, %Y") if rfpo.created_at else ""
+        draw_row("Requestor:", requestor_name, "Raised:", raised_date)
+
+        # Invoice to
+        invoice_addr = rfpo.invoice_address or ""
+        if not invoice_addr and consortium and hasattr(consortium, "invoicing_address") and consortium.invoicing_address:
+            invoice_addr = consortium.invoicing_address
+        draw_row("Invoice to:", invoice_addr)
+
+        # Ship to name + PO Expiration Date
+        expiry_date = rfpo.delivery_date.strftime("%B %d, %Y") if rfpo.delivery_date else ""
+        draw_row("Ship to name:", rfpo.shipto_name or "", "PO Expiration Date:", expiry_date)
+
+        # Ship to address
+        draw_row("Ship to address:", rfpo.shipto_address or "")
+
+        # Vendor block
+        vendor_name = ""
+        vendor_addr = ""
+        vendor_contact = ""
+        vendor_tel = ""
+        if vendor:
+            vendor_name = vendor.company_name or ""
+            site = vendor_site or vendor
+            vendor_addr = getattr(site, "contact_address", "") or ""
+            vendor_contact = getattr(site, "contact_name", "") or ""
+            vendor_tel = getattr(site, "contact_tel", "") or ""
+        draw_row("Vendor:", vendor_name, "Contact:", vendor_contact)
+        if vendor_addr:
+            # Indent address under vendor
+            c.setFont("Helvetica", font_size)
+            for i, line in enumerate(vendor_addr.split("\n")):
+                c.drawString(value_x, y - (i * row_height), line.strip())
+            addr_lines = len(vendor_addr.split("\n"))
+            # Draw contact tel on same rows (right column)
+            if vendor_tel:
+                c.setFont("Helvetica-Bold", font_size)
+                c.drawString(right_label_x, y, "Contact Tel:")
+                c.setFont("Helvetica", font_size)
+                c.drawString(right_value_x, y, vendor_tel)
+            y -= row_height * max(1, addr_lines)
+        elif vendor_tel:
+            draw_row("", "", "Contact Tel:", vendor_tel)
+
+        y -= 10  # spacing before line items
+
+        # --- LINE ITEMS TABLE ---
+        # Header
+        col_num_x = margin_left
+        col_qty_x = margin_left + 25
+        col_desc_x = margin_left + 65
+        col_unit_x = margin_right - 120
+        col_total_x = margin_right - 10
+
+        c.setFont("Helvetica-Bold", 8)
+        c.setStrokeColorRGB(0, 0, 0)
+        # Header row with border
+        header_top = y + 10
+        header_bottom = y - 4
+        c.rect(margin_left, header_bottom, usable_width, header_top - header_bottom)
+        c.drawString(col_num_x + 3, y, "#")
+        c.drawString(col_qty_x, y, "Qty")
+        c.drawString(col_desc_x, y, "Description of supplies or services")
+        c.drawRightString(col_unit_x + 55, y, "Unit Price")
+        c.drawRightString(col_total_x, y, "Total Price")
+        y = header_bottom - 2
+
+        c.setFont("Helvetica", 8)
+        items = sorted(rfpo.line_items, key=lambda x: x.line_number) if rfpo.line_items else []
+        for item in items:
+            if y < 120:  # leave room for totals
+                break
+            desc = item.description or ""
+            if item.is_capital_equipment:
+                desc += " [Capital Equipment]"
+            # Wrap description
+            desc_lines = self._wrap_text(desc, 55)
+            row_lines = max(1, len(desc_lines))
+
+            c.drawString(col_num_x + 3, y, str(item.line_number))
+            c.drawString(col_qty_x, y, str(item.quantity))
+            for i, dl in enumerate(desc_lines):
+                c.drawString(col_desc_x, y - (i * 11), dl)
+            c.drawRightString(col_unit_x + 55, y, f"${item.unit_price:,.2f}")
+            c.drawRightString(col_total_x, y, f"${item.total_price:,.2f}")
+
+            y -= 11 * row_lines + 3
+
+        # --- TOTALS ---
+        y -= 8
+        c.line(col_unit_x - 10, y + 14, col_total_x, y + 14)
+
+        c.setFont("Helvetica-Bold", 9)
+        c.drawRightString(col_unit_x + 55, y, "Gross purchase order:")
+        c.setFont("Helvetica", 9)
+        subtotal = rfpo.subtotal if rfpo.subtotal else 0
+        c.drawRightString(col_total_x, y, f"${subtotal:,.2f}")
+        y -= 14
+
+        # Cost share
+        cost_share = 0
+        try:
+            cost_share = rfpo.get_calculated_cost_share_amount()
+        except Exception:
+            cost_share = rfpo.cost_share_amount or 0
+        c.setFont("Helvetica-Bold", 9)
+        label = "Less supplier cost share:"
+        if rfpo.cost_share_description:
+            label += f"  ({rfpo.cost_share_description})"
+        c.drawRightString(col_unit_x + 55, y, label)
+        c.setFont("Helvetica", 9)
+        c.drawRightString(col_total_x, y, f"(${cost_share:,.2f})")
+        y -= 14
+
+        # Net total
+        c.line(col_unit_x - 10, y + 12, col_total_x, y + 12)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawRightString(col_unit_x + 55, y, "Net purchase not to exceed:")
+        total = 0
+        try:
+            total = rfpo.get_calculated_total_amount()
+        except Exception:
+            total = rfpo.total_amount or 0
+        c.drawRightString(col_total_x, y, f"${total:,.2f}")
+
     def generate_po_pdf(self, rfpo, consortium, project, vendor=None, vendor_site=None):
         """Generate complete PO PDF with dynamic data"""
         try:

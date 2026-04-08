@@ -1241,6 +1241,35 @@ def take_approval_action(action_id):
                         entity_type="rfpo",
                         entity_id=str(instance.rfpo.id),
                     )
+                # If refused, also notify remaining pending approvers so they
+                # know the RFPO has been terminated and can clear their queues.
+                if instance.overall_status == "refused" and instance.rfpo:
+                    remaining = RFPOApprovalAction.query.filter_by(
+                        instance_id=instance.id, status="pending",
+                    ).all()
+                    for ra in remaining:
+                        peer = User.query.filter_by(record_id=ra.approver_id, active=True).first()
+                        if peer and peer.email:
+                            try:
+                                send_approval_notification(
+                                    peer.email, peer.get_display_name(),
+                                    instance.rfpo.rfpo_id,
+                                    "RFPO Refused — No Action Required",
+                                    rfpo_db_id=instance.rfpo.id,
+                                    context={'rfpo_id': instance.rfpo.id, 'project_id': instance.rfpo.project_id, 'consortium_id': instance.rfpo.consortium_id, 'team_id': instance.rfpo.team_id},
+                                )
+                            except Exception:
+                                pass
+                        if peer:
+                            _create_notification(
+                                user_id=peer.id,
+                                notif_type="rfpo_status",
+                                title="RFPO Refused",
+                                message=f"RFPO {instance.rfpo.rfpo_id} has been refused. No action is required.",
+                                link=f"/rfpos/{instance.rfpo.id}",
+                                entity_type="rfpo",
+                                entity_id=str(instance.rfpo.id),
+                            )
             else:
                 # Notify the next active approver(s)
                 # For parallel stages, notify all pending in the stage
@@ -1408,6 +1437,24 @@ def bulk_approval_action():
                             rfpo_db_id=inst.rfpo.id,
                             context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
                         )
+                    # If refused, also notify remaining pending approvers
+                    if inst.overall_status == "refused":
+                        remaining = RFPOApprovalAction.query.filter_by(
+                            instance_id=inst.id, status="pending",
+                        ).all()
+                        for ra in remaining:
+                            peer = User.query.filter_by(record_id=ra.approver_id, active=True).first()
+                            if peer and peer.email:
+                                try:
+                                    send_approval_notification(
+                                        peer.email, peer.get_display_name(),
+                                        inst.rfpo.rfpo_id,
+                                        "RFPO Refused — No Action Required",
+                                        rfpo_db_id=inst.rfpo.id,
+                                        context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
+                                    )
+                                except Exception:
+                                    pass
                 else:
                     # Workflow advanced — notify next active approver(s)
                     bulk_notif_stage = inst.get_current_stage()

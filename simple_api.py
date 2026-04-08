@@ -134,7 +134,7 @@ def _error_response(e, status_code=500):
 def _find_applicable_workflow_and_stage(rfpo):
     """Find the best applicable workflow + stage for an RFPO.
 
-    Lookup priority: team → consortium → project.
+    Lookup priority: project → team → consortium.
     A workflow is only accepted if it has at least one stage with steps.
     Falls through to the next level if the found workflow is incomplete.
 
@@ -143,6 +143,13 @@ def _find_applicable_workflow_and_stage(rfpo):
     rfpo_total = float(rfpo.total_amount or 0)
 
     candidates = []
+    if rfpo.project_id:
+        w = RFPOApprovalWorkflow.query.filter_by(
+            project_id=rfpo.project_id, workflow_type="project",
+            is_active=True, is_template=True
+        ).first()
+        if w:
+            candidates.append(w)
     if rfpo.team_id:
         w = RFPOApprovalWorkflow.query.filter_by(
             team_id=rfpo.team_id, workflow_type="team", is_active=True, is_template=True
@@ -152,13 +159,6 @@ def _find_applicable_workflow_and_stage(rfpo):
     if rfpo.consortium_id:
         w = RFPOApprovalWorkflow.query.filter_by(
             consortium_id=rfpo.consortium_id, workflow_type="consortium",
-            is_active=True, is_template=True
-        ).first()
-        if w:
-            candidates.append(w)
-    if rfpo.project_id:
-        w = RFPOApprovalWorkflow.query.filter_by(
-            project_id=rfpo.project_id, workflow_type="project",
             is_active=True, is_template=True
         ).first()
         if w:
@@ -181,6 +181,23 @@ def _find_applicable_workflow_and_stage(rfpo):
             return workflow, applicable_stage
 
     return None, None
+
+
+def _find_global_workflow_stages():
+    """Find the active global workflow and return its stages (sections) with steps.
+
+    Returns a list of stages that have steps, ordered by stage_order.
+    Returns empty list if no global workflow is active or has no stages with steps.
+    """
+    global_workflow = RFPOApprovalWorkflow.query.filter_by(
+        workflow_type="global", is_active=True, is_template=True
+    ).first()
+
+    if not global_workflow or not global_workflow.stages:
+        return []
+
+    return [stage for stage in sorted(global_workflow.stages, key=lambda s: s.stage_order)
+            if stage.steps]
 
 
 def _validate_rfpo_for_approval(rfpo):
@@ -220,41 +237,64 @@ def _validate_rfpo_for_approval(rfpo):
 
     # Find applicable workflow
     workflow, applicable_stage = _find_applicable_workflow_and_stage(rfpo)
+    global_stages = _find_global_workflow_stages()
 
-    if not workflow:
+    if not workflow and not global_stages:
         result["errors"].append("No active approval workflow found for this RFPO")
         result["is_valid"] = False
         return result
 
-    if not applicable_stage or not applicable_stage.steps:
+    if workflow and (not applicable_stage or not applicable_stage.steps) and not global_stages:
         result["errors"].append("No approval stages/steps configured for this workflow")
         result["is_valid"] = False
         return result
 
-    # Workflow info
+    # Workflow info — collect approvers in correct order: entity stage → global stages
     approver_info = []
-    for step in sorted(applicable_stage.steps, key=lambda s: s.step_order):
-        approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
-        approver_info.append({
-            "step_name": step.step_name,
-            "approval_type": step.approval_type_name,
-            "approver_name": approver.get_display_name() if approver else "Unknown",
-            "approver_valid": approver is not None,
-        })
-        if not approver:
-            result["errors"].append(f"Approver not found for step: {step.step_name}")
-            result["is_valid"] = False
+    # Entity stage first
+    entity_stages_for_validation = []
+    if applicable_stage and applicable_stage.steps:
+        entity_stages_for_validation.append(applicable_stage)
+    # Then global stages in fixed order (Financial → US Car Internal → PO Release)
+    GLOBAL_VALIDATION_ORDER = {
+        "GLOBAL_FINANCIAL": 1,
+        "GLOBAL_USCAR_INTERNAL": 2,
+        "GLOBAL_PO_RELEASE": 3,
+    }
+    sorted_global_stages = sorted(
+        global_stages,
+        key=lambda s: GLOBAL_VALIDATION_ORDER.get((s.budget_bracket_key or "").upper(), 99)
+    )
+    all_stages_for_validation = entity_stages_for_validation + sorted_global_stages
+
+    for vstage in all_stages_for_validation:
+        for step in sorted(vstage.steps, key=lambda s: s.step_order):
+            approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
+            approver_info.append({
+                "step_name": step.step_name,
+                "approval_type": step.approval_type_name,
+                "approver_name": approver.get_display_name() if approver else "Unknown",
+                "approver_valid": approver is not None,
+                "stage_name": vstage.stage_name,
+            })
+            if not approver:
+                result["errors"].append(f"Approver not found for step: {step.step_name}")
+                result["is_valid"] = False
+
+    wf_name = workflow.name if workflow else "Global Approvers"
+    stg_name = applicable_stage.stage_name if applicable_stage else "Global Only"
+    stg_amount = float(applicable_stage.budget_bracket_amount or 0) if applicable_stage else 0
 
     result["workflow_info"] = {
-        "workflow_name": workflow.name,
-        "stage_name": applicable_stage.stage_name,
-        "budget_bracket": float(applicable_stage.budget_bracket_amount or 0),
+        "workflow_name": wf_name,
+        "stage_name": stg_name,
+        "budget_bracket": stg_amount,
         "rfpo_amount": rfpo_total,
         "approval_steps": approver_info,
     }
 
     # Required document validation
-    required_doc_keys = applicable_stage.get_required_document_types() if hasattr(applicable_stage, 'get_required_document_types') else []
+    required_doc_keys = applicable_stage.get_required_document_types() if applicable_stage and hasattr(applicable_stage, 'get_required_document_types') else []
     if required_doc_keys:
         uploaded_doc_types = [f.document_type for f in rfpo.files if f.document_type]
 
@@ -888,14 +928,25 @@ def get_approver_rfpos():
         user = request.current_user
 
         # Find all pending actions assigned to this user (primary approver)
-        pending_actions = RFPOApprovalAction.query.filter_by(
-            approver_id=user.record_id,
-            status="pending",
-        ).all()
+        # Only include actions whose stage_order and step_order match the
+        # instance's current pointer so approvers only see their turn.
+        pending_actions = (
+            RFPOApprovalAction.query
+            .join(RFPOApprovalInstance, RFPOApprovalAction.instance_id == RFPOApprovalInstance.id)
+            .filter(
+                RFPOApprovalAction.approver_id == user.record_id,
+                RFPOApprovalAction.status == "pending",
+                RFPOApprovalInstance.overall_status == "waiting",
+                RFPOApprovalAction.stage_order == RFPOApprovalInstance.current_stage_order,
+                RFPOApprovalAction.step_order == RFPOApprovalInstance.current_step_order,
+            )
+            .all()
+        )
 
         # Also find actions where user is backup approver (from instance snapshots)
+        # Only for the current stage/step of active instances
         all_active_instances = RFPOApprovalInstance.query.filter(
-            RFPOApprovalInstance.overall_status.in_(["waiting", "draft"]),
+            RFPOApprovalInstance.overall_status == "waiting",
         ).all()
 
         backup_action_ids = set()
@@ -903,7 +954,12 @@ def get_approver_rfpos():
             try:
                 data = inst.get_instance_data()
                 for stage in data.get("stages", []):
+                    # Only check the current stage/step
+                    if stage.get("stage_order") != inst.current_stage_order:
+                        continue
                     for step in stage.get("steps", []):
+                        if step.get("step_order") != inst.current_step_order:
+                            continue
                         if step.get("backup_approver_id") == user.record_id:
                             for act in inst.actions:
                                 if (act.status == "pending"
@@ -1006,6 +1062,19 @@ def take_approval_action(action_id):
                 400,
             )
 
+        # Enforce sequential ordering — action must match the current stage/step pointer
+        instance = action.instance
+        if (action.stage_order != instance.current_stage_order
+                or action.step_order != instance.current_step_order):
+            return (
+                jsonify(
+                    {"success": False,
+                     "message": "This approval step is not yet active. "
+                                "Earlier steps must be completed first."}
+                ),
+                409,
+            )
+
         # Validate status
         status = data.get("status")
         if status not in ["approved", "conditional", "refused"]:
@@ -1038,6 +1107,17 @@ def take_approval_action(action_id):
             if instance.overall_status == "approved" and instance.rfpo:
                 instance.rfpo.status = "Approved"
                 instance.rfpo.updated_by = user.get_display_name()
+                # Generate PO number on final approval
+                if not instance.rfpo.po_number:
+                    consortium = Consortium.query.filter_by(
+                        consort_id=instance.rfpo.consortium_id
+                    ).first()
+                    abbrev = consortium.abbrev if consortium else "GEN"
+                    instance.rfpo.po_number = RFPO.generate_po_number(abbrev)
+                    app.logger.info(
+                        "PO number %s assigned to RFPO %s on approval (API)",
+                        instance.rfpo.po_number, instance.rfpo.rfpo_id,
+                    )
         else:
             # For approvals, advance workflow and check for completion
             instance.advance_to_next_step()
@@ -1046,6 +1126,17 @@ def take_approval_action(action_id):
             if instance.overall_status == "approved" and instance.rfpo:
                 instance.rfpo.status = "Approved"
                 instance.rfpo.updated_by = user.get_display_name()
+                # Generate PO number on final approval
+                if not instance.rfpo.po_number:
+                    consortium = Consortium.query.filter_by(
+                        consort_id=instance.rfpo.consortium_id
+                    ).first()
+                    abbrev = consortium.abbrev if consortium else "GEN"
+                    instance.rfpo.po_number = RFPO.generate_po_number(abbrev)
+                    app.logger.info(
+                        "PO number %s assigned to RFPO %s on approval (API)",
+                        instance.rfpo.po_number, instance.rfpo.rfpo_id,
+                    )
 
         instance.updated_at = datetime.utcnow()
 
@@ -1097,10 +1188,12 @@ def take_approval_action(action_id):
                         entity_id=str(instance.rfpo.id),
                     )
             else:
-                # Notify next approver(s) when workflow advances to their stage/step
+                # Notify only the next active approver (matching current stage/step pointer)
                 if instance.rfpo:
                     next_actions = RFPOApprovalAction.query.filter_by(
-                        instance_id=instance.id, status="pending"
+                        instance_id=instance.id, status="pending",
+                        stage_order=instance.current_stage_order,
+                        step_order=instance.current_step_order,
                     ).all()
                     for na in next_actions:
                         next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
@@ -1191,6 +1284,14 @@ def bulk_approval_action():
                     results["errors"].append(f"{action_id}: already completed")
                     continue
 
+                # Enforce sequential ordering
+                bulk_instance = action.instance
+                if (action.stage_order != bulk_instance.current_stage_order
+                        or action.step_order != bulk_instance.current_step_order):
+                    results["failed"] += 1
+                    results["errors"].append(f"{action_id}: step not yet active")
+                    continue
+
                 action.complete_action(status, comments, None, user.record_id)
 
                 instance = action.instance
@@ -1240,9 +1341,11 @@ def bulk_approval_action():
                             context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
                         )
                 else:
-                    # Workflow advanced — notify next approver(s)
+                    # Workflow advanced — notify only the next active approver
                     next_actions = RFPOApprovalAction.query.filter_by(
-                        instance_id=inst.id, status="pending"
+                        instance_id=inst.id, status="pending",
+                        stage_order=inst.current_stage_order,
+                        step_order=inst.current_step_order,
                     ).all()
                     for na in next_actions:
                         next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
@@ -1330,54 +1433,109 @@ def submit_for_approval(rfpo_id):
         # Find the appropriate workflow template
         # Priority: team → consortium → project (falls through if workflow has no usable stages)
         workflow, applicable_stage = _find_applicable_workflow_and_stage(rfpo)
+        global_stages = _find_global_workflow_stages()
 
-        if not workflow:
+        if not workflow and not global_stages:
             return jsonify({
                 "success": False,
                 "message": "No active approval workflow found for this RFPO's team or consortium. "
                            "Please configure a workflow in the admin panel first."
             }), 400
 
-        if not applicable_stage or not applicable_stage.steps:
+        if workflow and (not applicable_stage or not applicable_stage.steps):
+            # Consortium workflow exists but has no usable stages
+            if not global_stages:
+                return jsonify({
+                    "success": False,
+                    "message": "No approval stages/steps configured for this workflow"
+                }), 400
+            # Fall through to global-only approval
+            workflow = None
+            applicable_stage = None
+
+        # Build combined stages: Global sections (by order) + consortium stage
+        # Global sections with order < consortium stage come first,
+        # then consortium stage, then remaining global sections
+        def _build_stage_data(stage, is_global=False):
+            steps_data = []
+            for step in sorted(stage.steps, key=lambda s: s.step_order):
+                steps_data.append({
+                    "step_id": step.step_id,
+                    "step_name": step.step_name,
+                    "step_order": step.step_order,
+                    "approval_type_key": step.approval_type_key,
+                    "approval_type_name": step.approval_type_name,
+                    "primary_approver_id": step.primary_approver_id,
+                    "backup_approver_id": step.backup_approver_id,
+                    "is_required": step.is_required,
+                    "timeout_days": step.timeout_days,
+                })
+            return {
+                "stage_id": stage.stage_id,
+                "stage_name": stage.stage_name,
+                "stage_order": 0,  # Will be renumbered below
+                "budget_bracket_key": stage.budget_bracket_key,
+                "budget_bracket_amount": float(stage.budget_bracket_amount or 0),
+                "requires_all_steps": stage.requires_all_steps,
+                "is_parallel": stage.is_parallel,
+                "is_global": is_global,
+                "steps": steps_data,
+            }
+
+        # Collect global stages that go BEFORE the consortium stage (Financial, US Car Internals)
+        # and AFTER (P.O. Release)
+        # Fixed order: entity stage → Financial → US Car Internal → P.O. Release
+        GLOBAL_STAGE_ORDER = {
+            "GLOBAL_FINANCIAL": 1,
+            "GLOBAL_USCAR_INTERNAL": 2,
+            "GLOBAL_PO_RELEASE": 3,
+        }
+        global_stage_data = []
+        for gs in global_stages:
+            gkey = (gs.budget_bracket_key or "").upper()
+            gsd = _build_stage_data(gs, is_global=True)
+            gsd["_sort_key"] = GLOBAL_STAGE_ORDER.get(gkey, 99)
+            global_stage_data.append(gsd)
+        global_stage_data.sort(key=lambda s: s["_sort_key"])
+        # Clean up sort key
+        for gsd in global_stage_data:
+            gsd.pop("_sort_key", None)
+
+        # Build entity (project/team/consortium) stage
+        entity_stage_data = []
+        if applicable_stage and applicable_stage.steps:
+            entity_stage_data = [_build_stage_data(applicable_stage, is_global=False)]
+
+        # Combine: entity stage → global stages (Financial → US Car Internal → PO Release)
+        stages_data = entity_stage_data + global_stage_data
+
+        # Renumber stage_order sequentially (1-based)
+        for idx, stage in enumerate(stages_data, start=1):
+            stage["stage_order"] = idx
+
+        if not stages_data:
             return jsonify({
                 "success": False,
-                "message": "No approval stages/steps configured for this workflow"
+                "message": "No approval stages with steps found for this RFPO"
             }), 400
 
-        # Build instance_data snapshot for ONLY the applicable stage
-        # (the stage whose budget bracket covers the RFPO total amount)
-        steps_data = []
-        for step in sorted(applicable_stage.steps, key=lambda s: s.step_order):
-            steps_data.append({
-                "step_id": step.step_id,
-                "step_name": step.step_name,
-                "step_order": step.step_order,
-                "approval_type_key": step.approval_type_key,
-                "approval_type_name": step.approval_type_name,
-                "primary_approver_id": step.primary_approver_id,
-                "backup_approver_id": step.backup_approver_id,
-                "is_required": step.is_required,
-                "timeout_days": step.timeout_days,
-            })
-        stages_data = [{
-            "stage_id": applicable_stage.stage_id,
-            "stage_name": applicable_stage.stage_name,
-            "stage_order": applicable_stage.stage_order,
-            "budget_bracket_key": applicable_stage.budget_bracket_key,
-            "budget_bracket_amount": float(applicable_stage.budget_bracket_amount or 0),
-            "requires_all_steps": applicable_stage.requires_all_steps,
-            "is_parallel": applicable_stage.is_parallel,
-            "steps": steps_data,
-        }]
+        # Determine which workflow to reference as template
+        template_workflow = workflow
+        if not template_workflow:
+            # If no consortium workflow, reference the global workflow
+            global_wf = RFPOApprovalWorkflow.query.filter_by(
+                workflow_type="global", is_active=True, is_template=True
+            ).first()
+            template_workflow = global_wf
 
         # Create the approval instance
         instance = RFPOApprovalInstance(
             instance_id=uuid_mod.uuid4().hex[:16],
             rfpo_id=rfpo.id,
-            template_workflow_id=workflow.id,
-            workflow_name=workflow.name,
-            workflow_version=workflow.version or "1.0",
-            consortium_id=rfpo.consortium_id or workflow.consortium_id or "",
+            template_workflow_id=template_workflow.id,
+            workflow_name=template_workflow.name,
+            workflow_version=template_workflow.version or "1.0",
+            consortium_id=rfpo.consortium_id or (workflow.consortium_id if workflow else "") or "",
             current_stage_order=1,
             current_step_order=1,
             overall_status="waiting",
@@ -1431,7 +1589,7 @@ def submit_for_approval(rfpo_id):
         )
         audit.set_details({
             "rfpo_id": rfpo.rfpo_id,
-            "workflow_name": workflow.name,
+            "workflow_name": template_workflow.name,
             "instance_id": instance.instance_id,
             "total_amount": float(rfpo.total_amount or 0),
         })
@@ -1472,7 +1630,7 @@ def submit_for_approval(rfpo_id):
 
         return jsonify({
             "success": True,
-            "message": f"RFPO submitted for approval via '{workflow.name}'",
+            "message": f"RFPO submitted for approval via '{template_workflow.name}'",
             "instance": instance.to_dict(),
             "rfpo_status": rfpo.status,
         }), 201

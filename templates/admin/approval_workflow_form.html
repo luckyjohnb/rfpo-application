@@ -39,6 +39,14 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
+                                {% if workflow_type == 'global' %}
+                                <label for="entity_id">Scope</label>
+                                <input type="text" class="form-control" value="All Consortiums (Global)" disabled>
+                                <input type="hidden" name="entity_id" value="GLOBAL">
+                                <small class="form-text text-muted">
+                                    Global workflows apply to all consortiums automatically
+                                </small>
+                                {% else %}
                                 <label for="entity_id">{{ workflow_type.title() }} *</label>
                                 <select class="form-control" id="entity_id" name="entity_id" required>
                                     <option value="">Select {{ workflow_type.title() }}</option>
@@ -64,6 +72,7 @@
                                 <small class="form-text text-muted">
                                     Select the {{ workflow_type }} this workflow applies to
                                 </small>
+                                {% endif %}
                             </div>
                         </div>
                         <div class="col-md-6">

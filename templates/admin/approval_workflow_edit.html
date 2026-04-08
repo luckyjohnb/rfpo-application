@@ -132,7 +132,11 @@
                     <div class="row">
                         <div class="col-md-8">
                             <div class="form-group">
-                                {% if workflow.workflow_type == 'team' %}
+                                {% if workflow.workflow_type == 'global' %}
+                                <label for="entity_id">Scope</label>
+                                <input type="text" class="form-control" value="All Consortiums (Global)" disabled>
+                                <input type="hidden" name="entity_id" value="GLOBAL">
+                                {% elif workflow.workflow_type == 'team' %}
                                 <label for="entity_id">Team</label>
                                 <select class="form-control" id="entity_id" name="entity_id" required>
                                     <option value="">Select Team</option>
@@ -208,12 +212,21 @@
                 </div>
                 <hr>
                 <div style="color: #495057;">
+                    {% if workflow.workflow_type == 'global' %}
+                    <strong>Sections:</strong><br>
+                    {% for stage in workflow.stages %}
+                        <span class="badge badge-info">{{ stage.stage_name }}</span>
+                    {% else %}
+                        <em>No sections configured</em>
+                    {% endfor %}
+                    {% else %}
                     <strong>Budget Coverage:</strong><br>
                     {% for stage in workflow.stages %}
                         <span class="badge badge-info">${{ "{:,.0f}".format(stage.budget_bracket_amount) }}</span>
                     {% else %}
                         <em>No budget brackets configured</em>
                     {% endfor %}
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -223,12 +236,12 @@
 <!-- Approval Stages -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h5><i class="fas fa-layer-group"></i> Approval Stages</h5>
+        <h5><i class="fas fa-layer-group"></i> {% if workflow.workflow_type == 'global' %}Approval Sections{% else %}Approval Stages{% endif %}</h5>
         <div>
             <button class="btn btn-sm btn-success" onclick="showAddStageModal()">
-                <i class="fas fa-plus"></i> Add Stage
+                <i class="fas fa-plus"></i> Add {% if workflow.workflow_type == 'global' %}Section{% else %}Stage{% endif %}
             </button>
-            {% if workflow.stages %}
+            {% if workflow.stages and workflow.workflow_type != 'global' %}
             <button class="btn btn-sm btn-outline-primary" onclick="showCloneStageModal()">
                 <i class="fas fa-clone"></i> Clone Stage
             </button>
@@ -243,9 +256,11 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="mb-0">
-                                <span class="badge badge-primary">Stage {{ stage.stage_order }}</span>
+                                <span class="badge badge-primary">{% if workflow.workflow_type == 'global' %}Section{% else %}Stage{% endif %} {{ stage.stage_order }}</span>
                                 <strong>{{ stage.stage_name or 'Stage ' + stage.stage_order|string }}</strong>
+                                {% if workflow.workflow_type != 'global' %}
                                 <span class="badge badge-success">${{ "{:,.0f}".format(stage.budget_bracket_amount) }}</span>
+                                {% endif %}
                                 {% set doc_names = stage.get_required_document_names() %}
                                 {% if doc_names %}
                                 <span class="badge badge-warning ms-1"
@@ -390,10 +405,24 @@
         <div class="modal-content">
             <form method="POST" action="{{ url_for('approval_workflow_add_stage', workflow_id=workflow.id) }}">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add Approval Stage</h5>
+                    <h5 class="modal-title">Add {% if workflow.workflow_type == 'global' %}Approval Section{% else %}Approval Stage{% endif %}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    {% if workflow.workflow_type == 'global' %}
+                    <div class="form-group">
+                        <label for="global_section_type">Approver Section *</label>
+                        <select class="form-control" id="global_section_type" name="global_section_type" required>
+                            <option value="">Select Section</option>
+                            <option value="financial">Financial Approvers</option>
+                            <option value="uscar_internal">US Car Internals</option>
+                            <option value="po_release">P.O. Release Approvers</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            Each section can only be added once per workflow
+                        </small>
+                    </div>
+                    {% else %}
                     <div class="form-group">
                         <label for="budget_bracket_key">Budget Bracket *</label>
                         <select class="form-control" id="budget_bracket_key" name="budget_bracket_key" required>
@@ -406,6 +435,7 @@
                             The budget bracket will be used as the stage name
                         </small>
                     </div>
+                    {% endif %}
 
                     <div class="form-group">
                         <label for="description">Description (optional)</label>
@@ -452,7 +482,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Add Stage</button>
+                    <button type="submit" class="btn btn-success">Add {% if workflow.workflow_type == 'global' %}Section{% else %}Stage{% endif %}</button>
                 </div>
             </form>
         </div>
@@ -721,6 +751,11 @@ function showAddStepModal(stageId, stageName) {
 }
 
 function showAddStageModal() {
+    {% if workflow.workflow_type == 'global' %}
+    // Global workflows use section types, not budget brackets — just show the modal
+    const modal = new bootstrap.Modal(document.getElementById('addStageModal'));
+    modal.show();
+    {% else %}
     // Load available budget brackets for this workflow
     fetch(`/api/approval-workflow/{{ workflow.id }}/available-budget-brackets`)
         .then(response => response.json())
@@ -753,6 +788,7 @@ function showAddStageModal() {
             console.error('Error loading budget brackets:', error);
             alert('Error loading available budget brackets.');
         });
+    {% endif %}
 }
 
 function showCloneStageModal() {

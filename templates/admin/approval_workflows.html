@@ -51,6 +51,10 @@
             <i class="fas fa-plus"></i> New Workflow
         </button>
         <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('approval_workflow_new_form', workflow_type='global') }}">
+                <i class="fas fa-globe"></i> Global Approvers Workflow
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('approval_workflow_new_form', workflow_type='consortium') }}">
                 <i class="fas fa-building"></i> Consortium Workflow
             </a></li>
@@ -66,6 +70,13 @@
 
 <!-- Workflow Type Tabs -->
 <ul class="nav nav-tabs mb-4" id="workflowTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {{ 'active' if current_workflow_type == 'global' else '' }}"
+           href="{{ url_for('approval_workflows', workflow_type='global') }}" role="tab">
+            <i class="fas fa-globe"></i> Global Approvers
+            <span class="badge bg-secondary tab-badge">{{ workflow_counts.global }}</span>
+        </a>
+    </li>
     <li class="nav-item" role="presentation">
         <a class="nav-link {{ 'active' if current_workflow_type == 'consortium' else '' }}"
            href="{{ url_for('approval_workflows', workflow_type='consortium') }}" role="tab">

@@ -5332,9 +5332,9 @@ Southfield, MI  48075""",
     @app.route("/approval-workflows/<workflow_type>")
     @login_required
     def approval_workflows(workflow_type="consortium"):
-        """List RFPO approval workflows by type (consortium, team, project)"""
+        """List RFPO approval workflows by type (consortium, team, project, global)"""
         # Validate workflow type
-        if workflow_type not in ["consortium", "team", "project"]:
+        if workflow_type not in ["consortium", "team", "project", "global"]:
             workflow_type = "consortium"
 
         workflows = (
@@ -5385,6 +5385,9 @@ Southfield, MI  48075""",
                         workflow.consortium_name = (
                             consortium.name if consortium else consortium_ids[0]
                         )
+            elif workflow_type == "global":
+                workflow.entity_name = "All Consortiums"
+                workflow.entity_abbrev = "GLOBAL"
 
             # Count usage statistics
             all_instances = RFPOApprovalInstance.query.filter_by(
@@ -5418,6 +5421,9 @@ Southfield, MI  48075""",
 
         # Get counts for each workflow type for tabs
         workflow_counts = {
+            "global": RFPOApprovalWorkflow.query.filter_by(
+                workflow_type="global", is_template=True
+            ).count(),
             "consortium": RFPOApprovalWorkflow.query.filter_by(
                 workflow_type="consortium", is_template=True
             ).count(),
@@ -5442,7 +5448,7 @@ Southfield, MI  48075""",
     def approval_workflow_new_form(workflow_type="consortium"):
         """Show form for creating new approval workflow"""
         # Validate workflow type
-        if workflow_type not in ["consortium", "team", "project"]:
+        if workflow_type not in ["consortium", "team", "project", "global"]:
             workflow_type = "consortium"
 
         # Get entities based on workflow type
@@ -5452,6 +5458,8 @@ Southfield, MI  48075""",
             entities = Team.query.filter_by(active=True).all()
         elif workflow_type == "project":
             entities = Project.query.filter_by(active=True).all()
+        elif workflow_type == "global":
+            entities = []  # Global workflows don't need an entity
 
         return render_template(
             "admin/approval_workflow_form.html",
@@ -5476,7 +5484,7 @@ Southfield, MI  48075""",
             workflow_type = request.form.get("workflow_type", "consortium")
 
             # Validate workflow type
-            if workflow_type not in ["consortium", "team", "project"]:
+            if workflow_type not in ["consortium", "team", "project", "global"]:
                 flash("❌ Invalid workflow type.", "error")
                 return redirect(url_for("approval_workflows"))
 
@@ -5502,6 +5510,7 @@ Southfield, MI  48075""",
                 workflow.team_id = int(request.form.get("entity_id"))
             elif workflow_type == "project":
                 workflow.project_id = request.form.get("entity_id")
+            # Global workflows don't need entity association
 
             # If marking as active, deactivate others for this entity
             if workflow.is_active:
@@ -5548,6 +5557,7 @@ Southfield, MI  48075""",
                     workflow.team_id = int(team_val) if team_val else None
                 elif workflow.workflow_type == "project":
                     workflow.project_id = request.form.get("entity_id")
+                # Global workflows don't need entity association
 
                 # Handle activation
                 new_active_status = bool(request.form.get("is_active"))
@@ -5616,19 +5626,43 @@ Southfield, MI  48075""",
             # Auto-generate stage ID
             stage_id = generate_next_id(RFPOApprovalStage, "stage_id", "STG-", 8)
 
-            # Get budget bracket info (case-insensitive type + robust parsing)
-            bracket_key = request.form.get("budget_bracket_key")
-            bracket_item = List.get_item_ci("RFPO_BRACK", bracket_key)
-            bracket_amount = (
-                _parse_budget_amount(bracket_item.value) if bracket_item else 0.00
-            )
+            if workflow.workflow_type == "global":
+                # Global workflows use section types instead of budget brackets
+                section_type = request.form.get("global_section_type")
+                GLOBAL_SECTIONS = {
+                    "financial": "Financial Approvers",
+                    "uscar_internal": "US Car Internals",
+                    "po_release": "P.O. Release Approvers",
+                }
+                if section_type not in GLOBAL_SECTIONS:
+                    flash("❌ Invalid global section type.", "error")
+                    return redirect(url_for("approval_workflow_edit", id=workflow_id))
 
-            # Generate stage name from budget bracket
-            stage_name = (
-                f"Up to ${bracket_amount:,.0f}"
-                if bracket_amount > 0
-                else f"Budget Bracket {bracket_key}"
-            )
+                # Check if this section type already exists in the workflow
+                existing = RFPOApprovalStage.query.filter_by(
+                    workflow_id=workflow.id, budget_bracket_key=f"GLOBAL_{section_type.upper()}"
+                ).first()
+                if existing:
+                    flash(f"❌ Section '{GLOBAL_SECTIONS[section_type]}' already exists in this workflow.", "error")
+                    return redirect(url_for("approval_workflow_edit", id=workflow_id))
+
+                stage_name = GLOBAL_SECTIONS[section_type]
+                bracket_key = f"GLOBAL_{section_type.upper()}"
+                bracket_amount = 0.00
+            else:
+                # Get budget bracket info (case-insensitive type + robust parsing)
+                bracket_key = request.form.get("budget_bracket_key")
+                bracket_item = List.get_item_ci("RFPO_BRACK", bracket_key)
+                bracket_amount = (
+                    _parse_budget_amount(bracket_item.value) if bracket_item else 0.00
+                )
+
+                # Generate stage name from budget bracket
+                stage_name = (
+                    f"Up to ${bracket_amount:,.0f}"
+                    if bracket_amount > 0
+                    else f"Budget Bracket {bracket_key}"
+                )
 
             stage = RFPOApprovalStage(
                 stage_id=stage_id,

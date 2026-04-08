@@ -1546,6 +1546,11 @@ class RFPOApprovalWorkflow(db.Model):
             db.session.query(RFPOApprovalWorkflow).filter_by(
                 project_id=self.project_id, workflow_type="project", is_template=True
             ).update({"is_active": False})
+        elif self.workflow_type == "global":
+            # Deactivate all other global workflows
+            db.session.query(RFPOApprovalWorkflow).filter_by(
+                workflow_type="global", is_template=True
+            ).update({"is_active": False})
 
         # Activate this workflow
         self.is_active = True
@@ -1579,6 +1584,8 @@ class RFPOApprovalWorkflow(db.Model):
         elif self.workflow_type == "project":
             project = Project.query.filter_by(project_id=self.project_id).first()
             return project.name if project else self.project_id
+        elif self.workflow_type == "global":
+            return "All Consortiums"
         return "Unknown"
 
     def get_entity_identifier(self):
@@ -1589,6 +1596,8 @@ class RFPOApprovalWorkflow(db.Model):
             return str(self.team_id)
         elif self.workflow_type == "project":
             return self.project_id
+        elif self.workflow_type == "global":
+            return "GLOBAL"
         return "Unknown"
 
     def to_dict(self):

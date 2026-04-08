@@ -860,6 +860,34 @@ def create_user_app():
 
     # ─── PDF Download Route ───────────────────────────────────────────
 
+    @app.route("/api/rfpos/<int:rfpo_id>/pdf-snapshot")
+    def api_rfpo_pdf_snapshot(rfpo_id):
+        """Proxy the PDF snapshot from the API server (binary stream)."""
+        if "auth_token" not in session:
+            return jsonify({"success": False, "message": "Not authenticated"}), 401
+
+        import requests as _req
+        api_url = f"{API_BASE_URL}/rfpos/{rfpo_id}/pdf-snapshot"
+        headers = {"Authorization": f"Bearer {session['auth_token']}"}
+        resp = _req.get(api_url, headers=headers, timeout=30)
+
+        if resp.status_code != 200:
+            try:
+                return jsonify(resp.json()), resp.status_code
+            except Exception:
+                return jsonify({"success": False, "message": "PDF snapshot not available"}), resp.status_code
+
+        from flask import Response as FlaskResponse
+        return FlaskResponse(
+            resp.content,
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": resp.headers.get(
+                    "Content-Disposition", f'inline; filename="PO_SNAPSHOT_{rfpo_id}.pdf"'
+                )
+            },
+        )
+
     @app.route("/rfpos/<int:rfpo_id>/download-pdf", methods=["GET"])
     def rfpo_download_pdf(rfpo_id):
         """Redirect to preview page with print mode enabled."""

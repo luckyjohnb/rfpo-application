@@ -22,6 +22,13 @@
            id="generatePoBtn">
             <i class="fas fa-file-pdf"></i> Generate PO
         </a>
+        {% if rfpo.pdf_snapshot_path %}
+        <a href="{{ url_for('rfpo_pdf_snapshot', rfpo_id=rfpo.id) }}"
+           class="btn btn-sm btn-outline-secondary" target="_blank"
+           title="View the PDF frozen at submission time">
+            <i class="fas fa-file-archive"></i> Submitted PDF
+        </a>
+        {% endif %}
         {% if active_instance %}
         <a href="{{ url_for('approval_instance_view', id=active_instance.id) }}"
            class="btn btn-sm btn-info" title="View active approval">

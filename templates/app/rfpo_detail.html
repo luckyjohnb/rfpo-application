@@ -32,6 +32,9 @@
         <a href="/rfpos/{{ rfpo_id }}/preview?print=1" target="_blank" class="btn btn-outline-success me-2" title="Download PDF">
             <i class="fas fa-file-pdf"></i> Download PDF
         </a>
+        <a id="pdfSnapshotBtn" href="#" target="_blank" class="btn btn-outline-secondary me-2" title="View the PDF frozen at submission time" style="display: none;">
+            <i class="fas fa-file-archive"></i> Submitted PDF
+        </a>
         <a href="/rfpos" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Back to List
         </a>
@@ -558,6 +561,15 @@
         if (isAdmin && rfpo.status === 'Pending Approval') {
             const withdrawBtn = document.getElementById('withdrawApprovalBtn');
             if (withdrawBtn) withdrawBtn.style.display = 'inline-block';
+        }
+
+        // Show Submitted PDF button if snapshot exists
+        if (rfpo.pdf_snapshot_path) {
+            const snapshotBtn = document.getElementById('pdfSnapshotBtn');
+            if (snapshotBtn) {
+                snapshotBtn.href = `/api/rfpos/${rfpo.id}/pdf-snapshot`;
+                snapshotBtn.style.display = 'inline-block';
+            }
         }
 
         // Load files into Files card

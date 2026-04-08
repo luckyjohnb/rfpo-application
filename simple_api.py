@@ -1273,60 +1273,68 @@ def take_approval_action(action_id):
 
         db.session.commit()
 
-        # Send email notifications (non-blocking)
+        # Collect notification data and email tasks before returning.
+        # In-app notifications are fast DB inserts (synchronous).
+        # Emails are sent in a background thread to avoid blocking the
+        # response — ACS/SMTP calls can take several seconds each.
+        email_tasks = []  # list of (email, name, rfpo_id_str, subject, db_id, ctx)
         try:
-            from email_service import send_approval_notification
+            # Snapshot values we need (before leaving request context)
+            _overall_status = instance.overall_status
+            _rfpo_id_str = instance.rfpo.rfpo_id if instance.rfpo else None
+            _rfpo_db_id = instance.rfpo.id if instance.rfpo else None
+            _rfpo_ctx = (
+                {'rfpo_id': instance.rfpo.id, 'project_id': instance.rfpo.project_id,
+                 'consortium_id': instance.rfpo.consortium_id, 'team_id': instance.rfpo.team_id}
+                if instance.rfpo else {}
+            )
+
             # Notify requestor if workflow completed
-            if instance.overall_status in ("approved", "refused") and instance.rfpo:
+            if _overall_status in ("approved", "refused") and instance.rfpo:
                 requestor = User.query.filter_by(
                     record_id=instance.rfpo.created_by
                 ).first() if instance.rfpo.created_by else None
                 if requestor and requestor.email:
-                    send_approval_notification(
+                    email_tasks.append((
                         requestor.email, requestor.get_display_name(),
-                        instance.rfpo.rfpo_id, f"RFPO {instance.overall_status.title()}",
-                        rfpo_db_id=instance.rfpo.id,
-                        context={'rfpo_id': instance.rfpo.id, 'project_id': instance.rfpo.project_id, 'consortium_id': instance.rfpo.consortium_id, 'team_id': instance.rfpo.team_id},
-                    )
+                        _rfpo_id_str, f"RFPO {_overall_status.title()}",
+                        _rfpo_db_id, _rfpo_ctx,
+                    ))
                 # In-app notification for requestor
                 if requestor:
                     _create_notification(
                         user_id=requestor.id,
                         notif_type="rfpo_status",
-                        title=f"RFPO {instance.overall_status.title()}",
-                        message=f"RFPO {instance.rfpo.rfpo_id} has been {instance.overall_status}.",
-                        link=f"/rfpos/{instance.rfpo.id}",
+                        title=f"RFPO {_overall_status.title()}",
+                        message=f"RFPO {_rfpo_id_str} has been {_overall_status}.",
+                        link=f"/rfpos/{_rfpo_db_id}",
                         entity_type="rfpo",
-                        entity_id=str(instance.rfpo.id),
+                        entity_id=str(_rfpo_db_id),
                     )
                 # If refused, also notify remaining pending approvers so they
                 # know the RFPO has been terminated and can clear their queues.
-                if instance.overall_status == "refused" and instance.rfpo:
+                if _overall_status == "refused" and instance.rfpo:
                     remaining = RFPOApprovalAction.query.filter_by(
                         instance_id=instance.id, status="pending",
                     ).all()
                     for ra in remaining:
                         peer = User.query.filter_by(record_id=ra.approver_id, active=True).first()
                         if peer and peer.email:
-                            try:
-                                send_approval_notification(
-                                    peer.email, peer.get_display_name(),
-                                    instance.rfpo.rfpo_id,
-                                    "RFPO Refused — No Action Required",
-                                    rfpo_db_id=instance.rfpo.id,
-                                    context={'rfpo_id': instance.rfpo.id, 'project_id': instance.rfpo.project_id, 'consortium_id': instance.rfpo.consortium_id, 'team_id': instance.rfpo.team_id},
-                                )
-                            except Exception:
-                                pass
+                            email_tasks.append((
+                                peer.email, peer.get_display_name(),
+                                _rfpo_id_str,
+                                "RFPO Refused — No Action Required",
+                                _rfpo_db_id, _rfpo_ctx,
+                            ))
                         if peer:
                             _create_notification(
                                 user_id=peer.id,
                                 notif_type="rfpo_status",
                                 title="RFPO Refused",
-                                message=f"RFPO {instance.rfpo.rfpo_id} has been refused. No action is required.",
-                                link=f"/rfpos/{instance.rfpo.id}",
+                                message=f"RFPO {_rfpo_id_str} has been refused. No action is required.",
+                                link=f"/rfpos/{_rfpo_db_id}",
                                 entity_type="rfpo",
-                                entity_id=str(instance.rfpo.id),
+                                entity_id=str(_rfpo_db_id),
                             )
             else:
                 # Notify the next active approver(s)
@@ -1347,50 +1355,68 @@ def take_approval_action(action_id):
                     for na in next_actions:
                         next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
                         if next_approver:
-                            # Email notification
-                            try:
-                                send_approval_notification(
-                                    next_approver.email,
-                                    next_approver.get_display_name(),
-                                    instance.rfpo.rfpo_id,
-                                    na.step_name or "Approval Required",
-                                    rfpo_db_id=instance.rfpo.id,
-                                    context={'rfpo_id': instance.rfpo.id, 'project_id': instance.rfpo.project_id, 'consortium_id': instance.rfpo.consortium_id, 'team_id': instance.rfpo.team_id},
-                                )
-                            except Exception as adv_email_err:
-                                app.logger.warning(
-                                    "Stage-advance email to %s failed: %s",
-                                    next_approver.email, adv_email_err,
-                                )
+                            email_tasks.append((
+                                next_approver.email,
+                                next_approver.get_display_name(),
+                                _rfpo_id_str,
+                                na.step_name or "Approval Required",
+                                _rfpo_db_id, _rfpo_ctx,
+                            ))
                             # In-app notification
                             _create_notification(
                                 user_id=next_approver.id,
                                 notif_type="approval_request",
                                 title="Approval Step Ready",
-                                message=f"RFPO {instance.rfpo.rfpo_id} is ready for your review ({na.step_name}).",
-                                link=f"/rfpos/{instance.rfpo.id}",
+                                message=f"RFPO {_rfpo_id_str} is ready for your review ({na.step_name}).",
+                                link=f"/rfpos/{_rfpo_db_id}",
                                 entity_type="rfpo",
-                                entity_id=str(instance.rfpo.id),
+                                entity_id=str(_rfpo_db_id),
                             )
             db.session.commit()  # persist notifications
-        except Exception as email_err:
-            app.logger.warning(f"Email notification failed: {email_err}")
+        except Exception as notif_err:
+            app.logger.warning(f"Notification setup failed: {notif_err}")
 
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Action {status} successfully",
-                "action": {
-                    "action_id": action.action_id,
-                    "status": action.status,
-                    "completed_at": (
-                        action.completed_at.isoformat() if action.completed_at else None
-                    ),
-                },
-                "instance_status": instance.overall_status,
-                "rfpo_status": instance.rfpo.status if instance.rfpo else None,
-            }
-        )
+        # Build the response first, then fire emails in background
+        response_data = {
+            "success": True,
+            "message": f"Action {status} successfully",
+            "action": {
+                "action_id": action.action_id,
+                "status": action.status,
+                "completed_at": (
+                    action.completed_at.isoformat() if action.completed_at else None
+                ),
+            },
+            "instance_status": instance.overall_status,
+            "rfpo_status": instance.rfpo.status if instance.rfpo else None,
+        }
+
+        # Fire email notifications in a background thread so the API
+        # returns immediately.  Each task is a tuple of plain values
+        # (no ORM objects) so it's safe outside the request context.
+        if email_tasks:
+            def _send_emails(tasks):
+                try:
+                    from email_service import send_approval_notification
+                    for email, name, rfpo_id_str, subj, db_id, ctx in tasks:
+                        try:
+                            send_approval_notification(
+                                email, name, rfpo_id_str, subj,
+                                rfpo_db_id=db_id, context=ctx,
+                            )
+                        except Exception as e:
+                            logging.getLogger(__name__).warning(
+                                "Background email to %s failed: %s", email, e,
+                            )
+                except Exception as e:
+                    logging.getLogger(__name__).warning(
+                        "Background email thread error: %s", e,
+                    )
+
+            t = threading.Thread(target=_send_emails, args=(email_tasks,), daemon=True)
+            t.start()
+
+        return jsonify(response_data)
 
     except Exception as e:
         db.session.rollback()
@@ -1471,9 +1497,9 @@ def bulk_approval_action():
 
         db.session.commit()
 
-        # Send notifications for all affected instances (non-blocking)
+        # Collect email tasks, then fire in background thread.
+        bulk_email_tasks = []
         try:
-            from email_service import send_approval_notification
             processed_instances = set()
             for action_id in action_ids:
                 act = RFPOApprovalAction.query.filter_by(action_id=action_id).first()
@@ -1483,18 +1509,21 @@ def bulk_approval_action():
                 inst = act.instance
                 if not inst or not inst.rfpo:
                     continue
+                _rfpo_id_str = inst.rfpo.rfpo_id
+                _rfpo_db_id = inst.rfpo.id
+                _rfpo_ctx = {'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id,
+                             'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id}
                 if inst.overall_status in ("approved", "refused"):
                     # Workflow completed — notify requestor
                     requestor = User.query.filter_by(
                         record_id=inst.rfpo.created_by
                     ).first() if inst.rfpo.created_by else None
                     if requestor and requestor.email:
-                        send_approval_notification(
+                        bulk_email_tasks.append((
                             requestor.email, requestor.get_display_name(),
-                            inst.rfpo.rfpo_id, f"RFPO {inst.overall_status.title()}",
-                            rfpo_db_id=inst.rfpo.id,
-                            context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
-                        )
+                            _rfpo_id_str, f"RFPO {inst.overall_status.title()}",
+                            _rfpo_db_id, _rfpo_ctx,
+                        ))
                     # If refused, also notify remaining pending approvers
                     if inst.overall_status == "refused":
                         remaining = RFPOApprovalAction.query.filter_by(
@@ -1503,16 +1532,12 @@ def bulk_approval_action():
                         for ra in remaining:
                             peer = User.query.filter_by(record_id=ra.approver_id, active=True).first()
                             if peer and peer.email:
-                                try:
-                                    send_approval_notification(
-                                        peer.email, peer.get_display_name(),
-                                        inst.rfpo.rfpo_id,
-                                        "RFPO Refused — No Action Required",
-                                        rfpo_db_id=inst.rfpo.id,
-                                        context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
-                                    )
-                                except Exception:
-                                    pass
+                                bulk_email_tasks.append((
+                                    peer.email, peer.get_display_name(),
+                                    _rfpo_id_str,
+                                    "RFPO Refused — No Action Required",
+                                    _rfpo_db_id, _rfpo_ctx,
+                                ))
                 else:
                     # Workflow advanced — notify next active approver(s)
                     bulk_notif_stage = inst.get_current_stage()
@@ -1530,15 +1555,36 @@ def bulk_approval_action():
                     for na in next_actions:
                         next_approver = User.query.filter_by(record_id=na.approver_id, active=True).first()
                         if next_approver and next_approver.email:
-                            send_approval_notification(
+                            bulk_email_tasks.append((
                                 next_approver.email, next_approver.get_display_name(),
-                                inst.rfpo.rfpo_id, na.step_name or "Approval Required",
-                                rfpo_db_id=inst.rfpo.id,
-                                context={'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id, 'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id},
-                            )
-            db.session.commit()  # persist any notification records
+                                _rfpo_id_str, na.step_name or "Approval Required",
+                                _rfpo_db_id, _rfpo_ctx,
+                            ))
         except Exception as notif_err:
-            app.logger.warning(f"Bulk approval notifications failed: {notif_err}")
+            app.logger.warning(f"Bulk approval notification setup failed: {notif_err}")
+
+        # Fire emails in background thread
+        if bulk_email_tasks:
+            def _send_bulk_emails(tasks):
+                try:
+                    from email_service import send_approval_notification
+                    for email, name, rfpo_id_str, subj, db_id, ctx in tasks:
+                        try:
+                            send_approval_notification(
+                                email, name, rfpo_id_str, subj,
+                                rfpo_db_id=db_id, context=ctx,
+                            )
+                        except Exception as e:
+                            logging.getLogger(__name__).warning(
+                                "Background bulk email to %s failed: %s", email, e,
+                            )
+                except Exception as e:
+                    logging.getLogger(__name__).warning(
+                        "Background bulk email thread error: %s", e,
+                    )
+
+            t = threading.Thread(target=_send_bulk_emails, args=(bulk_email_tasks,), daemon=True)
+            t.start()
 
         return jsonify({
             "success": True,

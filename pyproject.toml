@@ -1,0 +1,53 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Fast unit tests (no DB)",
+    "integration: Tests with database",
+    "api: API endpoint tests",
+    "admin: Admin panel tests",
+    "auth: Authentication tests",
+    "models: Model tests",
+    "email: Email service tests",
+    "pdf: PDF generation tests",
+    "approval: Approval workflow tests",
+    "smoke: Post-deploy smoke tests",
+]
+addopts = "-v --tb=short -q"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "*.pyc",
+    "migrations/*",
+    "backups/*",
+    "azure/*",
+    "docs/*",
+    "config/*",
+    "venv/*",
+    ".venv/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 75
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "pass",
+]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 120

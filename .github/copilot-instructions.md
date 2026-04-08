@@ -181,6 +181,47 @@ Users have multi-layer permissions:
 - Store as: `{uuid}_{secure_filename(original)}`
 - Track in `UploadedFile` model with RFPO association
 
+### Email Notifications — Background Thread Pattern
+**CRITICAL:** All email sending in API endpoints MUST be non-blocking. The User App proxy has a 10-second timeout (`make_api_request`), and ACS/SMTP calls take 2-3+ seconds each. Synchronous emails cause "API service unavailable" errors when multiple recipients are involved.
+
+**Required pattern:**
+1. Complete ALL database operations (status changes, audit logs, in-app notifications) and `db.session.commit()` first
+2. Collect email tasks as a list of plain-value tuples (no ORM objects) — e.g. `(email, name, subject, ...)`
+3. Return the JSON response immediately
+4. Fire emails in a daemon background thread using the collected tuples
+
+```python
+# 1. Commit DB changes first
+db.session.commit()
+
+# 2. Collect email tasks as plain values (safe outside request context)
+email_tasks = []
+email_tasks.append((recipient.email, recipient.get_display_name(), rfpo_id_str, subject, db_id, ctx_dict))
+
+# 3. Build and return response
+response_data = {"success": True, "message": "..."}
+
+# 4. Fire emails in background thread
+if email_tasks:
+    def _send_emails(tasks):
+        from email_service import send_approval_notification
+        for email, name, rfpo_id_str, subj, db_id, ctx in tasks:
+            try:
+                send_approval_notification(email, name, rfpo_id_str, subj, rfpo_db_id=db_id, context=ctx)
+            except Exception as e:
+                logging.getLogger(__name__).warning("Background email to %s failed: %s", email, e)
+
+    threading.Thread(target=_send_emails, args=(email_tasks,), daemon=True).start()
+
+return jsonify(response_data)
+```
+
+**Key rules:**
+- NEVER call `send_approval_notification()` or any email function synchronously in an API route
+- NEVER pass SQLAlchemy ORM objects to background threads — snapshot all values as strings/ints/dicts first
+- In-app notifications (`_create_notification()`) are fast DB inserts and stay synchronous
+- `import threading` is already available at module level in `simple_api.py`
+
 ## Common Tasks
 
 ### Add new database model:

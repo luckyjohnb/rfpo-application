@@ -1,7 +1,7 @@
 # RFPO Application — Test Strategy & GitHub Alignment Plan
 
 > **Status:** Draft — Reviewed & approved by DevOps/QA architect agent. Ready for implementation.
-> **Date:** April 7, 2026
+> **Date:** April 7, 2026 (updated April 8, 2026)
 
 ---
 
@@ -180,36 +180,37 @@ markers =
 | 1 | test_models.py | 25 | All 21 models: to_dict(), JSON get/set, relationships, defaults |
 | 2 | test_api_auth.py | 12 | Login success/fail, JWT token, expired token, permission checks |
 | 3 | test_api_rfpos.py | 15 | RFPO CRUD, line items, total calculations, soft delete |
-| 4 | test_api_approvals.py | 10 | Workflow create/assign, approve/reject, stage progression |
+| 4 | test_api_approvals.py | 20 | Workflow create/assign, approve/reject, stage progression, parallel-within-stage, sequential ordering, amount bracket fallthrough, refusal notification, resubmit, approver+backup auth restriction |
 | 5 | test_utils.py | 8 | generate_next_id, format_response, validate_required_fields |
+| 6 | test_pdf_snapshot.py | 8 | PDF snapshot freeze at submission, snapshot retrieval, snapshot content matches RFPO state, missing consortium/project graceful failure |
 
 #### P1 — Should Have (Block Deploy)
 | # | Test File | Cases | What It Validates |
 |---|-----------|-------|-------------------|
-| 6 | test_api_consortiums.py | 8 | CRUD, uniqueness (name/abbrev), uppercase enforcement |
-| 7 | test_api_projects.py | 8 | CRUD, ref format validation, consortium association |
-| 8 | test_api_teams.py | 8 | CRUD, abbrev uniqueness, consortium linkage |
-| 9 | test_api_vendors.py | 6 | CRUD, vendor sites cascade |
-| 10 | test_email_service.py | 10 | Send, retry, queue, ACS fallback, logging |
-| 11 | test_api_users.py | 6 | Profile, permissions, first-login detection |
-| 12 | test_env_config.py | 6 | URL validation, secret key checks, config singleton |
+| 7 | test_api_consortiums.py | 8 | CRUD, uniqueness (name/abbrev), uppercase enforcement |
+| 8 | test_api_projects.py | 8 | CRUD, ref format validation, consortium association |
+| 9 | test_api_teams.py | 8 | CRUD, abbrev uniqueness, consortium linkage |
+| 10 | test_api_vendors.py | 6 | CRUD, vendor sites cascade |
+| 11 | test_email_service.py | 12 | Send, retry, queue, ACS fallback, logging, parallel-refusal notification |
+| 12 | test_api_users.py | 6 | Profile, permissions, first-login detection |
+| 13 | test_env_config.py | 6 | URL validation, secret key checks, config singleton |
 
 #### P2 — Nice to Have (Warn Only)
 | # | Test File | Cases | What It Validates |
 |---|-----------|-------|-------------------|
-| 13 | test_pdf_generator.py | 5 | PDF overlay, template combine, positioning |
-| 14 | test_api_notifications.py | 4 | List, count, mark read |
-| 15 | test_api_files.py | 4 | Upload, download, association |
-| 16 | test_admin_auth.py | 5 | Login, session, flask-login |
-| 17 | test_admin_crud.py | 20 | Entity CRUD operations (expanded per review) |
-| 18 | test_error_handlers.py | 4 | Exception types, status codes |
+| 14 | test_pdf_generator.py | 5 | PDF overlay, template combine, positioning |
+| 15 | test_api_notifications.py | 4 | List, count, mark read |
+| 16 | test_api_files.py | 4 | Upload, download, association |
+| 17 | test_admin_auth.py | 5 | Login, session, flask-login |
+| 18 | test_admin_crud.py | 20 | Entity CRUD operations (expanded per review) |
+| 19 | test_error_handlers.py | 4 | Exception types, status codes |
 
 #### Smoke (Post-Deploy)
 | # | Test File | Cases | What It Validates |
 |---|-----------|-------|-------------------|
-| 19 | test_health_checks.py | 5 | API health, admin login page, user app load, DB connectivity |
+| 20 | test_health_checks.py | 5 | API health, admin login page, user app load, DB connectivity |
 
-**Total: ~165 test cases across 19 files**
+**Total: ~183 test cases across 20 files**
 
 ---
 
@@ -282,6 +283,22 @@ smoke          # pytest tests/smoke/ against live URLs
 4. Admin test count increased from 10→20 cases
 5. Phase 4/5 reordered: GitHub standards before CI pipeline
 6. Added: security tests, performance budgets, coverage publishing in future phases
+
+### April 8 Updates (post-plan changes)
+
+Today's 10 commits added features not accounted for in the original plan:
+
+| Feature | Impact | Test Change |
+|---------|--------|-------------|
+| Sequential approval ordering (entity→Financial→USCAR→PO Release) | P0 | +3 cases in test_api_approvals |
+| Parallel-within-stage approval | P0 | +3 cases in test_api_approvals |
+| Approver + backup restriction (security) | P0 | +2 cases in test_api_approvals |
+| Amount bracket fallthrough | P0 | +2 cases in test_api_approvals |
+| Refusal notification to parallel approvers | P1 | +2 cases in test_email_service |
+| PDF snapshot freeze at submission | P0 (promoted from P2) | New file: test_pdf_snapshot.py (+8 cases) |
+| PDF snapshot retrieval endpoint | P0 | Covered in test_pdf_snapshot.py |
+
+**Net impact:** +18 cases, +1 test file, test_pdf_snapshot promoted from P2 to P0.
 
 ---
 

@@ -2684,14 +2684,18 @@ def create_rfpo():
         project = Project.query.filter_by(project_id=data["project_id"]).first()
         project_ref = project.ref if project else "PROJ"
 
-        # Count existing RFPOs for this project and date (retry to avoid duplicates)
-        for _attempt in range(5):
-            existing_count = RFPO.query.filter(
-                RFPO.rfpo_id.like(f"RFPO-{project_ref}-%{date_str}%")
-            ).count()
-            rfpo_id = f"RFPO-{project_ref}-{date_str}-N{existing_count + 1:02d}"
-            if not RFPO.query.filter_by(rfpo_id=rfpo_id).first():
-                break
+        # Find max sequence number for this project and date to avoid collisions
+        import re as _re
+        like_pattern = f"RFPO-{project_ref}-{date_str}-N%"
+        existing_rfpos = RFPO.query.filter(
+            RFPO.rfpo_id.like(like_pattern)
+        ).with_entities(RFPO.rfpo_id).all()
+        max_seq = 0
+        for (rid,) in existing_rfpos:
+            match = _re.search(r'-N(\d+)$', rid)
+            if match:
+                max_seq = max(max_seq, int(match.group(1)))
+        rfpo_id = f"RFPO-{project_ref}-{date_str}-N{max_seq + 1:02d}"
 
         # Create RFPO
         rfpo = RFPO(

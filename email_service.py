@@ -1151,6 +1151,90 @@ class EmailService:
             context=context,
         )
 
+    def send_approval_reminder(
+        self,
+        user_email: str,
+        user_name: str,
+        rfpo_id: str,
+        step_name: str,
+        due_date: str,
+        days_overdue: int,
+        reminder_number: int,
+        max_reminders: int,
+        rfpo_db_id: Optional[int] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Send approval reminder email for overdue actions"""
+        user_app_base = (
+            os.environ.get("USER_APP_URL")
+            or os.environ.get("APP_URL")
+            or "http://localhost:5000"
+        )
+        rfpo_link = f"{user_app_base}/rfpos/{rfpo_db_id}" if rfpo_db_id else f"{user_app_base}/rfpos"
+        subject = f"Reminder {reminder_number}/{max_reminders}: RFPO Approval Overdue - {rfpo_id}"
+        template_data = {
+            "user_name": user_name,
+            "rfpo_id": rfpo_id,
+            "step_name": step_name,
+            "due_date": due_date,
+            "days_overdue": days_overdue,
+            "reminder_number": reminder_number,
+            "max_reminders": max_reminders,
+            "rfpo_url": rfpo_link,
+            "subject": subject,
+        }
+        return self.send_templated_email(
+            to_emails=[user_email],
+            template_name="approval_reminder",
+            template_data=template_data,
+            subject=subject,
+            context=context,
+        )
+
+    def send_escalation_notification(
+        self,
+        user_email: str,
+        user_name: str,
+        rfpo_id: str,
+        step_name: str,
+        due_date: str,
+        days_overdue: int,
+        reminders_sent: int,
+        is_backup: bool = False,
+        primary_approver_name: str = "",
+        backup_approver_name: str = "",
+        rfpo_db_id: Optional[int] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Send escalation notification email"""
+        user_app_base = (
+            os.environ.get("USER_APP_URL")
+            or os.environ.get("APP_URL")
+            or "http://localhost:5000"
+        )
+        rfpo_link = f"{user_app_base}/rfpos/{rfpo_db_id}" if rfpo_db_id else f"{user_app_base}/rfpos"
+        subject = f"ESCALATED: RFPO Approval Overdue - {rfpo_id}"
+        template_data = {
+            "user_name": user_name,
+            "rfpo_id": rfpo_id,
+            "step_name": step_name,
+            "due_date": due_date,
+            "days_overdue": days_overdue,
+            "reminders_sent": reminders_sent,
+            "is_backup": is_backup,
+            "primary_approver_name": primary_approver_name,
+            "backup_approver_name": backup_approver_name,
+            "rfpo_url": rfpo_link,
+            "subject": subject,
+        }
+        return self.send_templated_email(
+            to_emails=[user_email],
+            template_name="approval_escalation",
+            template_data=template_data,
+            subject=subject,
+            context=context,
+        )
+
     def send_user_added_to_project_email(
         self,
         user_email: str,
@@ -1283,3 +1367,48 @@ def send_user_added_to_project_email(
 def test_email_connection() -> bool:
     """Test email service connection"""
     return email_service.test_connection()
+
+
+def send_approval_reminder(
+    user_email: str,
+    user_name: str,
+    rfpo_id: str,
+    step_name: str,
+    due_date: str,
+    days_overdue: int,
+    reminder_number: int,
+    max_reminders: int,
+    rfpo_db_id: Optional[int] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Send approval reminder email for overdue actions"""
+    return email_service.send_approval_reminder(
+        user_email, user_name, rfpo_id, step_name,
+        due_date, days_overdue, reminder_number, max_reminders,
+        rfpo_db_id=rfpo_db_id, context=context,
+    )
+
+
+def send_escalation_notification(
+    user_email: str,
+    user_name: str,
+    rfpo_id: str,
+    step_name: str,
+    due_date: str,
+    days_overdue: int,
+    reminders_sent: int,
+    is_backup: bool = False,
+    primary_approver_name: str = "",
+    backup_approver_name: str = "",
+    rfpo_db_id: Optional[int] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Send escalation notification email"""
+    return email_service.send_escalation_notification(
+        user_email, user_name, rfpo_id, step_name,
+        due_date, days_overdue, reminders_sent,
+        is_backup=is_backup,
+        primary_approver_name=primary_approver_name,
+        backup_approver_name=backup_approver_name,
+        rfpo_db_id=rfpo_db_id, context=context,
+    )

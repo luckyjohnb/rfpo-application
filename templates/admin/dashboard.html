@@ -73,6 +73,34 @@
             });
         }
     });
+
+    function triggerReminders() {
+        const btn = document.getElementById('btnTriggerReminders');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+        fetch('{{ url_for("trigger_reminders") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const sent = data.reminders.reminders_sent || 0;
+                const esc = data.escalations.escalations_triggered || 0;
+                alert('Reminders sent: ' + sent + ', Escalations: ' + esc);
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bell"></i> Trigger Reminders';
+            }
+        })
+        .catch(err => {
+            alert('Request failed: ' + err);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-bell"></i> Trigger Reminders';
+        });
+    }
 </script>
 {% endblock %}
 
@@ -209,6 +237,38 @@
         </div>
     </div>
 
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-warning border-4" style="border-color: #e67e22 !important;">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-uppercase mb-1" style="color: #e67e22;">Overdue Approvals</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.overdue_approvals }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-exclamation-triangle fa-2x" style="color: #f0d0a0;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-danger border-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-danger text-uppercase mb-1">Escalated</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ stats.escalated_approvals }}</div>
+                    </div>
+                    <div class="ms-2">
+                        <i class="fas fa-arrow-circle-up fa-2x" style="color: #f0c0c0;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {# Hidden per request: Total Files summary card #}
     {#
     <div class="col-xl-3 col-md-6 mb-4">
@@ -300,6 +360,66 @@
         </div>
     </div>
 </div>
+
+<!-- Overdue Approvals Table -->
+{% if overdue_actions %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 text-warning">&#x26A0;&#xFE0F; Overdue Approvals</h6>
+                <button class="btn btn-sm btn-outline-warning" id="btnTriggerReminders" onclick="triggerReminders()">
+                    <i class="fas fa-bell"></i> Trigger Reminders
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th scope="col">RFPO ID</th>
+                                <th scope="col">Approver</th>
+                                <th scope="col">Step</th>
+                                <th scope="col">Days Overdue</th>
+                                <th scope="col">Reminders</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for action in overdue_actions %}
+                            {% set rfpo = action.instance.rfpo if action.instance else None %}
+                            {% set days_overdue = ((now - action.due_date).days) if action.due_date else 0 %}
+                            <tr class="table-row-clickable" role="button" tabindex="0"
+                                {% if rfpo %}
+                                onclick="window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'"
+                                onkeydown="if(event.key==='Enter'||event.keyCode===13||event.keyCode===32){window.location='{{ url_for('rfpo_edit', id=rfpo.id) }}'}"
+                                {% endif %}>
+                                <td><small><strong>{{ rfpo.rfpo_id if rfpo else 'N/A' }}</strong></small></td>
+                                <td><small>{{ action.approver_name }}</small></td>
+                                <td><small>{{ action.step_name }}</small></td>
+                                <td>
+                                    <span class="badge {% if days_overdue > 10 %}bg-danger{% elif days_overdue > 5 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                        {{ days_overdue }}d
+                                    </span>
+                                </td>
+                                <td><small>{{ action.reminder_count or 0 }}</small></td>
+                                <td>
+                                    {% if action.is_escalated %}
+                                        <span class="badge bg-danger">Escalated</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Overdue</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Recent Activity -->
 <div class="row">

@@ -1891,6 +1891,9 @@ def create_app():
     def dashboard():
         """Main dashboard — optimised to batch count queries."""
         from sqlalchemy import func, case
+        from datetime import datetime as dt
+
+        now = dt.utcnow()
 
         # Batch simple counts in a single round-trip
         basic_counts = db.session.query(
@@ -1918,6 +1921,35 @@ def create_app():
             RFPOApprovalWorkflow.is_active.is_(True),
         ).first()
 
+        # Overdue + escalated counts in a single batched query
+        overdue_row = db.session.query(
+            func.count(RFPOApprovalAction.id),
+            func.coalesce(func.sum(case(
+                (RFPOApprovalAction.is_escalated.is_(True), 1), else_=0
+            )), 0),
+        ).join(RFPOApprovalInstance).filter(
+            RFPOApprovalAction.status == "pending",
+            RFPOApprovalAction.due_date < now,
+            RFPOApprovalInstance.overall_status == "waiting",
+        ).first()
+        overdue_count = overdue_row[0] if overdue_row else 0
+        escalated_count = int(overdue_row[1]) if overdue_row else 0
+
+        # Top 5 overdue actions with explicit RFPO join to avoid N+1
+        overdue_actions = (
+            db.session.query(RFPOApprovalAction)
+            .join(RFPOApprovalInstance)
+            .join(RFPO, RFPOApprovalInstance.rfpo_id == RFPO.id)
+            .filter(
+                RFPOApprovalAction.status == "pending",
+                RFPOApprovalAction.due_date < now,
+                RFPOApprovalInstance.overall_status == "waiting",
+            )
+            .order_by(RFPOApprovalAction.due_date.asc())
+            .limit(5)
+            .all()
+        )
+
         stats = {
             "consortiums": basic_counts.consortiums or 0,
             "teams": basic_counts.teams or 0,
@@ -1934,6 +1966,8 @@ def create_app():
             "pending_approvals": RFPOApprovalAction.query.filter_by(
                 status="pending"
             ).count(),
+            "overdue_approvals": overdue_count,
+            "escalated_approvals": escalated_count,
         }
 
         recent_rfpos = RFPO.query.order_by(desc(RFPO.created_at)).limit(5).all()
@@ -1946,9 +1980,27 @@ def create_app():
             stats=stats,
             recent_rfpos=recent_rfpos,
             recent_files=recent_files,
+            overdue_actions=overdue_actions,
+            now=now,
         )
 
     # Consortium routes
+    @app.route("/trigger-reminders", methods=["POST"])
+    @login_required
+    def trigger_reminders():
+        """Manually trigger the approval reminder and escalation service."""
+        try:
+            from reminder_service import run_reminders, run_escalations
+            reminder_summary = run_reminders(app)
+            escalation_summary = run_escalations(app)
+            return jsonify({
+                "success": True,
+                "reminders": reminder_summary,
+                "escalations": escalation_summary,
+            })
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     @app.route("/consortiums")
     @login_required
     def consortiums():

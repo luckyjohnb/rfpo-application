@@ -470,6 +470,73 @@ resource userContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
+// RFPO Approval Reminder Job (daily 8 AM ET)
+resource reminderJob 'Microsoft.App/jobs@2024-03-01' = {
+  name: 'rfpo-reminder-job'
+  location: location
+  tags: tags
+  properties: {
+    environmentId: containerAppsEnvironment.id
+    configuration: {
+      triggerType: 'Schedule'
+      scheduleTriggerConfig: {
+        cronExpression: '0 8 * * *'
+        parallelism: 1
+        replicaCompletionCount: 1
+      }
+      replicaTimeout: 600
+      replicaRetryLimit: 1
+      registries: [
+        {
+          server: acr.properties.loginServer
+          username: acr.listCredentials().username
+          passwordSecretRef: 'acr-password'
+        }
+      ]
+      secrets: [
+        {
+          name: 'acr-password'
+          value: acr.listCredentials().passwords[0].value
+        }
+        {
+          name: 'database-url'
+          value: 'postgresql://rfpoadmin:RfpoSecure123!@${postgresServer.properties.fullyQualifiedDomainName}:5432/rfpodb?sslmode=require'
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          image: '${acr.properties.loginServer}/rfpo-reminder:latest'
+          name: 'rfpo-reminder'
+          env: [
+            {
+              name: 'DATABASE_URL'
+              secretRef: 'database-url'
+            }
+            {
+              name: 'CRON_TZ'
+              value: 'America/New_York'
+            }
+            {
+              name: 'REMINDER_REPEAT_DAYS'
+              value: '2'
+            }
+            {
+              name: 'MAX_REMINDERS_BEFORE_ESCALATION'
+              value: '3'
+            }
+          ]
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+        }
+      ]
+    }
+  }
+}
+
 // Outputs
 output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name
@@ -479,4 +546,5 @@ output containerAppsEnvironmentName string = containerAppsEnvironment.name
 output apiUrl string = 'https://${apiContainerApp.properties.configuration.ingress.fqdn}'
 output adminUrl string = 'https://${adminContainerApp.properties.configuration.ingress.fqdn}'
 output userUrl string = 'https://${userContainerApp.properties.configuration.ingress.fqdn}'
+output reminderJobName string = reminderJob.name
 output resourceGroupName string = resourceGroup().name

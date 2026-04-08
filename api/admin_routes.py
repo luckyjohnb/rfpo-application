@@ -11,7 +11,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models import db, User, Consortium, Project, Vendor, VendorSite, List
+from models import db, User, Consortium, Project, Vendor, VendorSite, List, RFPOApprovalAction, RFPOApprovalInstance, RFPO
 from utils import require_auth, require_admin, error_response
 
 admin_api = Blueprint("admin_api", __name__, url_prefix="/api/admin")
@@ -279,5 +279,60 @@ def list_configuration_lists():
                 ],
             }
         )
+    except Exception as e:
+        return error_response(e)
+
+
+# Approval Reminder Routes
+@admin_api.route("/approval-reminders", methods=["GET"])
+@require_auth
+@require_admin
+def list_overdue_approvals():
+    """List overdue pending approval actions with reminder status"""
+    try:
+        now = datetime.utcnow()
+        overdue_actions = (
+            db.session.query(RFPOApprovalAction)
+            .join(RFPOApprovalInstance)
+            .join(RFPO, RFPOApprovalInstance.rfpo_id == RFPO.id)
+            .filter(
+                RFPOApprovalAction.status == "pending",
+                RFPOApprovalAction.due_date < now,
+                RFPOApprovalInstance.overall_status == "waiting",
+            )
+            .order_by(RFPOApprovalAction.due_date.asc())
+            .all()
+        )
+
+        results = []
+        for action in overdue_actions:
+            days_overdue = (now - action.due_date).days if action.due_date else 0
+            rfpo = action.instance.rfpo if action.instance else None
+            results.append({
+                "id": action.id,
+                "action_id": action.action_id,
+                "rfpo_id": rfpo.rfpo_id if rfpo else None,
+                "rfpo_db_id": rfpo.id if rfpo else None,
+                "approver_name": action.approver_name,
+                "step_name": action.step_name,
+                "stage_name": action.stage_name,
+                "due_date": action.due_date.isoformat() if action.due_date else None,
+                "days_overdue": days_overdue,
+                "reminder_count": action.reminder_count or 0,
+                "last_reminder_sent_utc": (
+                    action.last_reminder_sent_utc.isoformat()
+                    if action.last_reminder_sent_utc else None
+                ),
+                "is_escalated": action.is_escalated,
+                "escalated_at": (
+                    action.escalated_at.isoformat() if action.escalated_at else None
+                ),
+            })
+
+        return jsonify({
+            "success": True,
+            "overdue_actions": results,
+            "total": len(results),
+        })
     except Exception as e:
         return error_response(e)

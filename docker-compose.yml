@@ -74,6 +74,23 @@ services:
       start_period: 15s
       retries: 5
 
+  # RFPO Reminder Job (manual run only)
+  rfpo-reminder:
+    container_name: rfpo-reminder
+    build:
+      context: .
+      dockerfile: Dockerfile.reminder
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite:////app/instance/rfpo_admin.db
+    volumes:
+      - ./instance:/app/instance
+    networks:
+      - rfpo-network
+    profiles:
+      - reminder
+
 networks:
   rfpo-network:
     driver: bridge

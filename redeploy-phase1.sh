@@ -124,10 +124,11 @@ acr_build() {
     echo -e "${GREEN}✅ ${image} build complete${NC}"
 }
 
-# API, Admin, User builds
+# API, Admin, User, Reminder builds
 acr_build rfpo-api Dockerfile.api
 acr_build rfpo-admin Dockerfile.admin
 acr_build rfpo-user Dockerfile.user-app
+acr_build rfpo-reminder Dockerfile.reminder
 
 # Restart Container Apps to pull new images (pin by digest) and inject APP_BUILD_SHA
 echo ""

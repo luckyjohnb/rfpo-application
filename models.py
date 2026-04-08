@@ -2184,6 +2184,10 @@ class RFPOApprovalAction(db.Model):
     escalated_at = db.Column(db.DateTime)  # When action was escalated
     escalation_reason = db.Column(db.String(255))  # Reason for escalation
 
+    # Reminder tracking
+    last_reminder_sent_utc = db.Column(db.DateTime, nullable=True)  # Last reminder email sent
+    reminder_count = db.Column(db.Integer, nullable=False, default=0)  # Number of reminders sent
+
     # Audit fields
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
@@ -2264,6 +2268,12 @@ class RFPOApprovalAction(db.Model):
                 self.escalated_at.isoformat() if self.escalated_at else None
             ),
             "escalation_reason": self.escalation_reason,
+            "last_reminder_sent_utc": (
+                self.last_reminder_sent_utc.isoformat()
+                if self.last_reminder_sent_utc
+                else None
+            ),
+            "reminder_count": self.reminder_count or 0,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "is_pending": self.is_pending(),

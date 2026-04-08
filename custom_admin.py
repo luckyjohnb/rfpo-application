@@ -1257,20 +1257,26 @@ def create_app():
         return workflows[0][1] if workflows else None
 
     def determine_rfpo_stage(rfpo, workflow):
-        """Determine which approval stage an RFPO falls into based on its total amount"""
+        """Determine which approval stage an RFPO falls into based on its total amount.
+
+        Returns the first stage whose bracket covers the RFPO amount,
+        or None if the amount exceeds all configured brackets.
+        """
         if not rfpo.total_amount or not workflow:
             return None
+
+        rfpo_total = float(rfpo.total_amount)
 
         # Get all stages for this workflow, sorted by budget bracket amount
         stages = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount))
 
         # Find the appropriate stage based on RFPO total amount
         for stage in stages:
-            if float(rfpo.total_amount) <= float(stage.budget_bracket_amount):
+            if rfpo_total <= float(stage.budget_bracket_amount):
                 return stage
 
-        # If RFPO amount exceeds all brackets, use the highest bracket stage
-        return stages[-1] if stages else None
+        # Amount exceeds all brackets — no valid stage
+        return None
 
     def validate_rfpo_for_approval(rfpo):
         """Validate an RFPO against all applicable sequential workflow phases"""

@@ -249,17 +249,20 @@ def _find_applicable_workflow_and_stage(rfpo):
         if not workflow.stages:
             continue
 
-        # Find applicable stage based on amount
+        # Find applicable stage based on amount — only match if the RFPO
+        # total actually fits within a defined bracket.  When the amount
+        # exceeds every bracket in this workflow we must NOT silently fall
+        # back to the highest bracket; instead skip this workflow so the
+        # next priority level (team → consortium) gets a chance.
         applicable_stage = None
         for stage in sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0)):
             if rfpo_total <= float(stage.budget_bracket_amount or 0):
                 applicable_stage = stage
                 break
-        if not applicable_stage:
-            applicable_stage = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0))[-1]
 
         if applicable_stage and applicable_stage.steps:
             return workflow, applicable_stage
+        # Amount exceeds all brackets for this workflow — fall through to next
 
     return None, None
 

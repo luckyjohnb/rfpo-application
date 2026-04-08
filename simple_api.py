@@ -131,6 +131,32 @@ def _error_response(e, status_code=500):
     return jsonify({"success": False, "message": "An internal error occurred"}), status_code
 
 
+def _get_authorized_approver_ids(instance, action):
+    """Return the set of user record_ids authorized to execute this action.
+
+    Authorized users are:
+    - The designated primary approver (action.approver_id)
+    - The backup approver from the workflow step snapshot (if any)
+
+    Admins/super-admins are NOT authorized unless they are the designated approver or backup.
+    """
+    authorized = {action.approver_id}
+    try:
+        data = instance.get_instance_data()
+        for stage in data.get("stages", []):
+            if stage.get("stage_order") == action.stage_order:
+                for step in stage.get("steps", []):
+                    if step.get("step_order") == action.step_order:
+                        backup_id = step.get("backup_approver_id")
+                        if backup_id:
+                            authorized.add(backup_id)
+                        break
+                break
+    except Exception:
+        pass  # If snapshot is corrupt, only primary approver is authorized
+    return authorized
+
+
 def _find_applicable_workflow_and_stage(rfpo):
     """Find the best applicable workflow + stage for an RFPO.
 
@@ -1054,11 +1080,18 @@ def take_approval_action(action_id):
                 404,
             )
 
-        # Check if user is authorized to take this action
-        if action.approver_id != user.record_id and not user.is_super_admin():
+        # Check if user is authorized (primary approver or backup only)
+        authorized_ids = _get_authorized_approver_ids(action.instance, action)
+        if user.record_id not in authorized_ids:
+            app.logger.warning(
+                "SECURITY: User %s (record_id=%s) attempted to approve action %s "
+                "(authorized: %s)",
+                user.email, user.record_id, action_id, authorized_ids,
+            )
             return (
                 jsonify(
-                    {"success": False, "message": "Not authorized to take this action"}
+                    {"success": False, "message": "Not authorized to take this action. "
+                     "Only the designated approver or backup approver can act."}
                 ),
                 403,
             )
@@ -1304,7 +1337,8 @@ def bulk_approval_action():
                     results["failed"] += 1
                     results["errors"].append(f"{action_id}: not found")
                     continue
-                if action.approver_id != user.record_id and not user.is_super_admin():
+                bulk_authorized = _get_authorized_approver_ids(action.instance, action)
+                if user.record_id not in bulk_authorized:
                     results["failed"] += 1
                     results["errors"].append(f"{action_id}: not authorized")
                     continue

@@ -157,6 +157,61 @@ def _get_authorized_approver_ids(instance, action):
     return authorized
 
 
+def _generate_and_save_pdf_snapshot(rfpo):
+    """Generate a PO PDF and save it as an immutable snapshot tied to the RFPO.
+
+    Called at submission time so the PDF is frozen regardless of future data changes.
+    Returns the relative path to the saved file, or None on failure.
+    """
+    try:
+        from pdf_generator import RFPOPDFGenerator
+        import uuid as _uuid
+
+        consortium = Consortium.query.filter_by(consort_id=rfpo.consortium_id).first()
+        project = Project.query.filter_by(project_id=rfpo.project_id).first()
+        vendor = Vendor.query.get(rfpo.vendor_id) if rfpo.vendor_id else None
+        vendor_site = None
+        if rfpo.vendor_site_id:
+            try:
+                vendor_site = VendorSite.query.get(int(rfpo.vendor_site_id))
+            except (ValueError, TypeError):
+                pass
+
+        if not consortium or not project:
+            app.logger.warning(
+                "Cannot generate PDF snapshot for RFPO %s: missing consortium or project",
+                rfpo.rfpo_id,
+            )
+            return None
+
+        from models import PDFPositioning
+        positioning_config = PDFPositioning.query.filter_by(
+            consortium_id=consortium.consort_id,
+            template_name="po_template",
+            active=True,
+        ).first()
+
+        gen = RFPOPDFGenerator(positioning_config=positioning_config)
+        pdf_buffer = gen.generate_po_pdf(rfpo, consortium, project, vendor, vendor_site)
+
+        # Save to uploads/snapshots/<uuid>_<rfpo_id>.pdf
+        snapshots_dir = os.path.join(app.root_path, "uploads", "snapshots")
+        os.makedirs(snapshots_dir, exist_ok=True)
+
+        filename = f"{_uuid.uuid4().hex[:12]}_{rfpo.rfpo_id}.pdf"
+        filepath = os.path.join(snapshots_dir, filename)
+        with open(filepath, "wb") as f:
+            f.write(pdf_buffer.getvalue())
+
+        relative_path = f"uploads/snapshots/{filename}"
+        app.logger.info("PDF snapshot saved for RFPO %s: %s", rfpo.rfpo_id, relative_path)
+        return relative_path
+
+    except Exception as e:
+        app.logger.error("PDF snapshot generation failed for RFPO %s: %s", rfpo.rfpo_id, e)
+        return None
+
+
 def _find_applicable_workflow_and_stage(rfpo):
     """Find the best applicable workflow + stage for an RFPO.
 
@@ -1700,6 +1755,11 @@ def submit_for_approval(rfpo_id):
         rfpo.updated_by = user.get_display_name()
         rfpo.updated_at = datetime.utcnow()
 
+        # Generate and save PDF snapshot at submission time
+        snapshot_path = _generate_and_save_pdf_snapshot(rfpo)
+        if snapshot_path:
+            rfpo.pdf_snapshot_path = snapshot_path
+
         # Audit trail
         audit = AuditLog(
             user_id=user.id,
@@ -1759,6 +1819,30 @@ def submit_for_approval(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/rfpos/<int:rfpo_id>/pdf-snapshot")
+@require_auth
+def get_pdf_snapshot(rfpo_id):
+    """Serve the immutable PDF snapshot generated at submission time."""
+    try:
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        if not rfpo.pdf_snapshot_path:
+            return jsonify({"success": False, "message": "No PDF snapshot available for this RFPO"}), 404
+
+        filepath = os.path.join(app.root_path, rfpo.pdf_snapshot_path)
+        if not os.path.isfile(filepath):
+            return jsonify({"success": False, "message": "PDF snapshot file not found on disk"}), 404
+
+        from flask import send_file
+        return send_file(
+            filepath,
+            mimetype="application/pdf",
+            download_name=f"PO_SNAPSHOT_{rfpo.rfpo_id}.pdf",
+            as_attachment=False,
+        )
+    except Exception as e:
         return _error_response(e)
 
 

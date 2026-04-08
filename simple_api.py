@@ -1826,45 +1826,63 @@ def submit_for_approval(rfpo_id):
         })
         db.session.add(audit)
 
+        # In-app notifications (fast DB inserts — keep synchronous)
+        first_stage = stages_data[0] if stages_data else None
+        email_tasks = []
+        if first_stage:
+            for step_data in first_stage["steps"]:
+                approver = User.query.filter_by(
+                    record_id=step_data["primary_approver_id"], active=True
+                ).first()
+                if approver:
+                    _create_notification(
+                        user_id=approver.id,
+                        notif_type="approval_request",
+                        title="New Approval Required",
+                        message=f"RFPO {rfpo.rfpo_id} ({rfpo.title}) needs your approval.",
+                        link=f"/rfpos/{rfpo.id}",
+                        entity_type="rfpo",
+                        entity_id=str(rfpo.id),
+                    )
+                    if approver.email:
+                        email_tasks.append((
+                            approver.email,
+                            approver.get_display_name(),
+                            rfpo.rfpo_id,
+                            step_data["approval_type_name"],
+                            rfpo.id,
+                            {'rfpo_id': rfpo.id, 'project_id': rfpo.project_id,
+                             'consortium_id': rfpo.consortium_id, 'team_id': rfpo.team_id},
+                        ))
+
         db.session.commit()
 
-        # Send email notifications to first approver(s) (non-blocking)
-        try:
-            from email_service import send_approval_notification
-            first_stage = stages_data[0] if stages_data else None
-            if first_stage:
-                for step_data in first_stage["steps"]:
-                    approver = User.query.filter_by(
-                        record_id=step_data["primary_approver_id"], active=True
-                    ).first()
-                    if approver and approver.email:
-                        send_approval_notification(
-                            approver.email, approver.get_display_name(),
-                            rfpo.rfpo_id, step_data["approval_type_name"],
-                            rfpo_db_id=rfpo.id,
-                            context={'rfpo_id': rfpo.id, 'project_id': rfpo.project_id, 'consortium_id': rfpo.consortium_id, 'team_id': rfpo.team_id},
-                        )
-                    # In-app notification for approver
-                    if approver:
-                        _create_notification(
-                            user_id=approver.id,
-                            notif_type="approval_request",
-                            title="New Approval Required",
-                            message=f"RFPO {rfpo.rfpo_id} ({rfpo.title}) needs your approval.",
-                            link=f"/rfpos/{rfpo.id}",
-                            entity_type="rfpo",
-                            entity_id=str(rfpo.id),
-                        )
-            db.session.commit()  # persist notifications
-        except Exception as email_err:
-            app.logger.warning(f"Email notification failed: {email_err}")
-
-        return jsonify({
+        # Build response before firing background emails
+        response_data = {
             "success": True,
             "message": f"RFPO submitted for approval via '{template_workflow.name}'",
             "instance": instance.to_dict(),
             "rfpo_status": rfpo.status,
-        }), 201
+        }
+
+        # Fire emails in background thread (non-blocking)
+        if email_tasks:
+            def _send_submit_emails(tasks):
+                from email_service import send_approval_notification
+                for email, name, rfpo_id_str, approval_type, db_id, ctx in tasks:
+                    try:
+                        send_approval_notification(
+                            email, name, rfpo_id_str, approval_type,
+                            rfpo_db_id=db_id, context=ctx,
+                        )
+                    except Exception as e:
+                        logging.getLogger(__name__).warning(
+                            "Background email to %s failed: %s", email, e
+                        )
+
+            threading.Thread(target=_send_submit_emails, args=(email_tasks,), daemon=True).start()
+
+        return jsonify(response_data), 201
 
     except Exception as e:
         db.session.rollback()

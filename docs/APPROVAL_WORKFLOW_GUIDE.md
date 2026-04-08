@@ -104,9 +104,15 @@ Each approver has a designated **backup approver**. If the primary approver is o
 
 ## What Happens When Someone Refuses?
 
-If any approver at any stage refuses the RFPO, the process stops immediately. The RFPO is marked as **refused**, and the submitter is notified with the reason. No downstream approvers are bothered.
+If any approver at any stage refuses the RFPO, the process stops immediately. The RFPO is marked as **Refused**, and the submitter is notified with the reason. No downstream approvers are bothered.
 
-The submitter can then revise the RFPO and resubmit, which starts the approval process over from the beginning.
+### Can a Refused RFPO Be Resubmitted?
+
+**Yes.** A refused RFPO is unlocked for editing — the submitter (or an admin) can revise line items, amounts, vendors, or any other details. Once corrected, an admin can resubmit the RFPO for approval, which:
+
+1. Deletes the old refused workflow instance
+2. Creates a brand-new workflow starting from the beginning (entity approval → global approval)
+3. All approvers must review the revised RFPO fresh — no prior approvals carry over
 
 ---
 

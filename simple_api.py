@@ -2798,14 +2798,19 @@ def get_rfpo(rfpo_id):
         # Check permissions - user must have access to this RFPO
         user = request.current_user
         if not user.is_super_admin():
-            # Check if user has access to this RFPO via team, project, or approval
+            # Check if user has access to this RFPO via requestor, team, project, or approval
             has_access = False
 
-            # Check team access
-            user_teams = user.get_teams()
-            team_ids = [team.id for team in user_teams]
-            if rfpo.team_id and rfpo.team_id in team_ids:
+            # Check if user is the requestor (creator) of this RFPO
+            if rfpo.requestor_id == user.record_id:
                 has_access = True
+
+            # Check team access
+            if not has_access:
+                user_teams = user.get_teams()
+                team_ids = [team.id for team in user_teams]
+                if rfpo.team_id and rfpo.team_id in team_ids:
+                    has_access = True
 
             # Check project access
             if not has_access:
@@ -2983,10 +2988,16 @@ def update_rfpo(rfpo_id):
         user = request.current_user
         if not user.is_super_admin():
             has_access = False
-            user_teams = user.get_teams()
-            team_ids = [team.id for team in user_teams]
-            if rfpo.team_id in team_ids:
+
+            # Requestor can always edit their own RFPO
+            if rfpo.requestor_id == user.record_id:
                 has_access = True
+
+            if not has_access:
+                user_teams = user.get_teams()
+                team_ids = [team.id for team in user_teams]
+                if rfpo.team_id in team_ids:
+                    has_access = True
 
             if not has_access:
                 all_projects = Project.query.all()
@@ -3111,11 +3122,13 @@ def add_line_item(rfpo_id):
                 "message": f"Cannot modify line items while RFPO status is '{rfpo.status}'"
             }), 400
 
-        # Only RFPO_ADMIN or GOD can add line items
+        # Requestor or admin can add line items
         user = request.current_user
         user_perms = user.get_permissions() or []
-        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
-            return jsonify({"success": False, "message": "Admin access required"}), 403
+        is_admin = 'RFPO_ADMIN' in user_perms or 'GOD' in user_perms
+        is_requestor = rfpo.requestor_id == user.record_id
+        if not is_admin and not is_requestor:
+            return jsonify({"success": False, "message": "Access denied"}), 403
 
         # Get next line number
         max_line = (
@@ -3201,11 +3214,13 @@ def delete_line_item(rfpo_id, line_item_id):
                 400,
             )
 
-        # Only RFPO_ADMIN or GOD can delete line items
+        # Requestor or admin can delete line items
         user = request.current_user
         user_perms = user.get_permissions() or []
-        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
-            return jsonify({"success": False, "message": "Admin access required"}), 403
+        is_admin = 'RFPO_ADMIN' in user_perms or 'GOD' in user_perms
+        is_requestor = rfpo.requestor_id == user.record_id
+        if not is_admin and not is_requestor:
+            return jsonify({"success": False, "message": "Access denied"}), 403
 
         db.session.delete(line_item)
 
@@ -3273,11 +3288,13 @@ def update_line_item(rfpo_id, line_item_id):
                 400,
             )
 
-        # Only RFPO_ADMIN or GOD can update line items
+        # Requestor or admin can update line items
         user = request.current_user
         user_perms = user.get_permissions() or []
-        if 'RFPO_ADMIN' not in user_perms and 'GOD' not in user_perms:
-            return jsonify({"success": False, "message": "Admin access required"}), 403
+        is_admin = 'RFPO_ADMIN' in user_perms or 'GOD' in user_perms
+        is_requestor = rfpo.requestor_id == user.record_id
+        if not is_admin and not is_requestor:
+            return jsonify({"success": False, "message": "Access denied"}), 403
 
         data = request.get_json()
 

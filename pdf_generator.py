@@ -137,15 +137,17 @@ class RFPOPDFGenerator:
         # Horizontal rule
         y = height - 90
         c.setStrokeColorRGB(0, 0, 0)
+        c.setLineWidth(0.75)
         c.line(margin_left, y, margin_right, y)
-        y -= 18
+        y -= 20
 
         # --- INFO TABLE ---
-        label_x = margin_left
-        value_x = margin_left + 145
-        right_label_x = margin_left + 310
-        right_value_x = margin_left + 385
-        row_height = 14
+        label_x = margin_left + 2
+        value_x = margin_left + 160
+        right_label_x = margin_left + 320
+        right_value_x = margin_left + 410
+        row_height = 13
+        line_spacing = 12  # spacing for multi-line values
         font_size = 9
 
         def draw_row(label, value, label2=None, value2=None):
@@ -153,26 +155,23 @@ class RFPOPDFGenerator:
             c.setFont("Helvetica-Bold", font_size)
             c.drawString(label_x, y, label)
             c.setFont("Helvetica", font_size)
-            # Handle multi-line values
+
+            # Right column (always drawn at top of row)
+            if label2:
+                c.setFont("Helvetica-Bold", font_size)
+                c.drawRightString(right_label_x + 80, y, label2)
+                c.setFont("Helvetica", font_size)
+                if value2:
+                    c.drawString(right_value_x, y, str(value2))
+
+            # Left column value (handles multi-line)
             if value:
                 lines = str(value).split("\n")
                 for i, line in enumerate(lines):
-                    c.drawString(value_x, y - (i * row_height), line.strip())
-                if label2:
-                    c.setFont("Helvetica-Bold", font_size)
-                    c.drawString(right_label_x, y, label2)
-                    c.setFont("Helvetica", font_size)
-                    if value2:
-                        c.drawString(right_value_x, y, str(value2))
+                    c.drawString(value_x, y - (i * line_spacing), line.strip())
                 line_count = max(1, len(lines))
-                y -= row_height * line_count
+                y -= row_height + (line_spacing * (line_count - 1))
             else:
-                if label2:
-                    c.setFont("Helvetica-Bold", font_size)
-                    c.drawString(right_label_x, y, label2)
-                    c.setFont("Helvetica", font_size)
-                    if value2:
-                        c.drawString(right_value_x, y, str(value2))
                 y -= row_height
 
         # Government Agreement Number
@@ -225,73 +224,85 @@ class RFPOPDFGenerator:
         if vendor_addr:
             # Indent address under vendor
             c.setFont("Helvetica", font_size)
-            for i, line in enumerate(vendor_addr.split("\n")):
-                c.drawString(value_x, y - (i * row_height), line.strip())
-            addr_lines = len(vendor_addr.split("\n"))
-            # Draw contact tel on same rows (right column)
+            addr_lines_list = vendor_addr.split("\n")
+            for i, line in enumerate(addr_lines_list):
+                c.drawString(value_x, y - (i * line_spacing), line.strip())
+            addr_line_count = len(addr_lines_list)
+            # Draw contact tel on same row (right column)
             if vendor_tel:
                 c.setFont("Helvetica-Bold", font_size)
-                c.drawString(right_label_x, y, "Contact Tel:")
+                c.drawRightString(right_label_x + 80, y, "Contact Tel:")
                 c.setFont("Helvetica", font_size)
                 c.drawString(right_value_x, y, vendor_tel)
-            y -= row_height * max(1, addr_lines)
+            y -= row_height + (line_spacing * (addr_line_count - 1))
         elif vendor_tel:
             draw_row("", "", "Contact Tel:", vendor_tel)
 
-        y -= 10  # spacing before line items
+        y -= 14  # spacing before line items
 
         # --- LINE ITEMS TABLE ---
-        # Header
         col_num_x = margin_left
-        col_qty_x = margin_left + 25
-        col_desc_x = margin_left + 65
-        col_unit_x = margin_right - 120
-        col_total_x = margin_right - 10
+        col_qty_x = margin_left + 30
+        col_desc_x = margin_left + 70
+        col_unit_x = margin_right - 115
+        col_total_x = margin_right
 
         c.setFont("Helvetica-Bold", 8)
         c.setStrokeColorRGB(0, 0, 0)
-        # Header row with border
-        header_top = y + 10
-        header_bottom = y - 4
+        c.setLineWidth(1.5)
+
+        # Header row with thick border
+        header_top = y + 11
+        header_bottom = y - 5
         c.rect(margin_left, header_bottom, usable_width, header_top - header_bottom)
-        c.drawString(col_num_x + 3, y, "#")
+        c.drawString(col_num_x + 4, y, "#")
         c.drawString(col_qty_x, y, "Qty")
         c.drawString(col_desc_x, y, "Description of supplies or services")
-        c.drawRightString(col_unit_x + 55, y, "Unit Price")
-        c.drawRightString(col_total_x, y, "Total Price")
-        y = header_bottom - 2
+        c.drawRightString(col_unit_x + 50, y, "Unit Price")
+        c.drawRightString(col_total_x - 4, y, "Total Price")
+
+        # Data rows start well below the header box
+        y = header_bottom - 12
+        c.setLineWidth(0.5)
 
         c.setFont("Helvetica", 8)
         items = sorted(rfpo.line_items, key=lambda x: x.line_number) if rfpo.line_items else []
-        for item in items:
-            if y < 120:  # leave room for totals
+        for idx, item in enumerate(items):
+            if y < 130:  # leave room for totals
                 break
             desc = item.description or ""
             if item.is_capital_equipment:
                 desc += " [Capital Equipment]"
             # Wrap description
-            desc_lines = self._wrap_text(desc, 55)
+            desc_lines = self._wrap_text(desc, 50)
             row_lines = max(1, len(desc_lines))
 
-            c.drawString(col_num_x + 3, y, str(item.line_number))
+            c.drawString(col_num_x + 4, y, str(item.line_number))
             c.drawString(col_qty_x, y, str(item.quantity))
             for i, dl in enumerate(desc_lines):
                 c.drawString(col_desc_x, y - (i * 11), dl)
-            c.drawRightString(col_unit_x + 55, y, f"${item.unit_price:,.2f}")
-            c.drawRightString(col_total_x, y, f"${item.total_price:,.2f}")
+            c.drawRightString(col_unit_x + 50, y, f"${item.unit_price:,.2f}")
+            c.drawRightString(col_total_x - 4, y, f"${item.total_price:,.2f}")
 
-            y -= 11 * row_lines + 3
+            y -= 11 * row_lines + 4
+
+            # Light separator between rows
+            if idx < len(items) - 1:
+                c.setStrokeColorRGB(0.8, 0.8, 0.8)
+                c.line(margin_left, y + 2, margin_right, y + 2)
+                c.setStrokeColorRGB(0, 0, 0)
 
         # --- TOTALS ---
-        y -= 8
-        c.line(col_unit_x - 10, y + 14, col_total_x, y + 14)
+        y -= 6
+        c.setLineWidth(0.75)
+        c.line(col_unit_x - 10, y + 12, col_total_x, y + 12)
 
         c.setFont("Helvetica-Bold", 9)
-        c.drawRightString(col_unit_x + 55, y, "Gross purchase order:")
+        c.drawRightString(col_unit_x + 50, y, "Gross purchase order:")
         c.setFont("Helvetica", 9)
         subtotal = rfpo.subtotal if rfpo.subtotal else 0
-        c.drawRightString(col_total_x, y, f"${subtotal:,.2f}")
-        y -= 14
+        c.drawRightString(col_total_x - 4, y, f"${subtotal:,.2f}")
+        y -= 16
 
         # Cost share
         cost_share = 0
@@ -303,21 +314,22 @@ class RFPOPDFGenerator:
         label = "Less supplier cost share:"
         if rfpo.cost_share_description:
             label += f"  ({rfpo.cost_share_description})"
-        c.drawRightString(col_unit_x + 55, y, label)
+        c.drawRightString(col_unit_x + 50, y, label)
         c.setFont("Helvetica", 9)
-        c.drawRightString(col_total_x, y, f"(${cost_share:,.2f})")
-        y -= 14
+        c.drawRightString(col_total_x - 4, y, f"(${cost_share:,.2f})")
+        y -= 16
 
-        # Net total
-        c.line(col_unit_x - 10, y + 12, col_total_x, y + 12)
+        # Net total — bold with top border
+        c.setLineWidth(1.5)
+        c.line(col_unit_x - 10, y + 14, col_total_x, y + 14)
         c.setFont("Helvetica-Bold", 10)
-        c.drawRightString(col_unit_x + 55, y, "Net purchase not to exceed:")
+        c.drawRightString(col_unit_x + 50, y, "Net purchase not to exceed:")
         total = 0
         try:
             total = rfpo.get_calculated_total_amount()
         except Exception:
             total = rfpo.total_amount or 0
-        c.drawRightString(col_total_x, y, f"${total:,.2f}")
+        c.drawRightString(col_total_x - 4, y, f"${total:,.2f}")
 
     def generate_po_pdf(self, rfpo, consortium, project, vendor=None, vendor_site=None):
         """Generate complete PO PDF with dynamic data"""

@@ -1912,6 +1912,27 @@ def get_pdf_snapshot(rfpo_id):
         return _error_response(e)
 
 
+@app.route("/api/rfpos/<int:rfpo_id>/regenerate-snapshot", methods=["POST"])
+@require_auth
+def regenerate_pdf_snapshot(rfpo_id):
+    """Regenerate the PDF snapshot for an RFPO (admin only)."""
+    try:
+        user = request.current_user
+        user_perms = user.get_permissions() or []
+        if "RFPO_ADMIN" not in user_perms and "GOD" not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
+        rfpo = RFPO.query.get_or_404(rfpo_id)
+        snapshot_path = _generate_and_save_pdf_snapshot(rfpo)
+        if snapshot_path:
+            rfpo.pdf_snapshot_path = snapshot_path
+            db.session.commit()
+            return jsonify({"success": True, "message": "PDF snapshot regenerated", "path": snapshot_path})
+        return jsonify({"success": False, "message": "Failed to generate PDF snapshot"}), 500
+    except Exception as e:
+        return _error_response(e)
+
+
 @app.route("/api/rfpos/<int:rfpo_id>/withdraw-approval", methods=["POST"])
 @require_auth
 def withdraw_approval(rfpo_id):

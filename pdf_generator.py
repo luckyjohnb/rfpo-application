@@ -108,13 +108,14 @@ class RFPOPDFGenerator:
         usable_width = margin_right - margin_left
 
         # --- HEADER ---
-        # Consortium logo (right-aligned)
+        # Consortium logo (right-aligned, matching HTML 300px img)
         logo_drawn = False
         if consortium and hasattr(consortium, "logo") and consortium.logo:
             logo_file = os.path.join("uploads", "logos", consortium.logo)
             if os.path.exists(logo_file):
                 try:
-                    c.drawImage(logo_file, margin_right - 180, height - 75, width=170, height=45, preserveAspectRatio=True)
+                    c.drawImage(logo_file, margin_right - 200, height - 78,
+                                width=190, height=50, preserveAspectRatio=True)
                     logo_drawn = True
                 except Exception:
                     pass
@@ -122,32 +123,34 @@ class RFPOPDFGenerator:
             fallback = os.path.join("static", "po_files", "uscar_logo.jpg")
             if os.path.exists(fallback):
                 try:
-                    c.drawImage(fallback, margin_right - 180, height - 75, width=170, height=45, preserveAspectRatio=True)
+                    c.drawImage(fallback, margin_right - 200, height - 78,
+                                width=190, height=50, preserveAspectRatio=True)
                 except Exception:
                     pass
 
-        # Title
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(margin_left, height - 45, "REQUEST FOR PURCHASE ORDER")
-        c.setFont("Helvetica-Bold", 18)
-        c.drawString(margin_left, height - 68, rfpo.rfpo_id)
-        c.setFont("Helvetica", 8)
-        c.drawString(margin_left, height - 80, "THIS IS NOT A PO NUMBER - you cannot use this with any vendor.")
+        # Title — matching HTML: header1 = 13px bold, header2 = 22px bold
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(margin_left, height - 42, "REQUEST FOR PURCHASE ORDER")
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(margin_left, height - 66, rfpo.rfpo_id)
+        c.setFont("Helvetica", 7.5)
+        c.drawString(margin_left, height - 78, "THIS IS NOT A PO NUMBER - you cannot use this with any vendor.")
 
-        # Horizontal rule
-        y = height - 90
+        # Horizontal rule (1pt solid, matching HTML .bar)
+        y = height - 88
         c.setStrokeColorRGB(0, 0, 0)
-        c.setLineWidth(0.75)
+        c.setLineWidth(1)
         c.line(margin_left, y, margin_right, y)
-        y -= 20
+        y -= 18
 
         # --- INFO TABLE ---
+        # Column layout:  label (left) | value | right-label | right-value
         label_x = margin_left + 2
-        value_x = margin_left + 160
-        right_label_x = margin_left + 320
-        right_value_x = margin_left + 410
-        row_height = 13
-        line_spacing = 12  # spacing for multi-line values
+        value_x = margin_left + 155          # left-column values
+        right_label_x = margin_right - 172   # right-column labels (left-aligned)
+        right_value_x = margin_right - 100   # right-column values
+        row_height = 14
+        line_spacing = 11
         font_size = 9
 
         def draw_row(label, value, label2=None, value2=None):
@@ -159,7 +162,7 @@ class RFPOPDFGenerator:
             # Right column (always drawn at top of row)
             if label2:
                 c.setFont("Helvetica-Bold", font_size)
-                c.drawRightString(right_label_x + 80, y, label2)
+                c.drawString(right_label_x, y, label2)
                 c.setFont("Helvetica", font_size)
                 if value2:
                     c.drawString(right_value_x, y, str(value2))
@@ -174,40 +177,62 @@ class RFPOPDFGenerator:
             else:
                 y -= row_height
 
+        def draw_separator():
+            """Draw a subtle row separator matching HTML table cell padding."""
+            c.setStrokeColorRGB(0.85, 0.85, 0.85)
+            c.setLineWidth(0.25)
+            c.line(label_x, y + row_height - 3, margin_right - 2, y + row_height - 3)
+            c.setStrokeColorRGB(0, 0, 0)
+
         # Government Agreement Number
-        draw_row("Government Agreement Number:", rfpo.government_agreement_number or "")
+        draw_row("Government Agreement Number:",
+                 rfpo.government_agreement_number or "\u2014")
+        draw_separator()
 
         # Project
         project_text = f"{project.name} ({project.ref})" if project else ""
         draw_row("Project:", project_text)
+        draw_separator()
 
         # Requestor + Raised date
         requestor_name = ""
+        requestor_email = ""
         if requestor:
             requestor_name = requestor.get_display_name()
+            requestor_email = getattr(requestor, "email", "") or ""
         elif rfpo.requestor_id:
             try:
                 from models import User
                 req_user = User.query.filter_by(record_id=rfpo.requestor_id).first()
                 if req_user:
                     requestor_name = req_user.get_display_name()
+                    requestor_email = req_user.email or ""
             except Exception:
                 requestor_name = rfpo.requestor_id
         raised_date = rfpo.created_at.strftime("%B %d, %Y") if rfpo.created_at else ""
-        draw_row("Requestor:", requestor_name, "Raised:", raised_date)
+        # Draw requestor name + email (multi-line left value)
+        req_display = requestor_name
+        if requestor_email:
+            req_display += f"\nEmail: {requestor_email}"
+        draw_row("Requestor:", req_display, "Raised:", raised_date)
+        draw_separator()
 
         # Invoice to
         invoice_addr = rfpo.invoice_address or ""
         if not invoice_addr and consortium and hasattr(consortium, "invoicing_address") and consortium.invoicing_address:
             invoice_addr = consortium.invoicing_address
         draw_row("Invoice to:", invoice_addr)
+        draw_separator()
 
         # Ship to name + PO Expiration Date
         expiry_date = rfpo.delivery_date.strftime("%B %d, %Y") if rfpo.delivery_date else ""
-        draw_row("Ship to name:", rfpo.shipto_name or "", "PO Expiration Date:", expiry_date)
+        draw_row("Ship to name:", rfpo.shipto_name or "\u2014",
+                 "PO Expiration Date:", expiry_date or "\u2014")
+        draw_separator()
 
         # Ship to address
-        draw_row("Ship to address:", rfpo.shipto_address or "")
+        draw_row("Ship to address:", rfpo.shipto_address or "\u2014")
+        draw_separator()
 
         # Vendor block
         vendor_name = ""
@@ -222,50 +247,53 @@ class RFPOPDFGenerator:
             vendor_tel = getattr(site, "contact_tel", "") or ""
         draw_row("Vendor:", vendor_name, "Contact:", vendor_contact)
         if vendor_addr:
-            # Indent address under vendor
+            # Vendor address continuation + Contact Tel on same row
             c.setFont("Helvetica", font_size)
             addr_lines_list = vendor_addr.split("\n")
             for i, line in enumerate(addr_lines_list):
                 c.drawString(value_x, y - (i * line_spacing), line.strip())
             addr_line_count = len(addr_lines_list)
-            # Draw contact tel on same row (right column)
             if vendor_tel:
                 c.setFont("Helvetica-Bold", font_size)
-                c.drawRightString(right_label_x + 80, y, "Contact Tel:")
+                c.drawString(right_label_x, y, "Contact Tel:")
                 c.setFont("Helvetica", font_size)
                 c.drawString(right_value_x, y, vendor_tel)
             y -= row_height + (line_spacing * (addr_line_count - 1))
         elif vendor_tel:
             draw_row("", "", "Contact Tel:", vendor_tel)
 
-        y -= 14  # spacing before line items
+        y -= 16  # spacing before line items (matching HTML &#160;<br>&#160;)
 
         # --- LINE ITEMS TABLE ---
         col_num_x = margin_left
         col_qty_x = margin_left + 30
         col_desc_x = margin_left + 70
-        col_unit_x = margin_right - 115
+        col_unit_x = margin_right - 110
         col_total_x = margin_right
 
-        c.setFont("Helvetica-Bold", 8)
         c.setStrokeColorRGB(0, 0, 0)
-        c.setLineWidth(1.5)
 
-        # Header row with thick border
-        header_top = y + 11
-        header_bottom = y - 5
-        c.rect(margin_left, header_bottom, usable_width, header_top - header_bottom)
-        c.drawString(col_num_x + 4, y, "#")
-        c.drawString(col_qty_x, y, "Qty")
-        c.drawString(col_desc_x, y, "Description of supplies or services")
-        c.drawRightString(col_unit_x + 50, y, "Unit Price")
-        c.drawRightString(col_total_x - 4, y, "Total Price")
+        # Header row — 2px solid border (matching HTML th { border: 2px solid #000 })
+        c.setLineWidth(2)
+        c.setFont("Helvetica-Bold", 8.5)
+        hdr_h = 18  # header cell height
+        hdr_top = y + 10
+        hdr_bottom = hdr_top - hdr_h
+        text_y = hdr_bottom + 5  # text baseline inside header
+        c.rect(margin_left, hdr_bottom, usable_width, hdr_h)
+        # Vertical dividers inside header
+        col_dividers = [col_qty_x - 2, col_desc_x - 2, col_unit_x - 2, col_total_x - 62]
+        for vx in col_dividers:
+            c.line(vx, hdr_top, vx, hdr_bottom)
+        c.drawString(col_num_x + 4, text_y, "#")
+        c.drawString(col_qty_x + 2, text_y, "Qty")
+        c.drawString(col_desc_x + 2, text_y, "Description of supplies or services")
+        c.drawRightString(col_total_x - 64, text_y, "Unit Price")
+        c.drawRightString(col_total_x - 4, text_y, "Total Price")
 
-        # Data rows start well below the header box
-        y = header_bottom - 12
-        c.setLineWidth(0.5)
-
-        c.setFont("Helvetica", 8)
+        # Data rows — start BELOW the header with clear gap
+        y = hdr_bottom  # cursor is now the top of the data area
+        c.setFont("Helvetica", 8.5)
         items = sorted(rfpo.line_items, key=lambda x: x.line_number) if rfpo.line_items else []
         for idx, item in enumerate(items):
             if y < 130:  # leave room for totals
@@ -273,32 +301,38 @@ class RFPOPDFGenerator:
             desc = item.description or ""
             if item.is_capital_equipment:
                 desc += " [Capital Equipment]"
-            # Wrap description
-            desc_lines = self._wrap_text(desc, 50)
+            desc_lines = self._wrap_text(desc, 48)
             row_lines = max(1, len(desc_lines))
+            cell_h = 11 * row_lines + 7  # padding top(4) + bottom(3) + text
 
-            c.drawString(col_num_x + 4, y, str(item.line_number))
-            c.drawString(col_qty_x, y, str(item.quantity))
+            row_top = y
+            row_bottom = y - cell_h
+            text_baseline = row_top - 12  # text offset from top of cell
+
+            # Cell borders — 1px solid #ccc (matching HTML td { border: 1px solid #ccc })
+            c.setStrokeColorRGB(0.8, 0.8, 0.8)
+            c.setLineWidth(0.5)
+            c.rect(margin_left, row_bottom, usable_width, cell_h)
+            for vx in col_dividers:
+                c.line(vx, row_top, vx, row_bottom)
+            c.setStrokeColorRGB(0, 0, 0)
+
+            # Cell text
+            c.drawString(col_num_x + 4, text_baseline, str(item.line_number))
+            c.drawString(col_qty_x + 2, text_baseline, str(item.quantity))
             for i, dl in enumerate(desc_lines):
-                c.drawString(col_desc_x, y - (i * 11), dl)
-            c.drawRightString(col_unit_x + 50, y, f"${item.unit_price:,.2f}")
-            c.drawRightString(col_total_x - 4, y, f"${item.total_price:,.2f}")
+                c.drawString(col_desc_x + 2, text_baseline - (i * 11), dl)
+            c.drawRightString(col_total_x - 64, text_baseline, f"${item.unit_price:,.2f}")
+            c.drawRightString(col_total_x - 4, text_baseline, f"${item.total_price:,.2f}")
 
-            y -= 11 * row_lines + 4
-
-            # Light separator between rows
-            if idx < len(items) - 1:
-                c.setStrokeColorRGB(0.8, 0.8, 0.8)
-                c.line(margin_left, y + 2, margin_right, y + 2)
-                c.setStrokeColorRGB(0, 0, 0)
+            y = row_bottom  # next row starts at bottom of this row
 
         # --- TOTALS ---
-        y -= 6
-        c.setLineWidth(0.75)
-        c.line(col_unit_x - 10, y + 12, col_total_x, y + 12)
+        y -= 8
 
+        # Gross purchase order
         c.setFont("Helvetica-Bold", 9)
-        c.drawRightString(col_unit_x + 50, y, "Gross purchase order:")
+        c.drawRightString(col_total_x - 64, y, "Gross purchase order:")
         c.setFont("Helvetica", 9)
         subtotal = rfpo.subtotal if rfpo.subtotal else 0
         c.drawRightString(col_total_x - 4, y, f"${subtotal:,.2f}")
@@ -314,22 +348,30 @@ class RFPOPDFGenerator:
         label = "Less supplier cost share:"
         if rfpo.cost_share_description:
             label += f"  ({rfpo.cost_share_description})"
-        c.drawRightString(col_unit_x + 50, y, label)
+        c.drawRightString(col_total_x - 64, y, label)
         c.setFont("Helvetica", 9)
         c.drawRightString(col_total_x - 4, y, f"(${cost_share:,.2f})")
         y -= 16
 
-        # Net total — bold with top border
-        c.setLineWidth(1.5)
-        c.line(col_unit_x - 10, y + 14, col_total_x, y + 14)
+        # Net total — bold with 2px border box (matching HTML td.bold)
         c.setFont("Helvetica-Bold", 10)
-        c.drawRightString(col_unit_x + 50, y, "Net purchase not to exceed:")
+        c.drawRightString(col_total_x - 64, y, "Net purchase not to exceed:")
         total = 0
         try:
             total = rfpo.get_calculated_total_amount()
         except Exception:
             total = rfpo.total_amount or 0
-        c.drawRightString(col_total_x - 4, y, f"${total:,.2f}")
+        total_text = f"${total:,.2f}"
+        # Draw bordered box around net total value (matching HTML td.bold { border: 2px solid #000 })
+        tw = c.stringWidth(total_text, "Helvetica-Bold", 10)
+        box_x = col_total_x - 4 - tw - 4
+        box_y = y - 4
+        box_w = tw + 8
+        box_h = 16
+        c.setStrokeColorRGB(0, 0, 0)
+        c.setLineWidth(2)
+        c.rect(box_x, box_y, box_w, box_h)
+        c.drawRightString(col_total_x - 4, y, total_text)
 
     def generate_po_pdf(self, rfpo, consortium, project, vendor=None, vendor_site=None):
         """Generate complete PO PDF with dynamic data"""

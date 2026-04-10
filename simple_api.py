@@ -1075,7 +1075,11 @@ def get_approver_rfpos():
                                         and act.stage_order == stage.get("stage_order")
                                         and act.step_order == step.get("step_order")):
                                     backup_action_ids.add(act.id)
-            except Exception:
+            except Exception as inst_err:
+                app.logger.warning(
+                    "Skipping corrupted approval instance %s (RFPO %s): %s",
+                    inst.id, getattr(inst, 'rfpo_id', '?'), inst_err,
+                )
                 continue
 
         # Merge primary + backup actions
@@ -1133,7 +1137,7 @@ def get_approver_rfpos():
 
     except Exception as e:
         app.logger.exception(f"Approver RFPOs error for user {request.current_user.record_id}: {e}")
-        return _error_response(e)
+        return jsonify({"success": False, "message": "Failed to load approval queue. Please try again or contact support."}), 500
 
 
 @app.route("/api/users/approval-action/<action_id>", methods=["POST"])

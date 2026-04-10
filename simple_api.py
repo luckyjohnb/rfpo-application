@@ -4279,8 +4279,8 @@ def export_rfpos_csv():
                 r.rfpo_id or "",
                 r.title or "",
                 r.status or "",
-                r.vendor_name or "",
-                r.team_name or "",
+                r.vendor.company_name if r.vendor else "",
+                r.team.name if r.team else "",
                 f"{float(r.subtotal or 0):.2f}",
                 f"{float(r.cost_share_amount or 0):.2f}",
                 f"{float(r.total_amount or 0):.2f}",
@@ -4335,7 +4335,7 @@ def get_rfpo_analytics():
         # By team
         by_team = {}
         for r in rfpos:
-            t = r.team_name or "Unassigned"
+            t = r.team.name if r.team else "Unassigned"
             if t not in by_team:
                 by_team[t] = {"count": 0, "total": 0.0}
             by_team[t]["count"] += 1

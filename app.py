@@ -1139,13 +1139,8 @@ def create_user_app():
         # Get RFPO data from API
         rfpo_response = make_api_request(f"/rfpos/{rfpo_id}")
         if not rfpo_response.get("success"):
-            return (
-                f"Error loading RFPO: {
-                    rfpo_response.get(
-                        'message',
-                        'Unknown error')}",
-                404,
-            )
+            msg = rfpo_response.get('message', 'Unknown error')
+            return f"Error loading RFPO: {msg}", 404
 
         rfpo = rfpo_response["rfpo"]
 

@@ -15,6 +15,37 @@
         }
         .rfpo-amount-cell { white-space: nowrap; font-size: 0.9rem; }
     }
+
+    /* Collapsible section cards */
+    .section-card .card-header {
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.15s;
+    }
+    .section-card .card-header:hover {
+        background-color: rgba(0,0,0,0.03);
+    }
+    .section-card .card-header .collapse-icon {
+        transition: transform 0.2s;
+    }
+    .section-card .card-header.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+    }
+    .section-card .section-status {
+        font-size: 0.8rem;
+        margin-left: 0.5rem;
+    }
+
+    /* Highlight pulse for first-incomplete section */
+    @keyframes sectionPulse {
+        0% { box-shadow: 0 0 0 0 rgba(13,110,253,0.4); }
+        70% { box-shadow: 0 0 0 8px rgba(13,110,253,0); }
+        100% { box-shadow: 0 0 0 0 rgba(13,110,253,0); }
+    }
+    .section-highlight {
+        animation: sectionPulse 1.5s ease-out 2;
+        border-color: #0d6efd !important;
+    }
 </style>
 {% endblock %}
 
@@ -63,78 +94,28 @@
 </div>
 
 <div id="rfpoContent" style="display: none;">
-    <!-- Row 1: Action Required (full width) -->
-    <div id="approvalActionSection" style="display: none;" class="mb-4">
-        <div class="card border-warning">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-gavel"></i> Action Required
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <h6 id="actionStepName">Loading...</h6>
-                        <p class="text-muted mb-0" id="actionStageName">Loading...</p>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <button class="btn btn-success me-2" onclick="showApprovalModal('approved')">
-                            <i class="fas fa-check"></i> Approve
-                        </button>
-                        <button class="btn btn-warning me-2" onclick="showApprovalModal('conditional')">
-                            <i class="fas fa-exclamation-triangle"></i> Conditional
-                        </button>
-                        <button class="btn btn-danger" onclick="showApprovalModal('refused')">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Row 2: Approval Progress + Activity Timeline -->
-    <div class="row mb-4">
-        <div class="col-lg-8">
-            <!-- Approval Progress Card -->
-            <div id="approvalChainSection" class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-route"></i> Approval Progress
-                    </h5>
-                    <span id="approvalOverallStatus" class="badge bg-secondary">No Workflow</span>
-                </div>
-                <div class="card-body">
-                    <div id="approvalChainContent">
-                        <p class="text-muted">No approval workflow has been started for this RFPO.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-4">
-            <!-- Activity Timeline Card -->
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-history"></i> Activity Timeline
-                    </h5>
-                </div>
-                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                    <div id="recentActivityContent">
-                        <p class="text-muted text-center">No activity yet</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     {% if is_admin %}
-    <!-- Submission Readiness (admin only, shown for Draft/Refused) -->
+    <!-- Progress Stepper (wizard continuity from stage1/stage2) -->
+    <div id="creationProgressSection" class="row mb-4" style="display: none;">
+        <div class="col-12">
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar bg-primary" id="wizardProgressBar" role="progressbar" style="width: 75%" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-2">
+                <small class="text-success"><i class="fas fa-check-circle"></i> 1. Select Project</small>
+                <small class="text-success"><i class="fas fa-check-circle"></i> 2. Basic Info</small>
+                <small class="text-primary fw-bold" id="wizardStep3Label">3. Line Items</small>
+                <small class="text-muted" id="wizardStep4Label">4. Review</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submission Readiness (promoted to top — primary guide) -->
     <div id="submissionReadinessSection" class="row mb-4" style="display: none;">
         <div class="col-12">
-            <div class="card" id="readinessCard">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card border-primary" id="readinessCard">
+                <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-clipboard-check"></i> Submission Readiness
                     </h5>
@@ -203,15 +184,89 @@
     </div>
     {% endif %}
 
-    <!-- Row 3: RFPO Information -->
+    <!-- Row 1: Action Required (full width) -->
+    <div id="approvalActionSection" style="display: none;" class="mb-4">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-gavel"></i> Action Required
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 id="actionStepName">Loading...</h6>
+                        <p class="text-muted mb-0" id="actionStageName">Loading...</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button class="btn btn-success me-2" onclick="showApprovalModal('approved')">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                        <button class="btn btn-warning me-2" onclick="showApprovalModal('conditional')">
+                            <i class="fas fa-exclamation-triangle"></i> Conditional
+                        </button>
+                        <button class="btn btn-danger" onclick="showApprovalModal('refused')">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Approval Progress + Activity Timeline -->
     <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
+        <div class="col-lg-8">
+            <!-- Approval Progress Card -->
+            <div id="approvalChainSection" class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-route"></i> Approval Progress
+                    </h5>
+                    <span id="approvalOverallStatus" class="badge bg-secondary">No Workflow</span>
+                </div>
+                <div class="card-body">
+                    <div id="approvalChainContent">
+                        <p class="text-muted">No approval workflow has been started for this RFPO.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Activity Timeline Card -->
+            <div class="card h-100">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
-                        <i class="fas fa-info-circle"></i> RFPO Information
+                        <i class="fas fa-history"></i> Activity Timeline
                     </h5>
                 </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    <div id="recentActivityContent">
+                        <p class="text-muted text-center">No activity yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if is_admin %}
+    <!-- (Submission Readiness moved to top of page) -->
+    {% endif %}
+
+    <!-- Row 3: RFPO Information -->
+    <div class="row mb-4" id="sectionRfpoInfo">
+        <div class="col-12">
+            <div class="card section-card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     data-bs-toggle="collapse" data-bs-target="#collapseRfpoInfo" aria-expanded="true">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chevron-down collapse-icon me-1"></i>
+                        <i class="fas fa-info-circle"></i> RFPO Information
+                        <span class="section-status badge bg-secondary" id="statusRfpoInfo"></span>
+                    </h5>
+                </div>
+                <div class="collapse show" id="collapseRfpoInfo">
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
@@ -253,25 +308,30 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /collapse -->
             </div>
         </div>
     </div>
 
     <!-- Row 4: Line Items -->
-    <div class="row mb-4">
+    <div class="row mb-4" id="sectionLineItems">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card section-card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     data-bs-toggle="collapse" data-bs-target="#collapseLineItems" aria-expanded="true">
                     <h5 class="card-title mb-0">
+                        <i class="fas fa-chevron-down collapse-icon me-1"></i>
                         <i class="fas fa-receipt"></i> Line Items
                         <span class="badge bg-secondary ms-2" id="lineItemCount">0</span>
+                        <span class="section-status badge bg-secondary" id="statusLineItems"></span>
                     </h5>
                     {% if is_admin %}
-                    <button class="btn btn-primary btn-sm" onclick="showAddLineItemModal()" id="addLineItemBtn">
+                    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showAddLineItemModal()" id="addLineItemBtn">
                         <i class="fas fa-plus"></i> Add Line Item
                     </button>
                     {% endif %}
                 </div>
+                <div class="collapse show" id="collapseLineItems">
                 <div class="card-body">
                     <div id="lineItemsContent">
                         <div class="text-center py-4 text-muted">
@@ -280,25 +340,30 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /collapse -->
             </div>
         </div>
     </div>
 
     <!-- Row 5: Files / Attachments -->
-    <div class="row mb-4">
+    <div class="row mb-4" id="sectionFiles">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card section-card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     data-bs-toggle="collapse" data-bs-target="#collapseFiles" aria-expanded="true">
                     <h5 class="card-title mb-0">
+                        <i class="fas fa-chevron-down collapse-icon me-1"></i>
                         <i class="fas fa-paperclip"></i> Files & Attachments
                         <span class="badge bg-secondary ms-2" id="fileCount">0</span>
+                        <span class="section-status badge bg-secondary" id="statusFiles"></span>
                     </h5>
                     {% if is_admin %}
-                    <button class="btn btn-primary btn-sm" onclick="showUploadFileModal()" id="uploadFileBtn">
+                    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showUploadFileModal()" id="uploadFileBtn">
                         <i class="fas fa-upload"></i> Upload File
                     </button>
                     {% endif %}
                 </div>
+                <div class="collapse show" id="collapseFiles">
                 <div class="card-body">
                     <div id="filesContent">
                         <div class="text-center py-4 text-muted">
@@ -307,22 +372,26 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /collapse -->
             </div>
         </div>
     </div>
 
     <!-- Row 6: RFPO Document -->
-    <div class="row mb-4">
+    <div class="row mb-4" id="sectionDocument">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card section-card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     data-bs-toggle="collapse" data-bs-target="#collapseDocument" aria-expanded="true">
                     <h5 class="card-title mb-0">
+                        <i class="fas fa-chevron-down collapse-icon me-1"></i>
                         <i class="fas fa-file-alt"></i> RFPO Document
                     </h5>
-                    <button class="btn btn-sm btn-outline-primary" onclick="openRfpoInNewTab()">
+                    <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openRfpoInNewTab()">
                         <i class="fas fa-external-link-alt"></i> Open in New Tab
                     </button>
                 </div>
+                <div class="collapse show" id="collapseDocument">
                 <div class="card-body p-0">
                     <div id="rfpoDocumentContainer" style="height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">
                         <div class="text-center py-4">
@@ -331,19 +400,23 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /collapse -->
             </div>
         </div>
     </div>
 
     <!-- Row 7: Audit Trail -->
-    <div class="row">
+    <div class="row" id="sectionAudit">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header">
+            <div class="card section-card">
+                <div class="card-header"
+                     data-bs-toggle="collapse" data-bs-target="#collapseAudit" aria-expanded="false">
                     <h5 class="card-title mb-0">
+                        <i class="fas fa-chevron-down collapse-icon me-1"></i>
                         <i class="fas fa-clipboard-list"></i> Audit Trail
                     </h5>
                 </div>
+                <div class="collapse" id="collapseAudit">
                 <div class="card-body">
                     <div id="auditTrailContent">
                         <div class="text-center py-3 text-muted">
@@ -351,6 +424,7 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /collapse -->
             </div>
         </div>
     </div>
@@ -597,13 +671,17 @@
         }
 
         // Load files into Files card
-        loadFiles(data.files || []);
+        const files = data.files || [];
+        loadFiles(files);
 
         // Load line items
         displayLineItems(rfpo.line_items || []);
 
         // Load RFPO document view
         loadRfpoDocument();
+
+        // Update section completion indicators & wizard stepper
+        updateSectionCompletion(rfpo, files);
     }
 
     function getStatusBadge(status) {
@@ -1414,6 +1492,38 @@
                 submitBtn.classList.toggle('disabled', !v.is_valid);
                 submitBtn.title = v.is_valid ? 'Submit for approval' : 'Fix issues above before submitting';
             }
+
+            // Sync section-card badges with validation section data
+            if (v.sections) {
+                const sectionMap = {
+                    'basic_info': 'statusRfpoInfo',
+                    'vendor': 'statusRfpoInfo',
+                    'line_items': 'statusLineItems',
+                    'files': 'statusFiles',
+                };
+                // RFPO Info badge = basic_info AND vendor both complete
+                const rfpoInfoBadge = document.getElementById('statusRfpoInfo');
+                if (rfpoInfoBadge && v.sections.basic_info && v.sections.vendor) {
+                    const infoComplete = v.sections.basic_info.complete && v.sections.vendor.complete;
+                    rfpoInfoBadge.className = 'section-status badge ' + (infoComplete ? 'bg-success' : 'bg-warning text-dark');
+                    rfpoInfoBadge.innerHTML = infoComplete
+                        ? '<i class="fas fa-check"></i>'
+                        : '<i class="fas fa-exclamation"></i>';
+                }
+                // Line items badge
+                ['line_items', 'files'].forEach(key => {
+                    const s = v.sections[key];
+                    if (!s) return;
+                    const badgeId = key === 'line_items' ? 'statusLineItems' : 'statusFiles';
+                    const badge = document.getElementById(badgeId);
+                    if (badge) {
+                        badge.className = 'section-status badge ' + (s.complete ? 'bg-success' : 'bg-warning text-dark');
+                        badge.innerHTML = s.complete
+                            ? '<i class="fas fa-check"></i>'
+                            : '<i class="fas fa-exclamation"></i>';
+                    }
+                });
+            }
         } catch (error) {
             console.error('Validation check failed:', error);
             document.getElementById('readinessStatusBadge').textContent = 'Error';
@@ -1803,6 +1913,142 @@
         // Live-update calculated total in modal
         document.getElementById('liQuantity').addEventListener('input', updateCalculatedTotal);
         document.getElementById('liUnitPrice').addEventListener('input', updateCalculatedTotal);
+
+        // Sync collapse icon rotation with Bootstrap collapse events
+        document.querySelectorAll('.section-card .collapse').forEach(el => {
+            el.addEventListener('show.bs.collapse', function() {
+                const header = this.previousElementSibling || this.closest('.card').querySelector('.card-header');
+                if (header) header.classList.remove('collapsed');
+            });
+            el.addEventListener('hide.bs.collapse', function() {
+                const header = this.previousElementSibling || this.closest('.card').querySelector('.card-header');
+                if (header) header.classList.add('collapsed');
+            });
+        });
     });
+
+    // ─── Section Completion & Wizard Stepper ─────────────────────────
+
+    /**
+     * After RFPO data loads, compute which sections are complete,
+     * show badges, collapse completed sections for Draft RFPOs,
+     * update the wizard progress bar, and scroll to the first
+     * incomplete section.
+     */
+    function updateSectionCompletion(rfpo, files) {
+        const isDraft = rfpo.status === 'Draft' || rfpo.status === 'Refused';
+
+        // Determine completion per section
+        const sections = {
+            rfpoInfo: {
+                complete: !!(rfpo.title && rfpo.vendor_id),
+                collapseId: 'collapseRfpoInfo',
+                sectionId: 'sectionRfpoInfo',
+                statusId: 'statusRfpoInfo',
+                label: 'RFPO Info',
+            },
+            lineItems: {
+                complete: (rfpo.line_items && rfpo.line_items.length > 0),
+                collapseId: 'collapseLineItems',
+                sectionId: 'sectionLineItems',
+                statusId: 'statusLineItems',
+                label: 'Line Items',
+            },
+            files: {
+                complete: (files && files.length > 0),
+                collapseId: 'collapseFiles',
+                sectionId: 'sectionFiles',
+                statusId: 'statusFiles',
+                label: 'Files',
+            },
+        };
+
+        let firstIncompleteId = null;
+
+        Object.values(sections).forEach(sec => {
+            const badge = document.getElementById(sec.statusId);
+            if (badge) {
+                if (sec.complete) {
+                    badge.className = 'section-status badge bg-success';
+                    badge.innerHTML = '<i class="fas fa-check"></i>';
+                } else {
+                    badge.className = 'section-status badge bg-warning text-dark';
+                    badge.innerHTML = '<i class="fas fa-exclamation"></i>';
+                }
+            }
+
+            // For Draft RFPOs: collapse completed sections, keep first incomplete open
+            if (isDraft && isAdmin) {
+                const collapseEl = document.getElementById(sec.collapseId);
+                if (collapseEl) {
+                    const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
+                    if (sec.complete && firstIncompleteId !== null) {
+                        // Already found incomplete — collapse this completed one
+                        bsCollapse.hide();
+                    } else if (sec.complete && firstIncompleteId === null) {
+                        // Completed but no incomplete found yet — collapse it
+                        bsCollapse.hide();
+                    } else if (!sec.complete && firstIncompleteId === null) {
+                        // First incomplete — keep open and remember it
+                        firstIncompleteId = sec.sectionId;
+                        bsCollapse.show();
+                    }
+                }
+            }
+        });
+
+        // Update wizard stepper (only for Draft/Refused, admin)
+        if (isDraft && isAdmin) {
+            const progressSection = document.getElementById('creationProgressSection');
+            if (progressSection) {
+                progressSection.style.display = '';
+
+                const hasLineItems = sections.lineItems.complete;
+                const hasFiles = sections.files.complete;
+                const step3Label = document.getElementById('wizardStep3Label');
+                const step4Label = document.getElementById('wizardStep4Label');
+                const progressBar = document.getElementById('wizardProgressBar');
+
+                if (hasLineItems && hasFiles) {
+                    // All done → 100%
+                    progressBar.style.width = '100%';
+                    step3Label.className = 'text-success';
+                    step3Label.innerHTML = '<i class="fas fa-check-circle"></i> 3. Line Items';
+                    step4Label.className = 'text-success';
+                    step4Label.innerHTML = '<i class="fas fa-check-circle"></i> 4. Review';
+                } else if (hasLineItems) {
+                    // Line items done → 87%
+                    progressBar.style.width = '87%';
+                    step3Label.className = 'text-success';
+                    step3Label.innerHTML = '<i class="fas fa-check-circle"></i> 3. Line Items';
+                    step4Label.className = 'text-primary fw-bold';
+                    step4Label.textContent = '4. Review';
+                } else {
+                    // Still on line items → 75%
+                    progressBar.style.width = '75%';
+                    step3Label.className = 'text-primary fw-bold';
+                    step3Label.textContent = '3. Line Items';
+                    step4Label.className = 'text-muted';
+                    step4Label.textContent = '4. Review';
+                }
+            }
+        }
+
+        // Auto-scroll to first incomplete section (with slight delay for collapse animations)
+        if (isDraft && isAdmin && firstIncompleteId) {
+            setTimeout(() => {
+                const targetEl = document.getElementById(firstIncompleteId);
+                if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Brief highlight pulse
+                    const card = targetEl.querySelector('.card');
+                    if (card) {
+                        card.classList.add('section-highlight');
+                        setTimeout(() => card.classList.remove('section-highlight'), 3500);
+                    }
+                }
+            }, 400);
+        }
+    }
 </script>
 {% endblock %}

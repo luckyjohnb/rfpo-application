@@ -283,6 +283,66 @@ def _find_applicable_workflow_and_stage(rfpo):
     return None, None
 
 
+def _find_all_applicable_workflows_and_stages(rfpo):
+    """Find ALL applicable workflows and their cumulative stages for an RFPO.
+
+    Collects workflows from all levels: project, team, consortium.
+    Within each workflow, returns ALL stages at or below the matching bracket
+    (cumulative/cascading) — higher-value purchases require everything lower
+    tiers require, plus more.
+
+    Returns list of (workflow, [stages]) tuples. Each tuple has the workflow
+    and a list of applicable stages sorted by bracket amount ascending.
+    """
+    rfpo_total = float(rfpo.total_amount or 0)
+    results = []
+
+    workflow_queries = []
+    if rfpo.project_id:
+        w = RFPOApprovalWorkflow.query.filter_by(
+            project_id=rfpo.project_id, workflow_type="project",
+            is_active=True, is_template=True
+        ).first()
+        if w:
+            workflow_queries.append(w)
+    if rfpo.team_id:
+        w = RFPOApprovalWorkflow.query.filter_by(
+            team_id=rfpo.team_id, workflow_type="team", is_active=True, is_template=True
+        ).first()
+        if w:
+            workflow_queries.append(w)
+    if rfpo.consortium_id:
+        w = RFPOApprovalWorkflow.query.filter_by(
+            consortium_id=rfpo.consortium_id, workflow_type="consortium",
+            is_active=True, is_template=True
+        ).first()
+        if w:
+            workflow_queries.append(w)
+
+    for workflow in workflow_queries:
+        if not workflow.stages:
+            continue
+
+        sorted_stages = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount or 0))
+
+        # Cumulative: collect ALL stages at or below the matching bracket
+        cumulative_stages = []
+        for stage in sorted_stages:
+            cumulative_stages.append(stage)
+            if rfpo_total <= float(stage.budget_bracket_amount or 0):
+                break  # This is the ceiling — include it and stop
+        else:
+            # Amount exceeds all brackets — skip this workflow entirely
+            continue
+
+        # Only include if at least one stage has steps
+        stages_with_steps = [s for s in cumulative_stages if s.steps]
+        if stages_with_steps:
+            results.append((workflow, cumulative_stages))
+
+    return results
+
+
 def _find_global_workflow_stages():
     """Find the active global workflow and return its stages (sections) with steps.
 
@@ -335,27 +395,25 @@ def _validate_rfpo_for_approval(rfpo):
         result["errors"].append("RFPO total amount must be greater than zero")
         result["is_valid"] = False
 
-    # Find applicable workflow
-    workflow, applicable_stage = _find_applicable_workflow_and_stage(rfpo)
+    # Find applicable workflows — cumulative across ALL levels + global
+    all_entity_workflows = _find_all_applicable_workflows_and_stages(rfpo)
     global_stages = _find_global_workflow_stages()
 
-    if not workflow and not global_stages:
+    # Also keep legacy single-winner lookup for backward compat (workflow_info display)
+    workflow, applicable_stage = _find_applicable_workflow_and_stage(rfpo)
+
+    if not all_entity_workflows and not global_stages:
         result["errors"].append("No active approval workflow found for this RFPO")
         result["is_valid"] = False
         return result
 
-    if workflow and (not applicable_stage or not applicable_stage.steps) and not global_stages:
-        result["errors"].append("No approval stages/steps configured for this workflow")
-        result["is_valid"] = False
-        return result
+    # Build cumulative list of ALL applicable stages across all workflows
+    # Order: entity stages (lowest bracket first, across project→team→consortium) → global stages
+    all_entity_stages = []
+    for _wf, stages in all_entity_workflows:
+        for stage in stages:
+            all_entity_stages.append(stage)
 
-    # Workflow info — collect approvers in correct order: entity stage → global stages
-    approver_info = []
-    # Entity stage first
-    entity_stages_for_validation = []
-    if applicable_stage and applicable_stage.steps:
-        entity_stages_for_validation.append(applicable_stage)
-    # Then global stages in fixed order (Financial → US Car Internal → PO Release)
     GLOBAL_VALIDATION_ORDER = {
         "GLOBAL_FINANCIAL": 1,
         "GLOBAL_USCAR_INTERNAL": 2,
@@ -365,10 +423,18 @@ def _validate_rfpo_for_approval(rfpo):
         global_stages,
         key=lambda s: GLOBAL_VALIDATION_ORDER.get((s.budget_bracket_key or "").upper(), 99)
     )
-    all_stages_for_validation = entity_stages_for_validation + sorted_global_stages
+    all_stages_for_validation = all_entity_stages + sorted_global_stages
 
+    # Collect approver info — dedup by approval_type_key, keeping tiered order
+    approver_info = []
+    seen_approval_types = set()
     for vstage in all_stages_for_validation:
         for step in sorted(vstage.steps, key=lambda s: s.step_order):
+            dedup_key = step.approval_type_key
+            if dedup_key and dedup_key in seen_approval_types:
+                continue
+            if dedup_key:
+                seen_approval_types.add(dedup_key)
             approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
             approver_info.append({
                 "step_name": step.step_name,
@@ -1685,31 +1751,21 @@ def submit_for_approval(rfpo_id):
             db.session.flush()
 
         # Find the appropriate workflow template
-        # Priority: team → consortium → project (falls through if workflow has no usable stages)
-        workflow, applicable_stage = _find_applicable_workflow_and_stage(rfpo)
+        # Cumulative: collect ALL applicable workflows and stages across project→team→consortium
+        all_entity_workflows = _find_all_applicable_workflows_and_stages(rfpo)
         global_stages = _find_global_workflow_stages()
+        # Legacy single-winner for template reference
+        workflow, applicable_stage = _find_applicable_workflow_and_stage(rfpo)
 
-        if not workflow and not global_stages:
+        if not all_entity_workflows and not global_stages:
             return jsonify({
                 "success": False,
                 "message": "No active approval workflow found for this RFPO's team or consortium. "
                            "Please configure a workflow in the admin panel first."
             }), 400
 
-        if workflow and (not applicable_stage or not applicable_stage.steps):
-            # Consortium workflow exists but has no usable stages
-            if not global_stages:
-                return jsonify({
-                    "success": False,
-                    "message": "No approval stages/steps configured for this workflow"
-                }), 400
-            # Fall through to global-only approval
-            workflow = None
-            applicable_stage = None
-
-        # Build combined stages: Global sections (by order) + consortium stage
-        # Global sections with order < consortium stage come first,
-        # then consortium stage, then remaining global sections
+        # Build combined stages: entity stages (by bracket, across all workflow levels)
+        # → global stages (Financial → US Car Internal → PO Release)
         def _build_stage_data(stage, is_global=False):
             steps_data = []
             for step in sorted(stage.steps, key=lambda s: s.step_order):
@@ -1736,9 +1792,31 @@ def submit_for_approval(rfpo_id):
                 "steps": steps_data,
             }
 
-        # Collect global stages that go BEFORE the consortium stage (Financial, US Car Internals)
-        # and AFTER (P.O. Release)
-        # Fixed order: entity stage → Financial → US Car Internal → P.O. Release
+        # Entity stages: cumulative from all workflows, lowest bracket first
+        entity_stage_data = []
+        for _wf, stages in all_entity_workflows:
+            for stage in stages:
+                if stage.steps:
+                    entity_stage_data.append(_build_stage_data(stage, is_global=False))
+
+        # Dedup entity stages by approval_type_key across steps — keep tiered order
+        # (lower brackets come first, so their steps win the dedup)
+        seen_approval_types = set()
+        deduped_entity_stages = []
+        for stage_data in entity_stage_data:
+            deduped_steps = []
+            for step in stage_data["steps"]:
+                atype = step["approval_type_key"]
+                if atype and atype in seen_approval_types:
+                    continue
+                if atype:
+                    seen_approval_types.add(atype)
+                deduped_steps.append(step)
+            if deduped_steps:
+                stage_data["steps"] = deduped_steps
+                deduped_entity_stages.append(stage_data)
+
+        # Global stages in fixed order: Financial → US Car Internal → PO Release
         GLOBAL_STAGE_ORDER = {
             "GLOBAL_FINANCIAL": 1,
             "GLOBAL_USCAR_INTERNAL": 2,
@@ -1748,20 +1826,25 @@ def submit_for_approval(rfpo_id):
         for gs in global_stages:
             gkey = (gs.budget_bracket_key or "").upper()
             gsd = _build_stage_data(gs, is_global=True)
-            gsd["_sort_key"] = GLOBAL_STAGE_ORDER.get(gkey, 99)
-            global_stage_data.append(gsd)
+            # Dedup global steps against already-seen entity approval types
+            deduped_steps = []
+            for step in gsd["steps"]:
+                atype = step["approval_type_key"]
+                if atype and atype in seen_approval_types:
+                    continue
+                if atype:
+                    seen_approval_types.add(atype)
+                deduped_steps.append(step)
+            if deduped_steps:
+                gsd["steps"] = deduped_steps
+                gsd["_sort_key"] = GLOBAL_STAGE_ORDER.get(gkey, 99)
+                global_stage_data.append(gsd)
         global_stage_data.sort(key=lambda s: s["_sort_key"])
-        # Clean up sort key
         for gsd in global_stage_data:
             gsd.pop("_sort_key", None)
 
-        # Build entity (project/team/consortium) stage
-        entity_stage_data = []
-        if applicable_stage and applicable_stage.steps:
-            entity_stage_data = [_build_stage_data(applicable_stage, is_global=False)]
-
-        # Combine: entity stage → global stages (Financial → US Car Internal → PO Release)
-        stages_data = entity_stage_data + global_stage_data
+        # Combine: entity stages (tiered) → global stages (Financial → US Car Internal → PO Release)
+        stages_data = deduped_entity_stages + global_stage_data
 
         # Renumber stage_order sequentially (1-based)
         for idx, stage in enumerate(stages_data, start=1):

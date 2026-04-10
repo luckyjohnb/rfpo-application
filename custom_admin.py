@@ -1279,6 +1279,30 @@ def create_app():
         # Amount exceeds all brackets — no valid stage
         return None
 
+    def determine_rfpo_cumulative_stages(rfpo, workflow):
+        """Determine ALL applicable stages for an RFPO — cumulative cascading.
+
+        Returns all stages at or below the matching bracket, sorted by bracket
+        amount ascending. Higher-value purchases require everything lower tiers
+        require, plus more.
+        """
+        if not rfpo.total_amount or not workflow or not workflow.stages:
+            return []
+
+        rfpo_total = float(rfpo.total_amount)
+        stages = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount))
+
+        cumulative = []
+        for stage in stages:
+            cumulative.append(stage)
+            if rfpo_total <= float(stage.budget_bracket_amount):
+                break
+        else:
+            # Amount exceeds all brackets — no valid stages
+            return []
+
+        return cumulative
+
     def validate_rfpo_for_approval(rfpo):
         """Validate an RFPO against all applicable sequential workflow phases"""
         validation_result = {
@@ -1343,61 +1367,100 @@ def create_app():
                     }
                     validation_result["workflow_phases"].append(workflow_phase)
             else:
-                # Process each applicable workflow phase
+                # Process each applicable workflow phase — cumulative stages
                 for workflow_type, workflow, phase_number in applicable_workflows:
                     display_name = (
                         f"Phase {phase_number}: {workflow_type.title()}-specific"
                     )
 
-                    # Determine stage for this workflow
-                    stage = determine_rfpo_stage(rfpo, workflow)
+                    # Determine cumulative stages for this workflow
+                    cumulative_stages = determine_rfpo_cumulative_stages(rfpo, workflow)
+                    # Keep the "top" stage for backward compat display
+                    stage = cumulative_stages[-1] if cumulative_stages else None
                     stage_info = None
 
-                    if stage:
-                        # Validate documents for this stage
-                        document_validation = validate_stage_documents(rfpo, stage)
+                    if cumulative_stages:
+                        # Aggregate document validation across ALL cumulative stages (deduped)
+                        aggregated_doc_validation = {
+                            "required_documents": [],
+                            "uploaded_documents": [],
+                            "missing_documents": [],
+                            "document_status": [],
+                        }
+                        seen_doc_keys = set()
+                        uploaded_doc_types = [f.document_type for f in rfpo.files if f.document_type]
 
-                        # Get approval steps
-                        approval_steps = []
-                        for step in stage.steps:
-                            primary_approver = User.query.filter_by(
-                                record_id=step.primary_approver_id, active=True
-                            ).first()
-                            backup_approver = (
-                                User.query.filter_by(
-                                    record_id=step.backup_approver_id, active=True
+                        for cstage in cumulative_stages:
+                            for key in cstage.get_required_document_types():
+                                if key in seen_doc_keys:
+                                    continue
+                                seen_doc_keys.add(key)
+                                doc_item = List.query.filter_by(
+                                    type="doc_types", key=key, active=True
                                 ).first()
-                                if step.backup_approver_id
-                                else None
-                            )
+                                doc_name = doc_item.value if doc_item and doc_item.value and doc_item.value.strip() else key
+                                is_uploaded = key in uploaded_doc_types or doc_name in uploaded_doc_types
+                                aggregated_doc_validation["document_status"].append({
+                                    "key": key, "name": doc_name,
+                                    "is_uploaded": is_uploaded, "is_required": True,
+                                })
+                                aggregated_doc_validation["required_documents"].append(doc_name)
+                                if not is_uploaded:
+                                    aggregated_doc_validation["missing_documents"].append(doc_name)
 
-                            step_info = {
-                                "step_id": step.step_id,
-                                "step_name": step.step_name,
-                                "step_order": step.step_order,
-                                "approval_type": step.approval_type_name,
-                                "primary_approver": (
-                                    primary_approver.get_display_name()
-                                    if primary_approver
-                                    else "Unknown User"
-                                ),
-                                "backup_approver": (
-                                    backup_approver.get_display_name()
-                                    if backup_approver
+                        aggregated_doc_validation["uploaded_documents"] = [
+                            {"type": f.document_type, "filename": f.original_filename}
+                            for f in rfpo.files if f.document_type
+                        ]
+
+                        # Collect approval steps across all cumulative stages, deduped by approval_type_key
+                        approval_steps = []
+                        seen_approval_types = set()
+                        for cstage in cumulative_stages:
+                            for step in sorted(cstage.steps, key=lambda s: s.step_order):
+                                atype = step.approval_type_key
+                                if atype and atype in seen_approval_types:
+                                    continue
+                                if atype:
+                                    seen_approval_types.add(atype)
+
+                                primary_approver = User.query.filter_by(
+                                    record_id=step.primary_approver_id, active=True
+                                ).first()
+                                backup_approver = (
+                                    User.query.filter_by(
+                                        record_id=step.backup_approver_id, active=True
+                                    ).first()
+                                    if step.backup_approver_id
                                     else None
-                                ),
-                                "is_required": step.is_required,
-                                "description": step.description,
-                                "approver_valid": primary_approver is not None,
-                            }
-                            approval_steps.append(step_info)
-
-                            # Check for missing approvers
-                            if not primary_approver:
-                                validation_result["errors"].append(
-                                    f"Phase {phase_number} - Primary approver not found for step: {step.step_name}"
                                 )
-                                validation_result["is_valid"] = False
+
+                                step_info = {
+                                    "step_id": step.step_id,
+                                    "step_name": step.step_name,
+                                    "step_order": step.step_order,
+                                    "approval_type": step.approval_type_name,
+                                    "primary_approver": (
+                                        primary_approver.get_display_name()
+                                        if primary_approver
+                                        else "Unknown User"
+                                    ),
+                                    "backup_approver": (
+                                        backup_approver.get_display_name()
+                                        if backup_approver
+                                        else None
+                                    ),
+                                    "is_required": step.is_required,
+                                    "description": step.description,
+                                    "approver_valid": primary_approver is not None,
+                                }
+                                approval_steps.append(step_info)
+
+                                if not primary_approver:
+                                    validation_result["errors"].append(
+                                        f"Phase {phase_number} - Primary approver not found for step: {step.step_name}"
+                                    )
+                                    validation_result["is_valid"] = False
 
                         stage_info = {
                             "stage_id": stage.stage_id,
@@ -1406,18 +1469,18 @@ def create_app():
                             "budget_bracket_amount": float(stage.budget_bracket_amount),
                             "rfpo_amount": float(rfpo.total_amount or 0),
                             "description": stage.description,
-                            "document_validation": document_validation,
+                            "document_validation": aggregated_doc_validation,
                             "approval_steps": approval_steps,
+                            "cumulative_stage_count": len(cumulative_stages),
                         }
 
                         # Add summary warnings for document issues
-                        if document_validation["missing_documents"]:
-                            # Missing required documents block submission
+                        if aggregated_doc_validation["missing_documents"]:
                             missing_count = len(
-                                document_validation["missing_documents"]
+                                aggregated_doc_validation["missing_documents"]
                             )
                             missing_names = ", ".join(
-                                document_validation["missing_documents"]
+                                aggregated_doc_validation["missing_documents"]
                             )
                             msg = (
                                 f"{workflow_type.title()}: {missing_count} required "

@@ -22,6 +22,7 @@ COPY models.py .
 COPY config.py .
 COPY env_config.py .
 COPY init_postgres_db.py .
+COPY migrate_file_storage.py .
 COPY error_handlers.py .
 COPY exceptions.py .
 COPY logging_config.py .

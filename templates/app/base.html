@@ -363,8 +363,8 @@
                 }
 
                 const response = await fetch(url, {
+                    ...options,
                     headers,
-                    ...options
                 });
 
                 const data = await response.json();

@@ -179,9 +179,14 @@
                         <a href="{{ url_for('rfpo_create') }}" class="btn btn-secondary">
                             <i class="fas fa-arrow-left"></i> Back to Project Selection
                         </a>
-                        <button type="submit" class="btn btn-primary">
-                            Create RFPO & Add Line Items <i class="fas fa-arrow-right"></i>
-                        </button>
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                Create RFPO & Add Line Items <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

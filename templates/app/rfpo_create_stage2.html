@@ -1,6 +1,6 @@
 {% extends "app/base.html" %}
 
-{% block title %}Create RFPO - Stage 2 - RFPO Application{% endblock %}
+{% block title %}Create RFPO - Step 2 - RFPO Application{% endblock %}
 
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
@@ -8,14 +8,14 @@
         <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
         <li class="breadcrumb-item"><a href="{{ url_for('rfpos_list') }}">RFPOs</a></li>
         <li class="breadcrumb-item"><a href="{{ url_for('rfpo_create') }}">Create</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Stage 2</li>
+        <li class="breadcrumb-item active" aria-current="page">Step 2</li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">📄 Create RFPO - Stage 2: Basic Information</h1>
+    <h1 class="h2">📄 Create RFPO - Step 2: Basic Information</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Back to RFPOs

@@ -1,20 +1,20 @@
 {% extends "app/base.html" %}
 
-{% block title %}Create RFPO - Stage 4 - Review & Submit{% endblock %}
+{% block title %}Create RFPO - Step 4 - Review & Submit{% endblock %}
 
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
         <li class="breadcrumb-item"><a href="{{ url_for('rfpos_list') }}">RFPOs</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Create - Stage 4</li>
+        <li class="breadcrumb-item active" aria-current="page">Create - Step 4</li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">📄 Create RFPO - Stage 4: Review &amp; Submit</h1>
+    <h1 class="h2">📄 Create RFPO - Step 4: Review &amp; Submit</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <a href="/rfpos/{{ rfpo_id }}" class="btn btn-outline-secondary">
             <i class="fas fa-save"></i> Save &amp; Finish Later
@@ -43,7 +43,7 @@
         <i class="fas fa-info-circle fs-5"></i>
         <span><strong>RFPO:</strong> <span id="rfpoTitle">Loading...</span></span>
         <span class="d-none d-sm-inline text-muted">|</span>
-        <span><strong>ID:</strong> <span id="rfpoIdDisplay">{{ rfpo_id }}</span></span>
+        <span><strong>RFPO #:</strong> <span id="rfpoIdDisplay">Loading...</span></span>
         <span class="d-none d-sm-inline text-muted">|</span>
         <span><strong>Items:</strong> <span id="lineItemCountBanner">0</span></span>
         <span class="d-none d-sm-inline text-muted">|</span>
@@ -56,7 +56,7 @@
     <div class="col-lg-6 mb-4">
         <!-- Guided Document Collection (shown when required docs exist) -->
         <div class="card mb-4" id="guidedDocsCard" style="display: none;">
-            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-clipboard-list"></i> Required Documents</h5>
                 <span class="badge bg-secondary" id="docProgressBadge">0 of 0</span>
             </div>
@@ -181,7 +181,7 @@
     <div class="col-lg-6 mb-4">
         <!-- Submission Readiness Card -->
         <div class="card mb-4">
-            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-clipboard-check"></i> Submission Readiness</h5>
                 <span id="readinessStatusBadge" class="badge bg-secondary">Checking...</span>
             </div>
@@ -198,9 +198,9 @@
                 </div>
 
                 <div class="row">
-                    <!-- Sections checklist -->
+                    <!-- Requirements checklist -->
                     <div class="col-md-6">
-                        <h6 class="text-muted mb-2"><i class="fas fa-tasks"></i> Sections</h6>
+                        <h6 class="text-muted mb-2"><i class="fas fa-tasks"></i> Requirements</h6>
                         <ul class="list-unstyled" id="readinessSectionsList">
                             <li class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</li>
                         </ul>
@@ -285,6 +285,7 @@
             if (response.success) {
                 currentRfpo = response.rfpo;
                 document.getElementById('rfpoTitle').textContent = currentRfpo.title || 'Untitled RFPO';
+                document.getElementById('rfpoIdDisplay').textContent = currentRfpo.rfpo_id || '';
 
                 const lineItems = currentRfpo.line_items || [];
                 document.getElementById('lineItemCountBanner').textContent = lineItems.length;
@@ -320,7 +321,7 @@
             document.getElementById('readinessProgressBar').style.width = pct + '%';
             document.getElementById('readinessProgressBar').className = 'progress-bar ' + (v.is_valid ? 'bg-success' : 'bg-warning');
             document.getElementById('readinessProgressPercent').textContent = pct + '%';
-            document.getElementById('readinessProgressLabel').textContent = `${done} of ${total} sections complete`;
+            document.getElementById('readinessProgressLabel').textContent = `${done} of ${total} requirements met`;
 
             // Status badge
             const badge = document.getElementById('readinessStatusBadge');

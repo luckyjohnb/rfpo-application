@@ -100,7 +100,7 @@
     <div id="submissionReadinessSection" class="row mb-4" style="display: none;">
         <div class="col-12">
             <div class="card border-primary" id="readinessCard">
-                <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-clipboard-check"></i> Submission Readiness
                     </h5>
@@ -119,9 +119,9 @@
                     </div>
 
                     <div class="row">
-                        <!-- Sections checklist -->
+                        <!-- Requirements checklist -->
                         <div class="col-md-6">
-                            <h6 class="text-muted mb-2"><i class="fas fa-tasks"></i> Section Completion</h6>
+                            <h6 class="text-muted mb-2"><i class="fas fa-tasks"></i> Requirements</h6>
                             <ul class="list-unstyled" id="readinessSectionsList">
                                 <li class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</li>
                             </ul>
@@ -1395,7 +1395,7 @@
             document.getElementById('readinessProgressBar').style.width = pct + '%';
             document.getElementById('readinessProgressBar').className = 'progress-bar ' + (v.is_valid ? 'bg-success' : 'bg-warning');
             document.getElementById('readinessProgressPercent').textContent = pct + '%';
-            document.getElementById('readinessProgressLabel').textContent = `${done} of ${total} sections complete`;
+            document.getElementById('readinessProgressLabel').textContent = `${done} of ${total} requirements met`;
 
             // Status badge
             const badge = document.getElementById('readinessStatusBadge');

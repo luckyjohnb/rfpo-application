@@ -1,20 +1,20 @@
 {% extends "app/base.html" %}
 
-{% block title %}Create RFPO - Stage 3 - Line Items{% endblock %}
+{% block title %}Create RFPO - Step 3 - Line Items{% endblock %}
 
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
         <li class="breadcrumb-item"><a href="{{ url_for('rfpos_list') }}">RFPOs</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Create - Stage 3</li>
+        <li class="breadcrumb-item active" aria-current="page">Create - Step 3</li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">📄 Create RFPO - Stage 3: Line Items</h1>
+    <h1 class="h2">📄 Create RFPO - Step 3: Line Items</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <a href="/rfpos/{{ rfpo_id }}" class="btn btn-outline-secondary">
             <i class="fas fa-save"></i> Save &amp; Finish Later
@@ -43,7 +43,7 @@
         <i class="fas fa-info-circle fs-5"></i>
         <span><strong>RFPO:</strong> <span id="rfpoTitle">Loading...</span></span>
         <span class="d-none d-sm-inline text-muted">|</span>
-        <span><strong>ID:</strong> <span id="rfpoIdDisplay">{{ rfpo_id }}</span></span>
+        <span><strong>RFPO #:</strong> <span id="rfpoIdDisplay">Loading...</span></span>
     </div>
 </div>
 
@@ -287,6 +287,7 @@
             if (response.success) {
                 currentRfpo = response.rfpo;
                 document.getElementById('rfpoTitle').textContent = currentRfpo.title || 'Untitled RFPO';
+                document.getElementById('rfpoIdDisplay').textContent = currentRfpo.rfpo_id || '';
                 displayLineItems(currentRfpo.line_items || []);
                 updateTotals(currentRfpo.line_items || []);
             } else {

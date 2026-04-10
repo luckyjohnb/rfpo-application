@@ -193,17 +193,18 @@ def _generate_and_save_pdf_snapshot(rfpo):
         gen = RFPOPDFGenerator(positioning_config=None)
         pdf_buffer = gen.generate_rfpo_pdf(rfpo, consortium, project, vendor, vendor_site, requestor=requestor)
 
-        # Save to uploads/snapshots/<uuid>_<rfpo_id>.pdf
-        snapshots_dir = os.path.join(app.root_path, "uploads", "snapshots")
+        # Save to uploads/rfpos/<rfpo_id>/snapshots/<timestamp>_snapshot.pdf
+        snapshots_dir = os.path.join(app.root_path, "uploads", "rfpos", rfpo.rfpo_id, "snapshots")
         os.makedirs(snapshots_dir, exist_ok=True)
 
-        filename = f"{_uuid.uuid4().hex[:12]}_{rfpo.rfpo_id}.pdf"
+        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
+        filename = f"{timestamp}_snapshot.pdf"
         filepath = os.path.join(snapshots_dir, filename)
         pdf_bytes = pdf_buffer.getvalue()
         with open(filepath, "wb") as f:
             f.write(pdf_bytes)
 
-        relative_path = f"uploads/snapshots/{filename}"
+        relative_path = f"uploads/rfpos/{rfpo.rfpo_id}/snapshots/{filename}"
         app.logger.info("PDF snapshot saved for RFPO %s: %s", rfpo.rfpo_id, relative_path)
 
         # Upload PDF snapshot to cloud storage
@@ -3891,7 +3892,7 @@ def upload_rfpo_file(rfpo_id):
         file_id = str(uuid.uuid4())
         stored_filename = f"{file_id}_{original_filename}"
 
-        rfpo_dir = os.path.join("uploads", "rfpo_files", f"rfpo_{rfpo.id}")
+        rfpo_dir = os.path.join("uploads", "rfpos", rfpo.rfpo_id, "documents")
         os.makedirs(rfpo_dir, exist_ok=True)
 
         file_path = os.path.join(rfpo_dir, stored_filename)

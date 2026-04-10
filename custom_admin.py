@@ -1035,15 +1035,16 @@ def create_app():
         gen = RFPOPDFGenerator(positioning_config=None)
         pdf_buffer = gen.generate_rfpo_pdf(rfpo, consortium, project, vendor, vendor_site, requestor=requestor)
 
-        snapshots_dir = os.path.join(app.root_path, "uploads", "snapshots")
+        snapshots_dir = os.path.join(app.root_path, "uploads", "rfpos", rfpo.rfpo_id, "snapshots")
         os.makedirs(snapshots_dir, exist_ok=True)
 
-        filename = f"{_uuid.uuid4().hex[:12]}_{rfpo.rfpo_id}.pdf"
+        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
+        filename = f"{timestamp}_snapshot.pdf"
         filepath = os.path.join(snapshots_dir, filename)
         with open(filepath, "wb") as f:
             f.write(pdf_buffer.getvalue())
 
-        relative_path = f"uploads/snapshots/{filename}"
+        relative_path = f"uploads/rfpos/{rfpo.rfpo_id}/snapshots/{filename}"
         app.logger.info("PDF snapshot saved for RFPO %s: %s", rfpo.rfpo_id, relative_path)
         return relative_path
 
@@ -3831,8 +3832,8 @@ Southfield, MI  48075""",
             file_id = str(uuid.uuid4())
             stored_filename = f"{file_id}_{original_filename}"
 
-            # Create RFPO-specific directory
-            rfpo_dir = os.path.join("uploads", "rfpo_files", f"rfpo_{rfpo.id}")
+            # Create RFPO-specific directory (organized by business RFPO number)
+            rfpo_dir = os.path.join("uploads", "rfpos", rfpo.rfpo_id, "documents")
             os.makedirs(rfpo_dir, exist_ok=True)
 
             # Full file path

@@ -9,6 +9,16 @@
         #approvalModal .modal-body .row .col-md-4,
         #approvalModal .modal-body .row .col-md-6 { margin-bottom: 0.5rem; }
         #approvalModal .d-flex.gap-3 { flex-direction: column; gap: 0.5rem !important; }
+        #bulkActionBar .card-body {
+            flex-direction: column !important;
+            gap: 0.5rem;
+        }
+        #bulkActionBar .d-flex.gap-2 {
+            width: 100%;
+        }
+        #bulkActionBar .d-flex.gap-2 .btn {
+            flex: 1;
+        }
     }
 </style>
 {% endblock %}
@@ -62,6 +72,27 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Action Bar (hidden until selections made) -->
+<div id="bulkActionBar" class="card mb-3 border-warning" style="display: none;">
+    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+        <div>
+            <i class="fas fa-check-square text-warning me-2"></i>
+            <strong id="selectedCount">0</strong> action(s) selected
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm" onclick="bulkApprove('approved')">
+                <i class="fas fa-check"></i> Approve Selected
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="bulkApprove('refused')">
+                <i class="fas fa-times"></i> Refuse Selected
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="clearSelection()">
+                <i class="fas fa-times-circle"></i> Clear
+            </button>
         </div>
     </div>
 </div>
@@ -322,7 +353,12 @@
                 for (const action of actions) {
                     html += `
                             <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
-                                <div>
+                                <div class="form-check d-inline-block me-2 align-self-center">
+                                    <input class="form-check-input bulk-select" type="checkbox"
+                                           data-action-id="${escapeAttr(action.action_id)}"
+                                           onchange="updateBulkBar()">
+                                </div>
+                                <div class="flex-grow-1">
                                     <span class="fw-bold">${escapeHtml(action.step_name || 'Approval Step')}</span>
                                     <br>
                                     <small class="text-muted">
@@ -330,7 +366,7 @@
                                         Type: ${escapeHtml(action.approval_type_key || 'N/A')}
                                     </small>
                                 </div>
-                                <div>
+                                <div class="text-nowrap">
                                     <a href="/rfpos/${rfpo.id}/preview" class="btn btn-sm btn-outline-info me-1" target="_blank" title="Preview RFPO">
                                         <i class="fas fa-eye"></i>
                                     </a>
@@ -522,6 +558,63 @@
     function escapeAttr(str) {
         if (!str) return '';
         return str.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ─── Bulk Approval Functions ─────────────────────────────
+    function updateBulkBar() {
+        const checked = document.querySelectorAll('.bulk-select:checked');
+        const bar = document.getElementById('bulkActionBar');
+        const count = document.getElementById('selectedCount');
+
+        if (checked.length > 0) {
+            bar.style.display = '';
+            count.textContent = checked.length;
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    function clearSelection() {
+        document.querySelectorAll('.bulk-select:checked').forEach(cb => cb.checked = false);
+        updateBulkBar();
+    }
+
+    async function bulkApprove(status) {
+        const checked = document.querySelectorAll('.bulk-select:checked');
+        const actionIds = Array.from(checked).map(cb => cb.dataset.actionId);
+
+        if (actionIds.length === 0) return;
+
+        const label = status === 'approved' ? 'approve' : 'refuse';
+        showConfirmModal(
+            `Bulk ${label.charAt(0).toUpperCase() + label.slice(1)}`,
+            `Are you sure you want to <strong>${label}</strong> ${actionIds.length} action(s)?`,
+            async function() {
+                try {
+                    const response = await makeApiCall('/api/users/bulk-approval', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ action_ids: actionIds, status: status, comments: `Bulk ${label}` })
+                    });
+                    if (response.success) {
+                        let msg = response.message;
+                        if (response.results && response.results.errors && response.results.errors.length > 0) {
+                            msg += '<br><small class="text-muted">Details: ' + response.results.errors.join('; ') + '</small>';
+                            showAlert(msg, 'warning');
+                        } else {
+                            showAlert(msg, 'success');
+                        }
+                        clearSelection();
+                        loadApprovals();
+                    } else {
+                        throw new Error(response.message || 'Bulk action failed');
+                    }
+                } catch (error) {
+                    showAlert(`Error: ${error.message}`, 'danger');
+                }
+            },
+            status === 'approved' ? 'btn-success' : 'btn-danger'
+        );
     }
 
     // Load on page load

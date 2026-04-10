@@ -2770,7 +2770,16 @@ def list_rfpos():
             for pa in user_pending:
                 inst = RFPOApprovalInstance.query.get(pa.instance_id)
                 if inst and inst.rfpo_id:
-                    pending_action_map[inst.rfpo_id] = pa.action_id
+                    # Only pick the action that is currently active (matches current stage/step)
+                    if pa.stage_order == inst.current_stage_order:
+                        if pa.step_order == inst.current_step_order:
+                            # Exact match — always use this one
+                            pending_action_map[inst.rfpo_id] = pa.action_id
+                        else:
+                            # Check if the stage is parallel (any step can act)
+                            stage_data = inst.get_current_stage()
+                            if stage_data and stage_data.get("is_parallel"):
+                                pending_action_map.setdefault(inst.rfpo_id, pa.action_id)
         except Exception as e:
             app.logger.warning(f"Failed to load pending actions: {e}")
 

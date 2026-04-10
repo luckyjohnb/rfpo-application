@@ -3052,6 +3052,7 @@ def get_rfpo(rfpo_id):
                         "file_id": file.file_id,
                         "original_filename": file.original_filename,
                         "file_size": file.file_size,
+                        "file_extension": file.file_extension,
                         "document_type": file.document_type,
                         "description": file.description,
                         "uploaded_at": (
@@ -3061,11 +3062,12 @@ def get_rfpo(rfpo_id):
                     }
                 )
 
-        # Build RFPO response with line items included
+        # Build RFPO response with line items and files included
         rfpo_data = rfpo.to_dict()
         rfpo_data["line_items"] = [
             item.to_dict() for item in rfpo.line_items
         ]
+        rfpo_data["files"] = files_data
 
         return jsonify(
             {

@@ -527,10 +527,33 @@
         const files = (currentRfpo && currentRfpo.files) || [];
         const matchingFile = files.find(f => f.document_type === doc.name);
         if (!matchingFile) {
-            showAlert('File not found for this document type', 'warning');
+            // Fallback: try matching by key
+            const matchByKey = files.find(f => f.document_type === doc.key);
+            if (!matchByKey) {
+                showAlert('File not found for this document type. Try deleting from the files list below.', 'warning');
+                return;
+            }
+            doDeleteAndReload(matchByKey.file_id);
             return;
         }
-        deleteFile(matchingFile.file_id, matchingFile.original_filename);
+        doDeleteAndReload(matchingFile.file_id);
+    }
+
+    async function doDeleteAndReload(fileId) {
+        try {
+            const response = await makeApiCall(`/api/rfpos/${rfpoId}/files/${fileId}`, { method: 'DELETE' });
+            if (response.success) {
+                showAlert('File removed. You can now re-upload.', 'success');
+                currentGuidedIndex = -1;
+                activeUploadIndex = -1;
+                await loadRfpoData();
+                await loadValidation();
+            } else {
+                showAlert(response.message || 'Failed to delete file', 'danger');
+            }
+        } catch (error) {
+            showAlert(`Error: ${error.message}`, 'danger');
+        }
     }
 
     // ─── Generic Upload (for additional/optional docs) ───────────────

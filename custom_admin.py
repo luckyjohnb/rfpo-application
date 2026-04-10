@@ -1413,16 +1413,17 @@ def create_app():
                             for f in rfpo.files if f.document_type
                         ]
 
-                        # Collect approval steps across all cumulative stages, deduped by approval_type_key
+                        # Collect approval steps across all cumulative stages, deduped by approver_id
+                        # (same person won't appear twice, but multiple approvers of same type are kept)
                         approval_steps = []
-                        seen_approval_types = set()
+                        seen_approvers = set()
                         for cstage in cumulative_stages:
                             for step in sorted(cstage.steps, key=lambda s: s.step_order):
-                                atype = step.approval_type_key
-                                if atype and atype in seen_approval_types:
+                                approver_id = step.primary_approver_id
+                                if approver_id and approver_id in seen_approvers:
                                     continue
-                                if atype:
-                                    seen_approval_types.add(atype)
+                                if approver_id:
+                                    seen_approvers.add(approver_id)
 
                                 primary_approver = User.query.filter_by(
                                     record_id=step.primary_approver_id, active=True

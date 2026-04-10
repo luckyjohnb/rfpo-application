@@ -425,16 +425,17 @@ def _validate_rfpo_for_approval(rfpo):
     )
     all_stages_for_validation = all_entity_stages + sorted_global_stages
 
-    # Collect approver info — dedup by approval_type_key, keeping tiered order
+    # Collect approver info — dedup by approver_id so the same person isn't listed
+    # twice across workflow levels, but multiple approvers of the same type are kept
     approver_info = []
-    seen_approval_types = set()
+    seen_approvers = set()
     for vstage in all_stages_for_validation:
         for step in sorted(vstage.steps, key=lambda s: s.step_order):
-            dedup_key = step.approval_type_key
-            if dedup_key and dedup_key in seen_approval_types:
+            approver_id = step.primary_approver_id
+            if approver_id and approver_id in seen_approvers:
                 continue
-            if dedup_key:
-                seen_approval_types.add(dedup_key)
+            if approver_id:
+                seen_approvers.add(approver_id)
             approver = User.query.filter_by(record_id=step.primary_approver_id, active=True).first()
             approver_info.append({
                 "step_name": step.step_name,
@@ -1799,18 +1800,18 @@ def submit_for_approval(rfpo_id):
                 if stage.steps:
                     entity_stage_data.append(_build_stage_data(stage, is_global=False))
 
-        # Dedup entity stages by approval_type_key across steps — keep tiered order
-        # (lower brackets come first, so their steps win the dedup)
-        seen_approval_types = set()
+        # Dedup entity stages by approver_id across steps — keep tiered order
+        # Same person won't appear twice, but multiple approvers of same type are kept
+        seen_approver_ids = set()
         deduped_entity_stages = []
         for stage_data in entity_stage_data:
             deduped_steps = []
             for step in stage_data["steps"]:
-                atype = step["approval_type_key"]
-                if atype and atype in seen_approval_types:
+                approver_id = step.get("primary_approver_id")
+                if approver_id and approver_id in seen_approver_ids:
                     continue
-                if atype:
-                    seen_approval_types.add(atype)
+                if approver_id:
+                    seen_approver_ids.add(approver_id)
                 deduped_steps.append(step)
             if deduped_steps:
                 stage_data["steps"] = deduped_steps
@@ -1826,14 +1827,14 @@ def submit_for_approval(rfpo_id):
         for gs in global_stages:
             gkey = (gs.budget_bracket_key or "").upper()
             gsd = _build_stage_data(gs, is_global=True)
-            # Dedup global steps against already-seen entity approval types
+            # Dedup global steps against already-seen approver IDs
             deduped_steps = []
             for step in gsd["steps"]:
-                atype = step["approval_type_key"]
-                if atype and atype in seen_approval_types:
+                approver_id = step.get("primary_approver_id")
+                if approver_id and approver_id in seen_approver_ids:
                     continue
-                if atype:
-                    seen_approval_types.add(atype)
+                if approver_id:
+                    seen_approver_ids.add(approver_id)
                 deduped_steps.append(step)
             if deduped_steps:
                 gsd["steps"] = deduped_steps

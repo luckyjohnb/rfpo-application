@@ -75,43 +75,9 @@
                 <!-- Document checklist with status -->
                 <div id="docChecklist" class="mb-3"></div>
 
-                <!-- Guided upload form (shown for current required doc) -->
-                <div id="guidedUploadArea" style="display: none;">
-                    <div class="border rounded p-3 bg-white">
-                        <div class="d-flex align-items-center mb-3">
-                            <i class="fas fa-arrow-right text-primary me-2"></i>
-                            <h6 class="mb-0">Upload: <strong id="guidedDocTypeName"></strong></h6>
-                        </div>
-                        <form id="guidedUploadForm" enctype="multipart/form-data">
-                            <input type="hidden" id="guidedDocType" value="">
-                            <div class="mb-3">
-                                <label for="guidedFile" class="form-label">Select File <span class="text-danger">*</span></label>
-                                <input type="file" class="form-control" id="guidedFile" name="file" required
-                                       accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif">
-                                <div class="form-text">Max 10 MB. PDF, Word, Excel, Text, Images.</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="guidedDescription" class="form-label">Description (Optional)</label>
-                                <textarea class="form-control" id="guidedDescription" rows="2"
-                                          placeholder="Brief description" maxlength="500"></textarea>
-                            </div>
-                            <div id="guidedProgressContainer" class="mb-3" style="display: none;">
-                                <div class="progress">
-                                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="guidedProgressBar"
-                                         role="progressbar" style="width: 0%">0%</div>
-                                </div>
-                            </div>
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-primary" id="guidedSubmitBtn">
-                                    <i class="fas fa-upload"></i> Upload
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="skipCurrentDoc()">
-                                    Skip for Now
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <!-- Hidden file input for one-click doc uploads -->
+                <input type="file" id="docFileInput" style="display: none;"
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif">
 
                 <!-- All done banner -->
                 <div id="allDocsCompleteBanner" class="alert alert-success mb-0" style="display: none;">
@@ -411,6 +377,8 @@
 
     // ─── Guided Document Wizard ──────────────────────────────────────
 
+    let activeUploadIndex = -1; // tracks which doc row is currently uploading
+
     function updateDocWizard() {
         const card = document.getElementById('guidedDocsCard');
         if (requiredDocs.length === 0) {
@@ -429,102 +397,134 @@
         document.getElementById('docProgressBadge').className = allDone ? 'badge bg-success' : 'badge bg-secondary';
         document.getElementById('docStepLabel').textContent = allDone
             ? 'All documents collected!'
-            : `Step ${uploaded + 1} of ${total}`;
+            : `${uploaded} of ${total} uploaded`;
         document.getElementById('docStepPercent').textContent = pct + '%';
         document.getElementById('docStepProgressBar').style.width = pct + '%';
         document.getElementById('docStepProgressBar').className = 'progress-bar ' + (allDone ? 'bg-success' : 'bg-primary');
 
-        // Checklist
+        // Checklist — inline upload button per doc, inline progress, delete for uploaded
         const checklist = document.getElementById('docChecklist');
+        const files = (currentRfpo && currentRfpo.files) || [];
         checklist.innerHTML = requiredDocs.map((d, i) => {
             if (d.is_uploaded) {
-                return `<div class="d-flex align-items-center mb-2 text-success">
-                    <i class="fas fa-check-circle me-2"></i>
-                    <span>${escapeHtml(d.name)}</span>
-                    <span class="badge bg-success ms-auto">Uploaded</span>
+                const matchingFile = files.find(f => f.document_type === d.name);
+                const fileName = matchingFile ? matchingFile.original_filename : '';
+                const fileId = matchingFile ? matchingFile.file_id : '';
+                return `<div class="d-flex align-items-center mb-2">
+                    <i class="fas fa-check-circle text-success me-2"></i>
+                    <span class="text-success">${escapeHtml(d.name)}</span>
+                    <small class="text-muted ms-2 text-truncate" style="max-width: 140px;" title="${escapeHtml(fileName)}">${escapeHtml(fileName)}</small>
+                    <button class="btn btn-sm btn-outline-danger ms-auto py-0 px-2"
+                            onclick="deleteRequiredDoc('${escapeHtml(fileId)}', '${escapeHtml(fileName)}')"
+                            title="Remove and re-upload">
+                        <i class="fas fa-redo-alt"></i>
+                    </button>
                 </div>`;
             } else {
-                const isCurrent = (i === findNextMissingIndex());
-                return `<div class="d-flex align-items-center mb-2 ${isCurrent ? 'fw-bold text-primary' : 'text-muted'}">
-                    <i class="fas ${isCurrent ? 'fa-arrow-circle-right text-primary' : 'fa-circle'} me-2"></i>
+                return `<div class="d-flex align-items-center mb-2" id="docRow_${i}">
+                    <i class="fas fa-circle text-muted me-2" id="docIcon_${i}" style="font-size: 0.5rem;"></i>
                     <span>${escapeHtml(d.name)}</span>
-                    <button class="btn btn-sm ${isCurrent ? 'btn-primary' : 'btn-outline-primary'} ms-auto py-0 px-2"
-                            onclick="startGuidedUpload(${i})">
-                        <i class="fas fa-upload"></i> Upload
-                    </button>
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <div class="progress" id="docProgress_${i}" style="width: 80px; height: 6px; display: none;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                 id="docProgressBar_${i}" style="width: 0%"></div>
+                        </div>
+                        <button class="btn btn-sm btn-primary py-0 px-2" id="docUploadBtn_${i}"
+                                onclick="triggerDocUpload(${i})">
+                            <i class="fas fa-upload"></i> Upload
+                        </button>
+                    </div>
                 </div>`;
             }
         }).join('');
 
-        // Show/hide guided upload area and all-done banner
-        if (allDone) {
-            document.getElementById('guidedUploadArea').style.display = 'none';
-            document.getElementById('allDocsCompleteBanner').style.display = '';
-        } else {
-            document.getElementById('allDocsCompleteBanner').style.display = 'none';
-            // Auto-open the upload form for the first missing doc
-            const nextIdx = findNextMissingIndex();
-            if (nextIdx >= 0 && currentGuidedIndex < 0) {
-                startGuidedUpload(nextIdx);
-            }
+        // Show/hide all-done banner
+        document.getElementById('allDocsCompleteBanner').style.display = allDone ? '' : 'none';
+    }
+
+    function triggerDocUpload(index) {
+        activeUploadIndex = index;
+        const fileInput = document.getElementById('docFileInput');
+        fileInput.value = ''; // reset so same file can be re-selected
+        fileInput.click();
+    }
+
+    function onDocFileSelected() {
+        const fileInput = document.getElementById('docFileInput');
+        if (!fileInput.files.length || activeUploadIndex < 0) return;
+
+        const file = fileInput.files[0];
+        if (file.size > 10 * 1024 * 1024) {
+            showAlert('File exceeds 10 MB limit.', 'danger');
+            return;
         }
-    }
 
-    function findNextMissingIndex() {
-        return requiredDocs.findIndex(d => !d.is_uploaded);
-    }
+        const idx = activeUploadIndex;
+        const docType = requiredDocs[idx].name;
+        const btn = document.getElementById(`docUploadBtn_${idx}`);
+        const progressDiv = document.getElementById(`docProgress_${idx}`);
+        const progressBar = document.getElementById(`docProgressBar_${idx}`);
 
-    function startGuidedUpload(index) {
-        currentGuidedIndex = index;
-        const doc = requiredDocs[index];
-        document.getElementById('guidedDocTypeName').textContent = doc.name;
-        document.getElementById('guidedDocType').value = doc.name;
-        document.getElementById('guidedUploadForm').reset();
-        document.getElementById('guidedDocType').value = doc.name; // reset clears hidden
-        document.getElementById('guidedUploadArea').style.display = '';
-        document.getElementById('guidedFile').focus();
+        // Show progress, disable button
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        progressDiv.style.display = '';
+        progressBar.style.width = '0%';
 
-        // Re-render checklist to highlight current
-        const checklist = document.getElementById('docChecklist');
-        checklist.innerHTML = requiredDocs.map((d, i) => {
-            if (d.is_uploaded) {
-                return `<div class="d-flex align-items-center mb-2 text-success">
-                    <i class="fas fa-check-circle me-2"></i>
-                    <span>${escapeHtml(d.name)}</span>
-                    <span class="badge bg-success ms-auto">Uploaded</span>
-                </div>`;
-            } else {
-                const isCurrent = (i === index);
-                return `<div class="d-flex align-items-center mb-2 ${isCurrent ? 'fw-bold text-primary' : 'text-muted'}">
-                    <i class="fas ${isCurrent ? 'fa-arrow-circle-right text-primary' : 'fa-circle'} me-2"></i>
-                    <span>${escapeHtml(d.name)}</span>
-                    <button class="btn btn-sm ${isCurrent ? 'btn-primary' : 'btn-outline-primary'} ms-auto py-0 px-2"
-                            onclick="startGuidedUpload(${i})">
-                        <i class="fas fa-upload"></i> Upload
-                    </button>
-                </div>`;
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('document_type', docType);
+
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                const pct = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = pct + '%';
             }
-        }).join('');
-    }
+        });
 
-    function skipCurrentDoc() {
-        document.getElementById('guidedUploadArea').style.display = 'none';
-        currentGuidedIndex = -1;
-        // Find the next missing doc after the current one
-        const nextIdx = findNextMissingIndex();
-        if (nextIdx >= 0) {
-            // Find a different one if available
-            let skipTo = -1;
-            for (let i = 0; i < requiredDocs.length; i++) {
-                if (!requiredDocs[i].is_uploaded && i !== currentGuidedIndex) {
-                    skipTo = i;
-                    break;
+        xhr.addEventListener('load', function() {
+            try {
+                const result = JSON.parse(xhr.responseText);
+                if (result.success) {
+                    showAlert(`${docType} uploaded!`, 'success');
+                    activeUploadIndex = -1;
+                    currentGuidedIndex = -1;
+                    loadRfpoData().then(() => loadValidation());
+                } else {
+                    showAlert(`Upload error: ${result.message || 'Failed'}`, 'danger');
+                    resetDocUploadBtn(idx);
                 }
+            } catch (parseErr) {
+                showAlert('Upload error: Invalid server response', 'danger');
+                resetDocUploadBtn(idx);
             }
-            if (skipTo >= 0) {
-                startGuidedUpload(skipTo);
-            }
+        });
+
+        xhr.addEventListener('error', function() {
+            showAlert('Upload error: Network error', 'danger');
+            resetDocUploadBtn(idx);
+        });
+
+        xhr.open('POST', `/api/rfpos/${rfpoId}/files/upload`);
+        xhr.setRequestHeader('X-CSRFToken', getCsrfToken());
+        xhr.send(formData);
+    }
+
+    function resetDocUploadBtn(idx) {
+        const btn = document.getElementById(`docUploadBtn_${idx}`);
+        const progressDiv = document.getElementById(`docProgress_${idx}`);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
         }
+        if (progressDiv) progressDiv.style.display = 'none';
+    }
+
+    function deleteRequiredDoc(fileId, fileName) {
+        if (!fileId) return;
+        deleteFile(fileId, fileName);
     }
 
     // ─── Generic Upload (for additional/optional docs) ───────────────
@@ -761,27 +761,10 @@
     }
 
     function initUploadHandlers() {
-        // Guided upload form
-        const guidedForm = document.getElementById('guidedUploadForm');
-        if (guidedForm) {
-            guidedForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const docType = document.getElementById('guidedDocType').value;
-                doUpload(
-                    document.getElementById('guidedFile'),
-                    docType,
-                    document.getElementById('guidedDescription').value,
-                    document.getElementById('guidedSubmitBtn'),
-                    document.getElementById('guidedProgressContainer'),
-                    document.getElementById('guidedProgressBar'),
-                    async function() {
-                        document.getElementById('guidedUploadArea').style.display = 'none';
-                        currentGuidedIndex = -1;
-                        await loadRfpoData();
-                        await loadValidation();
-                    }
-                );
-            });
+        // One-click doc upload: file selected → auto-upload
+        const docInput = document.getElementById('docFileInput');
+        if (docInput) {
+            docInput.addEventListener('change', onDocFileSelected);
         }
 
         // Generic upload form

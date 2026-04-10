@@ -393,8 +393,16 @@ def _validate_rfpo_for_approval(rfpo):
         "approval_steps": approver_info,
     }
 
-    # Required document validation
-    required_doc_keys = applicable_stage.get_required_document_types() if applicable_stage and hasattr(applicable_stage, 'get_required_document_types') else []
+    # Required document validation — aggregate across ALL stages (entity + global)
+    required_doc_keys = []
+    seen_keys = set()
+    for vstage in all_stages_for_validation:
+        if hasattr(vstage, 'get_required_document_types'):
+            for key in vstage.get_required_document_types():
+                if key not in seen_keys:
+                    required_doc_keys.append(key)
+                    seen_keys.add(key)
+
     if required_doc_keys:
         uploaded_doc_types = [f.document_type for f in rfpo.files if f.document_type]
 

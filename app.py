@@ -574,6 +574,46 @@ def create_user_app():
             default_team=default_team,
         )
 
+    @app.route("/rfpos/<int:rfpo_id>/line-items")
+    def rfpo_create_line_items(rfpo_id):
+        """Create RFPO - Stage 3: Line Items"""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+
+        user_info = make_api_request("/auth/verify")
+        if user_info.get("error") == "permissions_changed":
+            return redirect(
+                url_for("login_page", reason="permissions_changed")
+            )
+        if user_info.get("authenticated"):
+            roles = user_info.get("user", {}).get("roles", [])
+            if "RFPO_ADMIN" not in roles and "GOD" not in roles:
+                return redirect(url_for("dashboard"))
+
+        return render_template(
+            "app/rfpo_create_stage3.html", rfpo_id=rfpo_id
+        )
+
+    @app.route("/rfpos/<int:rfpo_id>/review")
+    def rfpo_create_review(rfpo_id):
+        """Create RFPO - Stage 4: Review & Submit"""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+
+        user_info = make_api_request("/auth/verify")
+        if user_info.get("error") == "permissions_changed":
+            return redirect(
+                url_for("login_page", reason="permissions_changed")
+            )
+        if user_info.get("authenticated"):
+            roles = user_info.get("user", {}).get("roles", [])
+            if "RFPO_ADMIN" not in roles and "GOD" not in roles:
+                return redirect(url_for("dashboard"))
+
+        return render_template(
+            "app/rfpo_create_stage4.html", rfpo_id=rfpo_id
+        )
+
     @app.route("/rfpos/<int:rfpo_id>")
     def rfpo_detail(rfpo_id):
         """RFPO detail page"""

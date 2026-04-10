@@ -1,0 +1,505 @@
+{% extends "app/base.html" %}
+
+{% block title %}Create RFPO - Stage 3 - Line Items{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('rfpos_list') }}">RFPOs</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Create - Stage 3</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">📄 Create RFPO - Stage 3: Line Items</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="/rfpos/{{ rfpo_id }}" class="btn btn-outline-secondary">
+            <i class="fas fa-save"></i> Save &amp; Finish Later
+        </a>
+    </div>
+</div>
+
+<!-- Progress indicator -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="progress" style="height: 8px;">
+            <div class="progress-bar bg-primary" role="progressbar" style="width: 75%" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-2">
+            <small class="text-success"><i class="fas fa-check-circle"></i> 1. Select Project</small>
+            <small class="text-success"><i class="fas fa-check-circle"></i> 2. Basic Info</small>
+            <small class="text-primary fw-bold">3. Line Items</small>
+            <small class="text-muted">4. Review</small>
+        </div>
+    </div>
+</div>
+
+<!-- RFPO Context Banner -->
+<div class="alert alert-info mb-4" id="rfpoContextBanner">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <i class="fas fa-info-circle fs-5"></i>
+        <span><strong>RFPO:</strong> <span id="rfpoTitle">Loading...</span></span>
+        <span class="d-none d-sm-inline text-muted">|</span>
+        <span><strong>ID:</strong> <span id="rfpoIdDisplay">{{ rfpo_id }}</span></span>
+    </div>
+</div>
+
+<!-- Line Items Section -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-receipt"></i> Line Items <span class="badge bg-secondary" id="lineItemCount">0</span></h5>
+        <button class="btn btn-primary btn-sm" onclick="showAddForm()">
+            <i class="fas fa-plus"></i> Add Line Item
+        </button>
+    </div>
+    <div class="card-body">
+        <!-- Inline Add/Edit Form (hidden by default) -->
+        <div id="lineItemForm" class="border rounded p-3 mb-3 bg-light" style="display: none;">
+            <h6 id="formTitle" class="mb-3"><i class="fas fa-plus"></i> Add Line Item</h6>
+            <input type="hidden" id="editLineItemId" value="">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label for="liQuantity" class="form-label">Quantity <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="liQuantity" value="1" min="1" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="liDescription" class="form-label">Description <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="liDescription" placeholder="Item description" required>
+                </div>
+                <div class="col-md-2">
+                    <label for="liUnitPrice" class="form-label">Unit Price <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="liUnitPrice" value="0.00" min="0" step="0.01" required>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="fw-bold text-end w-100">
+                        <label class="form-label">Total</label>
+                        <div id="liCalculatedTotal" class="fs-5 text-primary">$0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Capital Equipment Toggle -->
+            <div class="mt-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="liIsCapital" onchange="toggleCapitalFields()">
+                    <label class="form-check-label" for="liIsCapital">
+                        <i class="fas fa-tools"></i> Capital Equipment
+                    </label>
+                </div>
+            </div>
+
+            <!-- Capital Equipment Fields -->
+            <div id="capitalFieldsSection" class="row g-3 mt-1" style="display: none;">
+                <div class="col-md-4">
+                    <label for="liCapitalDesc" class="form-label">Capital Description</label>
+                    <input type="text" class="form-control" id="liCapitalDesc" placeholder="Equipment description">
+                </div>
+                <div class="col-md-4">
+                    <label for="liCapitalSerial" class="form-label">Serial ID</label>
+                    <input type="text" class="form-control" id="liCapitalSerial" placeholder="Serial number">
+                </div>
+                <div class="col-md-4">
+                    <label for="liCapitalLocation" class="form-label">Location</label>
+                    <input type="text" class="form-control" id="liCapitalLocation" placeholder="Equipment location">
+                </div>
+                <div class="col-md-4">
+                    <label for="liCapitalCondition" class="form-label">Condition</label>
+                    <select class="form-select" id="liCapitalCondition">
+                        <option value="">-- Select --</option>
+                        <option value="New">New</option>
+                        <option value="Used">Used</option>
+                        <option value="Refurbished">Refurbished</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="liCapitalDate" class="form-label">Acquisition Date</label>
+                    <input type="date" class="form-control" id="liCapitalDate">
+                </div>
+                <div class="col-md-4">
+                    <label for="liCapitalCost" class="form-label">Acquisition Cost</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="liCapitalCost" min="0" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary" id="saveLineItemBtn" onclick="saveLineItem()">
+                    <i class="fas fa-plus"></i> Add Line Item
+                </button>
+                <button class="btn btn-secondary" onclick="hideForm()">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Line Items Table -->
+        <div id="lineItemsContent">
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted mb-3"></i>
+                <p class="text-muted">Loading line items...</p>
+            </div>
+        </div>
+
+        <!-- Totals Summary -->
+        <div id="totalsSummary" class="mt-3" style="display: none;">
+            <div class="card bg-light">
+                <div class="card-body py-2">
+                    <div class="row text-end">
+                        <div class="col-md-8 d-none d-md-block"></div>
+                        <div class="col-12 col-md-4">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Subtotal:</span>
+                                <strong id="subtotalDisplay">$0.00</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1" id="costShareRow" style="display: none;">
+                                <span>Cost Share:</span>
+                                <strong id="costShareDisplay" class="text-warning">-$0.00</strong>
+                            </div>
+                            <hr class="my-1">
+                            <div class="d-flex justify-content-between">
+                                <span class="fs-5">Net Total:</span>
+                                <strong id="netTotalDisplay" class="fs-5 text-success">$0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Buttons -->
+<div class="d-flex flex-column flex-sm-row justify-content-between gap-2 mb-4">
+    <a href="/rfpos/{{ rfpo_id }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Back to RFPO Details
+    </a>
+    <div class="d-flex flex-column flex-sm-row gap-2">
+        <a href="/rfpos/{{ rfpo_id }}" class="btn btn-outline-secondary">
+            <i class="fas fa-save"></i> Save &amp; Finish Later
+        </a>
+        <button class="btn btn-primary" id="continueBtn" onclick="continueToReview()">
+            Continue to Review <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const rfpoId = {{ rfpo_id }};
+    const isAdmin = true;
+    let currentRfpo = null;
+
+    // ─── Form Helpers ────────────────────────────────────────────────
+
+    function showAddForm() {
+        resetForm();
+        document.getElementById('formTitle').innerHTML = '<i class="fas fa-plus"></i> Add Line Item';
+        document.getElementById('saveLineItemBtn').innerHTML = '<i class="fas fa-plus"></i> Add Line Item';
+        document.getElementById('lineItemForm').style.display = 'block';
+        document.getElementById('liDescription').focus();
+    }
+
+    function showEditForm(lineItemId) {
+        const item = currentRfpo.line_items.find(li => li.id === lineItemId);
+        if (!item) {
+            showAlert('Line item not found', 'danger');
+            return;
+        }
+
+        resetForm();
+        document.getElementById('editLineItemId').value = item.id;
+        document.getElementById('liQuantity').value = item.quantity || 1;
+        document.getElementById('liDescription').value = item.description || '';
+        document.getElementById('liUnitPrice').value = item.unit_price || 0;
+        document.getElementById('liIsCapital').checked = item.is_capital_equipment || false;
+
+        if (item.is_capital_equipment) {
+            document.getElementById('capitalFieldsSection').style.display = '';
+            document.getElementById('liCapitalDesc').value = item.capital_description || '';
+            document.getElementById('liCapitalSerial').value = item.capital_serial_id || '';
+            document.getElementById('liCapitalDate').value = item.capital_acquisition_date || '';
+            document.getElementById('liCapitalLocation').value = item.capital_location || '';
+            document.getElementById('liCapitalCondition').value = item.capital_condition || '';
+            document.getElementById('liCapitalCost').value = item.capital_acquisition_cost || '';
+        }
+
+        updateCalculatedTotal();
+        document.getElementById('formTitle').innerHTML = `<i class="fas fa-edit"></i> Edit Line Item #${item.line_number}`;
+        document.getElementById('saveLineItemBtn').innerHTML = '<i class="fas fa-save"></i> Save Changes';
+        document.getElementById('lineItemForm').style.display = 'block';
+        document.getElementById('liDescription').focus();
+    }
+
+    function hideForm() {
+        document.getElementById('lineItemForm').style.display = 'none';
+        resetForm();
+    }
+
+    function resetForm() {
+        document.getElementById('editLineItemId').value = '';
+        document.getElementById('liQuantity').value = 1;
+        document.getElementById('liDescription').value = '';
+        document.getElementById('liUnitPrice').value = '0.00';
+        document.getElementById('liIsCapital').checked = false;
+        document.getElementById('liCapitalDesc').value = '';
+        document.getElementById('liCapitalSerial').value = '';
+        document.getElementById('liCapitalDate').value = '';
+        document.getElementById('liCapitalLocation').value = '';
+        document.getElementById('liCapitalCondition').value = '';
+        document.getElementById('liCapitalCost').value = '';
+        document.getElementById('capitalFieldsSection').style.display = 'none';
+        updateCalculatedTotal();
+    }
+
+    function toggleCapitalFields() {
+        const isCapital = document.getElementById('liIsCapital').checked;
+        document.getElementById('capitalFieldsSection').style.display = isCapital ? '' : 'none';
+    }
+
+    function updateCalculatedTotal() {
+        const qty = parseInt(document.getElementById('liQuantity').value) || 0;
+        const price = parseFloat(document.getElementById('liUnitPrice').value) || 0;
+        const total = qty * price;
+        document.getElementById('liCalculatedTotal').textContent = '$' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    // ─── API Operations ──────────────────────────────────────────────
+
+    async function loadRfpoData() {
+        try {
+            const response = await makeApiCall(`/api/rfpos/${rfpoId}`);
+            if (response.success) {
+                currentRfpo = response.rfpo;
+                document.getElementById('rfpoTitle').textContent = currentRfpo.title || 'Untitled RFPO';
+                displayLineItems(currentRfpo.line_items || []);
+                updateTotals(currentRfpo.line_items || []);
+            } else {
+                showAlert('Failed to load RFPO data', 'danger');
+            }
+        } catch (error) {
+            showAlert(`Error loading RFPO: ${error.message}`, 'danger');
+        }
+    }
+
+    async function saveLineItem() {
+        const description = document.getElementById('liDescription').value.trim();
+        const quantity = parseInt(document.getElementById('liQuantity').value);
+        const unitPrice = parseFloat(document.getElementById('liUnitPrice').value);
+
+        if (!description) {
+            showAlert('Description is required', 'warning');
+            return;
+        }
+        if (!quantity || quantity < 1) {
+            showAlert('Quantity must be at least 1', 'warning');
+            return;
+        }
+        if (isNaN(unitPrice) || unitPrice < 0) {
+            showAlert('Unit price must be a valid number', 'warning');
+            return;
+        }
+
+        const data = {
+            description: description,
+            quantity: quantity,
+            unit_price: unitPrice,
+            is_capital_equipment: document.getElementById('liIsCapital').checked,
+            capital_description: document.getElementById('liCapitalDesc').value.trim() || null,
+            capital_serial_id: document.getElementById('liCapitalSerial').value.trim() || null,
+            capital_location: document.getElementById('liCapitalLocation').value.trim() || null,
+            capital_condition: document.getElementById('liCapitalCondition').value.trim() || null,
+            capital_acquisition_date: document.getElementById('liCapitalDate').value || null,
+            capital_acquisition_cost: parseFloat(document.getElementById('liCapitalCost').value) || null
+        };
+
+        const editId = document.getElementById('editLineItemId').value;
+        const btn = document.getElementById('saveLineItemBtn');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        try {
+            let response;
+            if (editId) {
+                response = await makeApiCall(`/api/rfpos/${rfpoId}/line-items/${editId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+            } else {
+                response = await makeApiCall(`/api/rfpos/${rfpoId}/line-items`, {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+            }
+
+            if (response.success) {
+                showAlert(editId ? 'Line item updated!' : 'Line item added!', 'success');
+                hideForm();
+                await loadRfpoData();
+                // Re-show the add form for quick sequential entry
+                if (!editId) {
+                    setTimeout(() => showAddForm(), 300);
+                }
+            } else {
+                showAlert(response.message || 'Failed to save line item', 'danger');
+            }
+        } catch (error) {
+            showAlert(`Error saving line item: ${error.message}`, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+
+    async function deleteLineItem(lineItemId, lineNumber) {
+        showConfirmModal('Delete', `Delete line item <strong>#${lineNumber}</strong>? This cannot be undone.`, async function() {
+            try {
+                const response = await makeApiCall(`/api/rfpos/${rfpoId}/line-items/${lineItemId}`, {
+                    method: 'DELETE'
+                });
+                if (response.success) {
+                    showAlert('Line item deleted!', 'success');
+                    await loadRfpoData();
+                } else {
+                    showAlert(response.message || 'Failed to delete', 'danger');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'danger');
+            }
+        });
+    }
+
+    // ─── Display ─────────────────────────────────────────────────────
+
+    function displayLineItems(lineItems) {
+        const container = document.getElementById('lineItemsContent');
+        const countBadge = document.getElementById('lineItemCount');
+        countBadge.textContent = lineItems ? lineItems.length : 0;
+
+        if (!lineItems || lineItems.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No line items yet</h5>
+                    <p class="text-muted mb-3">Add at least one line item to your RFPO.</p>
+                    <button class="btn btn-primary" onclick="showAddForm()">
+                        <i class="fas fa-plus"></i> Add First Line Item
+                    </button>
+                </div>`;
+            document.getElementById('totalsSummary').style.display = 'none';
+            return;
+        }
+
+        const rows = lineItems.sort((a, b) => a.line_number - b.line_number).map(item => `
+            <tr>
+                <td>${item.line_number}</td>
+                <td>${item.quantity}</td>
+                <td>
+                    ${escapeHtml(item.description)}
+                    ${item.is_capital_equipment ? '<br><small class="text-info"><i class="fas fa-tools"></i> Capital Equipment</small>' : ''}
+                </td>
+                <td class="text-end">$${Number(item.unit_price || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td class="text-end fw-bold">$${Number(item.total_price || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td>
+                    <button class="btn btn-outline-primary btn-sm me-1" onclick="showEditForm(${item.id})" title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteLineItem(${item.id}, ${item.line_number})" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">Qty</th>
+                            <th scope="col">Description</th>
+                            <th scope="col" class="text-end">Unit Price</th>
+                            <th scope="col" class="text-end">Total</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+    }
+
+    function updateTotals(lineItems) {
+        if (!lineItems || lineItems.length === 0) {
+            document.getElementById('totalsSummary').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('totalsSummary').style.display = '';
+
+        const subtotal = lineItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
+        const costShareAmount = currentRfpo.cost_share_amount || 0;
+        const costShareType = currentRfpo.cost_share_type || '';
+        let costShare = 0;
+        if (costShareType === 'percent') {
+            costShare = (subtotal * costShareAmount) / 100;
+        } else if (costShareAmount > 0) {
+            costShare = costShareAmount;
+        }
+        const netTotal = subtotal - costShare;
+
+        document.getElementById('subtotalDisplay').textContent = '$' + subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('netTotalDisplay').textContent = '$' + netTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        if (costShare > 0) {
+            document.getElementById('costShareRow').style.display = '';
+            document.getElementById('costShareDisplay').textContent = '-$' + costShare.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        } else {
+            document.getElementById('costShareRow').style.display = 'none';
+        }
+    }
+
+    // ─── Navigation ──────────────────────────────────────────────────
+
+    function continueToReview() {
+        const count = currentRfpo && currentRfpo.line_items ? currentRfpo.line_items.length : 0;
+        if (count === 0) {
+            showAlert('Please add at least one line item before continuing.', 'warning');
+            return;
+        }
+        window.location.href = `/rfpos/${rfpoId}/review`;
+    }
+
+    // ─── Init ────────────────────────────────────────────────────────
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadRfpoData();
+        document.getElementById('liQuantity').addEventListener('input', updateCalculatedTotal);
+        document.getElementById('liUnitPrice').addEventListener('input', updateCalculatedTotal);
+
+        // Enter key submits the form
+        document.getElementById('lineItemForm').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                saveLineItem();
+            }
+        });
+    });
+</script>
+{% endblock %}

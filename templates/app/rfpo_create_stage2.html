@@ -99,6 +99,7 @@
                         <label for="delivery_date" class="form-label">PO Expiration Date</label>
                         <input type="date" class="form-control" id="delivery_date" name="delivery_date"
                                min="">
+                        <div class="form-text">Defaults to 30 days from today</div>
                     </div>
                 </div>
             </div>
@@ -522,6 +523,16 @@
     }
     {% endif %}
 
+    // Set default PO expiration date to today + 30 days
+    (function setDefaultExpiration() {
+        const dateInput = document.getElementById('delivery_date');
+        if (dateInput && !dateInput.value) {
+            const d = new Date();
+            d.setDate(d.getDate() + 30);
+            dateInput.value = d.toISOString().split('T')[0];
+        }
+    })();
+
     // Vendor → Vendor Site cascading dropdown
     document.getElementById('vendor_id').addEventListener('change', async function() {
         const vendorId = this.value;
@@ -551,6 +562,10 @@
                     siteSelect.appendChild(option);
                 });
                 siteSelect.disabled = false;
+                // Auto-select the first contact
+                if (sites.length >= 1) {
+                    siteSelect.value = sites[0].id;
+                }
             } else {
                 siteSelect.innerHTML = '<option value="">No contacts available for this vendor</option>';
             }
@@ -599,9 +614,9 @@
 
             if (response.success) {
                 window._formDirty = false;
-                showAlert('RFPO created successfully! You can now add line items.', 'success');
+                showAlert('RFPO created successfully! Continuing to line items...', 'success');
                 setTimeout(() => {
-                    window.location.href = `/rfpos/${response.rfpo.id}`;
+                    window.location.href = `/rfpos/${response.rfpo.id}/line-items`;
                 }, 1500);
             } else {
                 throw new Error(response.message || 'Failed to create RFPO');

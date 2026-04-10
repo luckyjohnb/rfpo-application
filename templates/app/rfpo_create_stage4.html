@@ -409,13 +409,12 @@
             if (d.is_uploaded) {
                 const matchingFile = files.find(f => f.document_type === d.name);
                 const fileName = matchingFile ? matchingFile.original_filename : '';
-                const fileId = matchingFile ? matchingFile.file_id : '';
                 return `<div class="d-flex align-items-center mb-2">
                     <i class="fas fa-check-circle text-success me-2"></i>
                     <span class="text-success">${escapeHtml(d.name)}</span>
                     <small class="text-muted ms-2 text-truncate" style="max-width: 140px;" title="${escapeHtml(fileName)}">${escapeHtml(fileName)}</small>
                     <button class="btn btn-sm btn-outline-danger ms-auto py-0 px-2"
-                            onclick="deleteRequiredDoc('${escapeHtml(fileId)}', '${escapeHtml(fileName)}')"
+                            onclick="deleteRequiredDoc(${i})"
                             title="Remove and re-upload">
                         <i class="fas fa-redo-alt"></i>
                     </button>
@@ -522,9 +521,16 @@
         if (progressDiv) progressDiv.style.display = 'none';
     }
 
-    function deleteRequiredDoc(fileId, fileName) {
-        if (!fileId) return;
-        deleteFile(fileId, fileName);
+    function deleteRequiredDoc(docIndex) {
+        const doc = requiredDocs[docIndex];
+        if (!doc) return;
+        const files = (currentRfpo && currentRfpo.files) || [];
+        const matchingFile = files.find(f => f.document_type === doc.name);
+        if (!matchingFile) {
+            showAlert('File not found for this document type', 'warning');
+            return;
+        }
+        deleteFile(matchingFile.file_id, matchingFile.original_filename);
     }
 
     // ─── Generic Upload (for additional/optional docs) ───────────────
@@ -586,7 +592,7 @@
         };
 
         let html = '<div class="list-group">';
-        files.forEach(file => {
+        files.forEach((file, idx) => {
             const fileSize = (file.file_size / 1024).toFixed(1) + ' KB';
             const icon = getFileIcon(file.file_extension || '');
             html += `
@@ -601,7 +607,7 @@
                         <button class="btn btn-outline-primary" onclick="viewFile('${file.file_id}')" title="View">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="btn btn-outline-danger" onclick="deleteFile('${file.file_id}', '${escapeHtml(file.original_filename)}')" title="Delete">
+                        <button class="btn btn-outline-danger" onclick="deleteFileByIndex(${idx})" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -615,8 +621,15 @@
         window.open(`/api/rfpos/${rfpoId}/files/${fileId}/view`, '_blank');
     }
 
+    function deleteFileByIndex(idx) {
+        const files = (currentRfpo && currentRfpo.files) || [];
+        const file = files[idx];
+        if (!file) return;
+        deleteFile(file.file_id, file.original_filename);
+    }
+
     function deleteFile(fileId, fileName) {
-        showConfirmModal('Delete File', `Delete <strong>${fileName}</strong>? This cannot be undone.`, async function() {
+        showConfirmModal('Delete File', `Delete <strong>${escapeHtml(fileName)}</strong>? This cannot be undone.`, async function() {
             try {
                 const response = await makeApiCall(`/api/rfpos/${rfpoId}/files/${fileId}`, { method: 'DELETE' });
                 if (response.success) {

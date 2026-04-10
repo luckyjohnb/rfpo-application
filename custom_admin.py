@@ -3896,8 +3896,9 @@ Southfield, MI  48075""",
             file_id = str(uuid.uuid4())
             stored_filename = f"{file_id}_{original_filename}"
 
-            # Create RFPO-specific directory (organized by business RFPO number)
-            rfpo_dir = os.path.join("uploads", "rfpos", rfpo.rfpo_id, "documents")
+            # Create RFPO-specific directory (organized by business RFPO number and doc type)
+            doc_type_folder = secure_filename(document_type or "general").lower().replace(" ", "-") or "general"
+            rfpo_dir = os.path.join("uploads", "rfpos", rfpo.rfpo_id, "documents", doc_type_folder)
             os.makedirs(rfpo_dir, exist_ok=True)
 
             # Full file path

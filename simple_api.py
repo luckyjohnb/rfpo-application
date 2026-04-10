@@ -3984,7 +3984,8 @@ def upload_rfpo_file(rfpo_id):
         file_id = str(uuid.uuid4())
         stored_filename = f"{file_id}_{original_filename}"
 
-        rfpo_dir = os.path.join("uploads", "rfpos", rfpo.rfpo_id, "documents")
+        doc_type_folder = secure_filename(document_type or "general").lower().replace(" ", "-") or "general"
+        rfpo_dir = os.path.join("uploads", "rfpos", rfpo.rfpo_id, "documents", doc_type_folder)
         os.makedirs(rfpo_dir, exist_ok=True)
 
         file_path = os.path.join(rfpo_dir, stored_filename)

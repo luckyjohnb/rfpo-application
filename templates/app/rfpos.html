@@ -446,7 +446,13 @@
                         body: JSON.stringify({ action_ids: actionIds, status: status, comments: `Bulk ${label}` })
                     });
                     if (response.success) {
-                        showAlert(response.message, 'success');
+                        let msg = response.message;
+                        if (response.results && response.results.errors && response.results.errors.length > 0) {
+                            msg += '<br><small class="text-muted">Details: ' + response.results.errors.join('; ') + '</small>';
+                            showAlert(msg, 'warning');
+                        } else {
+                            showAlert(msg, 'success');
+                        }
                         clearSelection();
                         loadRfpos(currentPage);
                     } else {

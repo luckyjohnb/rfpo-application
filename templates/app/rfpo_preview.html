@@ -264,26 +264,23 @@
                         {% if vendor %}
                             {{ vendor.company_name }}<br/>
                             {% if vendor_site %}
-                                {{ vendor_site.contact_address|replace('\n', '<br />')|safe if vendor_site.contact_address else vendor.contact_address|replace('\n', '<br />')|safe if vendor.contact_address else 'XXXX' }}
+                                {{ vendor_site.contact_address|replace('\n', '<br />')|safe if vendor_site.contact_address else vendor.contact_address|replace('\n', '<br />')|safe if vendor.contact_address else 'N/A' }}
                             {% else %}
-                                {{ vendor.contact_address|replace('\n', '<br />')|safe if vendor.contact_address else 'XXXX' }}
+                                {{ vendor.contact_address|replace('\n', '<br />')|safe if vendor.contact_address else 'N/A' }}
                             {% endif %}
                         {% else %}
-                            XXXX<br/>
-                            XXXX<br/>
-                            XXXX, XXXX XXXX<br />
-                            XXXX
+                            <em class="text-muted">No vendor assigned</em>
                         {% endif %}
                     </p>
                 </td>
                 <td style="text-align:right" nowrap><p id="delivery"><b>Contact:</b></p></td>
                 <td><p>
                     {% if vendor_site %}
-                        {{ vendor_site.contact_name or 'XXXX' }}
+                        {{ vendor_site.contact_name or 'N/A' }}
                     {% elif vendor %}
-                        {{ vendor.contact_name or 'XXXX' }}
+                        {{ vendor.contact_name or 'N/A' }}
                     {% else %}
-                        XXXX
+                        N/A
                     {% endif %}
                 </p></td>
             </tr>
@@ -292,11 +289,11 @@
                 <td style="text-align:right" nowrap><p id="delivery"><b>Contact Tel:</b></p></td>
                 <td><p>
                     {% if vendor_site %}
-                        {{ vendor_site.contact_tel or 'XXXX' }}
+                        {{ vendor_site.contact_tel or 'N/A' }}
                     {% elif vendor %}
-                        {{ vendor.contact_tel or 'XXXX' }}
+                        {{ vendor.contact_tel or 'N/A' }}
                     {% else %}
-                        XXXX
+                        N/A
                     {% endif %}
                 </p></td>
             </tr>

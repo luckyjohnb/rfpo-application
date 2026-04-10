@@ -544,7 +544,7 @@
                                             <span class="badge bg-warning">${actionCount} pending</span>
                                         </div>
                                         <div class="col-md-3 text-end">
-                                            <a href="/approvals" class="btn btn-sm btn-success">
+                                            <a href="{{ url_for('approvals') }}" class="btn btn-sm btn-success">
                                                 <i class="fas fa-clipboard-check"></i> Review
                                             </a>
                                         </div>
@@ -554,7 +554,7 @@
                         }
                         html += `
                             <div class="text-center mt-2">
-                                <a href="/approvals" class="btn btn-warning">
+                                <a href="{{ url_for('approvals') }}" class="btn btn-warning">
                                     <i class="fas fa-clipboard-check"></i> Go to My Approvals
                                 </a>
                             </div>
@@ -566,7 +566,7 @@
                                 <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
                                 <h5 class="text-muted">All caught up!</h5>
                                 <p class="text-muted">No RFPOs are currently waiting for your approval.</p>
-                                <a href="/approvals" class="btn btn-outline-success">
+                                <a href="{{ url_for('approvals') }}" class="btn btn-outline-success">
                                     <i class="fas fa-clipboard-check"></i> View Approvals
                                 </a>
                             </div>
@@ -578,7 +578,7 @@
             const container = document.getElementById('recentRfposContainer');
             container.innerHTML = `
                 <div class="text-center py-4">
-                    <a href="/approvals" class="btn btn-warning btn-lg">
+                    <a href="{{ url_for('approvals') }}" class="btn btn-warning btn-lg">
                         <i class="fas fa-clipboard-check"></i> Go to My Approvals
                     </a>
                 </div>

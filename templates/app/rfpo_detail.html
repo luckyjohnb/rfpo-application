@@ -191,7 +191,7 @@
                             <i class="fas fa-exclamation-triangle"></i> Conditional
                         </button>
                         <button class="btn btn-danger" onclick="showApprovalModal('refused')">
-                            <i class="fas fa-times"></i> Reject
+                            <i class="fas fa-times"></i> Refuse
                         </button>
                     </div>
                 </div>
@@ -243,7 +243,7 @@
     <div class="row mb-4" id="sectionRfpoInfo">
         <div class="col-12">
             <div class="card section-card">
-                <div class="card-header d-flex justify-content-between align-items-center"
+                <div class="card-header d-flex justify-content-between align-items-center" role="button" tabindex="0"
                      data-bs-toggle="collapse" data-bs-target="#collapseRfpoInfo" aria-expanded="true">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-chevron-down collapse-icon me-1"></i>
@@ -302,7 +302,7 @@
     <div class="row mb-4" id="sectionLineItems">
         <div class="col-12">
             <div class="card section-card">
-                <div class="card-header d-flex justify-content-between align-items-center"
+                <div class="card-header d-flex justify-content-between align-items-center" role="button" tabindex="0"
                      data-bs-toggle="collapse" data-bs-target="#collapseLineItems" aria-expanded="true">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-chevron-down collapse-icon me-1"></i>
@@ -334,7 +334,7 @@
     <div class="row mb-4" id="sectionFiles">
         <div class="col-12">
             <div class="card section-card">
-                <div class="card-header d-flex justify-content-between align-items-center"
+                <div class="card-header d-flex justify-content-between align-items-center" role="button" tabindex="0"
                      data-bs-toggle="collapse" data-bs-target="#collapseFiles" aria-expanded="true">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-chevron-down collapse-icon me-1"></i>
@@ -366,7 +366,7 @@
     <div class="row mb-4" id="sectionDocument">
         <div class="col-12">
             <div class="card section-card">
-                <div class="card-header d-flex justify-content-between align-items-center"
+                <div class="card-header d-flex justify-content-between align-items-center" role="button" tabindex="0"
                      data-bs-toggle="collapse" data-bs-target="#collapseDocument" aria-expanded="true">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-chevron-down collapse-icon me-1"></i>
@@ -394,7 +394,7 @@
     <div class="row" id="sectionAudit">
         <div class="col-12">
             <div class="card section-card">
-                <div class="card-header"
+                <div class="card-header" role="button" tabindex="0"
                      data-bs-toggle="collapse" data-bs-target="#collapseAudit" aria-expanded="false">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-chevron-down collapse-icon me-1"></i>
@@ -827,6 +827,7 @@
             }
         } catch (e) {
             console.error('Failed to load doc types:', e);
+            showAlert('Could not load document types. You can still upload files with a custom type.', 'warning');
         }
 
         // Reset form
@@ -1246,7 +1247,7 @@
         const actionLabels = {
             'approved': { title: 'Approve', btnClass: 'btn-success', icon: 'fa-check' },
             'conditional': { title: 'Conditionally Approve', btnClass: 'btn-warning', icon: 'fa-exclamation-triangle' },
-            'refused': { title: 'Reject', btnClass: 'btn-danger', icon: 'fa-times' },
+            'refused': { title: 'Refuse', btnClass: 'btn-danger', icon: 'fa-times' },
         };
         const label = actionLabels[action] || actionLabels['approved'];
 
@@ -1480,12 +1481,6 @@
 
             // Sync section-card badges with validation section data
             if (v.sections) {
-                const sectionMap = {
-                    'basic_info': 'statusRfpoInfo',
-                    'vendor': 'statusRfpoInfo',
-                    'line_items': 'statusLineItems',
-                    'files': 'statusFiles',
-                };
                 // RFPO Info badge = basic_info AND vendor both complete
                 const rfpoInfoBadge = document.getElementById('statusRfpoInfo');
                 if (rfpoInfoBadge && v.sections.basic_info && v.sections.vendor) {
@@ -1682,12 +1677,6 @@
                 </table>
             </div>
         `;
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text || '';
-        return div.innerHTML;
     }
 
     function toggleCapitalFields() {

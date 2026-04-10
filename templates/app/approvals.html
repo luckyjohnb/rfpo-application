@@ -150,6 +150,13 @@
                         </div>
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="approvalStatus"
+                                   id="statusConditional" value="conditional">
+                            <label class="form-check-label text-warning fw-bold" for="statusConditional">
+                                <i class="fas fa-exclamation-triangle"></i> Conditional
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="approvalStatus"
                                    id="statusRefuse" value="refused">
                             <label class="form-check-label text-danger fw-bold" for="statusRefuse">
                                 <i class="fas fa-times-circle"></i> Refuse
@@ -162,6 +169,14 @@
                     <label for="approvalComments" class="form-label">Comments</label>
                     <textarea class="form-control" id="approvalComments" rows="3"
                               placeholder="Optional comments about your decision..."></textarea>
+                </div>
+
+                <!-- Conditions for conditional approval -->
+                <div class="mb-3 d-none" id="conditionsSection">
+                    <label for="approvalConditions" class="form-label">Conditions <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="approvalConditions" rows="3"
+                              placeholder="Describe the conditions that must be met..." maxlength="1000"></textarea>
+                    <small class="form-text text-muted">Specify what must be addressed before full approval.</small>
                 </div>
 
                 <!-- Warning for refusal -->
@@ -426,11 +441,27 @@
         });
     });
 
+    // Toggle conditions/refusal sections based on selected radio
+    document.querySelectorAll('input[name="approvalStatus"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            document.getElementById('conditionsSection').classList.toggle('d-none', this.value !== 'conditional');
+            document.getElementById('refuseWarning').classList.toggle('d-none', this.value !== 'refused');
+        });
+    });
+
     async function submitApproval() {
         if (!currentActionId) return;
 
         const status = document.querySelector('input[name="approvalStatus"]:checked').value;
         const comments = document.getElementById('approvalComments').value.trim();
+        const conditionsEl = document.getElementById('approvalConditions');
+        const conditions = conditionsEl ? conditionsEl.value.trim() : '';
+
+        // Require conditions for conditional approval
+        if (status === 'conditional' && !conditions) {
+            showAlert('Please specify the conditions for conditional approval', 'warning');
+            return;
+        }
 
         // Confirm refusal
         if (status === 'refused') {
@@ -444,9 +475,12 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
 
         try {
+            const body = { status, comments };
+            if (conditions) body.conditions = conditions;
+
             const response = await makeApiCall(`/api/users/approval-action/${currentActionId}`, {
                 method: 'POST',
-                body: JSON.stringify({ status, comments }),
+                body: JSON.stringify(body),
             });
 
             if (response.success) {
@@ -454,9 +488,10 @@
                 const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
                 modal.hide();
 
+                const statusLabels = { approved: 'approved', conditional: 'conditionally approved', refused: 'refused' };
                 showAlert(
-                    `<i class="fas fa-check-circle"></i> RFPO ${status === 'approved' ? 'approved' : 'refused'} successfully!`,
-                    status === 'approved' ? 'success' : 'warning'
+                    `<i class="fas fa-check-circle"></i> RFPO ${statusLabels[status] || status} successfully!`,
+                    status === 'refused' ? 'warning' : 'success'
                 );
 
                 // Reload the approvals list

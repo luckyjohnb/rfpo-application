@@ -42,18 +42,21 @@
                 <form id="passwordForm">
                     <div class="mb-3">
                         <label for="currentPassword" class="form-label">Current Password</label>
-                        <input type="password" class="form-control" id="currentPassword" name="currentPassword" required>
+                        <input type="password" class="form-control" id="currentPassword" name="currentPassword" required aria-required="true">
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="newPassword" class="form-label">New Password</label>
-                            <input type="password" class="form-control" id="newPassword" name="newPassword" required>
+                            <input type="password" class="form-control" id="newPassword" name="newPassword" required aria-required="true"
+                                   oninput="checkPasswordMatch()">
                             <div class="form-text">Minimum 8 characters</div>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="confirmPassword" class="form-label">Confirm New Password</label>
-                            <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
+                            <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required aria-required="true"
+                                   oninput="checkPasswordMatch()">
+                            <div class="form-text" id="passwordMatchFeedback"></div>
                         </div>
                     </div>
 
@@ -664,5 +667,19 @@
     document.addEventListener('DOMContentLoaded', function() {
         loadUserProfile();
     });
+
+    function checkPasswordMatch() {
+        const pw = document.getElementById('newPassword').value;
+        const cpw = document.getElementById('confirmPassword').value;
+        const feedback = document.getElementById('passwordMatchFeedback');
+        if (!cpw) { feedback.textContent = ''; feedback.className = 'form-text'; return; }
+        if (pw === cpw) {
+            feedback.textContent = '\u2713 Passwords match';
+            feedback.className = 'form-text text-success';
+        } else {
+            feedback.textContent = '\u2717 Passwords do not match';
+            feedback.className = 'form-text text-danger';
+        }
+    }
 </script>
 {% endblock %}

@@ -2,6 +2,22 @@
 
 {% block title %}RFPO Details - RFPO Application{% endblock %}
 
+{% block extra_css %}
+<style>
+    @media (max-width: 767.98px) {
+        #approvalActionSection .col-md-4 {
+            text-align: left !important;
+            margin-top: 0.75rem;
+        }
+        #approvalActionSection .col-md-4 .btn {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+        .rfpo-amount-cell { white-space: nowrap; font-size: 0.9rem; }
+    }
+</style>
+{% endblock %}
+
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
     <ol class="breadcrumb">
@@ -13,29 +29,29 @@
 {% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-6">
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+    <div>
         <h1 class="h2 mb-0">
             <i class="fas fa-file-invoice"></i> RFPO Details
         </h1>
-        <p class="text-muted" id="rfpoSubtitle">Loading...</p>
+        <p class="text-muted mb-0" id="rfpoSubtitle">Loading...</p>
     </div>
-    <div class="col-md-6 text-end">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
         {% if is_admin %}
-        <button class="btn btn-primary me-2" id="submitForApprovalBtn" style="display: none;" onclick="submitForApproval()">
+        <button class="btn btn-primary" id="submitForApprovalBtn" style="display: none;" onclick="submitForApproval()">
             <i class="fas fa-paper-plane"></i> Submit for Approval
         </button>
-        <button class="btn btn-outline-danger me-2" id="withdrawApprovalBtn" style="display: none;" onclick="withdrawApproval()">
+        <button class="btn btn-outline-danger" id="withdrawApprovalBtn" style="display: none;" onclick="withdrawApproval()">
             <i class="fas fa-undo"></i> Withdraw
         </button>
         {% endif %}
-        <a href="/rfpos/{{ rfpo_id }}/preview?print=1" target="_blank" class="btn btn-outline-success me-2" title="Download PDF">
+        <a href="/rfpos/{{ rfpo_id }}/preview?print=1" target="_blank" class="btn btn-outline-success" title="Download PDF">
             <i class="fas fa-file-pdf"></i> Download PDF
         </a>
-        <a id="pdfSnapshotBtn" href="#" target="_blank" class="btn btn-outline-secondary me-2" title="View the PDF frozen at submission time" style="display: none;">
+        <a id="pdfSnapshotBtn" href="#" target="_blank" class="btn btn-outline-secondary" title="View the PDF frozen at submission time" style="display: none;">
             <i class="fas fa-file-archive"></i> Submitted PDF
         </a>
-        <a href="/rfpos" class="btn btn-outline-secondary">
+        <a href="/rfpos" class="btn btn-outline-secondary" onclick="if (history.length > 1) { history.back(); return false; }">
             <i class="fas fa-arrow-left"></i> Back to List
         </a>
     </div>
@@ -359,7 +375,7 @@
                         <div class="mb-3">
                             <label for="liDescription" class="form-label">Description <span class="text-danger">*</span></label>
                             <textarea class="form-control" id="liDescription" rows="3" required
-                                      placeholder="Detailed description of the item or service"></textarea>
+                                      placeholder="Detailed description of the item or service" maxlength="1000"></textarea>
                         </div>
                         <div class="mb-3">
                             <label for="liUnitPrice" class="form-label">Unit Price ($) <span class="text-danger">*</span></label>
@@ -454,7 +470,15 @@
                     <div class="mb-3">
                         <label for="uploadDescription" class="form-label">Description (Optional)</label>
                         <textarea class="form-control" id="uploadDescription" name="description" rows="2"
-                                  placeholder="Brief description of the file contents"></textarea>
+                                  placeholder="Brief description of the file contents" maxlength="500"></textarea>
+                    </div>
+                    <!-- Upload Progress Bar -->
+                    <div id="uploadProgressContainer" class="mb-3" style="display: none;">
+                        <label class="form-label small text-muted">Upload progress</label>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" id="uploadProgressBar"
+                                 role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -780,30 +804,53 @@
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
-        try {
-            const token = document.cookie.split(';').find(c => c.trim().startsWith('auth_token='));
-            const response = await fetch(`/api/rfpos/${rfpoId}/files/upload`, {
-                method: 'POST',
-                body: formData,
-                // Don't set Content-Type - browser sets it with boundary for multipart
-            });
+        const progressContainer = document.getElementById('uploadProgressContainer');
+        const progressBar = document.getElementById('uploadProgressBar');
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.setAttribute('aria-valuenow', '0');
 
-            const result = await response.json();
+        const xhr = new XMLHttpRequest();
 
-            if (result.success) {
-                showAlert(result.message || 'File uploaded successfully!', 'success');
-                bootstrap.Modal.getInstance(document.getElementById('uploadFileModal')).hide();
-                // Reload RFPO to refresh file list
-                loadRfpoDetails();
-            } else {
-                throw new Error(result.message || 'Upload failed');
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                const pct = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = pct + '%';
+                progressBar.textContent = pct + '%';
+                progressBar.setAttribute('aria-valuenow', pct);
             }
-        } catch (error) {
-            showAlert(`Error uploading file: ${error.message}`, 'danger');
-        } finally {
+        });
+
+        xhr.addEventListener('load', function() {
+            try {
+                const result = JSON.parse(xhr.responseText);
+                if (result.success) {
+                    showAlert(result.message || 'File uploaded successfully!', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('uploadFileModal')).hide();
+                    loadRfpoDetails();
+                } else {
+                    showAlert(`Error uploading file: ${result.message || 'Upload failed'}`, 'danger');
+                }
+            } catch (parseErr) {
+                showAlert('Error uploading file: Invalid server response', 'danger');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-upload"></i> Upload File';
+                progressContainer.style.display = 'none';
+            }
+        });
+
+        xhr.addEventListener('error', function() {
+            showAlert('Error uploading file: Network error', 'danger');
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="fas fa-upload"></i> Upload File';
-        }
+            progressContainer.style.display = 'none';
+        });
+
+        xhr.open('POST', `/api/rfpos/${rfpoId}/files/upload`);
+        xhr.setRequestHeader('X-CSRFToken', getCsrfToken());
+        xhr.send(formData);
     });
     }
 
@@ -867,31 +914,31 @@
             <div class="p-3" style="font-size: 0.9rem;">
                 <div class="text-center mb-3">
                     <h6 class="text-primary">REQUEST FOR PURCHASE ORDER</h6>
-                    <h5>${rfpo.rfpo_id}</h5>
+                    <h5>${escapeHtml(rfpo.rfpo_id)}</h5>
                 </div>
 
                 <div class="mb-3">
-                    <strong>Project:</strong> ${project ? project.name : 'Unknown'}<br>
-                    <strong>Consortium:</strong> ${consortium ? consortium.name : 'Unknown'}<br>
-                    <strong>Title:</strong> ${rfpo.title}
+                    <strong>Project:</strong> ${escapeHtml(project ? project.name : 'Unknown')}<br>
+                    <strong>Consortium:</strong> ${escapeHtml(consortium ? consortium.name : 'Unknown')}<br>
+                    <strong>Title:</strong> ${escapeHtml(rfpo.title)}
                 </div>
 
                 <div class="mb-3">
-                    <strong>Requestor:</strong> ${requestor ? requestor.display_name : 'Unknown'}
+                    <strong>Requestor:</strong> ${escapeHtml(requestor ? requestor.display_name : 'Unknown')}
                 </div>
 
                 <div class="mb-3">
-                    <strong>Vendor:</strong> ${vendor ? vendor.company_name : 'Not specified'}<br>
+                    <strong>Vendor:</strong> ${escapeHtml(vendor ? vendor.company_name : 'Not specified')}<br>
                     <strong>Total Amount:</strong> $${Number(rfpo.total_amount || 0).toLocaleString()}
                 </div>
 
                 <div class="mb-3">
                     <strong>Description:</strong><br>
-                    <div class="border p-2 bg-light">${rfpo.description || 'No description provided'}</div>
+                    <div class="border p-2 bg-light">${escapeHtml(rfpo.description || 'No description provided')}</div>
                 </div>
 
                 <div class="mb-3">
-                    <strong>Status:</strong> <span class="badge bg-info">${rfpo.status}</span><br>
+                    <strong>Status:</strong> <span class="badge bg-info">${escapeHtml(rfpo.status)}</span><br>
                     <strong>Created:</strong> ${formatDate(rfpo.created_at)}<br>
                     <strong>Created By:</strong> ${rfpo.created_by}
                 </div>
@@ -1151,19 +1198,19 @@
                         </div>
                         <div class="modal-body">
                             <div class="alert alert-info">
-                                <strong>RFPO:</strong> ${currentRfpo.title} (${currentRfpo.rfpo_id})<br>
+                                <strong>RFPO:</strong> ${escapeHtml(currentRfpo.title)} (${escapeHtml(currentRfpo.rfpo_id)})<br>
                                 <strong>Your Step:</strong> <span id="modalStepName"></span>
                             </div>
                             <div class="mb-3">
                                 <label for="approvalComments" class="form-label">Comments</label>
                                 <textarea class="form-control" id="approvalComments" rows="3"
-                                          placeholder="Enter your comments..."></textarea>
+                                          placeholder="Enter your comments..." maxlength="1000"></textarea>
                             </div>
                             ${action === 'conditional' ? `
                             <div class="mb-3">
                                 <label for="approvalConditions" class="form-label">Conditions <span class="text-danger">*</span></label>
                                 <textarea class="form-control" id="approvalConditions" rows="3"
-                                          placeholder="Describe the conditions that must be met..." required></textarea>
+                                          placeholder="Describe the conditions that must be met..." required maxlength="1000"></textarea>
                                 <small class="form-text text-muted">Specify what must be addressed before full approval.</small>
                             </div>` : ''}
                         </div>
@@ -1228,14 +1275,14 @@
                 })
             });
 
-            // Close modal first so alerts are visible
             const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
-            if (modal) modal.hide();
 
             if (data.success) {
+                if (modal) modal.hide();
                 showAlert(`RFPO ${currentUserAction} successfully!`, 'success');
                 setTimeout(() => { window.location.reload(); }, 1500);
             } else {
+                if (modal) modal.hide();
                 showAlert(`Error: ${data.message || 'Action failed'}`, 'danger');
             }
         } catch (error) {
@@ -1243,6 +1290,12 @@
             const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
             if (modal) modal.hide();
             // makeApiCall already called showAlert, so no need to duplicate
+        } finally {
+            // Re-enable submit button in case modal stays open on error
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-check"></i> Submit';
+            }
         }
     }
 

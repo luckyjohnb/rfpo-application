@@ -2,6 +2,17 @@
 
 {% block title %}My Approvals - RFPO Application{% endblock %}
 
+{% block extra_css %}
+<style>
+    @media (max-width: 767.98px) {
+        #approvalModal .modal-dialog { margin: 0.5rem; }
+        #approvalModal .modal-body .row .col-md-4,
+        #approvalModal .modal-body .row .col-md-6 { margin-bottom: 0.5rem; }
+        #approvalModal .d-flex.gap-3 { flex-direction: column; gap: 0.5rem !important; }
+    }
+</style>
+{% endblock %}
+
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
     <ol class="breadcrumb">
@@ -309,15 +320,37 @@
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     <button class="btn btn-sm btn-outline-warning me-1" title="Reassign"
-                                            onclick="openReassignModal('${escapeAttr(action.action_id)}', '${escapeAttr(action.step_name || '')}', '${escapeAttr(action.approver_name || '')}')">
+                                            data-action-id="${escapeAttr(action.action_id)}"
+                                            data-step-name="${escapeAttr(action.step_name || '')}"
+                                            data-approver-name="${escapeAttr(action.approver_name || '')}"
+                                            onclick="openReassignModal(this.dataset.actionId, this.dataset.stepName, this.dataset.approverName)">
                                         <i class="fas fa-user-edit"></i>
                                     </button>
                                     <button class="btn btn-sm btn-success me-1"
-                                            onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, '${escapeAttr(rfpo.title || '')}', '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}')">
+                                            aria-label="Approve RFPO ${escapeAttr(rfpo.rfpo_id)}"
+                                            data-action-id="${escapeAttr(action.action_id)}"
+                                            data-rfpo-db-id="${rfpo.id}"
+                                            data-rfpo-title="${escapeAttr(rfpo.title || '')}"
+                                            data-rfpo-id="${escapeAttr(rfpo.rfpo_id || '')}"
+                                            data-rfpo-amount="${rfpo.total_amount || 0}"
+                                            data-rfpo-status="${escapeAttr(rfpo.status || '')}"
+                                            data-stage-name="${escapeAttr(action.stage_name || '')}"
+                                            data-step-name="${escapeAttr(action.step_name || '')}"
+                                            onclick="openApprovalFromBtn(this)">
                                         <i class="fas fa-check"></i> Approve
                                     </button>
                                     <button class="btn btn-sm btn-danger"
-                                            onclick="openApprovalModal('${escapeAttr(action.action_id)}', ${rfpo.id}, '${escapeAttr(rfpo.title || '')}', '${escapeAttr(rfpo.rfpo_id || '')}', ${rfpo.total_amount || 0}, '${escapeAttr(rfpo.status || '')}', '${escapeAttr(action.stage_name || '')}', '${escapeAttr(action.step_name || '')}', true)">
+                                            aria-label="Refuse RFPO ${escapeAttr(rfpo.rfpo_id)}"
+                                            data-action-id="${escapeAttr(action.action_id)}"
+                                            data-rfpo-db-id="${rfpo.id}"
+                                            data-rfpo-title="${escapeAttr(rfpo.title || '')}"
+                                            data-rfpo-id="${escapeAttr(rfpo.rfpo_id || '')}"
+                                            data-rfpo-amount="${rfpo.total_amount || 0}"
+                                            data-rfpo-status="${escapeAttr(rfpo.status || '')}"
+                                            data-stage-name="${escapeAttr(action.stage_name || '')}"
+                                            data-step-name="${escapeAttr(action.step_name || '')}"
+                                            data-pre-refuse="true"
+                                            onclick="openApprovalFromBtn(this)">
                                         <i class="fas fa-times"></i> Refuse
                                     </button>
                                 </div>
@@ -337,10 +370,20 @@
             console.error('Error loading approvals:', error);
             container.innerHTML = `
                 <div class="alert alert-danger">
-                    <i class="fas fa-exclamation-circle"></i> Error loading approval queue: ${error.message || 'Unknown error. Please try again.'}
+                    <i class="fas fa-exclamation-circle"></i> Error loading approval queue: ${escapeHtml(error.message) || 'Unknown error. Please try again.'}
+                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="loadApprovals()"><i class="fas fa-redo"></i> Retry</button>
                 </div>
             `;
         }
+    }
+
+    function openApprovalFromBtn(btn) {
+        const d = btn.dataset;
+        openApprovalModal(
+            d.actionId, Number(d.rfpoDbId), d.rfpoTitle, d.rfpoId,
+            Number(d.rfpoAmount), d.rfpoStatus, d.stageName, d.stepName,
+            d.preRefuse === 'true'
+        );
     }
 
     function openApprovalModal(actionId, rfpoId, rfpoTitle, rfpoIdStr, rfpoAmount, rfpoStatus, stageName, stepName, preSelectRefuse) {

@@ -1,0 +1,274 @@
+/*
+ * RFPO Admin USCAR Theme
+ * Applies USCAR navy/red branding to the Admin Panel.
+ * Matches the User App RFPO theme for visual consistency.
+ */
+
+/* ── CSS Custom Properties ──────────────────────────────── */
+:root {
+    --uscar-navy: #002B5C;
+    --uscar-navy-dark: #001a3a;
+    --uscar-navy-light: #003d80;
+    --uscar-red: #C8102E;
+    --uscar-red-dark: #a00d24;
+    --uscar-red-light: #e0243f;
+    --uscar-light-gray: #f4f6f9;
+    --uscar-border: #e2e6ec;
+}
+
+/* ── Typography ─────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+.sidebar {
+    background: linear-gradient(180deg, var(--uscar-navy) 0%, var(--uscar-navy-dark) 100%) !important;
+    border-right: 3px solid var(--uscar-red);
+}
+
+.sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.75) !important;
+    border-radius: 8px !important;
+    margin: 2px 8px !important;
+    padding: 0.55rem 1rem !important;
+    font-weight: 500;
+    font-size: 0.88rem;
+    transition: all 0.2s ease;
+}
+
+.sidebar .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    color: #fff !important;
+}
+
+.sidebar .nav-link.active {
+    background-color: var(--uscar-red) !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(200, 16, 46, 0.3);
+}
+
+.sidebar .nav-link i {
+    width: 20px;
+    text-align: center;
+    margin-right: 0.4rem;
+}
+
+/* Sidebar section headings */
+.sidebar .sidebar-heading,
+.sidebar h6.sidebar-heading {
+    color: rgba(255, 255, 255, 0.4) !important;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+}
+
+.sidebar .text-muted {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Sidebar brand area */
+.sidebar .text-white {
+    color: #fff !important;
+}
+
+.sidebar .text-light {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Sidebar logo */
+.sidebar .admin-brand-logo {
+    height: 40px;
+    margin-bottom: 0.5rem;
+}
+
+/* Logout link */
+.sidebar .nav-link.text-warning {
+    color: var(--uscar-red-light) !important;
+}
+.sidebar .nav-link.text-warning:hover {
+    background: rgba(200, 16, 46, 0.15) !important;
+    color: #fff !important;
+}
+
+/* Sidebar scrollbar */
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+/* ── Main Content Area ──────────────────────────────────── */
+.main-content {
+    background-color: var(--uscar-light-gray) !important;
+}
+
+/* ── Buttons ────────────────────────────────────────────── */
+.btn-primary {
+    background-color: var(--uscar-navy) !important;
+    border-color: var(--uscar-navy) !important;
+}
+.btn-primary:hover, .btn-primary:focus {
+    background-color: var(--uscar-navy-dark) !important;
+    border-color: var(--uscar-navy-dark) !important;
+}
+
+.btn-outline-primary {
+    color: var(--uscar-navy) !important;
+    border-color: var(--uscar-navy) !important;
+}
+.btn-outline-primary:hover, .btn-outline-primary:focus {
+    background-color: var(--uscar-navy) !important;
+    border-color: var(--uscar-navy) !important;
+    color: #fff !important;
+}
+
+.btn-danger {
+    background-color: var(--uscar-red) !important;
+    border-color: var(--uscar-red) !important;
+}
+.btn-danger:hover, .btn-danger:focus {
+    background-color: var(--uscar-red-dark) !important;
+    border-color: var(--uscar-red-dark) !important;
+}
+
+.btn-outline-danger {
+    color: var(--uscar-red) !important;
+    border-color: var(--uscar-red) !important;
+}
+.btn-outline-danger:hover, .btn-outline-danger:focus {
+    background-color: var(--uscar-red) !important;
+    color: #fff !important;
+}
+
+/* ── Text & Link Colors ─────────────────────────────────── */
+.text-primary {
+    color: var(--uscar-navy) !important;
+}
+
+a {
+    color: var(--uscar-navy);
+}
+a:hover {
+    color: var(--uscar-navy-dark);
+}
+
+.bg-primary {
+    background-color: var(--uscar-navy) !important;
+}
+
+/* ── Cards ──────────────────────────────────────────────── */
+.card {
+    border: 1px solid var(--uscar-border) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+}
+
+.card-header {
+    background: var(--uscar-light-gray);
+    border-bottom: 1px solid var(--uscar-border);
+}
+
+/* ── Tables ─────────────────────────────────────────────── */
+.table th {
+    background-color: var(--uscar-light-gray) !important;
+    color: var(--uscar-navy);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--uscar-border) !important;
+}
+
+.table tbody tr:hover {
+    background: rgba(0, 43, 92, 0.03);
+}
+
+/* ── Form Controls ──────────────────────────────────────── */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--uscar-navy) !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 43, 92, 0.2) !important;
+}
+
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--uscar-navy) !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 43, 92, 0.25) !important;
+}
+
+/* ── Badges ─────────────────────────────────────────────── */
+.badge.bg-primary {
+    background-color: var(--uscar-navy) !important;
+}
+
+.badge.bg-danger {
+    background-color: var(--uscar-red) !important;
+}
+
+/* ── Pagination ─────────────────────────────────────────── */
+.page-link {
+    color: var(--uscar-navy);
+}
+.page-link:hover {
+    color: var(--uscar-navy-dark);
+    background: var(--uscar-light-gray);
+}
+.page-item.active .page-link {
+    background-color: var(--uscar-navy);
+    border-color: var(--uscar-navy);
+}
+
+/* ── Modals ─────────────────────────────────────────────── */
+.modal-header {
+    background: var(--uscar-light-gray);
+    border-bottom: 1px solid var(--uscar-border);
+}
+
+.modal-content {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* ── Alerts ─────────────────────────────────────────────── */
+.alert {
+    border-radius: 10px;
+}
+
+.alert-primary {
+    background-color: rgba(0, 43, 92, 0.1);
+    border-color: rgba(0, 43, 92, 0.2);
+    color: var(--uscar-navy);
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+footer {
+    background: var(--uscar-light-gray);
+    border-top: 1px solid var(--uscar-border);
+}
+
+/* ── Progress Bars ──────────────────────────────────────── */
+.progress-bar.bg-primary,
+.progress-bar {
+    background-color: var(--uscar-navy) !important;
+}
+
+/* ── Mobile ─────────────────────────────────────────────── */
+@media (max-width: 767.98px) {
+    .sidebar {
+        border-right: none !important;
+        border-bottom: 3px solid var(--uscar-red);
+    }
+
+    .sidebar .nav-link {
+        margin: 2px 4px !important;
+    }
+}

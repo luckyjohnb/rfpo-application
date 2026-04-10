@@ -1,0 +1,334 @@
+/*
+ * RFPO USCAR Theme — Overlay stylesheet
+ * Applies USCAR navy/red branding to the Bootstrap-based User App.
+ * Loaded conditionally via ?theme=rfpo or RFPO_THEME env var.
+ * Remove/disable the <link> to revert to stock Bootstrap styling.
+ */
+
+/* ── CSS Custom Properties ──────────────────────────────── */
+:root {
+    --uscar-navy: #002B5C;
+    --uscar-navy-dark: #001a3a;
+    --uscar-navy-light: #003d80;
+    --uscar-red: #C8102E;
+    --uscar-red-dark: #a00d24;
+    --uscar-red-light: #e0243f;
+    --uscar-light-gray: #f4f6f9;
+    --uscar-border: #e2e6ec;
+    --uscar-sidebar-bg: #f8fafd;
+    --uscar-sidebar-active: var(--uscar-navy);
+    --uscar-sidebar-hover: rgba(0, 43, 92, 0.08);
+}
+
+/* ── Typography ─────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Top Navbar ─────────────────────────────────────────── */
+.navbar.bg-primary,
+.navbar.navbar-dark.bg-primary {
+    background: linear-gradient(135deg, var(--uscar-navy) 0%, var(--uscar-navy-dark) 100%) !important;
+    border-bottom: 3px solid var(--uscar-red);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    font-size: 1.25rem;
+}
+
+.navbar .dropdown-menu {
+    border: 1px solid var(--uscar-border);
+    border-top: 3px solid var(--uscar-red);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.navbar .dropdown-item:hover,
+.navbar .dropdown-item:focus {
+    background: var(--uscar-light-gray);
+    color: var(--uscar-navy);
+}
+
+.navbar .dropdown-item:active {
+    background: var(--uscar-navy);
+    color: #fff;
+}
+
+/* Notification badge */
+.notification-badge.bg-danger {
+    background-color: var(--uscar-red) !important;
+}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+.sidebar {
+    background-color: var(--uscar-sidebar-bg) !important;
+    border-right: 1px solid var(--uscar-border);
+}
+
+.sidebar .nav-pills .nav-link {
+    color: #4a5568;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    margin-bottom: 2px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.sidebar .nav-pills .nav-link:hover {
+    background: var(--uscar-sidebar-hover);
+    color: var(--uscar-navy);
+}
+
+.sidebar .nav-pills .nav-link.active {
+    background: var(--uscar-sidebar-active) !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(0, 43, 92, 0.25);
+}
+
+.sidebar .nav-pills .nav-link i {
+    width: 20px;
+    text-align: center;
+    margin-right: 0.5rem;
+}
+
+/* Approval badge in sidebar */
+.sidebar .approval-count-badge {
+    background-color: var(--uscar-red) !important;
+}
+
+/* ── Primary Color Overrides ────────────────────────────── */
+/* Buttons */
+.btn-primary {
+    background-color: var(--uscar-navy) !important;
+    border-color: var(--uscar-navy) !important;
+}
+.btn-primary:hover, .btn-primary:focus {
+    background-color: var(--uscar-navy-dark) !important;
+    border-color: var(--uscar-navy-dark) !important;
+}
+.btn-primary:active {
+    background-color: var(--uscar-navy-dark) !important;
+    border-color: var(--uscar-navy-dark) !important;
+}
+.btn-primary:disabled {
+    background-color: var(--uscar-navy) !important;
+    border-color: var(--uscar-navy) !important;
+    opacity: 0.65;
+}
+
+.btn-outline-primary {
+    color: var(--uscar-navy) !important;
+    border-color: var(--uscar-navy) !important;
+}
+.btn-outline-primary:hover, .btn-outline-primary:focus {
+    background-color: var(--uscar-navy) !important;
+    border-color: var(--uscar-navy) !important;
+    color: #fff !important;
+}
+
+/* Text & link colors */
+.text-primary {
+    color: var(--uscar-navy) !important;
+}
+
+a {
+    color: var(--uscar-navy);
+}
+a:hover {
+    color: var(--uscar-navy-dark);
+}
+
+/* Background primary */
+.bg-primary {
+    background-color: var(--uscar-navy) !important;
+}
+
+/* Progress bars */
+.progress-bar.bg-primary {
+    background-color: var(--uscar-navy) !important;
+}
+
+/* ── Dashboard Stat Cards ───────────────────────────────── */
+.dashboard-stat-card {
+    border: none;
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+}
+
+.dashboard-stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* Total RFPOs card (primary) */
+.card.bg-primary.dashboard-stat-card {
+    background: linear-gradient(135deg, var(--uscar-navy) 0%, var(--uscar-navy-light) 100%) !important;
+}
+
+/* Success cards */
+.card.bg-success.dashboard-stat-card {
+    background: linear-gradient(135deg, #0d6f3c 0%, #198754 100%) !important;
+}
+
+/* Warning cards */
+.card.bg-warning.dashboard-stat-card {
+    background: linear-gradient(135deg, #e0a800 0%, #ffc107 100%) !important;
+}
+
+/* Info cards */
+.card.bg-info.dashboard-stat-card {
+    background: linear-gradient(135deg, #0a7c9e 0%, #0dcaf0 100%) !important;
+}
+
+/* ── Danger / Red Overrides ─────────────────────────────── */
+.btn-danger {
+    background-color: var(--uscar-red) !important;
+    border-color: var(--uscar-red) !important;
+}
+.btn-danger:hover, .btn-danger:focus {
+    background-color: var(--uscar-red-dark) !important;
+    border-color: var(--uscar-red-dark) !important;
+}
+
+.btn-outline-danger {
+    color: var(--uscar-red) !important;
+    border-color: var(--uscar-red) !important;
+}
+.btn-outline-danger:hover, .btn-outline-danger:focus {
+    background-color: var(--uscar-red) !important;
+    border-color: var(--uscar-red) !important;
+    color: #fff !important;
+}
+
+.badge.bg-danger {
+    background-color: var(--uscar-red) !important;
+}
+
+/* ── Cards ──────────────────────────────────────────────── */
+.card {
+    border: 1px solid var(--uscar-border);
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.card-header {
+    background: var(--uscar-light-gray);
+    border-bottom: 1px solid var(--uscar-border);
+}
+
+/* ── Tables ─────────────────────────────────────────────── */
+.table thead th {
+    background: var(--uscar-light-gray);
+    color: var(--uscar-navy);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--uscar-border);
+}
+
+.table tbody tr:hover {
+    background: rgba(0, 43, 92, 0.03);
+}
+
+/* ── Form Controls ──────────────────────────────────────── */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--uscar-navy) !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 43, 92, 0.2) !important;
+}
+
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--uscar-navy) !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 43, 92, 0.25) !important;
+}
+
+/* ── Badges ─────────────────────────────────────────────── */
+.badge.bg-primary {
+    background-color: var(--uscar-navy) !important;
+}
+
+/* ── Breadcrumbs ────────────────────────────────────────── */
+.breadcrumb-item a {
+    color: var(--uscar-navy);
+}
+.breadcrumb-item.active {
+    color: #6c757d;
+}
+
+/* ── Pagination ─────────────────────────────────────────── */
+.page-link {
+    color: var(--uscar-navy);
+}
+.page-link:hover {
+    color: var(--uscar-navy-dark);
+    background: var(--uscar-light-gray);
+}
+.page-item.active .page-link {
+    background-color: var(--uscar-navy);
+    border-color: var(--uscar-navy);
+}
+
+/* ── Modals ─────────────────────────────────────────────── */
+.modal-header {
+    background: var(--uscar-light-gray);
+    border-bottom: 1px solid var(--uscar-border);
+}
+
+.modal-content {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* ── Alerts ─────────────────────────────────────────────── */
+.alert {
+    border-radius: 10px;
+}
+
+.alert-primary {
+    background-color: rgba(0, 43, 92, 0.1);
+    border-color: rgba(0, 43, 92, 0.2);
+    color: var(--uscar-navy);
+}
+
+/* ── Scrollbar (WebKit) ─────────────────────────────────── */
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(0, 43, 92, 0.2);
+    border-radius: 3px;
+}
+
+/* ── RFPO Logo in Navbar ────────────────────────────────── */
+.navbar-brand .rfpo-brand-logo {
+    height: 28px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* ── Mobile Responsive ──────────────────────────────────── */
+@media (max-width: 767.98px) {
+    .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--uscar-border);
+    }
+
+    .dashboard-stat-card {
+        border-radius: 10px;
+    }
+
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+}

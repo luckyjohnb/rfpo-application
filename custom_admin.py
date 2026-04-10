@@ -1547,11 +1547,132 @@ def create_app():
         resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return resp
 
+    # ── Template preview (inline iframe) ──────────────────────────────
+    @app.route("/tools/email-template-preview/<template_name>")
+    @login_required
+    def email_template_preview(template_name):
+        """Render an email template with sample data and return raw HTML for iframe preview."""
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+        import os as _os
+
+        allowed = {
+            "approval_notification", "approval_complete", "approval_reminder",
+            "approval_escalation", "welcome", "password_changed", "user_added_to_project",
+        }
+        if template_name not in allowed:
+            return "Template not found", 404
+
+        tpl_dir = _os.path.join(_os.path.dirname(__file__), "templates", "email")
+        env = Environment(
+            loader=FileSystemLoader(tpl_dir),
+            autoescape=select_autoescape(["html", "xml"]),
+        )
+        template = env.get_template(f"{template_name}.html")
+
+        sample_data = {
+            "user_name": current_user.get_display_name() if current_user else "Jane Doe",
+            "rfpo_id": "RFPO-2026-0042",
+            "approval_type": "Standard Approval",
+            "rfpo_url": "#",
+            "current_date": datetime.now().strftime("%Y-%m-%d"),
+            "current_year": datetime.now().year,
+            "step_name": "Finance Review",
+            "due_date": "2026-04-15",
+            "days_overdue": 3,
+            "reminder_number": 2,
+            "max_reminders": 5,
+            "temp_password": "TempP@ss123",
+            "login_url": "#",
+            "user_login_url": "#",
+            "admin_login_url": "#",
+            "show_user_link": True,
+            "show_admin_link": True,
+            "project_name": "Sample Project Alpha",
+            "team_name": "Engineering Team A",
+            "consortium_name": "USCAR Consortium",
+            "role": "Team Viewer",
+            "added_by": "John Admin",
+            "subject": f"Sample - {template_name.replace('_', ' ').title()}",
+        }
+        html = template.render(**sample_data)
+        return html
+
     # Email test form (admin-only) — supports multiple recipients and HTML
     @app.route("/tools/email-test", methods=["GET", "POST"])
     @login_required
     def email_test_tool():
-        from email_service import email_service
+        from email_service import email_service, is_email_globally_disabled
+
+        # Handle EMAIL_DISABLED kill switch toggle
+        if request.method == "POST" and request.form.get("_action") == "save_kill_switch":
+            new_val = "true" if request.form.get("email_disabled") == "1" else ""
+            os.environ["EMAIL_DISABLED"] = new_val
+            if new_val:
+                flash(
+                    "\u26d4 Email KILL SWITCH activated \u2014 ALL emails are now blocked. "
+                    "This takes effect immediately across all threads.",
+                    "error",
+                )
+            else:
+                flash(
+                    "\u2705 Email kill switch deactivated \u2014 emails will follow test-mode settings.",
+                    "success",
+                )
+            return redirect(url_for("email_test_tool"))
+
+        # Handle send-template-test action
+        if request.method == "POST" and request.form.get("_action") == "send_template_test":
+            tpl_name = request.form.get("template_name", "").strip()
+            raw_emails = request.form.get("tpl_to_emails", "").strip()
+            to_emails = [
+                e.strip() for e in raw_emails.replace(";", ",").replace("\n", ",").split(",")
+                if e.strip()
+            ]
+            allowed = {
+                "approval_notification", "approval_complete", "approval_reminder",
+                "approval_escalation", "welcome", "password_changed", "user_added_to_project",
+            }
+            if tpl_name not in allowed:
+                flash("❌ Invalid template selected.", "error")
+                return redirect(url_for("email_test_tool"))
+            if not to_emails:
+                flash("❌ Please enter at least one recipient email.", "error")
+                return redirect(url_for("email_test_tool"))
+
+            sample_data = {
+                "user_name": current_user.get_display_name() if current_user else "Jane Doe",
+                "rfpo_id": "RFPO-2026-0042",
+                "approval_type": "Standard Approval",
+                "rfpo_url": "#",
+                "step_name": "Finance Review",
+                "due_date": "2026-04-15",
+                "days_overdue": 3,
+                "reminder_number": 2,
+                "max_reminders": 5,
+                "temp_password": "TempP@ss123",
+                "login_url": "#",
+                "user_login_url": "#",
+                "admin_login_url": "#",
+                "show_user_link": True,
+                "show_admin_link": True,
+                "project_name": "Sample Project Alpha",
+                "team_name": "Engineering Team A",
+                "consortium_name": "USCAR Consortium",
+                "role": "Team Viewer",
+                "added_by": current_user.get_display_name() if current_user else "Admin",
+            }
+            subject = f"[TEMPLATE TEST] {tpl_name.replace('_', ' ').title()} — RFPO"
+            ok = email_service.send_templated_email(
+                to_emails=to_emails,
+                template_name=tpl_name,
+                template_data=sample_data,
+                subject=subject,
+            )
+            if ok:
+                flash(f"✅ Branded template '{tpl_name}' sent to {', '.join(to_emails)}", "success")
+            else:
+                flash(f"❌ Failed to send branded template email.", "error")
+            return redirect(url_for("email_test_tool"))
 
         # Handle test-mode settings save
         if request.method == "POST" and request.form.get("_action") == "save_test_settings":
@@ -1672,6 +1793,7 @@ def create_app():
             "admin/tools/email_test.html",
             email_test_mode=email_test_mode,
             email_test_recipient=email_test_recipient,
+            email_globally_disabled=is_email_globally_disabled(),
         )
 
     # Test route for API integration (safe - doesn't break anything)
@@ -2049,6 +2171,22 @@ def create_app():
                         logo_filename = handle_file_upload(logo_file, "uploads/logos", ALLOWED_IMAGE_EXTENSIONS)
                         if logo_filename:
                             flash(f"📷 Logo uploaded: {logo_filename}", "info")
+                            # Upload logo to cloud storage
+                            try:
+                                from docupload_client import upload_to_docupload, is_configured
+                                if is_configured():
+                                    logo_path = os.path.join("uploads/logos", logo_filename)
+                                    with open(logo_path, "rb") as f:
+                                        logo_bytes = f.read()
+                                    upload_to_docupload(
+                                        files={"logo": (logo_filename, logo_bytes, "image/png")},
+                                        folder_path=f"consortiums/{consort_id}/logos",
+                                        form_id="consortium-assets",
+                                        submitted_by=current_user.get_display_name(),
+                                        tags={"consortium-id": consort_id, "asset-type": "logo", "source": "rfpo-admin"},
+                                    )
+                            except Exception as cloud_err:
+                                logging.getLogger(__name__).warning("DOCUPLOAD logo upload failed: %s", cloud_err)
 
                 # Handle terms PDF upload
                 terms_pdf_filename = None
@@ -2065,6 +2203,22 @@ def create_app():
                                     f"📄 Terms PDF uploaded: {terms_pdf_filename}",
                                     "info",
                                 )
+                                # Upload terms PDF to cloud storage
+                                try:
+                                    from docupload_client import upload_to_docupload, is_configured
+                                    if is_configured():
+                                        terms_path = os.path.join("uploads/terms", terms_pdf_filename)
+                                        with open(terms_path, "rb") as f:
+                                            terms_bytes = f.read()
+                                        upload_to_docupload(
+                                            files={"terms": (terms_pdf_filename, terms_bytes, "application/pdf")},
+                                            folder_path=f"consortiums/{consort_id}/terms",
+                                            form_id="consortium-assets",
+                                            submitted_by=current_user.get_display_name(),
+                                            tags={"consortium-id": consort_id, "asset-type": "terms-pdf", "source": "rfpo-admin"},
+                                        )
+                                except Exception as cloud_err:
+                                    logging.getLogger(__name__).warning("DOCUPLOAD terms upload failed: %s", cloud_err)
                         else:
                             flash("❌ Terms file must be a PDF", "error")
 
@@ -2173,6 +2327,23 @@ def create_app():
 
                         # Upload new logo
                         consortium.logo = handle_file_upload(logo_file, "uploads/logos", ALLOWED_IMAGE_EXTENSIONS)
+                        # Upload to cloud storage
+                        if consortium.logo:
+                            try:
+                                from docupload_client import upload_to_docupload, is_configured
+                                if is_configured():
+                                    logo_path = os.path.join("uploads/logos", consortium.logo)
+                                    with open(logo_path, "rb") as f:
+                                        logo_bytes = f.read()
+                                    upload_to_docupload(
+                                        files={"logo": (consortium.logo, logo_bytes, "image/png")},
+                                        folder_path=f"consortiums/{consortium.consort_id}/logos",
+                                        form_id="consortium-assets",
+                                        submitted_by=current_user.get_display_name(),
+                                        tags={"consortium-id": consortium.consort_id, "asset-type": "logo", "source": "rfpo-admin"},
+                                    )
+                            except Exception as cloud_err:
+                                logging.getLogger(__name__).warning("DOCUPLOAD logo upload failed: %s", cloud_err)
 
                 # Handle terms PDF upload
                 if "terms_pdf_file" in request.files:
@@ -2197,6 +2368,22 @@ def create_app():
                                     f"📄 Terms PDF updated: {consortium.terms_pdf}",
                                     "info",
                                 )
+                                # Upload to cloud storage
+                                try:
+                                    from docupload_client import upload_to_docupload, is_configured
+                                    if is_configured():
+                                        terms_path = os.path.join("uploads/terms", consortium.terms_pdf)
+                                        with open(terms_path, "rb") as f:
+                                            terms_bytes = f.read()
+                                        upload_to_docupload(
+                                            files={"terms": (consortium.terms_pdf, terms_bytes, "application/pdf")},
+                                            folder_path=f"consortiums/{consortium.consort_id}/terms",
+                                            form_id="consortium-assets",
+                                            submitted_by=current_user.get_display_name(),
+                                            tags={"consortium-id": consortium.consort_id, "asset-type": "terms-pdf", "source": "rfpo-admin"},
+                                        )
+                                except Exception as cloud_err:
+                                    logging.getLogger(__name__).warning("DOCUPLOAD terms upload failed: %s", cloud_err)
                         else:
                             flash("❌ Terms file must be a PDF", "error")
 
@@ -3653,6 +3840,25 @@ Southfield, MI  48075""",
 
             # Save the file
             file.save(file_path)
+
+            # Upload to DOCUPLOAD (Azure Blob Storage)
+            try:
+                from docupload_client import upload_to_docupload, is_configured
+                if is_configured():
+                    with open(file_path, "rb") as f:
+                        file_bytes = f.read()
+                    doc_type_folder = (document_type or "general").lower().replace(" ", "-")
+                    cloud_result = upload_to_docupload(
+                        files={doc_type_folder: (original_filename, file_bytes, mime_type or "application/octet-stream")},
+                        folder_path=f"rfpo/{rfpo.rfpo_id}/{doc_type_folder}",
+                        form_id="rfpo-documents",
+                        submitted_by=current_user.get_display_name(),
+                        tags={"rfpo-number": rfpo.rfpo_id, "document-type": doc_type_folder, "source": "rfpo-admin"},
+                    )
+                    if cloud_result.get("success"):
+                        flash(f"☁️ Also uploaded to cloud storage: {cloud_result.get('folder_path')}", "info")
+            except Exception as cloud_err:
+                logging.getLogger(__name__).warning("DOCUPLOAD cloud upload failed: %s", cloud_err)
 
             # Create database record
             uploaded_file = UploadedFile(

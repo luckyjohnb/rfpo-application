@@ -5,6 +5,96 @@
 {% block content %}
 <div class="container py-3">
 
+  <!-- ═══ Global Kill Switch ═══ -->
+  <div class="card mb-4 {% if email_globally_disabled %}border-danger{% else %}border-success{% endif %}" style="max-width: 720px;">
+    <div class="card-header {% if email_globally_disabled %}bg-danger text-white{% else %}bg-light{% endif %}">
+      <h5 class="mb-0">
+        <i class="fas fa-power-off"></i> Email Kill Switch
+        {% if email_globally_disabled %}
+          <span class="badge bg-dark ms-2">ALL EMAILS BLOCKED</span>
+        {% else %}
+          <span class="badge bg-success ms-2">ACTIVE</span>
+        {% endif %}
+      </h5>
+    </div>
+    <div class="card-body">
+      {% if email_globally_disabled %}
+      <div class="alert alert-danger mb-3 py-2">
+        <i class="fas fa-ban"></i> <strong>Kill switch is ON.</strong> No emails will be sent to anyone — not even test recipients.
+        This overrides test-mode settings below.
+      </div>
+      {% endif %}
+      <p class="text-muted small mb-3">
+        Emergency stop for <strong>all</strong> outbound email. Sets the <code>EMAIL_DISABLED</code> environment variable
+        in the running process. Works instantly across all threads — no database required.
+        <br><strong>Note:</strong> To persist across container restarts, also set <code>EMAIL_DISABLED=true</code> in your <code>.env</code> file or Azure Container App environment variables.
+      </p>
+      <form method="post">
+        <input type="hidden" name="_action" value="save_kill_switch">
+        <div class="d-flex align-items-center gap-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   id="email_disabled" name="email_disabled" value="1"
+                   {% if email_globally_disabled %}checked{% endif %}>
+            <label class="form-check-label" for="email_disabled">
+              <strong>Block ALL emails</strong>
+            </label>
+          </div>
+          <button type="submit" class="btn btn-sm {% if email_globally_disabled %}btn-danger{% else %}btn-outline-danger{% endif %}">
+            <i class="fas fa-save"></i> Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ Branded Template Preview & Test ═══ -->
+  <div class="card mb-4 border-primary" style="max-width: 960px;">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0"><i class="fas fa-palette"></i> Branded Email Template Preview &amp; Test</h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Preview USCAR-branded email templates or send a test using a real template.
+        The preview shows exactly what recipients will see.
+      </p>
+      <div class="row g-3">
+        <div class="col-md-5">
+          <label class="form-label"><strong>Select Template</strong></label>
+          <select id="tpl_select" class="form-select mb-2" onchange="loadTemplatePreview()">
+            <option value="">— Choose a template —</option>
+            <option value="approval_notification">Approval Notification</option>
+            <option value="approval_complete">Approval Complete</option>
+            <option value="approval_reminder">Approval Reminder</option>
+            <option value="approval_escalation">Approval Escalation</option>
+            <option value="welcome">Welcome</option>
+            <option value="password_changed">Password Changed</option>
+            <option value="user_added_to_project">User Added to Project</option>
+          </select>
+
+          <form method="post" class="mt-3">
+            <input type="hidden" name="_action" value="send_template_test">
+            <input type="hidden" name="template_name" id="tpl_hidden" value="">
+            <div class="mb-2">
+              <label for="tpl_to_emails" class="form-label small">Send branded test to:</label>
+              <input type="email" class="form-control form-control-sm" id="tpl_to_emails"
+                     name="tpl_to_emails" placeholder="your@email.com"
+                     value="{{ current_user.email if current_user else '' }}">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" id="tpl_send_btn" disabled>
+              <i class="fas fa-paper-plane"></i> Send Branded Test
+            </button>
+          </form>
+        </div>
+        <div class="col-md-7">
+          <div id="tpl_preview_area" style="border: 1px solid #dee2e6; border-radius: .375rem; background: #f8f9fa; height: 520px; display: flex; align-items: center; justify-content: center;">
+            <p class="text-muted mb-0"><i class="fas fa-eye"></i> Select a template to preview</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Email Test Mode Settings -->
   <div class="card mb-4 {% if email_test_mode %}border-warning{% endif %}" style="max-width: 720px;">
     <div class="card-header {% if email_test_mode %}bg-warning text-dark{% else %}bg-light{% endif %}">
@@ -149,6 +239,36 @@ Please check the following in the email headers:
     document.getElementById('to_emails').value = '';
     document.getElementById('message').value = '';
     document.getElementById('send_html').checked = false;
+  }
+
+  function loadTemplatePreview() {
+    const sel = document.getElementById('tpl_select');
+    const tplName = sel.value;
+    const area = document.getElementById('tpl_preview_area');
+    const hidden = document.getElementById('tpl_hidden');
+    const sendBtn = document.getElementById('tpl_send_btn');
+
+    hidden.value = tplName;
+
+    if (!tplName) {
+      area.innerHTML = '<p class="text-muted mb-0"><i class="fas fa-eye"></i> Select a template to preview</p>';
+      sendBtn.disabled = true;
+      return;
+    }
+
+    sendBtn.disabled = false;
+    area.innerHTML = '<p class="text-muted mb-0"><i class="fas fa-spinner fa-spin"></i> Loading preview...</p>';
+
+    fetch('/tools/email-template-preview/' + tplName)
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        area.innerHTML = '<iframe srcdoc="' + html.replace(/"/g, '&quot;') + '" ' +
+          'style="width:100%;height:520px;border:none;border-radius:.375rem;background:#fff;" ' +
+          'sandbox="allow-same-origin"></iframe>';
+      })
+      .catch(function() {
+        area.innerHTML = '<p class="text-danger mb-0"><i class="fas fa-exclamation-triangle"></i> Failed to load preview</p>';
+      });
   }
 </script>
 {% endblock %}

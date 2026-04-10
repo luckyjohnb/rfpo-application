@@ -490,29 +490,29 @@
     }
 
     async function loadApproverDashboard() {
-        // Load general RFPO stats (same source as the RFPO list page)
-        try {
-            const rfposResponse = await makeApiCall('/api/rfpos');
-            if (rfposResponse.success) {
-                const rfpos = rfposResponse.rfpos;
-                document.getElementById('totalRfpos').textContent = rfpos.length;
+        // Load RFPO stats and approver data in parallel
+        const [rfposResult, approverResult] = await Promise.allSettled([
+            makeApiCall('/api/rfpos'),
+            fetch('/api/users/approver-rfpos').then(r => r.json())
+        ]);
 
-                const statusLower = rfpo => (rfpo.status || '').toLowerCase();
-                const pendingCount = rfpos.filter(rfpo => ['draft', 'pending', 'pending approval', 'submitted', 'waiting'].includes(statusLower(rfpo))).length;
-                const completedCount = rfpos.filter(rfpo => ['completed', 'approved'].includes(statusLower(rfpo))).length;
+        // Process RFPO stats
+        if (rfposResult.status === 'fulfilled' && rfposResult.value.success) {
+            const rfpos = rfposResult.value.rfpos;
+            document.getElementById('totalRfpos').textContent = rfpos.length;
 
-                document.getElementById('pendingRfpos').textContent = pendingCount;
-                document.getElementById('completedRfpos').textContent = completedCount;
-            }
-        } catch (e) {
-            console.error('Error loading RFPO stats:', e);
+            const statusLower = rfpo => (rfpo.status || '').toLowerCase();
+            const pendingCount = rfpos.filter(rfpo => ['draft', 'pending', 'pending approval', 'submitted', 'waiting'].includes(statusLower(rfpo))).length;
+            const completedCount = rfpos.filter(rfpo => ['completed', 'approved'].includes(statusLower(rfpo))).length;
+
+            document.getElementById('pendingRfpos').textContent = pendingCount;
+            document.getElementById('completedRfpos').textContent = completedCount;
         }
 
-        // Load approver-specific content for activity section
-        fetch('/api/users/approver-rfpos')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
+        // Process approver data
+        if (approverResult.status === 'fulfilled') {
+            const data = approverResult.value;
+            if (data.success) {
                     // Show approval-focused content in recent RFPOs area
                     const container = document.getElementById('recentRfposContainer');
                     if (data.summary.pending > 0) {
@@ -573,19 +573,17 @@
                         `;
                     }
                 }
-            })
-            .catch(error => {
-                console.error('Error loading approver dashboard:', error);
-                // Fallback: just point them to the approvals page
-                const container = document.getElementById('recentRfposContainer');
-                container.innerHTML = `
-                    <div class="text-center py-4">
-                        <a href="/approvals" class="btn btn-warning btn-lg">
-                            <i class="fas fa-clipboard-check"></i> Go to My Approvals
-                        </a>
-                    </div>
-                `;
-            });
+        } else {
+            console.error('Error loading approver dashboard');
+            const container = document.getElementById('recentRfposContainer');
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <a href="/approvals" class="btn btn-warning btn-lg">
+                        <i class="fas fa-clipboard-check"></i> Go to My Approvals
+                    </a>
+                </div>
+            `;
+        }
     }
 
     function showProfileOnlyDashboard() {

@@ -1,140 +1,29 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RFPO Approval Escalation</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .header {
-            background-color: #e74c3c;
-            color: white;
-            padding: 30px 20px;
-            text-align: center;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 300;
-        }
-        .content {
-            padding: 40px 30px;
-        }
-        .urgent-notice {
-            background-color: #fff5f5;
-            border-left: 4px solid #e74c3c;
-            padding: 20px;
-            margin: 25px 0;
-            border-radius: 4px;
-        }
-        .urgent-notice h3 {
-            margin-top: 0;
-            color: #e74c3c;
-            font-size: 16px;
-        }
-        .info-notice {
-            background-color: #f0f7ff;
-            border-left: 4px solid #3498db;
-            padding: 20px;
-            margin: 25px 0;
-            border-radius: 4px;
-        }
-        .info-notice h3 {
-            margin-top: 0;
-            color: #3498db;
-            font-size: 16px;
-        }
-        .rfpo-details {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            padding: 20px;
-            border-radius: 4px;
-            margin: 20px 0;
-        }
-        .rfpo-details h3 {
-            margin-top: 0;
-            color: #2c3e50;
-        }
-        .button {
-            display: inline-block;
-            background-color: #e74c3c;
-            color: white;
-            padding: 15px 30px;
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: bold;
-            margin: 20px 0;
-            text-align: center;
-            font-size: 16px;
-        }
-        .button:hover {
-            background-color: #c0392b;
-        }
-        .footer {
-            background-color: #34495e;
-            color: #bdc3c7;
-            padding: 20px 30px;
-            font-size: 14px;
-            text-align: center;
-        }
-        .footer a {
-            color: #3498db;
-            text-decoration: none;
-        }
-        @media (max-width: 600px) {
-            .container {
-                margin: 0;
-                box-shadow: none;
-            }
-            .content {
-                padding: 20px 15px;
-            }
-            .header {
-                padding: 20px 15px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>&#x1F6A8; RFPO Approval Escalated</h1>
-            <p>Escalation notice for overdue approval</p>
-        </div>
+{% extends "base.html" %}
 
-        <!-- Main Content -->
-        <div class="content">
+{% block title %}RFPO Approval Escalation{% endblock %}
+
+{% block header_bg %}#C8102E{% endblock %}
+{% block header_title %}RFPO Approval Escalated{% endblock %}
+{% block header_subtitle %}<p>Escalation notice for overdue approval</p>{% endblock %}
+
+{% block content %}
             <p><strong>Hello {{ user_name }},</strong></p>
 
             {% if is_backup %}
-            <div class="urgent-notice">
-                <h3>&#x1F6A8; Backup Approver Notification</h3>
+            <div class="alert-box">
+                <h3>Backup Approver Notification</h3>
                 <p>You have been designated as the backup approver for the following RFPO. The primary approver ({{ primary_approver_name }}) has not responded after {{ reminders_sent }} reminders over {{ days_overdue }} days.</p>
                 <p><strong>Your review and decision is now requested.</strong></p>
             </div>
             {% else %}
-            <div class="info-notice">
-                <h3>&#x2139;&#xFE0F; Escalation Notice</h3>
+            <div class="info-box">
+                <h3>Escalation Notice</h3>
                 <p>This approval has been escalated to the backup approver ({{ backup_approver_name }}) after {{ reminders_sent }} reminders went unanswered. You may still take action on this approval at any time.</p>
             </div>
             {% endif %}
 
-            <div class="rfpo-details">
-                <h3>&#x1F4CB; RFPO Details</h3>
+            <div class="details-card">
+                <h3>RFPO Details</h3>
                 <p><strong>RFPO ID:</strong> {{ rfpo_id }}</p>
                 <p><strong>Step:</strong> {{ step_name }}</p>
                 <p><strong>Due Date:</strong> {{ due_date }}</p>
@@ -148,16 +37,6 @@
             </div>
 
             <p>If you have any questions about this RFPO or the approval process, please contact the system administrator.</p>
+{% endblock %}
 
-            <p>Best regards,<br>
-            <strong>RFPO Application System</strong></p>
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-            <p>&copy; {{ current_year }} RFPO Application. All rights reserved.</p>
-            <p>This is an automated escalation notice. Please do not reply to this email.</p>
-        </div>
-    </div>
-</body>
-</html>
+{% block footer_note %}This is an automated escalation notice. Please do not reply to this email.{% endblock %}

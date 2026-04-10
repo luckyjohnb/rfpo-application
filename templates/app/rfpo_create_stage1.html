@@ -52,7 +52,7 @@
                         </button>
                         {% endif %}
                     </label>
-                    <select class="form-select" id="consortium_id" required>
+                    <select class="form-select" id="consortium_id" required aria-required="true">
                         <option value="">-- Select the consortium for this RFPO --</option>
                         {% for c in consortiums %}
                         <option value="{{ c.consort_id }}" data-name="{{ c.name }}" data-abbrev="{{ c.abbrev }}">
@@ -76,7 +76,7 @@
                         </button>
                         {% endif %}
                     </label>
-                    <select class="form-select" id="project_id" disabled>
+                    <select class="form-select" id="project_id" disabled aria-required="true">
                         <option value="">-- Select a consortium first --</option>
                     </select>
                     <div class="form-text">The project this RFPO belongs to</div>
@@ -164,7 +164,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="newProjectDescription" class="form-label">Description</label>
-                        <textarea class="form-control" id="newProjectDescription" rows="3"></textarea>
+                        <textarea class="form-control" id="newProjectDescription" rows="3" maxlength="1000"></textarea>
                     </div>
                     <div class="mb-3">
                         <label class="form-label d-block">Project Flags</label>

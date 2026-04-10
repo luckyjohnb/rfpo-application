@@ -199,11 +199,27 @@ def _generate_and_save_pdf_snapshot(rfpo):
 
         filename = f"{_uuid.uuid4().hex[:12]}_{rfpo.rfpo_id}.pdf"
         filepath = os.path.join(snapshots_dir, filename)
+        pdf_bytes = pdf_buffer.getvalue()
         with open(filepath, "wb") as f:
-            f.write(pdf_buffer.getvalue())
+            f.write(pdf_bytes)
 
         relative_path = f"uploads/snapshots/{filename}"
         app.logger.info("PDF snapshot saved for RFPO %s: %s", rfpo.rfpo_id, relative_path)
+
+        # Upload PDF snapshot to cloud storage
+        try:
+            from docupload_client import upload_to_docupload, is_configured
+            if is_configured():
+                upload_to_docupload(
+                    files={"snapshot": (filename, pdf_bytes, "application/pdf")},
+                    folder_path=f"rfpo/{rfpo.rfpo_id}/snapshots",
+                    form_id="rfpo-snapshot",
+                    submitted_by="system",
+                    tags={"rfpo-id": rfpo.rfpo_id, "asset-type": "pdf-snapshot", "source": "rfpo-api"},
+                )
+        except Exception as cloud_err:
+            app.logger.warning("DOCUPLOAD snapshot upload failed for RFPO %s: %s", rfpo.rfpo_id, cloud_err)
+
         return relative_path
 
     except Exception as e:
@@ -3880,6 +3896,24 @@ def upload_rfpo_file(rfpo_id):
         user = request.current_user
         user_name = user.get_display_name() if hasattr(user, "get_display_name") else str(user)
 
+        # Upload to DOCUPLOAD (Azure Blob Storage)
+        cloud_result = None
+        try:
+            from docupload_client import upload_to_docupload, is_configured
+            if is_configured():
+                with open(file_path, "rb") as f:
+                    file_bytes = f.read()
+                doc_type_folder = (document_type or "general").lower().replace(" ", "-")
+                cloud_result = upload_to_docupload(
+                    files={doc_type_folder: (original_filename, file_bytes, mime_type or "application/octet-stream")},
+                    folder_path=f"rfpo/{rfpo.rfpo_id}/{doc_type_folder}",
+                    form_id="rfpo-documents",
+                    submitted_by=user_name,
+                    tags={"rfpo-number": rfpo.rfpo_id, "document-type": doc_type_folder, "source": "rfpo-api"},
+                )
+        except Exception as cloud_err:
+            logger.warning("DOCUPLOAD cloud upload failed (file saved locally): %s", cloud_err)
+
         uploaded_file = UploadedFile(
             file_id=file_id,
             original_filename=original_filename,
@@ -3897,11 +3931,20 @@ def upload_rfpo_file(rfpo_id):
         db.session.add(uploaded_file)
         db.session.commit()
 
-        return jsonify({
+        response_data = {
             "success": True,
             "message": f'File "{original_filename}" uploaded successfully',
             "file": uploaded_file.to_dict(),
-        })
+        }
+        if cloud_result and cloud_result.get("success"):
+            response_data["cloud_upload"] = {
+                "success": True,
+                "folder_path": cloud_result.get("folder_path"),
+                "uploaded_files": cloud_result.get("uploaded_files", []),
+                "scan_status": cloud_result.get("scan_status"),
+            }
+
+        return jsonify(response_data)
 
     except Exception as e:
         db.session.rollback()

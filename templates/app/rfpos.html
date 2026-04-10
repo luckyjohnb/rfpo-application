@@ -2,6 +2,31 @@
 
 {% block title %}RFPOs - RFPO Application{% endblock %}
 
+{% block extra_css %}
+<style>
+    @media (max-width: 767.98px) {
+        .rfpo-list-row .col-md-2,
+        .rfpo-list-row .col-md-3 {
+            text-align: left !important;
+            margin-top: 0.25rem;
+        }
+        .rfpo-list-row .btn-group { width: 100%; margin-top: 0.5rem; }
+        .rfpo-list-row .btn-group .btn { flex: 1; }
+        #bulkActionBar .card-body {
+            flex-direction: column !important;
+            gap: 0.5rem;
+        }
+        #bulkActionBar .d-flex.gap-2 {
+            width: 100%;
+        }
+        #bulkActionBar .d-flex.gap-2 .btn {
+            flex: 1;
+        }
+        .rfpo-amount { white-space: nowrap; font-size: 0.9rem; }
+    }
+</style>
+{% endblock %}
+
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
     <ol class="breadcrumb">
@@ -225,12 +250,12 @@
 
             return `
                 <div class="border-bottom pb-3 mb-3">
-                    <div class="row align-items-center">
+                    <div class="row align-items-center rfpo-list-row">
                         <div class="col-md-5">
                             <div class="d-flex align-items-start">
                                 ${checkbox}
                                 <div>
-                                    <h6 class="mb-1">
+                                    <h6 class="mb-1 text-truncate" style="max-width: 100%;">
                                         <a href="/rfpos/${rfpo.id}" class="text-decoration-none">
                                             ${escapeHtml(rfpo.title)}
                                         </a>
@@ -248,7 +273,7 @@
                             </div>
                         </div>
                         <div class="col-md-2 text-end">
-                            <strong>${amount}</strong>
+                            <strong class="rfpo-amount">${amount}</strong>
                         </div>
                         <div class="col-md-2 text-center">
                             ${statusBadge}
@@ -268,7 +293,8 @@
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item text-danger" href="#"
-                                           onclick="deleteRfpo(${rfpo.id}, '${rfpo.title}')">
+                                           data-rfpo-title="${escapeAttr(rfpo.title)}"
+                                           onclick="deleteRfpo(${rfpo.id}, this.dataset.rfpoTitle)">
                                         <i class="fas fa-trash"></i> Delete
                                     </a></li>
                                 </ul>
@@ -363,6 +389,7 @@
     function clearFilters() {
         document.getElementById('filterForm').reset();
         currentFilters = {};
+        try { sessionStorage.removeItem('rfpo_filters'); } catch(e) {}
         loadRfpos(1);
     }
 
@@ -433,6 +460,45 @@
         );
     }
 
+    // ─── Debounce helper ─────────────────────────────────────────
+    function debounce(fn, delay) {
+        let timer;
+        return function() {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, arguments), delay);
+        };
+    }
+
+    // Debounced search on input (300ms)
+    document.getElementById('searchInput').addEventListener('input', debounce(function() {
+        currentFilters.search = this.value.trim() || undefined;
+        if (!currentFilters.search) delete currentFilters.search;
+        saveFilterState();
+        loadRfpos(1);
+    }, 300));
+
+    // ─── Filter state persistence ────────────────────────────────
+    function saveFilterState() {
+        const state = {
+            search: document.getElementById('searchInput').value,
+            status: document.getElementById('statusFilter').value,
+            team: document.getElementById('teamFilter').value
+        };
+        try { sessionStorage.setItem('rfpo_filters', JSON.stringify(state)); } catch(e) {}
+    }
+
+    function restoreFilterState() {
+        try {
+            const saved = sessionStorage.getItem('rfpo_filters');
+            if (!saved) return false;
+            const state = JSON.parse(saved);
+            if (state.search) { document.getElementById('searchInput').value = state.search; currentFilters.search = state.search; }
+            if (state.status) { document.getElementById('statusFilter').value = state.status; currentFilters.status = state.status; }
+            if (state.team) { document.getElementById('teamFilter').value = state.team; currentFilters.team_id = state.team; }
+            return true;
+        } catch(e) { return false; }
+    }
+
     // Event listeners
     document.getElementById('filterForm').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -448,6 +514,7 @@
         const team = document.getElementById('teamFilter').value;
         if (team) currentFilters.team_id = team;
 
+        saveFilterState();
         loadRfpos(1);
     });
 
@@ -463,6 +530,9 @@
                 document.getElementById('statusFilter').value = filterVal;
                 currentFilters.status = filterVal;
             }
+        } else {
+            // Restore saved filter state if no URL params
+            restoreFilterState();
         }
         loadTeams();
         loadRfpos();

@@ -294,65 +294,82 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">🚀 Quick Actions</h5>
+                <h5 class="mb-0"><i class="fas fa-bolt"></i> Quick Actions</h5>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3 mb-2">
+                <!-- Row 1: Create New (core entities) -->
+                <div class="d-flex align-items-center mb-2">
+                    <small class="text-muted text-uppercase fw-bold me-3" style="white-space:nowrap; letter-spacing:1px; font-size:0.7rem;">Create</small>
+                    <hr class="flex-grow-1 my-0" style="opacity:0.15;">
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="{{ USER_APP_URL }}/rfpos/create" target="_blank" class="btn btn-danger w-100">
+                            <i class="fas fa-plus me-1"></i> New RFPO <i class="fas fa-external-link-alt fa-xs ms-1"></i>
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-2">
                         <a href="{{ url_for('consortium_new') }}" class="btn btn-primary w-100">
-                            <i class="fas fa-plus"></i> New Consortium
+                            <i class="fas fa-plus me-1"></i> New Consortium
                         </a>
                     </div>
-                    <div class="col-md-3 mb-2">
-                        <a href="{{ url_for('team_new') }}" class="btn btn-success w-100">
-                            <i class="fas fa-plus"></i> New Team
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="{{ url_for('team_new') }}" class="btn btn-primary w-100">
+                            <i class="fas fa-plus me-1"></i> New Team
                         </a>
                     </div>
-                    <div class="col-md-3 mb-2">
-                        <button type="button" class="btn btn-dark w-100" data-bs-toggle="tooltip" title="Create a new project" id="btnNewProject">
-                            <i class="fas fa-plus"></i> New Project
-                        </button>
-                    </div>
-                    <div class="col-md-3 mb-2">
-                        <a href="{{ USER_APP_URL }}/rfpos/create" target="_blank" class="btn btn-info w-100">
-                            <i class="fas fa-plus"></i> New RFPO <i class="fas fa-external-link-alt fa-xs"></i>
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-2">
-                        <a href="{{ url_for('user_new') }}" class="btn btn-warning w-100">
-                            <i class="fas fa-plus"></i> New User
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-2">
-                        <button type="button" class="btn btn-secondary w-100" data-bs-toggle="tooltip" title="Create a new vendor" id="btnNewVendor">
-                            <i class="fas fa-plus"></i> New Vendor
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <button type="button" class="btn btn-primary w-100" id="btnNewProject">
+                            <i class="fas fa-plus me-1"></i> New Project
                         </button>
                     </div>
                 </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="{{ url_for('user_new') }}" class="btn btn-primary w-100">
+                            <i class="fas fa-plus me-1"></i> New User
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <button type="button" class="btn btn-primary w-100" id="btnNewVendor">
+                            <i class="fas fa-plus me-1"></i> New Vendor
+                        </button>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="{{ url_for('approval_workflow_new_form') }}" class="btn btn-primary w-100">
+                            <i class="fas fa-plus me-1"></i> New Workflow
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <!-- empty for alignment -->
+                    </div>
+                </div>
+
+                <!-- Row 2: View / Manage -->
+                <div class="d-flex align-items-center mb-2">
+                    <small class="text-muted text-uppercase fw-bold me-3" style="white-space:nowrap; letter-spacing:1px; font-size:0.7rem;">Manage</small>
+                    <hr class="flex-grow-1 my-0" style="opacity:0.15;">
+                </div>
                 <div class="row">
-                    <div class="col-md-3 mb-2">
-                        <a href="{{ url_for('projects') }}" class="btn btn-outline-dark w-100" data-bs-toggle="tooltip" title="View all projects">
-                            <i class="fas fa-project-diagram"></i> View Projects
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="{{ url_for('projects') }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-project-diagram me-1"></i> Projects
                         </a>
                     </div>
-                    <div class="col-md-3 mb-2">
-                        <a href="{{ url_for('approval_workflow_new_form') }}" class="btn btn-secondary w-100">
-                            <i class="fas fa-route"></i> New Workflow
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="{{ url_for('approval_workflows') }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-route me-1"></i> Workflows
                         </a>
                     </div>
-                    <div class="col-md-3 mb-2">
-                        <a href="{{ url_for('approval_workflows') }}" class="btn btn-outline-secondary w-100">
-                            <i class="fas fa-list"></i> View Workflows
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="{{ url_for('approval_instances') }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-clipboard-list me-1"></i> Approval Instances
                         </a>
                     </div>
-                    <div class="col-md-3 mb-2">
-                        <a href="{{ url_for('approval_instances') }}" class="btn btn-outline-info w-100">
-                            <i class="fas fa-clipboard-list"></i> View Instances
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-2">
+                    <div class="col-md-3 col-sm-6 mb-2">
                         <a href="{{ url_for('lists') }}" class="btn btn-outline-primary w-100">
-                            <i class="fas fa-cog"></i> Configuration
+                            <i class="fas fa-cog me-1"></i> Configuration
                         </a>
                     </div>
                 </div>

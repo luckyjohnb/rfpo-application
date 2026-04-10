@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="card-body">
-        <form id="rfpoCreateForm">
+        <form id="rfpoCreateForm" data-track-unsaved>
             <!-- Hidden fields for consortium/project context -->
             <input type="hidden" id="consortium_id" value="{{ consortium.consort_id }}">
             <input type="hidden" id="project_id" value="{{ project.id }}">
@@ -73,19 +73,20 @@
                     <div class="mb-3">
                         <label for="title" class="form-label">RFPO Title <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="title" name="title" required
-                               placeholder="Brief description of the purchase">
+                               aria-required="true"
+                               placeholder="Brief description of the purchase" maxlength="255">
                         <div class="form-text">Clear, concise title for this purchase order</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="3"
-                                  placeholder="Detailed description of the purchase"></textarea>
+                                  placeholder="Detailed description of the purchase" maxlength="2000"></textarea>
                     </div>
 
                     <div class="mb-3">
                         <label for="government_agreement_number" class="form-label">Government Agreement Number</label>
-                        <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number">
+                        <input type="text" class="form-control" id="government_agreement_number" name="government_agreement_number" maxlength="100">
                         <div class="form-text">If applicable, reference number for government agreements</div>
                     </div>
                 </div>
@@ -96,7 +97,8 @@
 
                     <div class="mb-3">
                         <label for="delivery_date" class="form-label">PO Expiration Date</label>
-                        <input type="date" class="form-control" id="delivery_date" name="delivery_date">
+                        <input type="date" class="form-control" id="delivery_date" name="delivery_date"
+                               min="">
                     </div>
                 </div>
             </div>
@@ -302,6 +304,14 @@
 
 {% block extra_js %}
 <script>
+    // Set min date on delivery_date to today
+    (function() {
+        const dateInput = document.getElementById('delivery_date');
+        if (dateInput) {
+            dateInput.min = new Date().toISOString().split('T')[0];
+        }
+    })();
+
     // ===== Create Team/Vendor Modal Functions =====
     {% if nav.is_admin %}
     let _teamMemberUsers = [];
@@ -588,6 +598,7 @@
             });
 
             if (response.success) {
+                window._formDirty = false;
                 showAlert('RFPO created successfully! You can now add line items.', 'success');
                 setTimeout(() => {
                     window.location.href = `/rfpos/${response.rfpo.id}`;

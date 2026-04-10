@@ -8,10 +8,19 @@ import os
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
-import jwt as pyjwt
 import requests
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for, make_response
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+    make_response,
+)
 from flask_cors import CORS
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import error handling
@@ -33,14 +42,31 @@ def create_user_app():
     )
     if app.config["SECRET_KEY"] == "user-app-secret-change-in-production":
         if _is_production:
-            raise RuntimeError("USER_APP_SECRET_KEY must be set in production (DATABASE_URL contains postgresql)")
+            raise RuntimeError(
+                "USER_APP_SECRET_KEY must be set"
+                " in production (DATABASE_URL"
+                " contains postgresql)"
+            )
         import warnings
-        warnings.warn("USER_APP_SECRET_KEY not set! Using insecure default.", stacklevel=1)
+
+        warnings.warn(
+            "USER_APP_SECRET_KEY not set! Using insecure default.",
+            stacklevel=1,
+        )
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "True").lower() == "true"
-    app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))
+    app.config["SESSION_COOKIE_SECURE"] = (
+        os.environ.get("SESSION_COOKIE_SECURE", "True").lower() == "true"
+    )
+    app.config["MAX_CONTENT_LENGTH"] = int(
+        os.environ.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)
+    )
+    # CSRF tokens don't expire (session-scoped)
+    app.config["WTF_CSRF_TIME_LIMIT"] = None
+
+    # CSRF protection
+    csrf = CSRFProtect(app)
 
     # Setup logging
     logger = setup_logging("user_app", log_to_file=True)
@@ -52,7 +78,11 @@ def create_user_app():
     # Enable CORS - restrict to known origins in production
     _cors_default = "https://rfpo.uscar.org"
     _allowed_origins = os.environ.get("CORS_ORIGINS", _cors_default).split(",")
-    CORS(app, origins=_allowed_origins, allow_headers=["Content-Type", "Authorization"])
+    CORS(
+        app,
+        origins=_allowed_origins,
+        allow_headers=["Content-Type", "Authorization"],
+    )
 
     # Security headers
     @app.after_request
@@ -60,14 +90,23 @@ def create_user_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-            "font-src 'self' https://cdnjs.cloudflare.com; "
+            "script-src 'self' 'unsafe-inline'"
+            " https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline'"
+            " https://cdn.jsdelivr.net"
+            " https://cdnjs.cloudflare.com; "
+            "font-src 'self'"
+            " https://cdnjs.cloudflare.com; "
             "img-src 'self' data:; "
-            "connect-src 'self' " + os.environ.get("API_BASE_URL", "http://127.0.0.1:5002/api").rsplit("/api", 1)[0]
+            "connect-src 'self' "
+            + os.environ.get(
+                "API_BASE_URL", "http://127.0.0.1:5002/api"
+            ).rsplit("/api", 1)[0]
         )
         return response
 
@@ -85,16 +124,58 @@ def create_user_app():
 
     # API Configuration
     API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:5002/api")
-    ADMIN_API_URL = os.environ.get("ADMIN_API_URL", "http://127.0.0.1:5111/api")
-    ADMIN_PANEL_URL = os.environ.get("ADMIN_PANEL_URL", "http://127.0.0.1:5111")
+    ADMIN_API_URL = os.environ.get(
+        "ADMIN_API_URL", "http://127.0.0.1:5111/api"
+    )
+    ADMIN_PANEL_URL = os.environ.get(
+        "ADMIN_PANEL_URL", "http://127.0.0.1:5111"
+    )
     INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+
+    # ── Theme toggle ────────────────────────────────────────
+    # Enable RFPO USCAR theme via:
+    #   1. ENV var  RFPO_THEME=1          (force-on for all users)
+    #   2. URL param ?theme=rfpo          (sets cookie, persists)
+    #   3. URL param ?theme=default       (clears cookie, reverts)
+    RFPO_THEME_DEFAULT = os.environ.get("RFPO_THEME", "1") == "1"
+
+    @app.after_request
+    def _set_theme_cookie(response):
+        """Persist theme choice in a cookie when toggled via query param."""
+        from flask import request as req
+
+        theme_param = req.args.get("theme")
+        if theme_param == "rfpo":
+            response.set_cookie(
+                "rfpo_theme", "1", max_age=60 * 60 * 24 * 365, samesite="Lax"
+            )
+        elif theme_param == "default":
+            response.delete_cookie("rfpo_theme")
+        return response
 
     # Context processor — inject nav context into every template
     @app.context_processor
     def inject_nav_context():
-        """Provide role-based navigation context to all templates (re-verified periodically)."""
+        """Provide role-based nav context to templates.
+
+        Re-verified periodically.
+        """
+        from flask import request as req
         from time import time as _time
-        base = {"admin_panel_url": ADMIN_PANEL_URL}
+
+        # Determine active theme
+        theme_param = req.args.get("theme")
+        if theme_param in ("rfpo", "default"):
+            use_rfpo_theme = theme_param == "rfpo"
+        elif req.cookies.get("rfpo_theme") == "1":
+            use_rfpo_theme = True
+        else:
+            use_rfpo_theme = RFPO_THEME_DEFAULT
+
+        base = {
+            "admin_panel_url": ADMIN_PANEL_URL,
+            "rfpo_theme": use_rfpo_theme,
+        }
         nav = {"is_admin": False, "is_approver": False, "show_rfpo_nav": False}
         if "auth_token" not in session:
             return {**base, "nav": nav}
@@ -128,15 +209,26 @@ def create_user_app():
     def _require_session_token(f):
         """Decorator to reject proxy requests without a session auth_token."""
         from functools import wraps
+
         @wraps(f)
         def decorated(*args, **kwargs):
             if "auth_token" not in session:
-                return jsonify({"authenticated": False, "message": "No token"}), 401
+                return (
+                    jsonify({"authenticated": False, "message": "No token"}),
+                    401,
+                )
             return f(*args, **kwargs)
+
         return decorated
 
     # Helper function to make API calls
-    def make_api_request(endpoint, method="GET", data=None, use_admin_api=False, extra_headers=None):
+    def make_api_request(
+        endpoint,
+        method="GET",
+        data=None,
+        use_admin_api=False,
+        extra_headers=None,
+    ):
         """Make API request with authentication"""
         base_url = ADMIN_API_URL if use_admin_api else API_BASE_URL
         url = f"{base_url}{endpoint}"
@@ -153,15 +245,20 @@ def create_user_app():
             if method == "GET":
                 response = requests.get(url, headers=headers, timeout=10)
             elif method == "POST":
-                response = requests.post(url, json=data, headers=headers, timeout=10)
+                response = requests.post(
+                    url, json=data, headers=headers, timeout=10
+                )
             elif method == "PUT":
-                response = requests.put(url, json=data, headers=headers, timeout=10)
+                response = requests.put(
+                    url, json=data, headers=headers, timeout=10
+                )
             elif method == "DELETE":
                 response = requests.delete(url, headers=headers, timeout=10)
             else:
                 return {"success": False, "message": "Unsupported method"}
 
-            # If the API reports permissions changed, force re-login immediately
+            # If API reports permissions changed, force
+            # re-login immediately
             # so the user cannot continue with stale elevated privileges.
             if response.status_code == 401:
                 try:
@@ -175,7 +272,12 @@ def create_user_app():
                         return {
                             "success": False,
                             "error": "permissions_changed",
-                            "message": body.get("message", "Your permissions have been updated. Please log in again."),
+                            "message": body.get(
+                                "message",
+                                "Your permissions have been"
+                                " updated. Please log in"
+                                " again.",
+                            ),
                         }
                 except ValueError:
                     pass
@@ -183,13 +285,57 @@ def create_user_app():
             if not response.content:
                 return {"success": True}
             try:
-                return response.json()
+                result = response.json()
+                # Sanitize error messages from 5xx responses to avoid leaking
+                # internals
+                if response.status_code >= 500 and "message" in result:
+                    app.logger.error(
+                        f"API 5xx for {endpoint}: {result.get('message', '')}"
+                    )
+                    result["message"] = (
+                        "A server error occurred. Please try again later."
+                    )
+                return result
             except ValueError:
-                return {"success": False, "message": f"API returned non-JSON response (HTTP {response.status_code})"}
+                return {
+                    "success": False,
+                    "message": (
+                        "API returned non-JSON response"
+                        f" (HTTP {response.status_code})"
+                    ),
+                }
 
+        except requests.exceptions.ConnectTimeout as e:
+            app.logger.error(
+                "Connection timeout for %s: %s", endpoint, e
+            )
+            return {
+                "success": False,
+                "message": "Request timed out. Please try again.",
+            }
+        except requests.exceptions.ReadTimeout as e:
+            app.logger.error(f"Read timeout for {endpoint}: {e}")
+            return {
+                "success": False,
+                "message": "The request took too long. Please try again.",
+            }
+        except requests.exceptions.ConnectionError as e:
+            app.logger.error(
+                "Connection failed for %s: %s", endpoint, e
+            )
+            return {
+                "success": False,
+                "message": (
+                    "Unable to reach the API service."
+                    " Please try again later."
+                ),
+            }
         except requests.exceptions.RequestException as e:
             app.logger.error(f"API request failed for {endpoint}: {e}")
-            return {"success": False, "message": "API service unavailable"}
+            return {
+                "success": False,
+                "message": "Something went wrong. Please try again.",
+            }
 
     # Routes
     @app.route("/")
@@ -202,7 +348,9 @@ def create_user_app():
         """Login page"""
         from auth_saml import is_saml_enabled
 
-        return render_template("app/login.html", saml_enabled=is_saml_enabled())
+        return render_template(
+            "app/login.html", saml_enabled=is_saml_enabled()
+        )
 
     @app.route("/dashboard")
     def dashboard():
@@ -213,7 +361,9 @@ def create_user_app():
         # Get user info
         user_info = make_api_request("/auth/verify")
         if user_info.get("error") == "permissions_changed":
-            return redirect(url_for("login_page", reason="permissions_changed"))
+            return redirect(
+                url_for("login_page", reason="permissions_changed")
+            )
         if not user_info.get("authenticated"):
             session.pop("auth_token", None)
             return redirect(url_for("login_page"))
@@ -229,7 +379,8 @@ def create_user_app():
 
             # First login if:
             # 1. No last_visit recorded, OR
-            # 2. last_visit is exactly the same as created_at (never updated after creation)
+            # 2. last_visit is exactly the same as created_at (never updated
+            # after creation)
             if not last_visit or (
                 last_visit and created_at and last_visit == created_at
             ):
@@ -239,13 +390,17 @@ def create_user_app():
         # Get recent RFPOs
         rfpos_response = make_api_request("/rfpos")
         recent_rfpos = (
-            rfpos_response.get("rfpos", []) if rfpos_response.get("success") else []
+            rfpos_response.get("rfpos", [])
+            if rfpos_response.get("success")
+            else []
         )
 
         # Get user's teams
         teams_response = make_api_request("/teams")
         user_teams = (
-            teams_response.get("teams", []) if teams_response.get("success") else []
+            teams_response.get("teams", [])
+            if teams_response.get("success")
+            else []
         )
 
         # Get user permissions summary to determine access levels
@@ -258,7 +413,9 @@ def create_user_app():
 
         # Get approver status
         approver_response = make_api_request("/users/approver-status")
-        approver_info = approver_response if approver_response.get("success") else {}
+        approver_info = (
+            approver_response if approver_response.get("success") else {}
+        )
 
         # Determine user access level
         user_data = user_info.get("user", {})
@@ -278,8 +435,10 @@ def create_user_app():
         else:
             dashboard_type = "no_access"
 
-        # The dashboard will load user-specific data via JavaScript based on user type
-        # This keeps the server-side logic simple and leverages existing API endpoints
+        # Dashboard loads user-specific data via JS
+        # based on user type
+        # This keeps the server-side logic simple and leverages existing API
+        # endpoints
 
         return render_template(
             "app/dashboard.html",
@@ -308,7 +467,9 @@ def create_user_app():
         # Only admins can create RFPOs
         user_info = make_api_request("/auth/verify")
         if user_info.get("error") == "permissions_changed":
-            return redirect(url_for("login_page", reason="permissions_changed"))
+            return redirect(
+                url_for("login_page", reason="permissions_changed")
+            )
         if user_info.get("authenticated"):
             roles = user_info.get("user", {}).get("roles", [])
             if "RFPO_ADMIN" not in roles and "GOD" not in roles:
@@ -318,7 +479,8 @@ def create_user_app():
         consortiums_response = make_api_request("/consortiums")
         consortiums = (
             consortiums_response.get("consortiums", [])
-            if consortiums_response.get("success") else []
+            if consortiums_response.get("success")
+            else []
         )
 
         return render_template(
@@ -335,7 +497,9 @@ def create_user_app():
         # Only admins can create RFPOs
         user_info = make_api_request("/auth/verify")
         if user_info.get("error") == "permissions_changed":
-            return redirect(url_for("login_page", reason="permissions_changed"))
+            return redirect(
+                url_for("login_page", reason="permissions_changed")
+            )
         if user_info.get("authenticated"):
             roles = user_info.get("user", {}).get("roles", [])
             if "RFPO_ADMIN" not in roles and "GOD" not in roles:
@@ -356,15 +520,12 @@ def create_user_app():
                     consortium = c
                     break
 
-        projects_resp = make_api_request(
-            f"/projects/{consortium_id}"
-        )
+        projects_resp = make_api_request(f"/projects/{consortium_id}")
         project = None
         projects = (
             projects_resp.get("projects", [])
             if projects_resp.get("success")
-            else projects_resp if isinstance(projects_resp, list)
-            else []
+            else projects_resp if isinstance(projects_resp, list) else []
         )
         for p in projects:
             if str(p.get("id")) == str(project_id):
@@ -376,6 +537,7 @@ def create_user_app():
 
         # Wrap dicts as SimpleNamespace for template dot access
         from types import SimpleNamespace
+
         consortium_obj = SimpleNamespace(**consortium)
         project_obj = SimpleNamespace(**project)
 
@@ -383,13 +545,15 @@ def create_user_app():
         teams_response = make_api_request("/teams")
         teams = (
             teams_response.get("teams", [])
-            if teams_response.get("success") else []
+            if teams_response.get("success")
+            else []
         )
 
         vendors_response = make_api_request("/vendors")
         vendors = (
             vendors_response.get("vendors", [])
-            if vendors_response.get("success") else []
+            if vendors_response.get("success")
+            else []
         )
 
         # Determine default team from project
@@ -419,13 +583,17 @@ def create_user_app():
         # Get user info for role-based UI
         user_info = make_api_request("/auth/verify")
         if user_info.get("error") == "permissions_changed":
-            return redirect(url_for("login_page", reason="permissions_changed"))
+            return redirect(
+                url_for("login_page", reason="permissions_changed")
+            )
         is_admin = False
         if user_info.get("authenticated"):
             roles = user_info.get("user", {}).get("roles", [])
             is_admin = "RFPO_ADMIN" in roles or "GOD" in roles
 
-        return render_template("app/rfpo_detail.html", rfpo_id=rfpo_id, is_admin=is_admin)
+        return render_template(
+            "app/rfpo_detail.html", rfpo_id=rfpo_id, is_admin=is_admin
+        )
 
     @app.route("/teams")
     def teams_list():
@@ -475,6 +643,7 @@ def create_user_app():
 
     # API Proxy Routes (for frontend AJAX calls)
     @app.route("/api/auth/login", methods=["POST"])
+    @csrf.exempt  # Login has no session/token yet
     def api_login():
         """Login API proxy"""
         data = request.get_json()
@@ -509,7 +678,10 @@ def create_user_app():
     def api_verify():
         """Verify auth API proxy"""
         if "auth_token" not in session:
-            return jsonify({"authenticated": False, "message": "No token"}), 401
+            return (
+                jsonify({"authenticated": False, "message": "No token"}),
+                401,
+            )
 
         response = make_api_request("/auth/verify")
         if response.get("error") == "permissions_changed":
@@ -584,9 +756,7 @@ def create_user_app():
     @_require_session_token
     def api_projects_for_consortium(consortium_id):
         """Projects for consortium API proxy"""
-        response = make_api_request(
-            f"/projects/{consortium_id}"
-        )
+        response = make_api_request(f"/projects/{consortium_id}")
         return jsonify(response)
 
     @app.route("/api/vendors", methods=["GET", "POST"])
@@ -604,9 +774,7 @@ def create_user_app():
     @_require_session_token
     def api_vendor_sites(vendor_id):
         """Vendor sites API proxy"""
-        response = make_api_request(
-            f"/vendor-sites/{vendor_id}"
-        )
+        response = make_api_request(f"/vendor-sites/{vendor_id}")
         return jsonify(response)
 
     @app.route("/api/users/profile", methods=["GET"])
@@ -657,7 +825,9 @@ def create_user_app():
     def api_take_approval_action(action_id):
         """Take approval action API proxy"""
         data = request.get_json()
-        response = make_api_request(f"/users/approval-action/{action_id}", "POST", data)
+        response = make_api_request(
+            f"/users/approval-action/{action_id}", "POST", data
+        )
         return jsonify(response)
 
     @app.route("/api/users/bulk-approval", methods=["POST"])
@@ -673,24 +843,32 @@ def create_user_app():
         response = make_api_request(f"/rfpos/{rfpo_id}/validate", "GET")
         return jsonify(response)
 
-    @app.route("/api/rfpos/<int:rfpo_id>/submit-for-approval", methods=["POST"])
+    @app.route(
+        "/api/rfpos/<int:rfpo_id>/submit-for-approval", methods=["POST"]
+    )
     def api_submit_for_approval(rfpo_id):
         """Submit RFPO for approval API proxy"""
-        response = make_api_request(f"/rfpos/{rfpo_id}/submit-for-approval", "POST")
+        response = make_api_request(
+            f"/rfpos/{rfpo_id}/submit-for-approval", "POST"
+        )
         return jsonify(response)
 
     @app.route("/api/rfpos/<int:rfpo_id>/withdraw-approval", methods=["POST"])
     def api_withdraw_approval(rfpo_id):
         """Withdraw RFPO from approval process API proxy"""
         data = request.get_json() if request.is_json else {}
-        response = make_api_request(f"/rfpos/{rfpo_id}/withdraw-approval", "POST", data)
+        response = make_api_request(
+            f"/rfpos/{rfpo_id}/withdraw-approval", "POST", data
+        )
         return jsonify(response)
 
     @app.route("/api/users/reassign-approval/<action_id>", methods=["POST"])
     def api_reassign_approval(action_id):
         """Reassign approval action to a different user API proxy"""
         data = request.get_json()
-        response = make_api_request(f"/users/reassign-approval/{action_id}", "POST", data)
+        response = make_api_request(
+            f"/users/reassign-approval/{action_id}", "POST", data
+        )
         return jsonify(response)
 
     @app.route("/api/users/list", methods=["GET"])
@@ -704,26 +882,38 @@ def create_user_app():
         """RFPO line items API proxy"""
         if request.method == "POST":
             data = request.get_json()
-            response = make_api_request(f"/rfpos/{rfpo_id}/line-items", "POST", data)
+            response = make_api_request(
+                f"/rfpos/{rfpo_id}/line-items", "POST", data
+            )
         else:
             response = make_api_request(f"/rfpos/{rfpo_id}/line-items")
         return jsonify(response)
 
-    @app.route("/api/rfpos/<int:rfpo_id>/line-items/<int:line_item_id>", methods=["PUT", "DELETE"])
+    @app.route(
+        "/api/rfpos/<int:rfpo_id>/line-items/<int:line_item_id>",
+        methods=["PUT", "DELETE"],
+    )
     def api_rfpo_line_item_detail(rfpo_id, line_item_id):
         """RFPO line item detail API proxy"""
         if request.method == "PUT":
             data = request.get_json()
-            response = make_api_request(f"/rfpos/{rfpo_id}/line-items/{line_item_id}", "PUT", data)
+            response = make_api_request(
+                f"/rfpos/{rfpo_id}/line-items/{line_item_id}", "PUT", data
+            )
         else:  # DELETE
-            response = make_api_request(f"/rfpos/{rfpo_id}/line-items/{line_item_id}", "DELETE")
+            response = make_api_request(
+                f"/rfpos/{rfpo_id}/line-items/{line_item_id}", "DELETE"
+            )
         return jsonify(response)
 
     @app.route("/api/rfpos/<int:rfpo_id>/files/upload", methods=["POST"])
     def api_rfpo_upload_file(rfpo_id):
         """RFPO file upload proxy - forwards multipart form data to API"""
         if "auth_token" not in session:
-            return jsonify({"success": False, "message": "Not authenticated"}), 401
+            return (
+                jsonify({"success": False, "message": "Not authenticated"}),
+                401,
+            )
 
         url = f"{API_BASE_URL}/rfpos/{rfpo_id}/files/upload"
         headers = {"Authorization": f"Bearer {session['auth_token']}"}
@@ -740,12 +930,19 @@ def create_user_app():
                 "description": request.form.get("description", ""),
             }
 
-            resp = requests.post(url, headers=headers, files=files, data=form_data, timeout=30)
+            resp = requests.post(
+                url, headers=headers, files=files, data=form_data, timeout=30
+            )
             return jsonify(resp.json()), resp.status_code
         except requests.exceptions.RequestException as e:
-            return jsonify({"success": False, "message": f"API Error: {str(e)}"}), 500
+            return (
+                jsonify({"success": False, "message": f"API Error: {str(e)}"}),
+                500,
+            )
 
-    @app.route("/api/rfpos/<int:rfpo_id>/files/<file_id>/view", methods=["GET"])
+    @app.route(
+        "/api/rfpos/<int:rfpo_id>/files/<file_id>/view", methods=["GET"]
+    )
     def api_rfpo_view_file(rfpo_id, file_id):
         """RFPO file view proxy - streams file content from API"""
         if "auth_token" not in session:
@@ -757,23 +954,36 @@ def create_user_app():
         try:
             resp = requests.get(url, headers=headers, stream=True, timeout=30)
             if resp.status_code != 200:
-                return jsonify({"success": False, "message": "File not found"}), resp.status_code
+                return (
+                    jsonify({"success": False, "message": "File not found"}),
+                    resp.status_code,
+                )
 
             from flask import Response
+
             return Response(
                 resp.iter_content(chunk_size=8192),
-                content_type=resp.headers.get("Content-Type", "application/octet-stream"),
+                content_type=resp.headers.get(
+                    "Content-Type", "application/octet-stream"
+                ),
                 headers={
-                    "Content-Disposition": resp.headers.get("Content-Disposition", ""),
+                    "Content-Disposition": resp.headers.get(
+                        "Content-Disposition", ""
+                    ),
                 },
             )
         except requests.exceptions.RequestException as e:
-            return jsonify({"success": False, "message": f"API Error: {str(e)}"}), 500
+            return (
+                jsonify({"success": False, "message": f"API Error: {str(e)}"}),
+                500,
+            )
 
     @app.route("/api/rfpos/<int:rfpo_id>/files/<file_id>", methods=["DELETE"])
     def api_rfpo_delete_file(rfpo_id, file_id):
         """RFPO file delete proxy"""
-        response = make_api_request(f"/rfpos/{rfpo_id}/files/{file_id}", "DELETE")
+        response = make_api_request(
+            f"/rfpos/{rfpo_id}/files/{file_id}", "DELETE"
+        )
         return jsonify(response)
 
     @app.route("/api/rfpos/doc-types", methods=["GET"])
@@ -841,13 +1051,24 @@ def create_user_app():
         try:
             resp = requests.get(url, headers=headers, stream=True, timeout=30)
             from flask import Response
+
             return Response(
                 resp.iter_content(chunk_size=8192),
                 mimetype=resp.headers.get("Content-Type", "text/csv"),
-                headers={"Content-Disposition": resp.headers.get("Content-Disposition", "attachment; filename=rfpos_export.csv")},
+                headers={
+                    "Content-Disposition": resp.headers.get(
+                        "Content-Disposition",
+                        "attachment; filename=rfpos_export.csv",
+                    )
+                },
             )
         except requests.exceptions.RequestException as e:
-            return jsonify({"success": False, "message": f"Export failed: {str(e)}"}), 500
+            return (
+                jsonify(
+                    {"success": False, "message": f"Export failed: {str(e)}"}
+                ),
+                500,
+            )
 
     # ─── Cost Analytics Proxy Route ───────────────────────────────────
 
@@ -864,9 +1085,13 @@ def create_user_app():
     def api_rfpo_pdf_snapshot(rfpo_id):
         """Proxy the PDF snapshot from the API server (binary stream)."""
         if "auth_token" not in session:
-            return jsonify({"success": False, "message": "Not authenticated"}), 401
+            return (
+                jsonify({"success": False, "message": "Not authenticated"}),
+                401,
+            )
 
         import requests as _req
+
         api_url = f"{API_BASE_URL}/rfpos/{rfpo_id}/pdf-snapshot"
         headers = {"Authorization": f"Bearer {session['auth_token']}"}
         resp = _req.get(api_url, headers=headers, timeout=30)
@@ -875,15 +1100,25 @@ def create_user_app():
             try:
                 return jsonify(resp.json()), resp.status_code
             except Exception:
-                return jsonify({"success": False, "message": "PDF snapshot not available"}), resp.status_code
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "PDF snapshot not available",
+                        }
+                    ),
+                    resp.status_code,
+                )
 
         from flask import Response as FlaskResponse
+
         return FlaskResponse(
             resp.content,
             mimetype="application/pdf",
             headers={
                 "Content-Disposition": resp.headers.get(
-                    "Content-Disposition", f'inline; filename="PO_SNAPSHOT_{rfpo_id}.pdf"'
+                    "Content-Disposition",
+                    f'inline; filename="PO_SNAPSHOT_{rfpo_id}.pdf"',
                 )
             },
         )
@@ -905,7 +1140,10 @@ def create_user_app():
         rfpo_response = make_api_request(f"/rfpos/{rfpo_id}")
         if not rfpo_response.get("success"):
             return (
-                f"Error loading RFPO: {rfpo_response.get('message', 'Unknown error')}",
+                f"Error loading RFPO: {
+                    rfpo_response.get(
+                        'message',
+                        'Unknown error')}",
                 404,
             )
 
@@ -947,7 +1185,9 @@ def create_user_app():
 
         # Get vendor site info
         if rfpo.get("vendor_site_id") and vendor:
-            vendor_sites_response = make_api_request(f'/vendor-sites/{vendor["id"]}')
+            vendor_sites_response = make_api_request(
+                f'/vendor-sites/{vendor["id"]}'
+            )
             if isinstance(vendor_sites_response, list):
                 for site in vendor_sites_response:
                     if site.get("id") == rfpo["vendor_site_id"]:
@@ -981,7 +1221,9 @@ def create_user_app():
         project_obj = SimpleNamespace(**project) if project else None
         consortium_obj = SimpleNamespace(**consortium) if consortium else None
         vendor_obj = SimpleNamespace(**vendor) if vendor else None
-        vendor_site_obj = SimpleNamespace(**vendor_site) if vendor_site else None
+        vendor_site_obj = (
+            SimpleNamespace(**vendor_site) if vendor_site else None
+        )
 
         # Add line_items as a list of SimpleNamespace objects
         if hasattr(rfpo_obj, "line_items") and rfpo_obj.line_items:
@@ -993,7 +1235,9 @@ def create_user_app():
 
         # Add helper methods to rfpo_obj
         def get_calculated_cost_share_amount():
-            if hasattr(rfpo_obj, "cost_share_amount") and hasattr(rfpo_obj, "subtotal"):
+            if hasattr(rfpo_obj, "cost_share_amount") and hasattr(
+                rfpo_obj, "subtotal"
+            ):
                 if rfpo_obj.cost_share_type == "percent":
                     return (
                         float(rfpo_obj.subtotal or 0)
@@ -1008,7 +1252,9 @@ def create_user_app():
             cost_share = get_calculated_cost_share_amount()
             return subtotal - cost_share
 
-        rfpo_obj.get_calculated_cost_share_amount = get_calculated_cost_share_amount
+        rfpo_obj.get_calculated_cost_share_amount = (
+            get_calculated_cost_share_amount
+        )
         rfpo_obj.get_calculated_total_amount = get_calculated_total_amount
 
         # Add helper method to requestor
@@ -1047,9 +1293,17 @@ def create_user_app():
         return redirect(sso_url)
 
     @app.route("/saml/acs", methods=["GET", "POST"])
+    @csrf.exempt  # SAML ACS receives POST from external IdP
     def saml_acs():
-        """Assertion Consumer Service — receives and validates SAML Response from IdP."""
-        from auth_saml import is_saml_enabled, init_saml_auth, extract_user_attributes, map_roles_to_permissions
+        """Assertion Consumer Service.
+
+        Receives and validates SAML Response from IdP.
+        """
+        from auth_saml import (
+            is_saml_enabled,
+            init_saml_auth,
+            extract_user_attributes,
+        )
 
         if request.method == "GET":
             return redirect(url_for("login_page"))
@@ -1063,19 +1317,31 @@ def create_user_app():
 
         if errors:
             error_reason = auth.get_last_error_reason()
-            logger.error(f"SAML ACS validation failed: {errors} — {error_reason}")
-            return render_template(
-                "app/error.html",
-                error_code=401,
-                error_message="SSO authentication failed. Please contact your administrator.",
-            ), 401
+            logger.error(
+                f"SAML ACS validation failed: {errors} — {error_reason}"
+            )
+            return (
+                render_template(
+                    "app/error.html",
+                    error_code=401,
+                    error_message=(
+                        "SSO authentication failed."
+                        " Please contact your"
+                        " administrator."
+                    ),
+                ),
+                401,
+            )
 
         if not auth.is_authenticated():
-            return render_template(
-                "app/error.html",
-                error_code=401,
-                error_message="Authentication was not completed.",
-            ), 401
+            return (
+                render_template(
+                    "app/error.html",
+                    error_code=401,
+                    error_message="Authentication was not completed.",
+                ),
+                401,
+            )
 
         # Extract user attributes from the SAML assertion
         user_attrs = extract_user_attributes(auth)
@@ -1083,30 +1349,53 @@ def create_user_app():
 
         if not email:
             logger.error("SAML assertion missing email/NameID")
-            return render_template(
-                "app/error.html",
-                error_code=400,
-                error_message="SSO response did not include an email address.",
-            ), 400
+            return (
+                render_template(
+                    "app/error.html",
+                    error_code=400,
+                    error_message=(
+                        "SSO response did not include"
+                        " an email address."
+                    ),
+                ),
+                400,
+            )
 
         # Match to local RFPO user by email (D3: block if not pre-provisioned)
-        internal_headers = {"X-Internal-API-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}
-        match_response = make_api_request("/auth/saml-match", "POST", {
-            "email": email,
-            "entra_roles": user_attrs.get("roles", []),
-            "first_name": user_attrs.get("first_name", ""),
-            "last_name": user_attrs.get("last_name", ""),
-            "name_id": user_attrs.get("name_id", ""),
-        }, extra_headers=internal_headers)
+        internal_headers = (
+            {"X-Internal-API-Key": INTERNAL_API_KEY}
+            if INTERNAL_API_KEY
+            else {}
+        )
+        match_response = make_api_request(
+            "/auth/saml-match",
+            "POST",
+            {
+                "email": email,
+                "entra_roles": user_attrs.get("roles", []),
+                "first_name": user_attrs.get("first_name", ""),
+                "last_name": user_attrs.get("last_name", ""),
+                "name_id": user_attrs.get("name_id", ""),
+            },
+            extra_headers=internal_headers,
+        )
 
         if not match_response.get("success"):
-            message = match_response.get("message", "Your account has not been set up in RFPO. Contact your USCAR administrator.")
+            message = match_response.get(
+                "message",
+                "Your account has not been set up"
+                " in RFPO. Contact your USCAR"
+                " administrator.",
+            )
             logger.warning(f"SAML login blocked for {email}: {message}")
-            return render_template(
-                "app/error.html",
-                error_code=403,
-                error_message=message,
-            ), 403
+            return (
+                render_template(
+                    "app/error.html",
+                    error_code=403,
+                    error_message=message,
+                ),
+                403,
+            )
 
         # Store JWT in session (same as password-based login)
         session["auth_token"] = match_response["token"]
@@ -1116,11 +1405,16 @@ def create_user_app():
 
         # Redirect to intended destination or dashboard
         relay_state = request.form.get("RelayState", "")
-        if relay_state and relay_state != url_for("saml_login") and not relay_state.startswith("http"):
+        if (
+            relay_state
+            and relay_state != url_for("saml_login")
+            and not relay_state.startswith("http")
+        ):
             return redirect(relay_state)
         return redirect(url_for("dashboard"))
 
     @app.route("/saml/sls", methods=["GET", "POST"])
+    @csrf.exempt  # SAML SLS receives POST from external IdP
     def saml_sls():
         """Single Logout Service — handles logout initiated by IdP."""
         from auth_saml import is_saml_enabled, init_saml_auth
@@ -1148,7 +1442,11 @@ def create_user_app():
 
     @app.route("/saml/metadata")
     def saml_metadata():
-        """Serve SP metadata XML — useful for IT when configuring the Enterprise Application."""
+        """Serve SP metadata XML.
+
+        Useful for IT when configuring the
+        Enterprise Application.
+        """
         from auth_saml import is_saml_enabled, init_saml_auth
 
         if not is_saml_enabled():
@@ -1186,7 +1484,9 @@ def create_user_app():
     def not_found(error):
         return (
             render_template(
-                "app/error.html", error_code=404, error_message="Page not found"
+                "app/error.html",
+                error_code=404,
+                error_message="Page not found",
             ),
             404,
         )
@@ -1195,7 +1495,9 @@ def create_user_app():
     def internal_error(error):
         return (
             render_template(
-                "app/error.html", error_code=500, error_message="Internal server error"
+                "app/error.html",
+                error_code=500,
+                error_message="Internal server error",
             ),
             500,
         )
@@ -1210,10 +1512,14 @@ if __name__ == "__main__":
     print("=" * 60)
     print("🚀 RFPO USER APPLICATION STARTING")
     print("=" * 60)
-    print(f"🌐 Server: http://127.0.0.1:5000")
-    print(f"🔍 Health Check: http://127.0.0.1:5000/health")
-    print(f"📋 Dashboard: http://127.0.0.1:5000/dashboard")
-    print(f"🔐 Login: http://127.0.0.1:5000/login")
+    print("🌐 Server: http://127.0.0.1:5000")
+    print("🔍 Health: http://127.0.0.1:5000/health")
+    print("📋 Dashboard: http://127.0.0.1:5000/dashboard")
+    print("🔐 Login: http://127.0.0.1:5000/login")
     print("=" * 60)
 
-    app.run(debug=os.environ.get("FLASK_ENV") == "development", host="0.0.0.0", port=5000)
+    app.run(
+        debug=os.environ.get("FLASK_ENV") == "development",
+        host="0.0.0.0",
+        port=5000,
+    )

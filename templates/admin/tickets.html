@@ -12,8 +12,8 @@
         {% endif %}
     </h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <form class="d-flex gap-2" method="GET">
-            <div class="input-group" style="max-width: 420px;">
+        <form class="d-flex flex-wrap gap-2" method="GET">
+            <div class="input-group" style="min-width: 280px; max-width: 420px;">
                 <input type="text" name="search" class="form-control"
                        placeholder="Search by ticket #, title..."
                        value="{{ search_filter or '' }}">

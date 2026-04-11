@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements-azure.txt
 
 # Copy application code
 COPY app.py .
+COPY user_app/ ./user_app/
 COPY templates/ ./templates/
 COPY static/ ./static/
 

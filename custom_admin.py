@@ -1059,10 +1059,10 @@ def create_app():
                 email=rfpo.created_by, active=True
             ).first()
             if not creator:
-                # created_by might be display_name; try lookup via display
+                # created_by might be display_name; try lookup via fullname
                 creator = User.query.filter(
                     User.active == True,
-                    (User.first_name + " " + User.last_name) == rfpo.created_by
+                    User.fullname == rfpo.created_by
                 ).first()
             if not creator or not creator.email:
                 return
@@ -8379,7 +8379,7 @@ Southfield, MI  48075""",
         ticket = Ticket.query.get_or_404(ticket_id)
         comments = TicketComment.query.filter_by(ticket_id=ticket.id).order_by(TicketComment.created_at.asc()).all()
         attachments = TicketAttachment.query.filter_by(ticket_id=ticket.id).all()
-        admin_users = User.query.filter(User.active == True).order_by(User.first_name).all()
+        admin_users = User.query.filter(User.active == True).order_by(User.fullname).all()
         return render_template(
             "admin/ticket_detail.html",
             ticket=ticket,

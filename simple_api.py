@@ -4240,17 +4240,17 @@ def get_rfpo_audit_trail(rfpo_id):
         logs = (
             AuditLog.query
             .filter_by(entity_type="rfpo", entity_id=str(rfpo.id))
-            .order_by(AuditLog.created_at.desc())
+            .order_by(AuditLog.timestamp.desc())
             .all()
         )
         # Also include approval-related audit logs
         approval_logs = (
             AuditLog.query
             .filter_by(entity_type="rfpo_approval", entity_id=str(rfpo.id))
-            .order_by(AuditLog.created_at.desc())
+            .order_by(AuditLog.timestamp.desc())
             .all()
         )
-        all_logs = sorted(logs + approval_logs, key=lambda l: l.created_at, reverse=True)
+        all_logs = sorted(logs + approval_logs, key=lambda l: l.timestamp, reverse=True)
         return jsonify({
             "success": True,
             "audit_trail": [l.to_dict() for l in all_logs],

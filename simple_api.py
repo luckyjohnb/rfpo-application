@@ -4439,7 +4439,7 @@ def create_ticket():
     """Create a new bug report or feature request."""
     try:
         user = request.current_user
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({"success": False, "message": "No data provided"}), 400
 

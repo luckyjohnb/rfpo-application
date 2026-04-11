@@ -3,11 +3,13 @@
 from flask import Blueprint, jsonify, request
 
 from user_app.api_client import get_api_client
+from user_app.decorators import require_auth_json
 
 user_proxy_bp = Blueprint("user_proxy", __name__)
 
 
 @user_proxy_bp.route("/api/users/profile", methods=["GET"])
+@require_auth_json
 def api_user_profile():
     """User profile API proxy."""
     client = get_api_client()
@@ -16,6 +18,7 @@ def api_user_profile():
 
 
 @user_proxy_bp.route("/api/users/profile", methods=["PUT"])
+@require_auth_json
 def api_update_profile():
     """Update user profile API proxy."""
     client = get_api_client()
@@ -25,6 +28,7 @@ def api_update_profile():
 
 
 @user_proxy_bp.route("/api/users/permissions-summary", methods=["GET"])
+@require_auth_json
 def api_user_permissions_summary():
     """User permissions summary API proxy."""
     client = get_api_client()
@@ -33,6 +37,7 @@ def api_user_permissions_summary():
 
 
 @user_proxy_bp.route("/api/users/approver-status", methods=["GET"])
+@require_auth_json
 def api_user_approver_status():
     """User approver status API proxy."""
     client = get_api_client()
@@ -41,6 +46,7 @@ def api_user_approver_status():
 
 
 @user_proxy_bp.route("/api/users/approver-rfpos", methods=["GET"])
+@require_auth_json
 def api_user_approver_rfpos():
     """User approver RFPOs API proxy."""
     client = get_api_client()
@@ -49,6 +55,7 @@ def api_user_approver_rfpos():
 
 
 @user_proxy_bp.route("/api/users/approval-action/<action_id>", methods=["POST"])
+@require_auth_json
 def api_take_approval_action(action_id):
     """Take approval action API proxy."""
     client = get_api_client()
@@ -58,6 +65,7 @@ def api_take_approval_action(action_id):
 
 
 @user_proxy_bp.route("/api/users/bulk-approval", methods=["POST"])
+@require_auth_json
 def api_bulk_approval():
     """Bulk approval action API proxy."""
     client = get_api_client()
@@ -67,6 +75,7 @@ def api_bulk_approval():
 
 
 @user_proxy_bp.route("/api/users/reassign-approval/<action_id>", methods=["POST"])
+@require_auth_json
 def api_reassign_approval(action_id):
     """Reassign approval action API proxy."""
     client = get_api_client()
@@ -76,6 +85,7 @@ def api_reassign_approval(action_id):
 
 
 @user_proxy_bp.route("/api/users/list", methods=["GET"])
+@require_auth_json
 def api_list_users():
     """List active users API proxy."""
     client = get_api_client()

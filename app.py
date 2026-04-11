@@ -143,10 +143,12 @@ def create_user_app():
     from user_app.blueprints.ticket_proxy import ticket_proxy_bp
     from user_app.blueprints.user_proxy import user_proxy_bp
 
-    # CSRF exemptions for SAML callbacks and login (no session/token yet)
-    csrf.exempt(auth_bp)
-
     app.register_blueprint(auth_bp)
+
+    # CSRF exemptions — only routes that genuinely cannot provide a token
+    csrf.exempt(auth_bp.name + ".api_login")   # No session/token yet
+    csrf.exempt(auth_bp.name + ".saml_acs")    # External IdP POST
+    csrf.exempt(auth_bp.name + ".saml_sls")    # External IdP POST
     app.register_blueprint(pages_bp)
     app.register_blueprint(rfpo_proxy_bp)
     app.register_blueprint(file_proxy_bp)

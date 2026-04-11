@@ -14,14 +14,20 @@ import os
 import logging
 from urllib.parse import urlparse
 
-from onelogin.saml2.auth import OneLogin_Saml2_Auth
-from onelogin.saml2.utils import OneLogin_Saml2_Utils
+try:
+    from onelogin.saml2.auth import OneLogin_Saml2_Auth
+    from onelogin.saml2.utils import OneLogin_Saml2_Utils
+    _SAML_AVAILABLE = True
+except ImportError:
+    _SAML_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
 
 def is_saml_enabled():
     """Check if SAML SSO is configured and enabled."""
+    if not _SAML_AVAILABLE:
+        return False
     enabled = os.environ.get("SAML_ENABLED", "false").lower() == "true"
     has_idp = bool(os.environ.get("SAML_IDP_ENTITY_ID"))
     return enabled and has_idp

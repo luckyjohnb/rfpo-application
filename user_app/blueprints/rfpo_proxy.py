@@ -12,6 +12,7 @@ rfpo_proxy_bp = Blueprint("rfpo_proxy", __name__)
 
 
 @rfpo_proxy_bp.route("/api/rfpos", methods=["GET", "POST"])
+@require_auth_json
 def api_rfpos():
     """RFPOs API proxy."""
     client = get_api_client()
@@ -26,6 +27,7 @@ def api_rfpos():
 
 
 @rfpo_proxy_bp.route("/api/rfpos/<int:rfpo_id>", methods=["GET", "PUT", "DELETE"])
+@require_auth_json
 def api_rfpo_detail(rfpo_id):
     """RFPO detail API proxy."""
     client = get_api_client()
@@ -40,6 +42,7 @@ def api_rfpo_detail(rfpo_id):
 
 
 @rfpo_proxy_bp.route("/api/rfpos/<int:rfpo_id>/validate", methods=["GET"])
+@require_auth_json
 def api_validate_rfpo(rfpo_id):
     """Validate RFPO readiness."""
     client = get_api_client()
@@ -48,6 +51,7 @@ def api_validate_rfpo(rfpo_id):
 
 
 @rfpo_proxy_bp.route("/api/rfpos/<int:rfpo_id>/submit-for-approval", methods=["POST"])
+@require_auth_json
 def api_submit_for_approval(rfpo_id):
     """Submit RFPO for approval."""
     client = get_api_client()
@@ -56,6 +60,7 @@ def api_submit_for_approval(rfpo_id):
 
 
 @rfpo_proxy_bp.route("/api/rfpos/<int:rfpo_id>/withdraw-approval", methods=["POST"])
+@require_auth_json
 def api_withdraw_approval(rfpo_id):
     """Withdraw RFPO from approval process."""
     client = get_api_client()
@@ -65,6 +70,7 @@ def api_withdraw_approval(rfpo_id):
 
 
 @rfpo_proxy_bp.route("/api/rfpos/<int:rfpo_id>/line-items", methods=["GET", "POST"])
+@require_auth_json
 def api_rfpo_line_items(rfpo_id):
     """RFPO line items API proxy."""
     client = get_api_client()
@@ -80,6 +86,7 @@ def api_rfpo_line_items(rfpo_id):
     "/api/rfpos/<int:rfpo_id>/line-items/<int:line_item_id>",
     methods=["PUT", "DELETE"],
 )
+@require_auth_json
 def api_rfpo_line_item_detail(rfpo_id, line_item_id):
     """RFPO line item detail API proxy."""
     client = get_api_client()
@@ -92,6 +99,7 @@ def api_rfpo_line_item_detail(rfpo_id, line_item_id):
 
 
 @rfpo_proxy_bp.route("/api/rfpos/<int:rfpo_id>/rendered-view", methods=["GET"])
+@require_auth_json
 def api_rfpo_rendered_view(rfpo_id):
     """RFPO rendered view API proxy."""
     client = get_api_client()

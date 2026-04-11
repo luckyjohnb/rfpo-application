@@ -1,7 +1,7 @@
 """File & stream proxy blueprint — file uploads, CSV export, PDF snapshots."""
 
 import requests
-from flask import Blueprint, Response, jsonify, redirect, request, session, url_for
+from flask import Blueprint, Response, jsonify, request
 
 from user_app.api_client import get_api_client
 from user_app.decorators import require_auth_json
@@ -10,11 +10,9 @@ file_proxy_bp = Blueprint("file_proxy", __name__)
 
 
 @file_proxy_bp.route("/api/rfpos/<int:rfpo_id>/files/upload", methods=["POST"])
+@require_auth_json
 def api_rfpo_upload_file(rfpo_id):
     """RFPO file upload proxy — forwards multipart form data to API."""
-    if "auth_token" not in session:
-        return jsonify({"success": False, "message": "Not authenticated"}), 401
-
     client = get_api_client()
     try:
         files = {}
@@ -34,18 +32,16 @@ def api_rfpo_upload_file(rfpo_id):
             timeout=30,
         )
         return jsonify(resp.json()), resp.status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"success": False, "message": f"API Error: {str(e)}"}), 500
+    except requests.exceptions.RequestException:
+        return jsonify({"success": False, "message": "File upload failed. Please try again."}), 503
 
 
 @file_proxy_bp.route(
     "/api/rfpos/<int:rfpo_id>/files/<file_id>/view", methods=["GET"]
 )
+@require_auth_json
 def api_rfpo_view_file(rfpo_id, file_id):
     """RFPO file view proxy — streams file content from API."""
-    if "auth_token" not in session:
-        return redirect(url_for("pages.login_page"))
-
     client = get_api_client()
     try:
         resp = client.raw_get(
@@ -68,13 +64,14 @@ def api_rfpo_view_file(rfpo_id, file_id):
                 "Content-Disposition": resp.headers.get("Content-Disposition", ""),
             },
         )
-    except requests.exceptions.RequestException as e:
-        return jsonify({"success": False, "message": f"API Error: {str(e)}"}), 500
+    except requests.exceptions.RequestException:
+        return jsonify({"success": False, "message": "File not available. Please try again."}), 503
 
 
 @file_proxy_bp.route(
     "/api/rfpos/<int:rfpo_id>/files/<file_id>", methods=["DELETE"]
 )
+@require_auth_json
 def api_rfpo_delete_file(rfpo_id, file_id):
     """RFPO file delete proxy."""
     client = get_api_client()
@@ -99,19 +96,17 @@ def api_rfpos_export():
                 )
             },
         )
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
         return (
-            jsonify({"success": False, "message": f"Export failed: {str(e)}"}),
-            500,
+            jsonify({"success": False, "message": "Export failed. Please try again."}),
+            503,
         )
 
 
 @file_proxy_bp.route("/api/rfpos/<int:rfpo_id>/pdf-snapshot")
+@require_auth_json
 def api_rfpo_pdf_snapshot(rfpo_id):
     """Proxy the PDF snapshot from the API server (binary stream)."""
-    if "auth_token" not in session:
-        return jsonify({"success": False, "message": "Not authenticated"}), 401
-
     client = get_api_client()
     resp = client.raw_get(f"/rfpos/{rfpo_id}/pdf-snapshot", timeout=30)
 

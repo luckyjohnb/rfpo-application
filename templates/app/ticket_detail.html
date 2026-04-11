@@ -310,10 +310,10 @@ function postComment(e) {
             document.getElementById('commentContent').value = '';
             loadTicket();  // Reload everything
         } else {
-            showAlert('danger', data.message || 'Failed to post comment.');
+            showAlert(data.message || 'Failed to post comment.', 'danger');
         }
     })
-    .catch(() => showAlert('danger', 'Failed to post comment.'))
+    .catch(() => showAlert('Failed to post comment.', 'danger'))
     .finally(() => {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Comment';
@@ -327,7 +327,7 @@ function uploadAttachment(input) {
     const formData = new FormData();
     formData.append('file', file);
 
-    showAlert('info', `Uploading ${file.name}...`);
+    showAlert(`Uploading ${file.name}...`, 'info');
 
     fetch(`/api/tickets/${TICKET_ID}/attachments`, {
         method: 'POST',
@@ -336,13 +336,13 @@ function uploadAttachment(input) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showAlert('success', `File "${file.name}" uploaded.`);
+            showAlert(`File "${file.name}" uploaded.`, 'success');
             loadTicket();
         } else {
-            showAlert('danger', data.message || 'Upload failed.');
+            showAlert(data.message || 'Upload failed.', 'danger');
         }
     })
-    .catch(() => showAlert('danger', 'Upload failed.'))
+    .catch(() => showAlert('Upload failed.', 'danger'))
     .finally(() => { input.value = ''; });
 }
 
@@ -352,19 +352,5 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-function showAlert(type, message) {
-    const container = document.getElementById('alertContainer');
-    if (!container) return;
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} alert-dismissible fade show`;
-    alert.textContent = message;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-close';
-    btn.setAttribute('data-bs-dismiss', 'alert');
-    alert.appendChild(btn);
-    container.appendChild(alert);
-    setTimeout(() => alert.remove(), 5000);
-}
 </script>
 {% endblock %}

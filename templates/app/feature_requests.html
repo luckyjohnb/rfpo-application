@@ -171,13 +171,13 @@ function submitFeature(e) {
     .then(data => {
         if (data.success) {
             document.getElementById('featureForm').reset();
-            showAlert('success', `Feature request ${data.ticket?.ticket_number || ''} submitted successfully!`);
+            showAlert(`Feature request ${data.ticket?.ticket_number || ''} submitted successfully!`, 'success');
             loadTickets();
         } else {
-            showAlert('danger', data.message || 'Failed to submit feature request.');
+            showAlert(data.message || 'Failed to submit feature request.', 'danger');
         }
     })
-    .catch(() => showAlert('danger', 'Failed to submit feature request.'))
+    .catch(() => showAlert('Failed to submit feature request.', 'danger'))
     .finally(() => {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-lightbulb"></i> Submit Feature Request';
@@ -190,19 +190,6 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-function showAlert(type, message) {
-    const container = document.getElementById('alertContainer');
-    if (!container) return;
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} alert-dismissible fade show`;
-    alert.textContent = message;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-close';
-    btn.setAttribute('data-bs-dismiss', 'alert');
-    alert.appendChild(btn);
-    container.appendChild(alert);
-    setTimeout(() => alert.remove(), 5000);
-}
+
 </script>
 {% endblock %}

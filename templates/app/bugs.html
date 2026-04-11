@@ -191,13 +191,13 @@ function submitBug(e) {
         if (data.success) {
             document.getElementById('bugForm').reset();
             document.getElementById('bugPageUrl').value = window.location.href;
-            showAlert('success', `Bug report ${data.ticket?.ticket_number || ''} submitted successfully!`);
+            showAlert(`Bug report ${data.ticket?.ticket_number || ''} submitted successfully!`, 'success');
             loadTickets();
         } else {
-            showAlert('danger', data.message || 'Failed to submit bug report.');
+            showAlert(data.message || 'Failed to submit bug report.', 'danger');
         }
     })
-    .catch(() => showAlert('danger', 'Failed to submit bug report.'))
+    .catch(() => showAlert('Failed to submit bug report.', 'danger'))
     .finally(() => {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-bug"></i> Submit Bug Report';
@@ -210,19 +210,5 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-function showAlert(type, message) {
-    const container = document.getElementById('alertContainer');
-    if (!container) return;
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} alert-dismissible fade show`;
-    alert.textContent = message;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-close';
-    btn.setAttribute('data-bs-dismiss', 'alert');
-    alert.appendChild(btn);
-    container.appendChild(alert);
-    setTimeout(() => alert.remove(), 5000);
-}
 </script>
 {% endblock %}

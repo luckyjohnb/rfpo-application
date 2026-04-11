@@ -337,10 +337,12 @@
             alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
             alertDiv.setAttribute('role', 'alert');
             alertDiv.setAttribute('aria-live', 'assertive');
-            alertDiv.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
+            alertDiv.textContent = message;
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'btn-close';
+            closeBtn.setAttribute('data-bs-dismiss', 'alert');
+            alertDiv.appendChild(closeBtn);
             alertContainer.appendChild(alertDiv);
 
             // Error alerts persist until dismissed; others auto-dismiss after 5s

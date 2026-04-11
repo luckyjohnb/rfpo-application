@@ -1,0 +1,370 @@
+{% extends "app/base.html" %}
+
+{% block title %}Ticket Details - RFPO Application{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item" id="breadcrumbParent"><a href="#">Tickets</a></li>
+        <li class="breadcrumb-item active" aria-current="page" id="breadcrumbTicket">Loading...</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div id="ticketLoading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="text-muted mt-2">Loading ticket...</p>
+</div>
+
+<div id="ticketContent" style="display: none;">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h1 class="h2 mb-1">
+                <span id="ticketIcon"></span>
+                <code id="ticketNumber"></code>
+            </h1>
+            <h5 id="ticketTitle" class="text-muted"></h5>
+        </div>
+        <div>
+            <span id="ticketStatus" class="badge fs-6"></span>
+            <span id="ticketPriority" class="badge fs-6 ms-1"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left: Ticket Info & Comments (2/3) -->
+        <div class="col-lg-8">
+            <!-- Description -->
+            <div class="card mb-4">
+                <div class="card-header"><i class="fas fa-align-left"></i> Description</div>
+                <div class="card-body">
+                    <div id="ticketDescription" style="white-space: pre-wrap;"></div>
+                </div>
+            </div>
+
+            <!-- Steps to Reproduce (bug only) -->
+            <div class="card mb-4" id="stepsCard" style="display: none;">
+                <div class="card-header"><i class="fas fa-list-ol"></i> Steps to Reproduce</div>
+                <div class="card-body">
+                    <div id="ticketSteps" style="white-space: pre-wrap;"></div>
+                </div>
+            </div>
+
+            <!-- Attachments -->
+            <div class="card mb-4" id="attachmentsCard" style="display: none;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-paperclip"></i> Attachments</span>
+                    <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('attachFile').click()">
+                        <i class="fas fa-upload"></i> Add File
+                    </button>
+                    <input type="file" id="attachFile" style="display:none" onchange="uploadAttachment(this)">
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush" id="attachmentsList"></ul>
+                </div>
+            </div>
+
+            <!-- Attachments upload button (when no attachments yet) -->
+            <div class="card mb-4" id="attachmentsEmpty" style="display: none;">
+                <div class="card-body text-center py-3">
+                    <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('attachFileEmpty').click()">
+                        <i class="fas fa-paperclip"></i> Add Attachment
+                    </button>
+                    <input type="file" id="attachFileEmpty" style="display:none" onchange="uploadAttachment(this)">
+                    <p class="text-muted small mt-1 mb-0">Max 5 files, 10 MB each</p>
+                </div>
+            </div>
+
+            <!-- Comments -->
+            <div class="card mb-4">
+                <div class="card-header"><i class="fas fa-comments"></i> Conversation</div>
+                <div class="card-body" id="commentsBody">
+                    <p class="text-muted text-center mb-0">No comments yet.</p>
+                </div>
+                <div class="card-footer">
+                    <form onsubmit="postComment(event)">
+                        <div class="mb-2">
+                            <textarea class="form-control" id="commentContent" rows="3" placeholder="Add a comment..." required></textarea>
+                        </div>
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary btn-sm" id="commentBtn">
+                                <i class="fas fa-paper-plane"></i> Post Comment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Meta Info (1/3) -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header"><i class="fas fa-info-circle"></i> Details</div>
+                <ul class="list-group list-group-flush small">
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">Type</span>
+                        <span id="metaType"></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">Status</span>
+                        <span id="metaStatus"></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">Priority</span>
+                        <span id="metaPriority"></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between" id="metaSeverityRow" style="display: none;">
+                        <span class="text-muted">Severity</span>
+                        <span id="metaSeverity"></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">Submitted</span>
+                        <span id="metaCreated"></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">Updated</span>
+                        <span id="metaUpdated"></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between" id="metaAssigneeRow" style="display: none;">
+                        <span class="text-muted">Assigned To</span>
+                        <span id="metaAssignee"></span>
+                    </li>
+                </ul>
+            </div>
+
+            {% if ticket_id %}
+            <div class="card mt-3" id="pageUrlCard" style="display: none;">
+                <div class="card-header"><i class="fas fa-link"></i> Related Page</div>
+                <div class="card-body">
+                    <code id="metaPageUrl" class="small"></code>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="ticketError" style="display: none;" class="text-center py-5">
+    <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+    <p class="text-danger">Ticket not found or access denied.</p>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+</div>
+
+<script>
+const TICKET_ID = {{ ticket_id }};
+
+document.addEventListener('DOMContentLoaded', loadTicket);
+
+function loadTicket() {
+    fetch(`/api/tickets/${TICKET_ID}`)
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('ticketLoading').style.display = 'none';
+
+        if (!data.success || !data.ticket) {
+            document.getElementById('ticketError').style.display = 'block';
+            return;
+        }
+
+        const t = data.ticket;
+        document.getElementById('ticketContent').style.display = 'block';
+
+        // Breadcrumb
+        const parentLink = document.querySelector('#breadcrumbParent a');
+        if (t.type === 'bug') {
+            parentLink.href = '{{ url_for("bugs_page") }}';
+            parentLink.textContent = 'Bug Reports';
+        } else {
+            parentLink.href = '{{ url_for("feature_requests_page") }}';
+            parentLink.textContent = 'Feature Requests';
+        }
+        document.getElementById('breadcrumbTicket').textContent = t.ticket_number;
+
+        // Header
+        document.getElementById('ticketIcon').innerHTML = t.type === 'bug'
+            ? '<i class="fas fa-bug text-danger"></i>'
+            : '<i class="fas fa-lightbulb text-warning"></i>';
+        document.getElementById('ticketNumber').textContent = t.ticket_number;
+        document.getElementById('ticketTitle').textContent = t.title;
+
+        const statusColors = {
+            open: 'primary', in_progress: 'info', under_review: 'info',
+            planned: 'secondary', resolved: 'success', completed: 'success',
+            closed: 'dark', wont_fix: 'dark', declined: 'dark'
+        };
+        const priorityColors = {
+            critical: 'danger', high: 'warning', medium: 'info', low: 'secondary'
+        };
+
+        const statusBadge = document.getElementById('ticketStatus');
+        statusBadge.className = `badge fs-6 bg-${statusColors[t.status] || 'secondary'}`;
+        statusBadge.textContent = t.status.replace(/_/g, ' ');
+
+        const prioBadge = document.getElementById('ticketPriority');
+        prioBadge.className = `badge fs-6 bg-${priorityColors[t.priority] || 'secondary'}`;
+        prioBadge.textContent = t.priority;
+
+        // Description
+        document.getElementById('ticketDescription').textContent = t.description;
+
+        // Steps (bug only)
+        if (t.type === 'bug' && t.steps_to_reproduce) {
+            document.getElementById('stepsCard').style.display = 'block';
+            document.getElementById('ticketSteps').textContent = t.steps_to_reproduce;
+        }
+
+        // Meta sidebar
+        document.getElementById('metaType').textContent = t.type === 'bug' ? 'Bug Report' : 'Feature Request';
+        document.getElementById('metaStatus').textContent = t.status.replace(/_/g, ' ');
+        document.getElementById('metaPriority').textContent = t.priority;
+
+        if (t.type === 'bug' && t.severity) {
+            document.getElementById('metaSeverityRow').style.display = '';
+            document.getElementById('metaSeverity').textContent = t.severity;
+        }
+
+        document.getElementById('metaCreated').textContent = t.created_at ? new Date(t.created_at).toLocaleDateString() : '—';
+        document.getElementById('metaUpdated').textContent = t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—';
+
+        if (t.assignee_name) {
+            document.getElementById('metaAssigneeRow').style.display = '';
+            document.getElementById('metaAssignee').textContent = t.assignee_name;
+        }
+
+        if (t.page_url) {
+            document.getElementById('pageUrlCard').style.display = 'block';
+            document.getElementById('metaPageUrl').textContent = t.page_url;
+        }
+
+        // Attachments
+        renderAttachments(t.attachments || []);
+
+        // Comments
+        renderComments(t.comments || []);
+    })
+    .catch(() => {
+        document.getElementById('ticketLoading').style.display = 'none';
+        document.getElementById('ticketError').style.display = 'block';
+    });
+}
+
+function renderAttachments(attachments) {
+    if (attachments.length > 0) {
+        document.getElementById('attachmentsCard').style.display = 'block';
+        document.getElementById('attachmentsEmpty').style.display = 'none';
+        const list = document.getElementById('attachmentsList');
+        list.innerHTML = attachments.map(a => `
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-file"></i>
+                    <strong>${escapeHtml(a.original_filename)}</strong>
+                    <span class="text-muted small ms-2">${(a.file_size / 1024).toFixed(1)} KB</span>
+                </div>
+                <a href="/api/tickets/${TICKET_ID}/attachments/${a.file_id}/view" target="_blank" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-download"></i>
+                </a>
+            </li>`).join('');
+    } else {
+        document.getElementById('attachmentsCard').style.display = 'none';
+        document.getElementById('attachmentsEmpty').style.display = 'block';
+    }
+}
+
+function renderComments(comments) {
+    const body = document.getElementById('commentsBody');
+    if (comments.length === 0) {
+        body.innerHTML = '<p class="text-muted text-center mb-0">No comments yet.</p>';
+        return;
+    }
+
+    body.innerHTML = comments.map((c, i) => `
+        <div class="mb-3 pb-3 ${i < comments.length - 1 ? 'border-bottom' : ''}">
+            <div class="d-flex justify-content-between">
+                <strong>${escapeHtml(c.author_name || 'Unknown')}</strong>
+                <small class="text-muted">${c.created_at ? new Date(c.created_at).toLocaleString() : ''}</small>
+            </div>
+            <div class="mt-1" style="white-space: pre-wrap;">${escapeHtml(c.content)}</div>
+        </div>`).join('');
+}
+
+function postComment(e) {
+    e.preventDefault();
+    const btn = document.getElementById('commentBtn');
+    const content = document.getElementById('commentContent').value.trim();
+    if (!content) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    fetch(`/api/tickets/${TICKET_ID}/comments`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content: content})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('commentContent').value = '';
+            loadTicket();  // Reload everything
+        } else {
+            showAlert('danger', data.message || 'Failed to post comment.');
+        }
+    })
+    .catch(() => showAlert('danger', 'Failed to post comment.'))
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Comment';
+    });
+}
+
+function uploadAttachment(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showAlert('info', `Uploading ${file.name}...`);
+
+    fetch(`/api/tickets/${TICKET_ID}/attachments`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `File "${file.name}" uploaded.`);
+            loadTicket();
+        } else {
+            showAlert('danger', data.message || 'Upload failed.');
+        }
+    })
+    .catch(() => showAlert('danger', 'Upload failed.'))
+    .finally(() => { input.value = ''; });
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function showAlert(type, message) {
+    const container = document.getElementById('alertContainer');
+    if (!container) return;
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.textContent = message;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-close';
+    btn.setAttribute('data-bs-dismiss', 'alert');
+    alert.appendChild(btn);
+    container.appendChild(alert);
+    setTimeout(() => alert.remove(), 5000);
+}
+</script>
+{% endblock %}

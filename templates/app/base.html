@@ -212,6 +212,23 @@
                         </a>
                     </li>
                     {% endif %}
+
+                    <!-- Support Section -->
+                    <li class="nav-item mt-3">
+                        <small class="text-muted px-3 text-uppercase fw-bold" style="font-size: 0.65rem;">Support</small>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'bugs_page' %}active{% endif %}"
+                           href="{{ url_for('bugs_page') }}">
+                            <i class="fas fa-bug"></i> Report Bug
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'feature_requests_page' %}active{% endif %}"
+                           href="{{ url_for('feature_requests_page') }}">
+                            <i class="fas fa-lightbulb"></i> Feature Request
+                        </a>
+                    </li>
                 </ul>
             </div>
 

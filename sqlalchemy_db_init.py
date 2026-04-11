@@ -37,6 +37,9 @@ from models import (
     AuditLog,
     Notification,
     EmailLog,
+    Ticket,
+    TicketComment,
+    TicketAttachment,
 )
 
 

@@ -1537,6 +1537,110 @@ def create_user_app():
             500,
         )
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Ticket System — Page Routes (Bug Reports & Feature Requests)
+    # ──────────────────────────────────────────────────────────────────────
+
+    @app.route("/bugs")
+    def bugs_page():
+        """Bug report page with side-by-side submit form & list."""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+        return render_template("app/bugs.html")
+
+    @app.route("/feature-requests")
+    def feature_requests_page():
+        """Feature request page with side-by-side submit form & list."""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+        return render_template("app/feature_requests.html")
+
+    @app.route("/tickets/<int:ticket_id>")
+    def ticket_detail_page(ticket_id):
+        """Individual ticket detail page."""
+        if "auth_token" not in session:
+            return redirect(url_for("login_page"))
+        return render_template("app/ticket_detail.html", ticket_id=ticket_id)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Ticket System — API Proxy Routes
+    # ──────────────────────────────────────────────────────────────────────
+
+    @app.route("/api/tickets", methods=["GET"])
+    @_require_session_token
+    def api_tickets_list():
+        """Proxy GET /api/tickets to API with query params."""
+        qs = request.query_string.decode()
+        endpoint = f"/tickets?{qs}" if qs else "/tickets"
+        result = make_api_request(endpoint)
+        return jsonify(result)
+
+    @app.route("/api/tickets", methods=["POST"])
+    @_require_session_token
+    def api_tickets_create():
+        """Proxy POST /api/tickets to API."""
+        data = request.get_json()
+        result = make_api_request("/tickets", method="POST", data=data)
+        return jsonify(result)
+
+    @app.route("/api/tickets/<int:ticket_id>", methods=["GET"])
+    @_require_session_token
+    def api_ticket_get(ticket_id):
+        """Proxy GET /api/tickets/<id> to API."""
+        result = make_api_request(f"/tickets/{ticket_id}")
+        return jsonify(result)
+
+    @app.route("/api/tickets/<int:ticket_id>", methods=["PUT"])
+    @_require_session_token
+    def api_ticket_update(ticket_id):
+        """Proxy PUT /api/tickets/<id> to API."""
+        data = request.get_json()
+        result = make_api_request(f"/tickets/{ticket_id}", method="PUT", data=data)
+        return jsonify(result)
+
+    @app.route("/api/tickets/<int:ticket_id>/comments", methods=["POST"])
+    @_require_session_token
+    def api_ticket_add_comment(ticket_id):
+        """Proxy POST comment to API."""
+        data = request.get_json()
+        result = make_api_request(f"/tickets/{ticket_id}/comments", method="POST", data=data)
+        return jsonify(result)
+
+    @app.route("/api/tickets/<int:ticket_id>/attachments", methods=["POST"])
+    @_require_session_token
+    def api_ticket_upload_attachment(ticket_id):
+        """Proxy file upload to ticket attachment API."""
+        url = f"{API_BASE_URL}/tickets/{ticket_id}/attachments"
+        headers = {"Authorization": f"Bearer {session['auth_token']}"}
+        try:
+            files = {}
+            if "file" in request.files:
+                f = request.files["file"]
+                files["file"] = (f.filename, f.stream, f.content_type)
+            resp = requests.post(url, headers=headers, files=files, timeout=30)
+            return jsonify(resp.json()), resp.status_code
+        except requests.exceptions.RequestException:
+            return jsonify({"success": False, "message": "API service unavailable"}), 503
+
+    @app.route("/api/tickets/<int:ticket_id>/attachments/<file_id>/view", methods=["GET"])
+    @_require_session_token
+    def api_ticket_view_attachment(ticket_id, file_id):
+        """Proxy attachment download from API."""
+        url = f"{API_BASE_URL}/tickets/{ticket_id}/attachments/{file_id}/view"
+        headers = {"Authorization": f"Bearer {session['auth_token']}"}
+        try:
+            resp = requests.get(url, headers=headers, stream=True, timeout=30)
+            if resp.status_code != 200:
+                return jsonify({"success": False, "message": "File not found"}), resp.status_code
+            from flask import Response as FlaskResponse
+            return FlaskResponse(
+                resp.iter_content(chunk_size=8192),
+                content_type=resp.headers.get("Content-Type", "application/octet-stream"),
+                headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")},
+            )
+        except requests.exceptions.RequestException:
+            return jsonify({"success": False, "message": "API service unavailable"}), 503
+
     return app
 
 

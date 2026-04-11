@@ -1,0 +1,208 @@
+{% extends "app/base.html" %}
+
+{% block title %}Feature Requests - RFPO Application{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Feature Requests</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0"><i class="fas fa-lightbulb text-warning"></i> Feature Requests</h1>
+        <p class="text-muted">Suggest new features and track their progress</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left: Submit Form -->
+    <div class="col-lg-5 mb-4">
+        <div class="card">
+            <div class="card-header"><i class="fas fa-plus-circle"></i> Request a Feature</div>
+            <div class="card-body">
+                <form id="featureForm" onsubmit="submitFeature(event)">
+                    <div class="mb-3">
+                        <label for="featureTitle" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="featureTitle" maxlength="255" required placeholder="Brief summary of the feature">
+                    </div>
+                    <div class="mb-3">
+                        <label for="featureDescription" class="form-label">Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="featureDescription" rows="5" required placeholder="Describe the feature you'd like. What problem would it solve?"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="featurePriority" class="form-label">Priority</label>
+                        <select class="form-select" id="featurePriority">
+                            <option value="low">Low — Nice to have</option>
+                            <option value="medium" selected>Medium — Would improve workflow</option>
+                            <option value="high">High — Significant impact</option>
+                            <option value="critical">Critical — Blocking work</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="featurePageUrl" class="form-label">Related Page</label>
+                        <input type="text" class="form-control" id="featurePageUrl" placeholder="Which page is this for? (optional)">
+                    </div>
+                    <button type="submit" class="btn btn-warning w-100" id="featureSubmitBtn">
+                        <i class="fas fa-lightbulb"></i> Submit Feature Request
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Submissions List -->
+    <div class="col-lg-7">
+        <!-- Status Filters -->
+        <div class="mb-3">
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-warning active" onclick="filterStatus('')" data-status="">All</button>
+                <button type="button" class="btn btn-outline-warning" onclick="filterStatus('open')" data-status="open">Open</button>
+                <button type="button" class="btn btn-outline-warning" onclick="filterStatus('under_review')" data-status="under_review">Under Review</button>
+                <button type="button" class="btn btn-outline-warning" onclick="filterStatus('planned')" data-status="planned">Planned</button>
+                <button type="button" class="btn btn-outline-warning" onclick="filterStatus('in_progress')" data-status="in_progress">In Progress</button>
+                <button type="button" class="btn btn-outline-warning" onclick="filterStatus('completed')" data-status="completed">Completed</button>
+            </div>
+        </div>
+
+        <div id="ticketsList">
+            <div class="text-center py-5">
+                <div class="spinner-border text-warning" role="status"></div>
+                <p class="text-muted mt-2">Loading feature requests...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentStatus = '';
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadTickets();
+});
+
+function filterStatus(status) {
+    currentStatus = status;
+    document.querySelectorAll('.btn-group [data-status]').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-status') === status);
+    });
+    loadTickets();
+}
+
+function loadTickets() {
+    let url = '/api/tickets?type=feature_request';
+    if (currentStatus) url += '&status=' + currentStatus;
+
+    fetch(url)
+    .then(r => r.json())
+    .then(data => {
+        const container = document.getElementById('ticketsList');
+        if (!data.success || !data.tickets || data.tickets.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-lightbulb fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No feature requests found.</p>
+                </div>`;
+            return;
+        }
+
+        const statusColors = {
+            open: 'primary', under_review: 'info', planned: 'secondary',
+            in_progress: 'info', completed: 'success', declined: 'dark'
+        };
+        const priorityColors = {
+            critical: 'danger', high: 'warning', medium: 'info', low: 'secondary'
+        };
+
+        let html = '<div class="list-group">';
+        data.tickets.forEach(t => {
+            const created = new Date(t.created_at).toLocaleDateString();
+            html += `
+                <a href="/tickets/${t.id}" class="list-group-item list-group-item-action">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="me-3" style="min-width: 0;">
+                            <div class="d-flex align-items-center mb-1">
+                                <code class="me-2">${t.ticket_number}</code>
+                                <span class="badge bg-${statusColors[t.status] || 'secondary'} me-1">${t.status.replace(/_/g, ' ')}</span>
+                                <span class="badge bg-${priorityColors[t.priority] || 'secondary'}">${t.priority}</span>
+                            </div>
+                            <h6 class="mb-1 text-truncate">${escapeHtml(t.title)}</h6>
+                            <small class="text-muted">${created}</small>
+                            ${t.comment_count ? `<span class="badge bg-secondary ms-2"><i class="fas fa-comment"></i> ${t.comment_count}</span>` : ''}
+                            ${t.attachment_count ? `<span class="badge bg-secondary ms-1"><i class="fas fa-paperclip"></i> ${t.attachment_count}</span>` : ''}
+                        </div>
+                    </div>
+                </a>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    })
+    .catch(() => {
+        document.getElementById('ticketsList').innerHTML =
+            '<div class="alert alert-danger">Failed to load feature requests.</div>';
+    });
+}
+
+function submitFeature(e) {
+    e.preventDefault();
+    const btn = document.getElementById('featureSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Submitting...';
+
+    const payload = {
+        type: 'feature_request',
+        title: document.getElementById('featureTitle').value.trim(),
+        description: document.getElementById('featureDescription').value.trim(),
+        priority: document.getElementById('featurePriority').value,
+        page_url: document.getElementById('featurePageUrl').value.trim() || null,
+        browser_info: navigator.userAgent
+    };
+
+    fetch('/api/tickets', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('featureForm').reset();
+            showAlert('success', `Feature request ${data.ticket?.ticket_number || ''} submitted successfully!`);
+            loadTickets();
+        } else {
+            showAlert('danger', data.message || 'Failed to submit feature request.');
+        }
+    })
+    .catch(() => showAlert('danger', 'Failed to submit feature request.'))
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lightbulb"></i> Submit Feature Request';
+    });
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function showAlert(type, message) {
+    const container = document.getElementById('alertContainer');
+    if (!container) return;
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.textContent = message;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-close';
+    btn.setAttribute('data-bs-dismiss', 'alert');
+    alert.appendChild(btn);
+    container.appendChild(alert);
+    setTimeout(() => alert.remove(), 5000);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,228 @@
+{% extends "app/base.html" %}
+
+{% block title %}Report Bug - RFPO Application{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Report Bug</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0"><i class="fas fa-bug text-danger"></i> Bug Reports</h1>
+        <p class="text-muted">Report issues and track their resolution</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left: Submit Form -->
+    <div class="col-lg-5 mb-4">
+        <div class="card">
+            <div class="card-header"><i class="fas fa-plus-circle"></i> Report a Bug</div>
+            <div class="card-body">
+                <form id="bugForm" onsubmit="submitBug(event)">
+                    <div class="mb-3">
+                        <label for="bugTitle" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="bugTitle" maxlength="255" required placeholder="Brief summary of the issue">
+                    </div>
+                    <div class="mb-3">
+                        <label for="bugDescription" class="form-label">Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="bugDescription" rows="4" required placeholder="What happened? What did you expect to happen?"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bugSteps" class="form-label">Steps to Reproduce</label>
+                        <textarea class="form-control" id="bugSteps" rows="3" placeholder="1. Go to...&#10;2. Click on...&#10;3. See error"></textarea>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label for="bugPriority" class="form-label">Priority</label>
+                            <select class="form-select" id="bugPriority">
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label for="bugSeverity" class="form-label">Severity</label>
+                            <select class="form-select" id="bugSeverity">
+                                <option value="">— Select —</option>
+                                <option value="cosmetic">Cosmetic</option>
+                                <option value="minor">Minor</option>
+                                <option value="major">Major</option>
+                                <option value="blocker">Blocker</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bugPageUrl" class="form-label">Page URL</label>
+                        <input type="text" class="form-control" id="bugPageUrl" placeholder="Where did this happen?" readonly>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100" id="bugSubmitBtn">
+                        <i class="fas fa-bug"></i> Submit Bug Report
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Submissions List -->
+    <div class="col-lg-7">
+        <!-- Status Filters -->
+        <div class="mb-3">
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-primary active" onclick="filterStatus('')" data-status="">All</button>
+                <button type="button" class="btn btn-outline-primary" onclick="filterStatus('open')" data-status="open">Open</button>
+                <button type="button" class="btn btn-outline-info" onclick="filterStatus('in_progress')" data-status="in_progress">In Progress</button>
+                <button type="button" class="btn btn-outline-success" onclick="filterStatus('resolved')" data-status="resolved">Resolved</button>
+                <button type="button" class="btn btn-outline-dark" onclick="filterStatus('closed')" data-status="closed">Closed</button>
+            </div>
+        </div>
+
+        <div id="ticketsList">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="text-muted mt-2">Loading bug reports...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentStatus = '';
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-capture current page URL
+    document.getElementById('bugPageUrl').value = window.location.href;
+    loadTickets();
+});
+
+function filterStatus(status) {
+    currentStatus = status;
+    document.querySelectorAll('.btn-group [data-status]').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-status') === status);
+    });
+    loadTickets();
+}
+
+function loadTickets() {
+    let url = '/api/tickets?type=bug';
+    if (currentStatus) url += '&status=' + currentStatus;
+
+    fetch(url)
+    .then(r => r.json())
+    .then(data => {
+        const container = document.getElementById('ticketsList');
+        if (!data.success || !data.tickets || data.tickets.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-bug fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No bug reports found.</p>
+                </div>`;
+            return;
+        }
+
+        const statusColors = {
+            open: 'primary', in_progress: 'info', resolved: 'success',
+            closed: 'dark', wont_fix: 'dark'
+        };
+        const priorityColors = {
+            critical: 'danger', high: 'warning', medium: 'info', low: 'secondary'
+        };
+
+        let html = '<div class="list-group">';
+        data.tickets.forEach(t => {
+            const created = new Date(t.created_at).toLocaleDateString();
+            html += `
+                <a href="/tickets/${t.id}" class="list-group-item list-group-item-action">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="me-3" style="min-width: 0;">
+                            <div class="d-flex align-items-center mb-1">
+                                <code class="me-2">${t.ticket_number}</code>
+                                <span class="badge bg-${statusColors[t.status] || 'secondary'} me-1">${t.status.replace(/_/g, ' ')}</span>
+                                <span class="badge bg-${priorityColors[t.priority] || 'secondary'}">${t.priority}</span>
+                            </div>
+                            <h6 class="mb-1 text-truncate">${escapeHtml(t.title)}</h6>
+                            <small class="text-muted">${created}</small>
+                            ${t.comment_count ? `<span class="badge bg-secondary ms-2"><i class="fas fa-comment"></i> ${t.comment_count}</span>` : ''}
+                            ${t.attachment_count ? `<span class="badge bg-secondary ms-1"><i class="fas fa-paperclip"></i> ${t.attachment_count}</span>` : ''}
+                        </div>
+                    </div>
+                </a>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    })
+    .catch(() => {
+        document.getElementById('ticketsList').innerHTML =
+            '<div class="alert alert-danger">Failed to load bug reports.</div>';
+    });
+}
+
+function submitBug(e) {
+    e.preventDefault();
+    const btn = document.getElementById('bugSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Submitting...';
+
+    const payload = {
+        type: 'bug',
+        title: document.getElementById('bugTitle').value.trim(),
+        description: document.getElementById('bugDescription').value.trim(),
+        steps_to_reproduce: document.getElementById('bugSteps').value.trim() || null,
+        priority: document.getElementById('bugPriority').value,
+        severity: document.getElementById('bugSeverity').value || null,
+        page_url: document.getElementById('bugPageUrl').value || null,
+        browser_info: navigator.userAgent
+    };
+
+    fetch('/api/tickets', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('bugForm').reset();
+            document.getElementById('bugPageUrl').value = window.location.href;
+            showAlert('success', `Bug report ${data.ticket?.ticket_number || ''} submitted successfully!`);
+            loadTickets();
+        } else {
+            showAlert('danger', data.message || 'Failed to submit bug report.');
+        }
+    })
+    .catch(() => showAlert('danger', 'Failed to submit bug report.'))
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-bug"></i> Submit Bug Report';
+    });
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function showAlert(type, message) {
+    const container = document.getElementById('alertContainer');
+    if (!container) return;
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.textContent = message;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-close';
+    btn.setAttribute('data-bs-dismiss', 'alert');
+    alert.appendChild(btn);
+    container.appendChild(alert);
+    setTimeout(() => alert.remove(), 5000);
+}
+</script>
+{% endblock %}

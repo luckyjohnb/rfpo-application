@@ -1,0 +1,134 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ page_title }} - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        {% if ticket_type == 'bug' %}
+            <i class="fas fa-bug text-danger"></i> Bug Log
+        {% else %}
+            <i class="fas fa-lightbulb text-warning"></i> Feature Requests
+        {% endif %}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <form class="d-flex gap-2" method="GET">
+            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">All Statuses</option>
+                {% if ticket_type == 'bug' %}
+                    <option value="open" {{ 'selected' if status_filter == 'open' }}>Open</option>
+                    <option value="in_progress" {{ 'selected' if status_filter == 'in_progress' }}>In Progress</option>
+                    <option value="resolved" {{ 'selected' if status_filter == 'resolved' }}>Resolved</option>
+                    <option value="closed" {{ 'selected' if status_filter == 'closed' }}>Closed</option>
+                    <option value="wont_fix" {{ 'selected' if status_filter == 'wont_fix' }}>Won't Fix</option>
+                {% else %}
+                    <option value="open" {{ 'selected' if status_filter == 'open' }}>Open</option>
+                    <option value="under_review" {{ 'selected' if status_filter == 'under_review' }}>Under Review</option>
+                    <option value="planned" {{ 'selected' if status_filter == 'planned' }}>Planned</option>
+                    <option value="in_progress" {{ 'selected' if status_filter == 'in_progress' }}>In Progress</option>
+                    <option value="completed" {{ 'selected' if status_filter == 'completed' }}>Completed</option>
+                    <option value="declined" {{ 'selected' if status_filter == 'declined' }}>Declined</option>
+                {% endif %}
+            </select>
+            <select name="priority" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">All Priorities</option>
+                <option value="critical" {{ 'selected' if priority_filter == 'critical' }}>Critical</option>
+                <option value="high" {{ 'selected' if priority_filter == 'high' }}>High</option>
+                <option value="medium" {{ 'selected' if priority_filter == 'medium' }}>Medium</option>
+                <option value="low" {{ 'selected' if priority_filter == 'low' }}>Low</option>
+            </select>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if tickets %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Ticket #</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                            {% if ticket_type == 'bug' %}
+                                <th>Severity</th>
+                            {% endif %}
+                            <th>Submitted By</th>
+                            <th>Assigned To</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ticket in tickets %}
+                        <tr>
+                            <td><code>{{ ticket.ticket_number }}</code></td>
+                            <td>
+                                <a href="{{ url_for('admin_ticket_detail', ticket_id=ticket.id) }}" class="text-decoration-none">
+                                    {{ ticket.title | truncate(60) }}
+                                </a>
+                                {% if ticket.comment_count %}
+                                    <span class="badge bg-secondary ms-1" title="Comments"><i class="fas fa-comment"></i> {{ ticket.comments | length }}</span>
+                                {% endif %}
+                                {% if ticket.attachments | length > 0 %}
+                                    <span class="badge bg-secondary ms-1" title="Attachments"><i class="fas fa-paperclip"></i> {{ ticket.attachments | length }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set status_colors = {
+                                    'open': 'primary', 'in_progress': 'info', 'under_review': 'info',
+                                    'planned': 'secondary', 'resolved': 'success', 'completed': 'success',
+                                    'closed': 'dark', 'wont_fix': 'dark', 'declined': 'dark'
+                                } %}
+                                <span class="badge bg-{{ status_colors.get(ticket.status, 'secondary') }}">
+                                    {{ ticket.status | replace('_', ' ') | title }}
+                                </span>
+                            </td>
+                            <td>
+                                {% set priority_colors = {'critical': 'danger', 'high': 'warning', 'medium': 'info', 'low': 'secondary'} %}
+                                <span class="badge bg-{{ priority_colors.get(ticket.priority, 'secondary') }}">
+                                    {{ ticket.priority | title }}
+                                </span>
+                            </td>
+                            {% if ticket_type == 'bug' %}
+                                <td>
+                                    {% if ticket.severity %}
+                                        {% set severity_colors = {'blocker': 'danger', 'major': 'warning', 'minor': 'info', 'cosmetic': 'secondary'} %}
+                                        <span class="badge bg-{{ severity_colors.get(ticket.severity, 'secondary') }}">
+                                            {{ ticket.severity | title }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            {% endif %}
+                            <td>{{ ticket.creator.get_display_name() if ticket.creator else '—' }}</td>
+                            <td>
+                                {% if ticket.assignee %}
+                                    {{ ticket.assignee.get_display_name() }}
+                                {% else %}
+                                    <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ ticket.created_at.strftime('%Y-%m-%d %H:%M') if ticket.created_at else '—' }}</td>
+                            <td>
+                                <a href="{{ url_for('admin_ticket_detail', ticket_id=ticket.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-{% if ticket_type == 'bug' %}bug{% else %}lightbulb{% endif %} fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No {{ 'bug reports' if ticket_type == 'bug' else 'feature requests' }} found.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

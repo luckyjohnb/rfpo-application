@@ -64,6 +64,9 @@ from models import (
     RFPOApprovalWorkflow,
     RFPOLineItem,
     Team,
+    Ticket,
+    TicketAttachment,
+    TicketComment,
     UploadedFile,
     User,
     UserTeam,
@@ -8321,6 +8324,161 @@ Southfield, MI  48075""",
             output.getvalue(),
             mimetype="text/csv",
             headers={"Content-Disposition": f"attachment; filename=email_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"},
+        )
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Ticket Management (Bug Log & Feature Requests)
+    # ──────────────────────────────────────────────────────────────────────
+
+    @app.route("/admin/tickets/bugs")
+    @admin_required
+    def admin_ticket_bugs():
+        """List all bug reports for admin triage."""
+        status_filter = request.args.get("status", "")
+        priority_filter = request.args.get("priority", "")
+        query = Ticket.query.filter(Ticket.type == "bug")
+        if status_filter:
+            query = query.filter(Ticket.status == status_filter)
+        if priority_filter:
+            query = query.filter(Ticket.priority == priority_filter)
+        tickets = query.order_by(Ticket.created_at.desc()).all()
+        return render_template(
+            "admin/tickets.html",
+            tickets=tickets,
+            ticket_type="bug",
+            page_title="Bug Log",
+            status_filter=status_filter,
+            priority_filter=priority_filter,
+        )
+
+    @app.route("/admin/tickets/features")
+    @admin_required
+    def admin_ticket_features():
+        """List all feature requests for admin review."""
+        status_filter = request.args.get("status", "")
+        priority_filter = request.args.get("priority", "")
+        query = Ticket.query.filter(Ticket.type == "feature_request")
+        if status_filter:
+            query = query.filter(Ticket.status == status_filter)
+        if priority_filter:
+            query = query.filter(Ticket.priority == priority_filter)
+        tickets = query.order_by(Ticket.created_at.desc()).all()
+        return render_template(
+            "admin/tickets.html",
+            tickets=tickets,
+            ticket_type="feature_request",
+            page_title="Feature Requests",
+            status_filter=status_filter,
+            priority_filter=priority_filter,
+        )
+
+    @app.route("/admin/tickets/<int:ticket_id>")
+    @admin_required
+    def admin_ticket_detail(ticket_id):
+        """Admin detail view for a ticket — triage, assign, comment."""
+        ticket = Ticket.query.get_or_404(ticket_id)
+        comments = TicketComment.query.filter_by(ticket_id=ticket.id).order_by(TicketComment.created_at.asc()).all()
+        attachments = TicketAttachment.query.filter_by(ticket_id=ticket.id).all()
+        admin_users = User.query.filter(User.active == True).order_by(User.first_name).all()
+        return render_template(
+            "admin/ticket_detail.html",
+            ticket=ticket,
+            comments=comments,
+            attachments=attachments,
+            admin_users=admin_users,
+        )
+
+    @app.route("/admin/tickets/<int:ticket_id>/update", methods=["POST"])
+    @admin_required
+    def admin_ticket_update(ticket_id):
+        """Update ticket fields from admin detail page."""
+        ticket = Ticket.query.get_or_404(ticket_id)
+        old_status = ticket.status
+
+        ticket.status = request.form.get("status", ticket.status)
+        ticket.priority = request.form.get("priority", ticket.priority)
+        if ticket.type == "bug":
+            ticket.severity = request.form.get("severity", ticket.severity)
+
+        assigned_to = request.form.get("assigned_to")
+        if assigned_to:
+            try:
+                assigned_id = int(assigned_to)
+                assigned_user = User.query.get(assigned_id)
+                if not assigned_user:
+                    flash("Selected user does not exist.", "danger")
+                    return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
+                ticket.assigned_to = assigned_id
+            except (ValueError, TypeError):
+                flash("Invalid user selection.", "danger")
+                return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
+        else:
+            ticket.assigned_to = None
+
+        ticket.internal_notes = (request.form.get("internal_notes") or "")[:5000]
+
+        if ticket.status in ("resolved", "completed") and ticket.status != old_status:
+            ticket.resolved_at = datetime.now()
+        if ticket.status in ("closed", "wont_fix", "declined") and ticket.status != old_status:
+            ticket.closed_at = datetime.now()
+
+        record_audit("update", "ticket", ticket.id, {
+            "ticket_number": ticket.ticket_number,
+            "old_status": old_status,
+            "new_status": ticket.status,
+        })
+
+        db.session.commit()
+        flash(f"Ticket {ticket.ticket_number} updated.", "success")
+        return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
+
+    @app.route("/admin/tickets/<int:ticket_id>/comment", methods=["POST"])
+    @admin_required
+    def admin_ticket_add_comment(ticket_id):
+        """Add a comment (public or internal) from admin detail page."""
+        ticket = Ticket.query.get_or_404(ticket_id)
+        content = (request.form.get("content") or "").strip()
+        if not content:
+            flash("Comment cannot be empty.", "danger")
+            return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
+
+        is_internal = request.form.get("is_internal") == "1"
+
+        comment = TicketComment(
+            ticket_id=ticket.id,
+            user_id=current_user.id,
+            content=content,
+            is_internal=is_internal,
+        )
+        db.session.add(comment)
+        db.session.commit()
+
+        record_audit("create", "ticket_comment", comment.id, {
+            "ticket_number": ticket.ticket_number,
+            "is_internal": is_internal,
+        })
+
+        flash("Comment added.", "success")
+        return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
+
+    @app.route("/admin/tickets/<int:ticket_id>/attachments/<file_id>")
+    @admin_required
+    def admin_ticket_attachment(ticket_id, file_id):
+        """Serve a ticket attachment file for admin download."""
+        ticket = Ticket.query.get_or_404(ticket_id)
+        attachment = TicketAttachment.query.filter_by(
+            file_id=file_id, ticket_id=ticket.id
+        ).first_or_404()
+
+        if not os.path.exists(attachment.file_path):
+            abort(404)
+
+        from flask import send_file
+        return send_file(
+            attachment.file_path,
+            mimetype=attachment.mime_type,
+            as_attachment=False,
+            download_name=attachment.original_filename,
         )
 
     return app

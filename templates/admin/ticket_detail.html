@@ -1,0 +1,227 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ ticket.ticket_number }} - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        {% if ticket.type == 'bug' %}
+            <i class="fas fa-bug text-danger"></i>
+        {% else %}
+            <i class="fas fa-lightbulb text-warning"></i>
+        {% endif %}
+        {{ ticket.ticket_number }}
+    </h1>
+    <div>
+        <a href="{{ url_for('admin_ticket_bugs' if ticket.type == 'bug' else 'admin_ticket_features') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left Column: Ticket Details & Triage (2/3) -->
+    <div class="col-lg-8">
+        <!-- Ticket Info Card -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>{{ ticket.title }}</strong>
+                {% set status_colors = {
+                    'open': 'primary', 'in_progress': 'info', 'under_review': 'info',
+                    'planned': 'secondary', 'resolved': 'success', 'completed': 'success',
+                    'closed': 'dark', 'wont_fix': 'dark', 'declined': 'dark'
+                } %}
+                <span class="badge bg-{{ status_colors.get(ticket.status, 'secondary') }}">
+                    {{ ticket.status | replace('_', ' ') | title }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Description</label>
+                    <div class="border rounded p-3 bg-light" style="white-space: pre-wrap;">{{ ticket.description }}</div>
+                </div>
+
+                {% if ticket.type == 'bug' and ticket.steps_to_reproduce %}
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Steps to Reproduce</label>
+                    <div class="border rounded p-3 bg-light" style="white-space: pre-wrap;">{{ ticket.steps_to_reproduce }}</div>
+                </div>
+                {% endif %}
+
+                {% if ticket.page_url %}
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Page URL</label>
+                    <div><code>{{ ticket.page_url }}</code></div>
+                </div>
+                {% endif %}
+
+                {% if ticket.browser_info %}
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Browser Info</label>
+                    <div class="small text-muted">{{ ticket.browser_info | truncate(200) }}</div>
+                </div>
+                {% endif %}
+
+                <div class="row text-muted small">
+                    <div class="col-auto"><i class="fas fa-user"></i> {{ ticket.creator.get_display_name() if ticket.creator else 'Unknown' }}</div>
+                    <div class="col-auto"><i class="fas fa-calendar"></i> {{ ticket.created_at.strftime('%Y-%m-%d %H:%M') if ticket.created_at else '—' }}</div>
+                    {% if ticket.resolved_at %}
+                        <div class="col-auto"><i class="fas fa-check-circle text-success"></i> Resolved {{ ticket.resolved_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Attachments -->
+        {% if attachments %}
+        <div class="card mb-4">
+            <div class="card-header"><i class="fas fa-paperclip"></i> Attachments ({{ attachments | length }})</div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for att in attachments %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-file"></i>
+                            <strong>{{ att.original_filename }}</strong>
+                            <span class="text-muted small ms-2">{{ (att.file_size / 1024) | round(1) }} KB</span>
+                        </div>
+                        <a href="{{ url_for('admin_ticket_attachment', ticket_id=ticket.id, file_id=att.file_id) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Comment Timeline -->
+        <div class="card mb-4">
+            <div class="card-header"><i class="fas fa-comments"></i> Conversation ({{ comments | length }})</div>
+            <div class="card-body">
+                {% if comments %}
+                    {% for comment in comments %}
+                    <div class="mb-3 pb-3 {{ '' if loop.last else 'border-bottom' }}">
+                        <div class="d-flex justify-content-between">
+                            <strong>
+                                {{ comment.author.get_display_name() if comment.author else 'Unknown' }}
+                                {% if comment.is_internal %}
+                                    <span class="badge bg-warning text-dark ms-1"><i class="fas fa-lock"></i> Internal</span>
+                                {% endif %}
+                            </strong>
+                            <small class="text-muted">{{ comment.created_at.strftime('%Y-%m-%d %H:%M') if comment.created_at else '' }}</small>
+                        </div>
+                        <div class="mt-1{% if comment.is_internal %} border-start border-warning border-3 ps-3{% endif %}" style="white-space: pre-wrap;">{{ comment.content }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted text-center mb-0">No comments yet.</p>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <form method="POST" action="{{ url_for('admin_ticket_add_comment', ticket_id=ticket.id) }}">
+                    <div class="mb-2">
+                        <textarea class="form-control" name="content" rows="3" placeholder="Add a comment..." required></textarea>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_internal" value="1" id="internalCheck">
+                            <label class="form-check-label small" for="internalCheck">
+                                <i class="fas fa-lock"></i> Internal note (not visible to submitter)
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-paper-plane"></i> Post</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Triage Panel (1/3) -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header"><i class="fas fa-sliders-h"></i> Triage</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_ticket_update', ticket_id=ticket.id) }}">
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select form-select-sm">
+                            {% if ticket.type == 'bug' %}
+                                {% set statuses = [('open', 'Open'), ('in_progress', 'In Progress'), ('resolved', 'Resolved'), ('closed', 'Closed'), ('wont_fix', "Won't Fix")] %}
+                            {% else %}
+                                {% set statuses = [('open', 'Open'), ('under_review', 'Under Review'), ('planned', 'Planned'), ('in_progress', 'In Progress'), ('completed', 'Completed'), ('declined', 'Declined')] %}
+                            {% endif %}
+                            {% for val, label in statuses %}
+                                <option value="{{ val }}" {{ 'selected' if ticket.status == val }}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Priority</label>
+                        <select name="priority" class="form-select form-select-sm">
+                            {% for val in ['low', 'medium', 'high', 'critical'] %}
+                                <option value="{{ val }}" {{ 'selected' if ticket.priority == val }}>{{ val | title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% if ticket.type == 'bug' %}
+                    <div class="mb-3">
+                        <label class="form-label">Severity</label>
+                        <select name="severity" class="form-select form-select-sm">
+                            <option value="">— Not Set —</option>
+                            {% for val in ['cosmetic', 'minor', 'major', 'blocker'] %}
+                                <option value="{{ val }}" {{ 'selected' if ticket.severity == val }}>{{ val | title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Assigned To</label>
+                        <select name="assigned_to" class="form-select form-select-sm">
+                            <option value="">Unassigned</option>
+                            {% for user in admin_users %}
+                                <option value="{{ user.id }}" {{ 'selected' if ticket.assigned_to == user.id }}>
+                                    {{ user.get_display_name() }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Internal Notes</label>
+                        <textarea class="form-control form-control-sm" name="internal_notes" rows="4" placeholder="Admin-only notes...">{{ ticket.internal_notes or '' }}</textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-save"></i> Save Changes</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Meta Info -->
+        <div class="card">
+            <div class="card-header"><i class="fas fa-info-circle"></i> Details</div>
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between">
+                    <span class="text-muted">Type</span>
+                    <span>{{ 'Bug Report' if ticket.type == 'bug' else 'Feature Request' }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                    <span class="text-muted">Submitted</span>
+                    <span>{{ ticket.created_at.strftime('%b %d, %Y') if ticket.created_at else '—' }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                    <span class="text-muted">Updated</span>
+                    <span>{{ ticket.updated_at.strftime('%b %d, %Y %H:%M') if ticket.updated_at else '—' }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                    <span class="text-muted">Attachments</span>
+                    <span>{{ attachments | length }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

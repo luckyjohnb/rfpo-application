@@ -301,7 +301,7 @@ function postComment(e) {
 
     fetch(`/api/tickets/${TICKET_ID}/comments`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
         body: JSON.stringify({content: content})
     })
     .then(r => r.json())
@@ -331,6 +331,7 @@ function uploadAttachment(input) {
 
     fetch(`/api/tickets/${TICKET_ID}/attachments`, {
         method: 'POST',
+        headers: {'X-CSRFToken': getCsrfToken()},
         body: formData
     })
     .then(r => r.json())

@@ -332,3 +332,26 @@ select:focus-visible, textarea:focus-visible {
         font-size: 1.1rem;
     }
 }
+
+/* ── Alert Container (Toast Notifications) ─────────────── */
+.alert-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 1055;
+    max-width: 420px;
+    width: 100%;
+}
+
+.alert-container .alert {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 575.98px) {
+    .alert-container {
+        left: 20px;
+        right: 20px;
+        max-width: none;
+    }
+}

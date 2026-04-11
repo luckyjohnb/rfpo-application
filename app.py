@@ -145,10 +145,11 @@ def create_user_app():
 
     app.register_blueprint(auth_bp)
 
-    # CSRF exemptions — only routes that genuinely cannot provide a token
-    csrf.exempt(auth_bp.name + ".api_login")   # No session/token yet
-    csrf.exempt(auth_bp.name + ".saml_acs")    # External IdP POST
-    csrf.exempt(auth_bp.name + ".saml_sls")    # External IdP POST
+    # CSRF exemption — auth blueprint handles login (no session yet),
+    # SAML ACS/SLS (external IdP POST), and logout/token proxies.
+    # Must exempt at blueprint level; string-based exempt() does not match
+    # the module.name format used by Flask-WTF ≥1.2 in before_request.
+    csrf.exempt(auth_bp)
     app.register_blueprint(pages_bp)
     app.register_blueprint(rfpo_proxy_bp)
     app.register_blueprint(file_proxy_bp)

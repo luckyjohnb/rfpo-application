@@ -5,7 +5,7 @@
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('pages.dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
         <li class="breadcrumb-item active" aria-current="page">Profile</li>
     </ol>
 </nav>
@@ -341,14 +341,14 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     {% if nav.is_admin %}
-                    <a href="{{ url_for('rfpo_create') }}" class="btn btn-outline-primary btn-sm">
+                    <a href="{{ url_for('pages.rfpo_create') }}" class="btn btn-outline-primary btn-sm">
                         <i class="fas fa-plus"></i> Create RFPO
                     </a>
                     {% endif %}
-                    <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-secondary btn-sm">
+                    <a href="{{ url_for('pages.rfpos_list') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-list"></i> My RFPOs
                     </a>
-                    <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-sm">
+                    <a href="{{ url_for('pages.teams_list') }}" class="btn btn-outline-success btn-sm">
                         <i class="fas fa-users"></i> View Teams
                     </a>
                     <button class="btn btn-outline-danger btn-sm" onclick="logout()">

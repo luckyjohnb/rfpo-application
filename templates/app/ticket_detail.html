@@ -5,7 +5,7 @@
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('pages.dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
         <li class="breadcrumb-item" id="breadcrumbParent"><a href="#">Tickets</a></li>
         <li class="breadcrumb-item active" aria-current="page" id="breadcrumbTicket">Loading...</li>
     </ol>
@@ -150,7 +150,7 @@
 <div id="ticketError" style="display: none;" class="text-center py-5">
     <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
     <p class="text-danger">Ticket not found or access denied.</p>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+    <a href="{{ url_for('pages.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
 </div>
 
 <script>
@@ -175,10 +175,10 @@ function loadTicket() {
         // Breadcrumb
         const parentLink = document.querySelector('#breadcrumbParent a');
         if (t.type === 'bug') {
-            parentLink.href = '{{ url_for("bugs_page") }}';
+            parentLink.href = '{{ url_for("pages.bugs_page") }}';
             parentLink.textContent = 'Bug Reports';
         } else {
-            parentLink.href = '{{ url_for("feature_requests_page") }}';
+            parentLink.href = '{{ url_for("pages.feature_requests_page") }}';
             parentLink.textContent = 'Feature Requests';
         }
         document.getElementById('breadcrumbTicket').textContent = t.ticket_number;

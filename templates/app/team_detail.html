@@ -5,8 +5,8 @@
 {% block breadcrumb %}
 <nav class="breadcrumb-nav" aria-label="breadcrumb">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('teams_list') }}">Teams</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('pages.dashboard') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('pages.teams_list') }}">Teams</a></li>
         <li class="breadcrumb-item active" aria-current="page" id="breadcrumbTeamName">Details</li>
     </ol>
 </nav>
@@ -23,7 +23,7 @@
 <div id="errorState" style="display: none;" class="text-center py-5">
     <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
     <p class="text-danger" id="errorMessage">Failed to load team details.</p>
-    <a href="{{ url_for('teams_list') }}" class="btn btn-outline-primary">
+    <a href="{{ url_for('pages.teams_list') }}" class="btn btn-outline-primary">
         <i class="fas fa-arrow-left"></i> Back to Teams
     </a>
 </div>
@@ -44,7 +44,7 @@
             <p class="text-muted mt-1" id="teamConsortium"></p>
         </div>
         <div class="col-md-4 text-end">
-            <a href="{{ url_for('teams_list') }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('pages.teams_list') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Back to Teams
             </a>
         </div>

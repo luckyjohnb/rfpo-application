@@ -28,7 +28,7 @@
 <!-- Statistics Cards -->
 <div class="row g-4 mb-4">
     <div class="col-md-3">
-        <a href="{{ url_for('rfpos_list') }}" class="text-decoration-none">
+        <a href="{{ url_for('pages.rfpos_list') }}" class="text-decoration-none">
         <div class="card bg-primary text-white dashboard-stat-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
@@ -46,7 +46,7 @@
     </div>
 
     <div class="col-md-3">
-        <a href="{{ url_for('teams_list') }}" class="text-decoration-none">
+        <a href="{{ url_for('pages.teams_list') }}" class="text-decoration-none">
         <div class="card bg-success text-white dashboard-stat-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
@@ -64,7 +64,7 @@
     </div>
 
     <div class="col-md-3">
-        <a href="{{ url_for('rfpos_list') }}?status=pending" class="text-decoration-none">
+        <a href="{{ url_for('pages.rfpos_list') }}?status=pending" class="text-decoration-none">
         <div class="card bg-warning text-dark dashboard-stat-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
@@ -82,7 +82,7 @@
     </div>
 
     <div class="col-md-3">
-        <a href="{{ url_for('rfpos_list') }}?status=completed" class="text-decoration-none">
+        <a href="{{ url_for('pages.rfpos_list') }}?status=completed" class="text-decoration-none">
         <div class="card bg-info text-white dashboard-stat-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
@@ -114,26 +114,26 @@
                 <div class="row g-3">
                     {% if nav.is_admin %}
                     <div class="col-md-3">
-                        <a href="{{ url_for('rfpo_create') }}" class="btn btn-primary btn-lg w-100">
+                        <a href="{{ url_for('pages.rfpo_create') }}" class="btn btn-primary btn-lg w-100">
                             <i class="fas fa-plus"></i><br>
                             Create RFPO
                         </a>
                     </div>
                     {% endif %}
                     <div class="col-md-3">
-                        <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
+                        <a href="{{ url_for('pages.rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
                             <i class="fas fa-list"></i><br>
                             View All RFPOs
                         </a>
                     </div>
                     <div class="col-md-3">
-                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                        <a href="{{ url_for('pages.teams_list') }}" class="btn btn-outline-success btn-lg w-100">
                             <i class="fas fa-users"></i><br>
                             Manage Teams
                         </a>
                     </div>
                     <div class="col-md-3">
-                        <a href="{{ url_for('profile') }}" class="btn btn-outline-info btn-lg w-100">
+                        <a href="{{ url_for('pages.profile') }}" class="btn btn-outline-info btn-lg w-100">
                             <i class="fas fa-user-cog"></i><br>
                             Profile Settings
                         </a>
@@ -155,25 +155,25 @@
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-3">
-                        <a href="{{ url_for('approvals') }}" class="btn btn-warning btn-lg w-100">
+                        <a href="{{ url_for('pages.approvals') }}" class="btn btn-warning btn-lg w-100">
                             <i class="fas fa-clipboard-check"></i><br>
                             My Approvals
                         </a>
                     </div>
                     <div class="col-md-3">
-                        <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
+                        <a href="{{ url_for('pages.rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
                             <i class="fas fa-list"></i><br>
                             View RFPOs
                         </a>
                     </div>
                     <div class="col-md-3">
-                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                        <a href="{{ url_for('pages.teams_list') }}" class="btn btn-outline-success btn-lg w-100">
                             <i class="fas fa-users"></i><br>
                             Explore Teams
                         </a>
                     </div>
                     <div class="col-md-3">
-                        <a href="{{ url_for('profile') }}" class="btn btn-outline-info btn-lg w-100">
+                        <a href="{{ url_for('pages.profile') }}" class="btn btn-outline-info btn-lg w-100">
                             <i class="fas fa-user-cog"></i><br>
                             Profile Settings
                         </a>
@@ -198,19 +198,19 @@
                 </p>
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <a href="{{ url_for('rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
+                        <a href="{{ url_for('pages.rfpos_list') }}" class="btn btn-outline-primary btn-lg w-100">
                             <i class="fas fa-list"></i><br>
                             View RFPOs
                         </a>
                     </div>
                     <div class="col-md-4">
-                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                        <a href="{{ url_for('pages.teams_list') }}" class="btn btn-outline-success btn-lg w-100">
                             <i class="fas fa-users"></i><br>
                             Explore Teams
                         </a>
                     </div>
                     <div class="col-md-4">
-                        <a href="{{ url_for('profile') }}" class="btn btn-outline-info btn-lg w-100">
+                        <a href="{{ url_for('pages.profile') }}" class="btn btn-outline-info btn-lg w-100">
                             <i class="fas fa-user-cog"></i><br>
                             Profile Settings
                         </a>
@@ -237,13 +237,13 @@
                 </p>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <a href="{{ url_for('profile') }}" class="btn btn-primary btn-lg w-100">
+                        <a href="{{ url_for('pages.profile') }}" class="btn btn-primary btn-lg w-100">
                             <i class="fas fa-user-cog"></i><br>
                             Manage Profile
                         </a>
                     </div>
                     <div class="col-md-6">
-                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success btn-lg w-100">
+                        <a href="{{ url_for('pages.teams_list') }}" class="btn btn-outline-success btn-lg w-100">
                             <i class="fas fa-users"></i><br>
                             Explore Teams
                         </a>
@@ -263,7 +263,7 @@
                 <h5 class="card-title mb-0">
                     <i class="fas fa-clock"></i> Recent RFPOs
                 </h5>
-                <a href="{{ url_for('rfpos_list') }}" class="btn btn-sm btn-outline-primary">
+                <a href="{{ url_for('pages.rfpos_list') }}" class="btn btn-sm btn-outline-primary">
                     View All
                 </a>
             </div>
@@ -289,7 +289,7 @@
                 <h5 class="card-title mb-0">
                     <i class="fas fa-users"></i> My Teams
                 </h5>
-                <a href="{{ url_for('teams_list') }}" class="btn btn-sm btn-outline-success">
+                <a href="{{ url_for('pages.teams_list') }}" class="btn btn-sm btn-outline-success">
                     Manage Teams
                 </a>
             </div>
@@ -312,7 +312,7 @@
                     <div class="text-center py-4">
                         <i class="fas fa-users fa-3x text-muted mb-3"></i>
                         <p class="text-muted">You are not assigned to any teams yet.</p>
-                        <a href="{{ url_for('teams_list') }}" class="btn btn-outline-success">
+                        <a href="{{ url_for('pages.teams_list') }}" class="btn btn-outline-success">
                             Explore Teams
                         </a>
                     </div>
@@ -544,7 +544,7 @@
                                             <span class="badge bg-warning">${actionCount} pending</span>
                                         </div>
                                         <div class="col-md-3 text-end">
-                                            <a href="{{ url_for('approvals') }}" class="btn btn-sm btn-success">
+                                            <a href="{{ url_for('pages.approvals') }}" class="btn btn-sm btn-success">
                                                 <i class="fas fa-clipboard-check"></i> Review
                                             </a>
                                         </div>
@@ -554,7 +554,7 @@
                         }
                         html += `
                             <div class="text-center mt-2">
-                                <a href="{{ url_for('approvals') }}" class="btn btn-warning">
+                                <a href="{{ url_for('pages.approvals') }}" class="btn btn-warning">
                                     <i class="fas fa-clipboard-check"></i> Go to My Approvals
                                 </a>
                             </div>
@@ -566,7 +566,7 @@
                                 <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
                                 <h5 class="text-muted">All caught up!</h5>
                                 <p class="text-muted">No RFPOs are currently waiting for your approval.</p>
-                                <a href="{{ url_for('approvals') }}" class="btn btn-outline-success">
+                                <a href="{{ url_for('pages.approvals') }}" class="btn btn-outline-success">
                                     <i class="fas fa-clipboard-check"></i> View Approvals
                                 </a>
                             </div>
@@ -578,7 +578,7 @@
             const container = document.getElementById('recentRfposContainer');
             container.innerHTML = `
                 <div class="text-center py-4">
-                    <a href="{{ url_for('approvals') }}" class="btn btn-warning btn-lg">
+                    <a href="{{ url_for('pages.approvals') }}" class="btn btn-warning btn-lg">
                         <i class="fas fa-clipboard-check"></i> Go to My Approvals
                     </a>
                 </div>

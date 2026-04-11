@@ -13,7 +13,20 @@
     </h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <form class="d-flex gap-2" method="GET">
-            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+            <div class="input-group" style="max-width: 420px;">
+                <input type="text" name="search" class="form-control"
+                       placeholder="Search by ticket #, title..."
+                       value="{{ search_filter or '' }}">
+                <button class="btn btn-outline-secondary" type="submit">
+                    <i class="fas fa-search"></i>
+                </button>
+                {% if search_filter %}
+                <a href="{{ request.path }}" class="btn btn-outline-danger" title="Clear search">
+                    <i class="fas fa-times"></i>
+                </a>
+                {% endif %}
+            </div>
+            <select name="status" class="form-select" onchange="this.form.submit()">
                 <option value="">All Statuses</option>
                 {% if ticket_type == 'bug' %}
                     <option value="open" {{ 'selected' if status_filter == 'open' }}>Open</option>
@@ -30,7 +43,7 @@
                     <option value="declined" {{ 'selected' if status_filter == 'declined' }}>Declined</option>
                 {% endif %}
             </select>
-            <select name="priority" class="form-select form-select-sm" onchange="this.form.submit()">
+            <select name="priority" class="form-select" onchange="this.form.submit()">
                 <option value="">All Priorities</option>
                 <option value="critical" {{ 'selected' if priority_filter == 'critical' }}>Critical</option>
                 <option value="high" {{ 'selected' if priority_filter == 'high' }}>High</option>
@@ -43,6 +56,12 @@
 
 <div class="card">
     <div class="card-body">
+        {% if total is defined %}
+        <p class="text-muted mb-2">
+            Showing {{ tickets | length }} of {{ total }} {{ 'bug reports' if ticket_type == 'bug' else 'feature requests' }}
+            {% if search_filter %} matching &ldquo;{{ search_filter }}&rdquo;{% endif %}
+        </p>
+        {% endif %}
         {% if tickets %}
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
@@ -128,6 +147,26 @@
                 <i class="fas fa-{% if ticket_type == 'bug' %}bug{% else %}lightbulb{% endif %} fa-3x text-muted mb-3"></i>
                 <p class="text-muted">No {{ 'bug reports' if ticket_type == 'bug' else 'feature requests' }} found.</p>
             </div>
+        {% endif %}
+
+        {% if pages is defined and pages > 1 %}
+        <nav class="mt-3">
+            <ul class="pagination justify-content-center mb-0">
+                <li class="page-item {{ 'disabled' if page <= 1 }}">
+                    <a class="page-link" href="?page={{ page - 1 }}&search={{ search_filter or '' }}&status={{ status_filter or '' }}&priority={{ priority_filter or '' }}">
+                        Previous
+                    </a>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link">Page {{ page }} of {{ pages }}</span>
+                </li>
+                <li class="page-item {{ 'disabled' if page >= pages }}">
+                    <a class="page-link" href="?page={{ page + 1 }}&search={{ search_filter or '' }}&status={{ status_filter or '' }}&priority={{ priority_filter or '' }}">
+                        Next
+                    </a>
+                </li>
+            </ul>
+        </nav>
         {% endif %}
     </div>
 </div>

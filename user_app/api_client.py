@@ -83,6 +83,55 @@ class APIClient:
             headers["Authorization"] = f"Bearer {session['auth_token']}"
         return headers
 
+    def _handle_permission_revocation(self, resp) -> dict | None:
+        """Detect 401 with permissions_changed and clear session.
+
+        Returns a failure dict if revocation was detected, else None.
+        """
+        if resp.status_code != 401:
+            return None
+        try:
+            body = resp.json()
+            if body.get("error") == "permissions_changed":
+                session.pop("auth_token", None)
+                session.pop("nav_context", None)
+                session.pop("nav_context_ts", None)
+                return {
+                    "success": False,
+                    "error": "permissions_changed",
+                    "message": body.get(
+                        "message",
+                        "Your permissions have been updated. "
+                        "Please log in again.",
+                    ),
+                }
+        except ValueError:
+            pass
+        return None
+
+    def _parse_response(self, resp, endpoint: str) -> dict:
+        """Parse an HTTP response into a standard result dict."""
+        if not resp.content:
+            return {"success": True}
+
+        try:
+            result = resp.json()
+            if resp.status_code >= 500 and "message" in result:
+                logger.error("API 5xx for %s: %s", endpoint,
+                             result.get("message", ""))
+                result["message"] = (
+                    "A server error occurred. Please try again later."
+                )
+            return result
+        except ValueError:
+            return {
+                "success": False,
+                "message": (
+                    f"API returned non-JSON response "
+                    f"(HTTP {resp.status_code})"
+                ),
+            }
+
     def _request(self, method: str, endpoint: str, data=None, *,
                  use_admin: bool = False, extra_headers: dict | None = None,
                  timeout: int | None = None) -> dict:
@@ -96,61 +145,16 @@ class APIClient:
         headers.update(self._auth_headers())
 
         try:
-            if method == "GET":
-                resp = requests.get(url, headers=headers,
-                                    timeout=effective_timeout)
-            elif method == "POST":
-                resp = requests.post(url, json=data, headers=headers,
-                                     timeout=effective_timeout)
-            elif method == "PUT":
-                resp = requests.put(url, json=data, headers=headers,
-                                    timeout=effective_timeout)
-            elif method == "DELETE":
-                resp = requests.delete(url, headers=headers,
-                                       timeout=effective_timeout)
-            else:
-                return {"success": False, "message": "Unsupported method"}
+            kwargs: dict = {"headers": headers, "timeout": effective_timeout}
+            if method in ("POST", "PUT", "PATCH"):
+                kwargs["json"] = data
+            resp = requests.request(method, url, **kwargs)
 
-            # Handle permission revocation
-            if resp.status_code == 401:
-                try:
-                    body = resp.json()
-                    if body.get("error") == "permissions_changed":
-                        session.pop("auth_token", None)
-                        session.pop("nav_context", None)
-                        session.pop("nav_context_ts", None)
-                        return {
-                            "success": False,
-                            "error": "permissions_changed",
-                            "message": body.get(
-                                "message",
-                                "Your permissions have been updated. "
-                                "Please log in again.",
-                            ),
-                        }
-                except ValueError:
-                    pass
+            revoked = self._handle_permission_revocation(resp)
+            if revoked:
+                return revoked
 
-            if not resp.content:
-                return {"success": True}
-
-            try:
-                result = resp.json()
-                if resp.status_code >= 500 and "message" in result:
-                    logger.error("API 5xx for %s: %s", endpoint,
-                                 result.get("message", ""))
-                    result["message"] = (
-                        "A server error occurred. Please try again later."
-                    )
-                return result
-            except ValueError:
-                return {
-                    "success": False,
-                    "message": (
-                        f"API returned non-JSON response "
-                        f"(HTTP {resp.status_code})"
-                    ),
-                }
+            return self._parse_response(resp, endpoint)
 
         except requests.exceptions.ConnectTimeout as exc:
             logger.error("Connection timeout for %s: %s", endpoint, exc)

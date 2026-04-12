@@ -5,7 +5,7 @@ All endpoints require GOD or RFPO_ADMIN permissions.
 """
 
 from flask import Blueprint, request, jsonify
-from sqlalchemy import func, case
+from sqlalchemy import func, case, text, extract
 from datetime import datetime, timedelta
 import sys
 import os
@@ -22,6 +22,32 @@ from utils import require_auth, error_response
 logger = logging.getLogger(__name__)
 
 report_api = Blueprint("report_api", __name__, url_prefix="/api/reports")
+
+
+def _is_sqlite():
+    """Check if we're running against SQLite (for SQL dialect differences)."""
+    return "sqlite" in str(db.engine.url)
+
+
+def _epoch_diff_days(col_end, col_start):
+    """Cross-database days between two datetime columns."""
+    if _is_sqlite():
+        return (
+            func.cast(func.strftime("%s", col_end), db.Integer)
+            - func.cast(func.strftime("%s", col_start), db.Integer)
+        ) / 86400.0
+    else:
+        # PostgreSQL: EXTRACT(EPOCH FROM (end - start)) / 86400
+        return extract("epoch", col_end - col_start) / 86400.0
+
+
+def _month_label(col):
+    """Cross-database month grouping label."""
+    if _is_sqlite():
+        return func.strftime("%Y-%m", col).label("month")
+    else:
+        return func.to_char(col, "YYYY-MM").label("month")
+
 
 # Status constants — RFPO.status uses capitalized values
 RFPO_OPEN_STATUSES = ["Draft", "Pending Approval"]
@@ -144,10 +170,7 @@ def _rfpo_summary(from_dt, to_dt):
     all_row = all_q.first()
 
     # Average time to fulfill (days between created_at and approved_at)
-    time_diff = (
-        func.cast(func.strftime("%s", RFPO.approved_at), db.Integer)
-        - func.cast(func.strftime("%s", RFPO.created_at), db.Integer)
-    ) / 86400.0
+    time_diff = _epoch_diff_days(RFPO.approved_at, RFPO.created_at)
     avg_q = db.session.query(
         func.avg(time_diff)
     ).filter(
@@ -245,24 +268,18 @@ def _rfpo_drilldown(from_dt, to_dt):
 
 def _rfpo_time_to_fulfill(from_dt, to_dt):
     """Average time to fulfill by month."""
-    # Use STRFTIME for cross-database month grouping (works on both SQLite and PostgreSQL via SQLAlchemy)
-    month_label = func.strftime("%Y-%m", RFPO.approved_at).label("month")
-
-    # For time diff, use epoch-based calc that works on both engines
-    time_diff_days = (
-        func.cast(func.strftime("%s", RFPO.approved_at), db.Integer)
-        - func.cast(func.strftime("%s", RFPO.created_at), db.Integer)
-    ) / 86400.0
+    ml = _month_label(RFPO.approved_at)
+    time_diff_days = _epoch_diff_days(RFPO.approved_at, RFPO.created_at)
 
     q = db.session.query(
-        month_label,
+        ml,
         func.count(RFPO.id).label("count"),
         func.avg(time_diff_days).label("avg_days"),
         func.min(time_diff_days).label("min_days"),
         func.max(time_diff_days).label("max_days"),
     ).filter(RFPO.approved_at.isnot(None), RFPO.deleted_at.is_(None))
     q = _apply_date_filter(q, from_dt, to_dt)
-    rows = q.group_by("month").order_by(month_label.desc()).limit(24).all()
+    rows = q.group_by("month").order_by(ml.desc()).limit(24).all()
 
     # Overall average
     overall_q = db.session.query(

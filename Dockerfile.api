@@ -28,6 +28,8 @@ COPY exceptions.py .
 COPY logging_config.py .
 COPY email_service.py .
 COPY pdf_generator.py .
+COPY ai_extractor.py .
+COPY status_constants.py .
 COPY api/ ./api/
 COPY templates/email/ ./templates/email/
 COPY static/po_files/ ./static/po_files/

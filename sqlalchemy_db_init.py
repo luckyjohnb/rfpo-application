@@ -40,6 +40,7 @@ from models import (
     Ticket,
     TicketComment,
     TicketAttachment,
+    AIUsageLog,
 )
 
 

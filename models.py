@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -233,6 +234,20 @@ class RFPO(db.Model):
     @property
     def is_deleted(self) -> bool:
         return self.deleted_at is not None
+
+    @property
+    def active_approval_instance(self):
+        """Get the current non-terminal approval instance, if any (BUG-0038)."""
+        if hasattr(self, 'approval_instances'):
+            for inst in self.approval_instances:
+                if inst.overall_status not in ("withdrawn", "refused", "error"):
+                    return inst
+        return None
+
+    @property
+    def approval_instance(self):
+        """Backward-compatible accessor — returns the active instance."""
+        return self.active_approval_instance
 
     def soft_delete(self) -> None:
         self.deleted_at = datetime.utcnow()
@@ -1948,7 +1963,7 @@ class RFPOApprovalInstance(db.Model):
     # Relationships
     rfpo = db.relationship(
         "RFPO", backref=db.backref(
-            "approval_instance", uselist=False, cascade="all, delete-orphan"
+            "approval_instances", lazy=True, cascade="all, delete-orphan"
         )
     )
     actions = db.relationship(
@@ -2003,12 +2018,12 @@ class RFPOApprovalInstance(db.Model):
         return [
             action
             for action in self.actions
-            if action.status in ["approved", "conditional", "refused"]
+            if action.status in ["approved", "conditional", "refused", "cancelled"]
         ]
 
     def is_complete(self):
         """Check if approval workflow is complete"""
-        return self.overall_status in ["approved", "refused"]
+        return self.overall_status in ["approved", "refused", "withdrawn", "error"]
 
     def check_completion_status(self):
         """Check if all actions are completed and determine final status"""
@@ -2030,6 +2045,28 @@ class RFPOApprovalInstance(db.Model):
 
         # If all actions are completed and none refused, it's approved
         return "approved"
+
+    def _resolve_orphaned_actions(self):
+        """Auto-complete pending actions that don't match the workflow structure.
+
+        This handles the limbo state where the pointer reaches the end of
+        stages but orphaned pending actions prevent completion (BUG-0040).
+        """
+        data = self.get_instance_data()
+        stages = data.get("stages", [])
+        valid_positions = set()
+        for stage in stages:
+            so = stage.get("stage_order")
+            for step in stage.get("steps", []):
+                valid_positions.add((so, step.get("step_order")))
+
+        for action in self.actions:
+            if action.status == "pending":
+                pos = (action.stage_order, action.step_order)
+                if pos not in valid_positions:
+                    action.status = "cancelled"
+                    action.completed_at = datetime.utcnow()
+                    action.comments = "[System] Auto-cancelled: orphaned action outside workflow structure."
 
     def advance_to_next_step(self):
         """Advance workflow to next step or stage, with proper completion logic.
@@ -2073,10 +2110,7 @@ class RFPOApprovalInstance(db.Model):
                         self.current_stage_order += 1
                         self.current_step_order = 1
                     else:
-                        final_status = self.check_completion_status()
-                        if final_status:
-                            self.overall_status = final_status
-                            self.completed_at = datetime.utcnow()
+                        self._finalize_at_end()
                 # else: still waiting for other approvers — don't move pointer
             else:
                 # Sequential stage: advance one step at a time
@@ -2092,11 +2126,28 @@ class RFPOApprovalInstance(db.Model):
                         self.current_stage_order += 1
                         self.current_step_order = 1
                     else:
-                        # Reached end of workflow structure - check completion again
-                        final_status = self.check_completion_status()
-                        if final_status:
-                            self.overall_status = final_status
-                            self.completed_at = datetime.utcnow()
+                        self._finalize_at_end()
+
+    def _finalize_at_end(self):
+        """Finalize workflow at the end of all stages with limbo guard (BUG-0040)."""
+        final_status = self.check_completion_status()
+        if final_status:
+            self.overall_status = final_status
+            self.completed_at = datetime.utcnow()
+        else:
+            # Limbo guard: attempt to resolve orphaned actions
+            self._resolve_orphaned_actions()
+            retry_status = self.check_completion_status()
+            if retry_status:
+                self.overall_status = retry_status
+                self.completed_at = datetime.utcnow()
+            else:
+                logging.getLogger(__name__).error(
+                    "Workflow %s stuck at end of stages — marking as error",
+                    self.instance_id,
+                )
+                self.overall_status = "error"
+                self.completed_at = datetime.utcnow()
 
     def to_dict(self):
         return {
@@ -2226,6 +2277,8 @@ class RFPOApprovalAction(db.Model):
 
     def complete_action(self, status, comments=None, conditions=None, approver_id=None):
         """Complete this approval action"""
+        if self.status != "pending":
+            raise ValueError(f"Action {self.action_id} is already {self.status}, cannot set to {status}")
         self.status = status
         self.comments = comments
         self.conditions = conditions
@@ -2658,3 +2711,43 @@ class TicketAttachment(db.Model):
 
     def __repr__(self):
         return f"<TicketAttachment {self.file_id}: {self.original_filename}>"
+
+
+class AIUsageLog(db.Model):
+    """Tracks Azure OpenAI API usage for budget enforcement."""
+
+    __tablename__ = "ai_usage_log"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    rfpo_id = db.Column(db.Integer, db.ForeignKey("rfpos.id"), nullable=True)
+    operation = db.Column(db.String(50), nullable=False)
+    model_name = db.Column(db.String(50), nullable=False)
+    prompt_tokens = db.Column(db.Integer, default=0)
+    completion_tokens = db.Column(db.Integer, default=0)
+    total_tokens = db.Column(db.Integer, default=0)
+    estimated_cost_usd = db.Column(db.Numeric(10, 6), default=0)
+    file_name = db.Column(db.String(256))
+    items_extracted = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    user = db.relationship("User", backref=db.backref("ai_usage_logs", lazy=True))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "rfpo_id": self.rfpo_id,
+            "operation": self.operation,
+            "model_name": self.model_name,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+            "estimated_cost_usd": float(self.estimated_cost_usd or 0),
+            "file_name": self.file_name,
+            "items_extracted": self.items_extracted,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def __repr__(self):
+        return f"<AIUsageLog {self.id}: {self.operation} ${float(self.estimated_cost_usd or 0):.4f}>"

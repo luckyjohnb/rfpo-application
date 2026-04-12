@@ -49,11 +49,18 @@
 
 <!-- Line Items Section -->
 <div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="fas fa-receipt"></i> Line Items <span class="badge bg-secondary" id="lineItemCount">0</span></h5>
-        <button class="btn btn-primary btn-sm" onclick="showAddForm()">
-            <i class="fas fa-plus"></i> Add Line Item
-        </button>
+    <div class="card-header">
+        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+            <h5 class="mb-0"><i class="fas fa-receipt"></i> Line Items <span class="badge bg-secondary" id="lineItemCount">0</span></h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-info btn-sm" onclick="showAiScanModal()">
+                    ✨ Add from AI
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="showAddForm()">
+                    <i class="fas fa-plus"></i> Add Line Item
+                </button>
+            </div>
+        </div>
     </div>
     <div class="card-body">
         <!-- Inline Add/Edit Form (hidden by default) -->
@@ -172,6 +179,100 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Scan Modal -->
+<div class="modal fade" id="aiScanModal" tabindex="-1" aria-labelledby="aiScanModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-fullscreen-md-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aiScanModalLabel">✨ AI Line Item Extraction</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Upload State -->
+                <div id="aiUploadState">
+                    <p class="text-muted mb-3">Upload a document (invoice, quote, PO) and AI will extract line items for you to review and import.</p>
+                    <div id="aiDropZone" class="border border-2 border-dashed rounded p-5 text-center bg-light"
+                         style="cursor: pointer;"
+                         onclick="document.getElementById('aiFileInput').click()">
+                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Drop file here or click to browse</h5>
+                        <p class="text-muted small mb-0">Supported: PDF, DOCX, XLSX, CSV, PNG, JPG (max 16 MB)</p>
+                        <input type="file" id="aiFileInput" class="d-none"
+                               accept=".pdf,.docx,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.gif,.webp,.tiff">
+                    </div>
+                    <div id="aiSelectedFile" class="mt-3 d-none">
+                        <div class="d-flex align-items-center justify-content-between bg-light rounded p-2">
+                            <span><i class="fas fa-file"></i> <span id="aiFileName"></span></span>
+                            <button class="btn btn-sm btn-outline-danger" onclick="clearAiFile()"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                    <div id="aiScanProgress" class="mt-3 d-none">
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%"></div>
+                        </div>
+                        <p class="text-center text-muted small mt-2"><i class="fas fa-spinner fa-spin"></i> Uploading &amp; analyzing document with AI...</p>
+                    </div>
+                </div>
+
+                <!-- Review State -->
+                <div id="aiReviewState" class="d-none">
+                    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+                        <div>
+                            <strong id="aiExtractedCount">0</strong> line items extracted
+                            <span id="aiWarningBadge" class="badge bg-warning text-dark ms-2 d-none"></span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllAiItems()">
+                                <i class="fas fa-check-double"></i> Toggle All
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="resetAiScan()">
+                                <i class="fas fa-redo"></i> Scan Another
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Desktop table view -->
+                    <div class="d-none d-md-block">
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover table-sm" id="aiItemsTable">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox" id="aiSelectAll" checked onchange="toggleAllAiItems()"></th>
+                                        <th>Description</th>
+                                        <th style="width: 80px;">Qty</th>
+                                        <th style="width: 120px;">Unit Price</th>
+                                        <th style="width: 120px;" class="text-end">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="aiItemsBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Mobile card view -->
+                    <div class="d-md-none" id="aiItemsCards" style="max-height: 50vh; overflow-y: auto;"></div>
+
+                    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mt-3 pt-3 border-top">
+                        <div>
+                            <span class="text-muted">Selected total:</span>
+                            <strong id="aiSelectedTotal" class="fs-5 text-primary ms-2">$0.00</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" id="aiScanBtn" onclick="uploadForAiScan()" disabled>
+                    ✨ Scan Document
+                </button>
+                <button type="button" class="btn btn-primary d-none" id="aiImportBtn" onclick="importSelectedItems()">
+                    <i class="fas fa-file-import"></i> Import Selected
+                </button>
             </div>
         </div>
     </div>
@@ -398,7 +499,7 @@
                 <div class="text-center py-5">
                     <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
                     <h5 class="text-muted">No line items yet</h5>
-                    <p class="text-muted mb-0">Use the <strong>+ Add Line Item</strong> button above to get started.</p>
+                    <p class="text-muted mb-0">Use <strong>+ Add Line Item</strong> to add manually, or <strong>✨ Add from AI</strong> to extract from a document.</p>
                 </div>`;
             document.getElementById('totalsSummary').style.display = 'none';
             return;
@@ -498,6 +599,319 @@
                 saveLineItem();
             }
         });
+
+        // AI file input change handler
+        document.getElementById('aiFileInput').addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                if (file.size > 16 * 1024 * 1024) {
+                    showAlert('File must be under 16 MB', 'warning');
+                    this.value = '';
+                    return;
+                }
+                document.getElementById('aiFileName').textContent = file.name;
+                document.getElementById('aiSelectedFile').classList.remove('d-none');
+                document.getElementById('aiScanBtn').disabled = false;
+            }
+        });
+
+        // Drag and drop support
+        const dropZone = document.getElementById('aiDropZone');
+        ['dragenter', 'dragover'].forEach(evt => {
+            dropZone.addEventListener(evt, function(e) {
+                e.preventDefault();
+                this.classList.add('border-info', 'bg-info', 'bg-opacity-10');
+            });
+        });
+        ['dragleave', 'drop'].forEach(evt => {
+            dropZone.addEventListener(evt, function(e) {
+                e.preventDefault();
+                this.classList.remove('border-info', 'bg-info', 'bg-opacity-10');
+            });
+        });
+        dropZone.addEventListener('drop', function(e) {
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                const input = document.getElementById('aiFileInput');
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change'));
+            }
+        });
     });
+
+    // ─── AI Scan ─────────────────────────────────────────────────────
+
+    let extractedItems = [];
+    let aiScanAbortController = null;
+
+    function showAiScanModal() {
+        resetAiScan();
+        const modal = new bootstrap.Modal(document.getElementById('aiScanModal'));
+        modal.show();
+    }
+
+    function clearAiFile() {
+        document.getElementById('aiFileInput').value = '';
+        document.getElementById('aiSelectedFile').classList.add('d-none');
+        document.getElementById('aiScanBtn').disabled = true;
+    }
+
+    function resetAiScan() {
+        clearAiFile();
+        extractedItems = [];
+        document.getElementById('aiUploadState').classList.remove('d-none');
+        document.getElementById('aiReviewState').classList.add('d-none');
+        document.getElementById('aiScanProgress').classList.add('d-none');
+        document.getElementById('aiDropZone').style.display = '';
+        document.getElementById('aiScanBtn').classList.remove('d-none');
+        document.getElementById('aiScanBtn').disabled = true;
+        document.getElementById('aiScanBtn').innerHTML = '✨ Scan Document';
+        document.getElementById('aiImportBtn').classList.add('d-none');
+    }
+
+    async function uploadForAiScan() {
+        const fileInput = document.getElementById('aiFileInput');
+        const file = fileInput.files[0];
+        if (!file) { showAlert('Please select a file first', 'warning'); return; }
+
+        const scanBtn = document.getElementById('aiScanBtn');
+        scanBtn.disabled = true;
+        scanBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+        document.getElementById('aiScanProgress').classList.remove('d-none');
+        document.getElementById('aiDropZone').style.display = 'none';
+        document.getElementById('aiSelectedFile').classList.add('d-none');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        aiScanAbortController = new AbortController();
+        const timeoutId = setTimeout(() => aiScanAbortController.abort(), 90000);
+
+        try {
+            const csrfToken = getCsrfToken();
+            const response = await fetch(`/api/rfpos/${rfpoId}/ai-scan/upload`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-CSRFToken': csrfToken },
+                signal: aiScanAbortController.signal
+            });
+
+            const data = await response.json();
+
+            if (response.status === 429) {
+                showAlert('AI budget limit reached. Contact your administrator.', 'warning');
+                resetAiScan();
+                return;
+            }
+
+            if (!response.ok || !data.success) {
+                showAlert(data.message || 'AI scan failed', 'danger');
+                resetAiScan();
+                return;
+            }
+
+            extractedItems = (data.items || []).map((item, i) => ({
+                ...item,
+                _idx: i,
+                _selected: true,
+                quantity: parseInt(item.quantity) || 1,
+                unit_price: parseFloat(item.unit_price) || 0
+            }));
+
+            displayExtractedItems(extractedItems, data.warning);
+
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                showAlert('AI scan timed out. Try a smaller document.', 'warning');
+            } else {
+                showAlert(`AI scan error: ${err.message}`, 'danger');
+            }
+            resetAiScan();
+        } finally {
+            clearTimeout(timeoutId);
+            aiScanAbortController = null;
+        }
+    }
+
+    function displayExtractedItems(items, warning) {
+        document.getElementById('aiUploadState').classList.add('d-none');
+        document.getElementById('aiReviewState').classList.remove('d-none');
+        document.getElementById('aiScanBtn').classList.add('d-none');
+        document.getElementById('aiImportBtn').classList.remove('d-none');
+        document.getElementById('aiExtractedCount').textContent = items.length;
+
+        if (warning) {
+            const badge = document.getElementById('aiWarningBadge');
+            badge.textContent = warning;
+            badge.classList.remove('d-none');
+        }
+
+        // Desktop table
+        const tbody = document.getElementById('aiItemsBody');
+        tbody.innerHTML = items.map((item, i) => `
+            <tr>
+                <td><input type="checkbox" class="ai-item-check" data-idx="${i}" checked onchange="onAiItemToggle()"></td>
+                <td><input type="text" class="form-control form-control-sm ai-desc" data-idx="${i}" value="${escapeHtml(item.description)}"></td>
+                <td><input type="number" class="form-control form-control-sm ai-qty" data-idx="${i}" value="${item.quantity}" min="1" onchange="onAiItemEdit(${i})"></td>
+                <td><input type="number" class="form-control form-control-sm ai-price" data-idx="${i}" value="${item.unit_price}" min="0" step="0.01" onchange="onAiItemEdit(${i})"></td>
+                <td class="text-end fw-bold ai-total" data-idx="${i}">$${(item.quantity * item.unit_price).toFixed(2)}</td>
+            </tr>
+        `).join('');
+
+        // Mobile card view
+        const cardsContainer = document.getElementById('aiItemsCards');
+        cardsContainer.innerHTML = items.map((item, i) => `
+            <div class="card mb-2 ai-card" data-idx="${i}">
+                <div class="card-body p-2">
+                    <div class="d-flex align-items-start gap-2 mb-2">
+                        <input type="checkbox" class="ai-item-check-m form-check-input mt-1" data-idx="${i}" checked onchange="onAiItemToggle()">
+                        <input type="text" class="form-control form-control-sm ai-desc-m" data-idx="${i}" value="${escapeHtml(item.description)}">
+                    </div>
+                    <div class="d-flex gap-2">
+                        <div class="flex-fill">
+                            <label class="form-label small text-muted mb-0">Qty</label>
+                            <input type="number" class="form-control form-control-sm ai-qty-m" data-idx="${i}" value="${item.quantity}" min="1" onchange="onAiItemEditMobile(${i})">
+                        </div>
+                        <div class="flex-fill">
+                            <label class="form-label small text-muted mb-0">Unit Price</label>
+                            <input type="number" class="form-control form-control-sm ai-price-m" data-idx="${i}" value="${item.unit_price}" min="0" step="0.01" onchange="onAiItemEditMobile(${i})">
+                        </div>
+                        <div class="text-end" style="min-width: 80px;">
+                            <label class="form-label small text-muted mb-0">Total</label>
+                            <div class="fw-bold ai-total-m" data-idx="${i}">$${(item.quantity * item.unit_price).toFixed(2)}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        updateAiSelectedTotal();
+    }
+
+    function onAiItemEdit(idx) {
+        const qty = parseInt(document.querySelector(`.ai-qty[data-idx="${idx}"]`).value) || 0;
+        const price = parseFloat(document.querySelector(`.ai-price[data-idx="${idx}"]`).value) || 0;
+        extractedItems[idx].quantity = qty;
+        extractedItems[idx].unit_price = price;
+        document.querySelector(`.ai-total[data-idx="${idx}"]`).textContent = '$' + (qty * price).toFixed(2);
+        // Sync mobile
+        const mQty = document.querySelector(`.ai-qty-m[data-idx="${idx}"]`);
+        const mPrice = document.querySelector(`.ai-price-m[data-idx="${idx}"]`);
+        if (mQty) mQty.value = qty;
+        if (mPrice) mPrice.value = price;
+        const mTotal = document.querySelector(`.ai-total-m[data-idx="${idx}"]`);
+        if (mTotal) mTotal.textContent = '$' + (qty * price).toFixed(2);
+        updateAiSelectedTotal();
+    }
+
+    function onAiItemEditMobile(idx) {
+        const qty = parseInt(document.querySelector(`.ai-qty-m[data-idx="${idx}"]`).value) || 0;
+        const price = parseFloat(document.querySelector(`.ai-price-m[data-idx="${idx}"]`).value) || 0;
+        extractedItems[idx].quantity = qty;
+        extractedItems[idx].unit_price = price;
+        document.querySelector(`.ai-total-m[data-idx="${idx}"]`).textContent = '$' + (qty * price).toFixed(2);
+        // Sync desktop
+        const dQty = document.querySelector(`.ai-qty[data-idx="${idx}"]`);
+        const dPrice = document.querySelector(`.ai-price[data-idx="${idx}"]`);
+        if (dQty) dQty.value = qty;
+        if (dPrice) dPrice.value = price;
+        const dTotal = document.querySelector(`.ai-total[data-idx="${idx}"]`);
+        if (dTotal) dTotal.textContent = '$' + (qty * price).toFixed(2);
+        updateAiSelectedTotal();
+    }
+
+    function onAiItemToggle() {
+        // Sync checkbox state between desktop and mobile views
+        document.querySelectorAll('.ai-item-check').forEach(cb => {
+            const idx = cb.dataset.idx;
+            extractedItems[idx]._selected = cb.checked;
+            const mobileCb = document.querySelector(`.ai-item-check-m[data-idx="${idx}"]`);
+            if (mobileCb) mobileCb.checked = cb.checked;
+        });
+        document.querySelectorAll('.ai-item-check-m').forEach(cb => {
+            const idx = cb.dataset.idx;
+            extractedItems[idx]._selected = cb.checked;
+            const desktopCb = document.querySelector(`.ai-item-check[data-idx="${idx}"]`);
+            if (desktopCb) desktopCb.checked = cb.checked;
+        });
+        updateAiSelectedTotal();
+    }
+
+    function toggleAllAiItems() {
+        const allChecked = extractedItems.every(item => item._selected);
+        const newState = !allChecked;
+        extractedItems.forEach(item => item._selected = newState);
+        document.querySelectorAll('.ai-item-check, .ai-item-check-m').forEach(cb => cb.checked = newState);
+        const selectAll = document.getElementById('aiSelectAll');
+        if (selectAll) selectAll.checked = newState;
+        updateAiSelectedTotal();
+    }
+
+    function updateAiSelectedTotal() {
+        const selected = extractedItems.filter(item => item._selected);
+        const total = selected.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+        document.getElementById('aiSelectedTotal').textContent = '$' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        const importBtn = document.getElementById('aiImportBtn');
+        if (selected.length === 0) {
+            importBtn.disabled = true;
+            importBtn.innerHTML = '<i class="fas fa-file-import"></i> Import Selected';
+        } else {
+            importBtn.disabled = false;
+            importBtn.innerHTML = `<i class="fas fa-file-import"></i> Import ${selected.length} Item${selected.length !== 1 ? 's' : ''}`;
+        }
+    }
+
+    async function importSelectedItems() {
+        const selected = extractedItems.filter(item => item._selected);
+        if (selected.length === 0) {
+            showAlert('No items selected for import', 'warning');
+            return;
+        }
+
+        const importBtn = document.getElementById('aiImportBtn');
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const item of selected) {
+            // Read latest value from the visible input (desktop or mobile)
+            const descInput = document.querySelector(`.ai-desc[data-idx="${item._idx}"]`) ||
+                              document.querySelector(`.ai-desc-m[data-idx="${item._idx}"]`);
+            const description = descInput ? descInput.value.trim() : item.description;
+
+            if (!description) { failCount++; continue; }
+
+            try {
+                const response = await makeApiCall(`/api/rfpos/${rfpoId}/line-items`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        description: description,
+                        quantity: item.quantity,
+                        unit_price: item.unit_price,
+                        is_capital_equipment: false
+                    })
+                });
+                if (response.success) { successCount++; } else { failCount++; }
+            } catch (e) {
+                failCount++;
+            }
+        }
+
+        // Close modal and reload
+        const modal = bootstrap.Modal.getInstance(document.getElementById('aiScanModal'));
+        if (modal) modal.hide();
+
+        if (successCount > 0) {
+            showAlert(`Imported ${successCount} line item${successCount !== 1 ? 's' : ''} from AI scan${failCount > 0 ? ` (${failCount} failed)` : ''}`, 'success');
+            await loadRfpoData();
+        } else {
+            showAlert('Failed to import line items', 'danger');
+        }
+    }
 </script>
 {% endblock %}

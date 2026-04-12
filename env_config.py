@@ -197,6 +197,12 @@ class Config:
     AZURE_RESOURCE_GROUP = get_env("AZURE_RESOURCE_GROUP")
     AZURE_LOCATION = get_env("AZURE_LOCATION", "eastus")
 
+    # Azure OpenAI
+    AZURE_OPENAI_ENDPOINT = get_env("AZURE_OPENAI_ENDPOINT")
+    AZURE_OPENAI_KEY = get_env("AZURE_OPENAI_KEY")
+    AZURE_OPENAI_DEPLOYMENT = get_env("AZURE_OPENAI_DEPLOYMENT") or "gpt-4o"
+    AZURE_OPENAI_BUDGET_LIMIT = float(get_env("AZURE_OPENAI_BUDGET_LIMIT") or "100.00")
+
 
 # Create singleton instance
 config = Config()

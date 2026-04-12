@@ -17,6 +17,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from error_handlers import register_error_handlers
 from logging_config import setup_logging
 from user_app.api_client import init_api_client
+from user_app.auth_provider import init_auth_provider
 from user_app.context_processors import init_context_processors
 
 
@@ -76,6 +77,33 @@ def create_user_app():
     # ── API client (DIP) ────────────────────────────────────────────
     init_api_client(app)
 
+    # ── Auth provider (DIP) ─────────────────────────────────────────
+    init_auth_provider(app)
+
+    # ── Security headers (OCP — CSP sources configurable via env) ──
+    _csp_extra_script = os.environ.get("CSP_EXTRA_SCRIPT_SRC", "")
+    _csp_extra_style = os.environ.get("CSP_EXTRA_STYLE_SRC", "")
+    _csp_extra_font = os.environ.get("CSP_EXTRA_FONT_SRC", "")
+    _csp_connect_base = os.environ.get(
+        "API_BASE_URL", "http://127.0.0.1:5002/api"
+    ).rsplit("/api", 1)[0]
+
+    _csp_policy = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'"
+        " https://cdn.jsdelivr.net"
+        f"{' ' + _csp_extra_script if _csp_extra_script else ''}; "
+        "style-src 'self' 'unsafe-inline'"
+        " https://cdn.jsdelivr.net"
+        " https://cdnjs.cloudflare.com"
+        f"{' ' + _csp_extra_style if _csp_extra_style else ''}; "
+        "font-src 'self'"
+        " https://cdnjs.cloudflare.com"
+        f"{' ' + _csp_extra_font if _csp_extra_font else ''}; "
+        "img-src 'self' data:; "
+        f"connect-src 'self' {_csp_connect_base}"
+    )
+
     # ── Security headers ────────────────────────────────────────────
     @app.after_request
     def set_security_headers(response):
@@ -85,21 +113,7 @@ def create_user_app():
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'"
-            " https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline'"
-            " https://cdn.jsdelivr.net"
-            " https://cdnjs.cloudflare.com; "
-            "font-src 'self'"
-            " https://cdnjs.cloudflare.com; "
-            "img-src 'self' data:; "
-            "connect-src 'self' "
-            + os.environ.get(
-                "API_BASE_URL", "http://127.0.0.1:5002/api"
-            ).rsplit("/api", 1)[0]
-        )
+        response.headers["Content-Security-Policy"] = _csp_policy
         return response
 
     # ── Theme toggle cookie ─────────────────────────────────────────
@@ -139,17 +153,19 @@ def create_user_app():
     from user_app.blueprints.notification_proxy import notification_proxy_bp
     from user_app.blueprints.pages import pages_bp
     from user_app.blueprints.rfpo_proxy import rfpo_proxy_bp
+    from user_app.blueprints.saml import saml_bp
     from user_app.blueprints.team_proxy import team_proxy_bp
     from user_app.blueprints.ticket_proxy import ticket_proxy_bp
     from user_app.blueprints.user_proxy import user_proxy_bp
 
     app.register_blueprint(auth_bp)
 
-    # CSRF exemption — auth blueprint handles login (no session yet),
-    # SAML ACS/SLS (external IdP POST), and logout/token proxies.
-    # Must exempt at blueprint level; string-based exempt() does not match
-    # the module.name format used by Flask-WTF ≥1.2 in before_request.
+    # CSRF exemption — auth blueprint handles login (no session yet)
+    # and logout/token proxies.  SAML blueprint handles external IdP
+    # POSTs (ACS/SLS) which carry their own assertion signatures.
     csrf.exempt(auth_bp)
+    csrf.exempt(saml_bp)
+    app.register_blueprint(saml_bp)
     app.register_blueprint(pages_bp)
     app.register_blueprint(rfpo_proxy_bp)
     app.register_blueprint(file_proxy_bp)

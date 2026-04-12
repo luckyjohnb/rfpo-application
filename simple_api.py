@@ -46,6 +46,7 @@ from models import (
     Ticket,
     TicketComment,
     TicketAttachment,
+    AIUsageLog,
 )
 import sys
 
@@ -142,6 +143,13 @@ def _error_response(e, status_code=500):
     return jsonify({"success": False, "message": "An internal error occurred"}), status_code
 
 
+def _query_for_update(query):
+    """Apply SELECT ... FOR UPDATE on PostgreSQL; no-op on SQLite (BUG-0033)."""
+    if 'sqlite' not in str(db.engine.url):
+        return query.with_for_update()
+    return query
+
+
 def _get_authorized_approver_ids(instance, action):
     """Return the set of user record_ids authorized to execute this action.
 
@@ -154,6 +162,12 @@ def _get_authorized_approver_ids(instance, action):
     authorized = {action.approver_id}
     try:
         data = instance.get_instance_data()
+        if not isinstance(data, dict) or not isinstance(data.get("stages"), list):
+            app.logger.warning(
+                "Malformed instance_data for instance %s — backup approver not resolved",
+                getattr(instance, 'instance_id', '?'),
+            )
+            return authorized
         for stage in data.get("stages", []):
             if stage.get("stage_order") == action.stage_order:
                 for step in stage.get("steps", []):
@@ -163,8 +177,16 @@ def _get_authorized_approver_ids(instance, action):
                             authorized.add(backup_id)
                         break
                 break
-    except Exception:
-        pass  # If snapshot is corrupt, only primary approver is authorized
+    except Exception as e:
+        app.logger.error(
+            "Failed to resolve backup approver from instance_data — "
+            "instance_id=%s, action_id=%s, stage_order=%s, step_order=%s: %s",
+            getattr(instance, 'instance_id', '?'),
+            getattr(action, 'action_id', '?'),
+            getattr(action, 'stage_order', '?'),
+            getattr(action, 'step_order', '?'),
+            str(e),
+        )
     return authorized
 
 
@@ -1240,16 +1262,34 @@ def take_approval_action(action_id):
         user = request.current_user
         data = request.get_json()
 
-        # Find the action
-        action = RFPOApprovalAction.query.filter_by(action_id=action_id).first()
+        # Find the action with row-level lock (BUG-0033: prevent concurrent approvals)
+        action = _query_for_update(
+            RFPOApprovalAction.query.filter_by(action_id=action_id)
+        ).first()
         if not action:
             return (
                 jsonify({"success": False, "message": "Approval action not found"}),
                 404,
             )
 
+        # Lock the instance too (BUG-0033)
+        instance = _query_for_update(
+            RFPOApprovalInstance.query.filter_by(id=action.instance_id)
+        ).first()
+
+        # BUG-0034: Guard against actions on already-completed workflows
+        if instance.is_complete():
+            return (
+                jsonify(
+                    {"success": False,
+                     "message": f"This RFPO has already been {instance.overall_status}. "
+                                "No further actions can be taken."}
+                ),
+                409,
+            )
+
         # Check if user is authorized (primary approver or backup only)
-        authorized_ids = _get_authorized_approver_ids(action.instance, action)
+        authorized_ids = _get_authorized_approver_ids(instance, action)
         if user.record_id not in authorized_ids:
             app.logger.warning(
                 "SECURITY: User %s (record_id=%s) attempted to approve action %s "
@@ -1275,7 +1315,6 @@ def take_approval_action(action_id):
 
         # Enforce sequential ordering — action must match the current stage pointer.
         # For parallel stages, any step within the stage is allowed.
-        instance = action.instance
         if action.stage_order != instance.current_stage_order:
             return (
                 jsonify(
@@ -1314,10 +1353,18 @@ def take_approval_action(action_id):
         action.complete_action(status, comments, conditions if status == "conditional" else None, user.record_id)
 
         # Update instance status
-        instance = action.instance
         if status == "refused":
             instance.overall_status = "refused"
             instance.completed_at = datetime.utcnow()
+
+            # BUG-0034: Cancel all remaining pending actions in this workflow
+            remaining_pending = RFPOApprovalAction.query.filter_by(
+                instance_id=instance.id, status="pending"
+            ).all()
+            for pending_action in remaining_pending:
+                pending_action.status = "cancelled"
+                pending_action.completed_at = datetime.utcnow()
+                pending_action.comments = "[System] Auto-cancelled: RFPO was refused by another approver."
 
             # Update RFPO status
             if instance.rfpo:
@@ -1401,11 +1448,11 @@ def take_approval_action(action_id):
                 if instance.rfpo else {}
             )
 
-            # Notify requestor if workflow completed
+            # Notify requestor if workflow completed (BUG-0044: use requestor_id, not created_by)
             if _overall_status in ("approved", "refused") and instance.rfpo:
                 requestor = User.query.filter_by(
-                    record_id=instance.rfpo.created_by
-                ).first() if instance.rfpo.created_by else None
+                    record_id=instance.rfpo.requestor_id
+                ).first() if instance.rfpo.requestor_id else None
                 if requestor and requestor.email:
                     email_tasks.append((
                         requestor.email, requestor.get_display_name(),
@@ -1557,12 +1604,31 @@ def bulk_approval_action():
 
         for action_id in action_ids:
             try:
-                action = RFPOApprovalAction.query.filter_by(action_id=action_id).first()
+                # BUG-0033: Row locking for concurrent access safety
+                action = _query_for_update(
+                    RFPOApprovalAction.query.filter_by(action_id=action_id)
+                ).first()
                 if not action:
                     results["failed"] += 1
                     results["errors"].append(f"{action_id}: not found")
                     continue
-                bulk_authorized = _get_authorized_approver_ids(action.instance, action)
+
+                # BUG-0033: Lock the instance row too
+                bulk_instance = _query_for_update(
+                    RFPOApprovalInstance.query.filter_by(id=action.instance_id)
+                ).first()
+                if not bulk_instance:
+                    results["failed"] += 1
+                    results["errors"].append(f"{action_id}: instance not found")
+                    continue
+
+                # BUG-0034: Terminal state guard
+                if bulk_instance.is_complete():
+                    results["failed"] += 1
+                    results["errors"].append(f"{action_id}: workflow already completed")
+                    continue
+
+                bulk_authorized = _get_authorized_approver_ids(bulk_instance, action)
                 if user.record_id not in bulk_authorized:
                     results["failed"] += 1
                     results["errors"].append(f"{action_id}: not authorized")
@@ -1573,7 +1639,6 @@ def bulk_approval_action():
                     continue
 
                 # Enforce sequential ordering (parallel stages allow any step)
-                bulk_instance = action.instance
                 if action.stage_order != bulk_instance.current_stage_order:
                     results["failed"] += 1
                     results["errors"].append(f"{action_id}: step not yet active")
@@ -1587,13 +1652,25 @@ def bulk_approval_action():
 
                 action.complete_action(status, comments, None, user.record_id)
 
-                instance = action.instance
+                instance = bulk_instance
                 if status == "refused":
                     instance.overall_status = "refused"
                     instance.completed_at = datetime.utcnow()
                     if instance.rfpo:
                         instance.rfpo.status = "Refused"
                         instance.rfpo.updated_by = user.get_display_name()
+
+                    # BUG-0034: Cancel remaining pending actions
+                    remaining_pending = RFPOApprovalAction.query.filter_by(
+                        instance_id=instance.id, status="pending"
+                    ).all()
+                    for rp in remaining_pending:
+                        rp.status = "cancelled"
+                        rp.completed_at = datetime.utcnow()
+                        rp.comments = (
+                            (rp.comments + "\n" if rp.comments else "")
+                            + f"[System] Cancelled: RFPO refused by {user.get_display_name()}."
+                        )
                 else:
                     instance.advance_to_next_step()
                     if instance.overall_status == "approved" and instance.rfpo:
@@ -1627,10 +1704,10 @@ def bulk_approval_action():
                 _rfpo_ctx = {'rfpo_id': inst.rfpo.id, 'project_id': inst.rfpo.project_id,
                              'consortium_id': inst.rfpo.consortium_id, 'team_id': inst.rfpo.team_id}
                 if inst.overall_status in ("approved", "refused"):
-                    # Workflow completed — notify requestor
+                    # BUG-0044: Workflow completed — notify requestor (not creator)
                     requestor = User.query.filter_by(
-                        record_id=inst.rfpo.created_by
-                    ).first() if inst.rfpo.created_by else None
+                        record_id=inst.rfpo.requestor_id
+                    ).first() if inst.rfpo.requestor_id else None
                     if requestor and requestor.email:
                         bulk_email_tasks.append((
                             requestor.email, requestor.get_display_name(),
@@ -1739,6 +1816,11 @@ def submit_for_approval(rfpo_id):
 
         rfpo = RFPO.query.get_or_404(rfpo_id)
 
+        # BUG-0042: Lock the RFPO row to prevent concurrent submissions
+        rfpo = _query_for_update(
+            RFPO.query.filter_by(id=rfpo_id)
+        ).first_or_404()
+
         # Only Draft RFPOs can be submitted
         if rfpo.status not in ("Draft", "Refused"):
             return jsonify({
@@ -1756,18 +1838,17 @@ def submit_for_approval(rfpo_id):
                 "validation": validation,
             }), 400
 
-        # Check if there's already an active approval instance
-        existing = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
-        if existing and existing.overall_status not in ("refused",):
+        # BUG-0042: Check for existing active (non-terminal) approval instance
+        existing_active = None
+        for inst in RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).all():
+            if inst.overall_status not in ("refused", "withdrawn", "error"):
+                existing_active = inst
+                break
+        if existing_active:
             return jsonify({
                 "success": False,
                 "message": "This RFPO already has an active approval workflow"
-            }), 400
-
-        # If re-submitting after refusal, remove old instance
-        if existing and existing.overall_status == "refused":
-            db.session.delete(existing)
-            db.session.flush()
+            }), 409
 
         # Find the appropriate workflow template
         # Cumulative: collect ALL applicable workflows and stages across project→team→consortium
@@ -2083,21 +2164,42 @@ def withdraw_approval(rfpo_id):
                 "message": f"Cannot withdraw RFPO with status '{rfpo.status}'"
             }), 400
 
-        instance = RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).first()
+        # BUG-0038: Find the active (non-terminal) instance
+        instance = None
+        for inst in RFPOApprovalInstance.query.filter_by(rfpo_id=rfpo.id).all():
+            if inst.overall_status not in ("refused", "withdrawn", "error"):
+                instance = inst
+                break
         if not instance:
             return jsonify({
-                "success": False, "message": "No approval instance found"
+                "success": False, "message": "No active approval instance found"
             }), 404
 
-        # Delete the instance (cascades to actions)
-        db.session.delete(instance)
+        # BUG-0038: Soft-delete — mark as withdrawn instead of hard-deleting
+        instance.overall_status = "withdrawn"
+        instance.completed_at = datetime.utcnow()
+        instance.updated_at = datetime.utcnow()
+
+        # Cancel any pending actions (preserve completed ones)
+        for action in instance.actions:
+            if action.status == "pending":
+                action.status = "cancelled"
+                action.completed_at = datetime.utcnow()
+                action.updated_at = datetime.utcnow()
+                action.comments = (
+                    (action.comments + "\n" if action.comments else "")
+                    + "[System] Cancelled due to RFPO withdrawal."
+                )
 
         # Reset RFPO status to Draft
         rfpo.status = "Draft"
+        # BUG-0039: Clear stale approval fields
+        rfpo.approved_at = None
+        rfpo.po_number = None
         rfpo.updated_by = user.get_display_name()
         rfpo.updated_at = datetime.utcnow()
 
-        # Audit trail
+        # Audit trail with action snapshot
         audit = AuditLog(
             user_id=user.id,
             user_email=user.email,
@@ -2110,6 +2212,16 @@ def withdraw_approval(rfpo_id):
             "rfpo_id": rfpo.rfpo_id,
             "instance_id": instance.instance_id,
             "reason": request.get_json().get("reason", "") if request.is_json else "",
+            "actions_at_withdrawal": [
+                {
+                    "action_id": a.action_id,
+                    "step_name": a.step_name,
+                    "approver_name": a.approver_name,
+                    "status": a.status,
+                    "completed_at": a.completed_at.isoformat() if a.completed_at else None,
+                }
+                for a in instance.actions
+            ],
         })
         db.session.add(audit)
 
@@ -2165,12 +2277,36 @@ def reassign_approval_action(action_id):
 
         old_approver_id = action.approver_id
         old_approver_name = action.approver_name
+        old_due_date = action.due_date
 
         # Reassign
         action.approver_id = new_approver.record_id
         action.approver_name = new_approver.get_display_name()
         action.assigned_at = datetime.utcnow()
         action.updated_at = datetime.utcnow()
+
+        # BUG-0036: Recalculate due_date from instance_data snapshot
+        timeout_days = 5  # default fallback
+        try:
+            instance_data = action.instance.get_instance_data()
+            for stage in instance_data.get("stages", []):
+                if stage.get("stage_order") == action.stage_order:
+                    for step in stage.get("steps", []):
+                        if step.get("step_order") == action.step_order:
+                            timeout_days = step.get("timeout_days", 5)
+                            break
+                    break
+        except Exception as e:
+            app.logger.warning("Could not resolve timeout_days for reassignment: %s", e)
+
+        action.due_date = action.assigned_at + timedelta(days=timeout_days)
+
+        # Reset reminder/escalation state for fresh assignment
+        action.last_reminder_sent_utc = None
+        action.reminder_count = 0
+        action.is_escalated = False
+        action.escalated_at = None
+        action.escalation_reason = None
 
         # Audit trail
         audit = AuditLog(
@@ -2189,26 +2325,28 @@ def reassign_approval_action(action_id):
             "new_approver_id": new_approver.record_id,
             "new_approver_name": new_approver.get_display_name(),
             "reason": reason,
+            "old_due_date": old_due_date.isoformat() if old_due_date else None,
+            "new_due_date": action.due_date.isoformat() if action.due_date else None,
+            "timeout_days": timeout_days,
         })
         db.session.add(audit)
 
+        # BUG-0037: Snapshot email values before commit (safe outside request context)
+        email_task = None
+        rfpo = action.instance.rfpo
+        if new_approver.email and rfpo:
+            email_task = (
+                new_approver.email, new_approver.get_display_name(),
+                rfpo.rfpo_id, f"Reassigned: {action.step_name}",
+                rfpo.id,
+                {'rfpo_id': rfpo.id, 'project_id': rfpo.project_id,
+                 'consortium_id': rfpo.consortium_id, 'team_id': rfpo.team_id},
+            )
+
         db.session.commit()
 
-        # Notify new approver (non-blocking)
-        try:
-            from email_service import send_approval_notification
-            rfpo = action.instance.rfpo
-            if new_approver.email and rfpo:
-                send_approval_notification(
-                    new_approver.email, new_approver.get_display_name(),
-                    rfpo.rfpo_id, f"Reassigned: {action.step_name}",
-                    rfpo_db_id=rfpo.id,
-                    context={'rfpo_id': rfpo.id, 'project_id': rfpo.project_id, 'consortium_id': rfpo.consortium_id, 'team_id': rfpo.team_id},
-                )
-        except Exception as email_err:
-            app.logger.warning(f"Email notification failed: {email_err}")
-
-        return jsonify({
+        # Build response before firing background email
+        response_data = {
             "success": True,
             "message": f"Action reassigned from {old_approver_name} to {new_approver.get_display_name()}",
             "action": {
@@ -2216,7 +2354,26 @@ def reassign_approval_action(action_id):
                 "approver_id": action.approver_id,
                 "approver_name": action.approver_name,
             },
-        })
+        }
+
+        # Fire email in background thread (non-blocking)
+        if email_task:
+            def _send_reassign_email(task):
+                try:
+                    from email_service import send_approval_notification
+                    email, name, rfpo_id_str, subj, db_id, ctx = task
+                    send_approval_notification(
+                        email, name, rfpo_id_str, subj,
+                        rfpo_db_id=db_id, context=ctx,
+                    )
+                except Exception as e:
+                    logging.getLogger(__name__).warning(
+                        "Background reassign email to %s failed: %s", task[0], e
+                    )
+
+            threading.Thread(target=_send_reassign_email, args=(email_task,), daemon=True).start()
+
+        return jsonify(response_data)
 
     except Exception as e:
         db.session.rollback()
@@ -4111,6 +4268,224 @@ def upload_rfpo_file(rfpo_id):
 
     except Exception as e:
         db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/rfpos/<int:rfpo_id>/ai-scan/upload", methods=["POST"])
+@require_auth
+def ai_scan_upload(rfpo_id):
+    """Upload a document and extract line items using Azure OpenAI GPT-4o."""
+    try:
+        from ai_extractor import check_budget, extract_line_items, calculate_cost
+
+        # 1. Check AI budget
+        within_budget, spent, limit = check_budget()
+        if not within_budget:
+            return jsonify({
+                "success": False,
+                "message": f"AI scanning budget exhausted. ${spent:.2f} of ${limit:.2f} used. Contact your administrator.",
+                "budget_exceeded": True,
+                "total_spent": float(spent),
+                "budget_limit": float(limit),
+            }), 429
+
+        # 2. Validate RFPO exists
+        rfpo = RFPO.query.get(rfpo_id)
+        if not rfpo:
+            return jsonify({"success": False, "message": "RFPO not found"}), 404
+
+        # 3. Validate user access
+        user = request.current_user
+        user_perms = user.get_permissions() or []
+        is_admin = "RFPO_ADMIN" in user_perms or "GOD" in user_perms
+        is_requestor = rfpo.requestor_id == user.record_id
+        if not is_admin and not is_requestor:
+            return jsonify({"success": False, "message": "Access denied"}), 403
+
+        # 4. Validate RFPO status
+        locked_statuses = ("Pending Approval", "Approved", "Completed")
+        if rfpo.status in locked_statuses:
+            return jsonify({
+                "success": False,
+                "message": f"Cannot scan documents while RFPO status is '{rfpo.status}'",
+            }), 403
+
+        # 5. Validate file upload
+        if "file" not in request.files:
+            return jsonify({"success": False, "message": "No file provided"}), 400
+
+        file = request.files["file"]
+        if not file.filename:
+            return jsonify({"success": False, "message": "No file selected"}), 400
+
+        from werkzeug.utils import secure_filename
+        import uuid
+        import mimetypes
+
+        original_filename = secure_filename(file.filename)
+        if not original_filename:
+            return jsonify({"success": False, "message": "Invalid filename"}), 400
+
+        file_extension = os.path.splitext(original_filename)[1].lower()
+        if file_extension not in ALLOWED_UPLOAD_EXTENSIONS:
+            return jsonify({"success": False, "message": f"File type '{file_extension}' is not allowed"}), 400
+
+        if not _validate_file_header(file, file_extension):
+            return jsonify({"success": False, "message": f"File content does not match '{file_extension}' format"}), 400
+
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > MAX_UPLOAD_SIZE_BYTES:
+            return jsonify({"success": False, "message": "File exceeds 10 MB limit"}), 400
+
+        mime_type, _ = mimetypes.guess_type(original_filename)
+
+        # 6. Save file locally under AIScanned subfolder
+        file_id = str(uuid.uuid4())
+        stored_filename = f"{file_id}_{original_filename}"
+        rfpo_dir = os.path.join("uploads", "rfpos", rfpo.rfpo_id, "documents", "AIScanned")
+        os.makedirs(rfpo_dir, exist_ok=True)
+        file_path = os.path.join(rfpo_dir, stored_filename)
+        file.save(file_path)
+
+        user_name = user.get_display_name() if hasattr(user, "get_display_name") else str(user)
+
+        # 7. Upload to DOCUPLOAD (non-blocking)
+        cloud_result = None
+        try:
+            from docupload_client import upload_to_docupload, is_configured
+            if is_configured():
+                with open(file_path, "rb") as f:
+                    file_bytes = f.read()
+                cloud_result = upload_to_docupload(
+                    files={"aiscanned": (original_filename, file_bytes, mime_type or "application/octet-stream")},
+                    folder_path=f"rfpo/{rfpo.rfpo_id}/AIScanned",
+                    form_id="rfpo-documents",
+                    submitted_by=user_name,
+                    tags={"rfpo-number": rfpo.rfpo_id, "document-type": "AIScanned", "source": "rfpo-api"},
+                )
+        except Exception as cloud_err:
+            logger.warning("DOCUPLOAD cloud upload failed (file saved locally): %s", cloud_err)
+
+        # 8. Create UploadedFile record
+        uploaded_file = UploadedFile(
+            file_id=file_id,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            file_path=file_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            file_extension=file_extension,
+            document_type="AIScanned",
+            description="AI line item extraction source document",
+            rfpo_id=rfpo.id,
+            uploaded_by=user_name,
+        )
+        db.session.add(uploaded_file)
+        db.session.commit()
+
+        # 9. Extract line items via AI
+        extraction = extract_line_items(file_path, mime_type or "application/octet-stream")
+
+        # 10. Log usage
+        if extraction["total_tokens"] > 0:
+            usage_log = AIUsageLog(
+                user_id=user.id,
+                rfpo_id=rfpo.id,
+                operation="line_item_extraction",
+                model_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o"),
+                prompt_tokens=extraction["prompt_tokens"],
+                completion_tokens=extraction["completion_tokens"],
+                total_tokens=extraction["total_tokens"],
+                estimated_cost_usd=calculate_cost(
+                    extraction["prompt_tokens"], extraction["completion_tokens"]
+                ),
+                file_name=original_filename,
+                items_extracted=len(extraction["items"]),
+            )
+            db.session.add(usage_log)
+            db.session.commit()
+
+        # 11. Build response
+        response_data = {
+            "success": True,
+            "file": {"file_id": file_id, "original_filename": original_filename},
+            "extracted_items": extraction["items"],
+            "item_count": len(extraction["items"]),
+        }
+        if extraction.get("warning"):
+            response_data["warning"] = extraction["warning"]
+        if cloud_result and cloud_result.get("success"):
+            response_data["cloud_upload"] = {
+                "success": True,
+                "folder_path": cloud_result.get("folder_path"),
+            }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/ai-usage/summary", methods=["GET"])
+@require_auth
+def ai_usage_summary():
+    """Admin-only: Get AI usage summary with budget info."""
+    try:
+        user = request.current_user
+        user_perms = user.get_permissions() or []
+        if "GOD" not in user_perms and "RFPO_ADMIN" not in user_perms:
+            return jsonify({"success": False, "message": "Admin access required"}), 403
+
+        budget_limit = float(os.environ.get("AZURE_OPENAI_BUDGET_LIMIT", "100.00"))
+
+        total_spent = float(
+            db.session.query(
+                db.func.coalesce(db.func.sum(AIUsageLog.estimated_cost_usd), 0)
+            ).scalar()
+        )
+        total_requests = db.session.query(db.func.count(AIUsageLog.id)).scalar()
+        total_tokens = int(
+            db.session.query(
+                db.func.coalesce(db.func.sum(AIUsageLog.total_tokens), 0)
+            ).scalar()
+        )
+
+        # Per-user breakdown
+        usage_by_user = (
+            db.session.query(
+                AIUsageLog.user_id,
+                User.first_name,
+                User.last_name,
+                db.func.count(AIUsageLog.id).label("requests"),
+                db.func.sum(AIUsageLog.estimated_cost_usd).label("cost"),
+            )
+            .join(User, AIUsageLog.user_id == User.id)
+            .group_by(AIUsageLog.user_id, User.first_name, User.last_name)
+            .all()
+        )
+
+        return jsonify({
+            "success": True,
+            "total_spent_usd": round(total_spent, 2),
+            "budget_limit_usd": budget_limit,
+            "budget_remaining_usd": round(budget_limit - total_spent, 2),
+            "total_requests": total_requests,
+            "total_tokens": total_tokens,
+            "usage_by_user": [
+                {
+                    "user_id": u.user_id,
+                    "name": f"{u.first_name or ''} {u.last_name or ''}".strip(),
+                    "requests": u.requests,
+                    "cost": round(float(u.cost or 0), 4),
+                }
+                for u in usage_by_user
+            ],
+        })
+
+    except Exception as e:
         return _error_response(e)
 
 

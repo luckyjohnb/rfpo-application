@@ -1052,19 +1052,27 @@ def create_app():
         return relative_path
 
     def _notify_workflow_complete(rfpo, outcome):
-        """Send email notification to RFPO creator when workflow completes."""
+        """Send email notification to RFPO requestor when workflow completes."""
         try:
             from email_service import email_service as _email_svc
-            creator = User.query.filter_by(
-                email=rfpo.created_by, active=True
-            ).first()
-            if not creator:
+            # BUG-0044: Look up requestor by record_id (not created_by display name)
+            requestor = None
+            if rfpo.requestor_id:
+                requestor = User.query.filter_by(
+                    record_id=rfpo.requestor_id, active=True
+                ).first()
+            if not requestor:
+                # Fallback: try created_by as email
+                requestor = User.query.filter_by(
+                    email=rfpo.created_by, active=True
+                ).first()
+            if not requestor:
                 # created_by might be display_name; try lookup via fullname
-                creator = User.query.filter(
+                requestor = User.query.filter(
                     User.active == True,
                     User.fullname == rfpo.created_by
                 ).first()
-            if not creator or not creator.email:
+            if not requestor or not requestor.email:
                 return
 
             admin_url = (
@@ -1073,10 +1081,10 @@ def create_app():
                 or "http://localhost:5000"
             )
             _email_svc.send_templated_email(
-                to_emails=[creator.email],
+                to_emails=[requestor.email],
                 template_name="approval_complete",
                 template_data={
-                    "user_name": creator.get_display_name(),
+                    "user_name": requestor.get_display_name(),
                     "rfpo_id": rfpo.rfpo_id,
                     "po_number": rfpo.po_number,
                     "outcome": outcome,
@@ -1088,7 +1096,7 @@ def create_app():
             )
             app.logger.info(
                 "NOTIFY: Completion email sent to %s for RFPO %s (%s)",
-                creator.email, rfpo.rfpo_id, outcome,
+                requestor.email, rfpo.rfpo_id, outcome,
             )
         except Exception as e:
             app.logger.error("Failed to send completion notification: %s", e)
@@ -3452,12 +3460,10 @@ def create_app():
 
         # Add additional info for each RFPO
         for rfpo in rfpos:
-            # Check if RFPO has approval instances
-            rfpo.approval_instance = RFPOApprovalInstance.query.filter_by(
-                rfpo_id=rfpo.id
-            ).first()
+            # Check if RFPO has active approval instances (BUG-0038: skip withdrawn/terminal)
+            rfpo.approval_instance = rfpo.active_approval_instance
 
-            # Allow deletion if no approval instance OR if approval instance is completed
+            # Allow deletion if no active instance OR if instance is completed
             if rfpo.approval_instance is None:
                 rfpo.can_delete = True
                 rfpo.delete_reason = "No approval workflow"

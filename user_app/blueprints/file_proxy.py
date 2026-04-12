@@ -79,6 +79,27 @@ def api_rfpo_delete_file(rfpo_id, file_id):
     return jsonify(response)
 
 
+@file_proxy_bp.route("/api/rfpos/<int:rfpo_id>/ai-scan/upload", methods=["POST"])
+@require_auth_json
+def api_rfpo_ai_scan_upload(rfpo_id):
+    """AI line-item extraction proxy — forwards document to API for AI scanning."""
+    client = get_api_client()
+    try:
+        files = {}
+        if "file" in request.files:
+            f = request.files["file"]
+            files["file"] = (f.filename, f.stream, f.content_type)
+
+        resp = client.raw_post(
+            f"/rfpos/{rfpo_id}/ai-scan/upload",
+            files=files,
+            timeout=90,
+        )
+        return jsonify(resp.json()), resp.status_code
+    except requests.exceptions.RequestException:
+        return jsonify({"success": False, "message": "AI scan failed. Please try again."}), 503
+
+
 @file_proxy_bp.route("/api/rfpos/export", methods=["GET"])
 @require_auth_json
 def api_rfpos_export():

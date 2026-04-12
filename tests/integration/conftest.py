@@ -70,8 +70,10 @@ def live_db_cleanup(live_app):
             EmailLog, Notification, AuditLog,
             UploadedFile, RFPOLineItem, RFPO,
             UserTeam, VendorSite, Vendor, Project, Team, Consortium, User,
+            Ticket, TicketComment, TicketAttachment,
         )
         for model in [
+            TicketAttachment, TicketComment, Ticket,
             RFPOApprovalAction, RFPOApprovalInstance,
             RFPOApprovalStep, RFPOApprovalStage, RFPOApprovalWorkflow,
             EmailLog, Notification, AuditLog,

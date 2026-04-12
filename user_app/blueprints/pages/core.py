@@ -3,7 +3,13 @@
 from flask import redirect, render_template, request, session, url_for
 
 from user_app.api_client import get_api_client
+from user_app.auth_provider import get_auth_provider
 from user_app.blueprints.pages import pages_bp
+from user_app.dashboard_service import (
+    check_first_login,
+    classify_dashboard_type,
+    fetch_dashboard_data,
+)
 from user_app.decorators import require_admin, require_auth
 
 
@@ -16,9 +22,8 @@ def landing():
 @pages_bp.route("/login")
 def login_page():
     """Login page."""
-    from auth_saml import is_saml_enabled
-
-    return render_template("app/login.html", saml_enabled=is_saml_enabled())
+    provider = get_auth_provider()
+    return render_template("app/login.html", saml_enabled=provider.is_enabled())
 
 
 @pages_bp.route("/dashboard")
@@ -34,57 +39,21 @@ def dashboard():
         session.pop("auth_token", None)
         return redirect(url_for("pages.login_page"))
 
-    # First-login detection
-    user_profile = client.get("/users/profile")
-    if user_profile.get("success"):
-        user_data = user_profile["user"]
-        last_visit = user_data.get("last_visit")
-        created_at = user_data.get("created_at")
-        if not last_visit or (last_visit and created_at and last_visit == created_at):
-            return redirect(url_for("pages.first_login_password_reset"))
+    if check_first_login(client):
+        return redirect(url_for("pages.first_login_password_reset"))
 
-    rfpos_response = client.get("/rfpos")
-    recent_rfpos = (
-        rfpos_response.get("rfpos", []) if rfpos_response.get("success") else []
-    )
-
-    teams_response = client.get("/teams")
-    user_teams = (
-        teams_response.get("teams", []) if teams_response.get("success") else []
-    )
-
-    permissions_response = client.get("/users/permissions-summary")
-    user_permissions = (
-        permissions_response.get("permissions_summary", {})
-        if permissions_response.get("success")
-        else {}
-    )
-
-    approver_response = client.get("/users/approver-status")
-    approver_info = approver_response if approver_response.get("success") else {}
-
-    user_data = user_info.get("user", {})
-    is_rfpo_user = "RFPO_USER" in user_data.get("roles", [])
-    is_rfpo_admin = "RFPO_ADMIN" in user_data.get("roles", []) or "GOD" in user_data.get("roles", [])
-    is_approver = approver_info.get("is_approver", False)
-
-    if is_rfpo_admin:
-        dashboard_type = "admin"
-    elif is_rfpo_user and is_approver:
-        dashboard_type = "approver"
-    elif is_rfpo_user:
-        dashboard_type = "profile_only"
-    else:
-        dashboard_type = "no_access"
+    data = fetch_dashboard_data(client)
+    roles = user_info.get("user", {}).get("roles", [])
+    dashboard_type = classify_dashboard_type(roles, data["is_approver"])
 
     return render_template(
         "app/dashboard.html",
         user=user_info.get("user"),
-        recent_rfpos=recent_rfpos,
-        teams=user_teams,
-        user_permissions=user_permissions,
+        recent_rfpos=data["recent_rfpos"],
+        teams=data["teams"],
+        user_permissions=data["user_permissions"],
         dashboard_type=dashboard_type,
-        is_approver=is_approver,
+        is_approver=data["is_approver"],
     )
 
 

@@ -285,6 +285,253 @@
     </div>
 </div>
 
+<!-- ── RFPO Explorer ─────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center"
+         data-bs-toggle="collapse" data-bs-target="#explorerBody" role="button" aria-expanded="false">
+        <h5 class="mb-0"><i class="fas fa-search"></i> RFPO Explorer</h5>
+        <i class="fas fa-chevron-down text-muted"></i>
+    </div>
+    <div class="collapse" id="explorerBody">
+        <div class="card-body">
+            <!-- Filters -->
+            <form id="explorerForm" class="row g-2 mb-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Status</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="Draft">Draft</option>
+                        <option value="Pending Approval">Pending Approval</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Refused">Refused</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Consortium</label>
+                    <select name="consortium_id" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        {% for c in consortiums_list %}
+                        <option value="{{ c.consort_id }}">{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Vendor</label>
+                    <select name="vendor_id" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        {% for v in vendors_list %}
+                        <option value="{{ v.id }}">{{ v.company_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Project</label>
+                    <select name="project_id" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        {% for p in projects_list %}
+                        <option value="{{ p.project_id }}">{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Team</label>
+                    <select name="team_id" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        {% for t in teams_list %}
+                        <option value="{{ t.id }}">{{ t.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Search</label>
+                    <input type="text" name="search" class="form-control form-control-sm" placeholder="ID / title...">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">PO Number</label>
+                    <input type="text" name="po_number" class="form-control form-control-sm" placeholder="PO number...">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label form-label-sm">Min $</label>
+                    <input type="number" name="amount_min" class="form-control form-control-sm" min="0" step="0.01">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label form-label-sm">Max $</label>
+                    <input type="number" name="amount_max" class="form-control form-control-sm" min="0" step="0.01">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Created From</label>
+                    <input type="date" name="date_from" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Created To</label>
+                    <input type="date" name="date_to" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Cost Sharing</label>
+                    <select name="cost_sharing" class="form-select form-select-sm">
+                        <option value="">Any</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm">Sort By</label>
+                    <select name="sort_by" class="form-select form-select-sm">
+                        <option value="created_at">Created Date</option>
+                        <option value="total_amount">Amount</option>
+                        <option value="title">Title</option>
+                        <option value="status">Status</option>
+                        <option value="rfpo_id">RFPO ID</option>
+                        <option value="approved_at">Approved Date</option>
+                        <option value="due_date">Due Date</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label form-label-sm">Dir</label>
+                    <select name="sort_dir" class="form-select form-select-sm">
+                        <option value="desc">Desc</option>
+                        <option value="asc">Asc</option>
+                    </select>
+                </div>
+                <div class="col-auto d-flex gap-1 align-self-end">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Search</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="explorerReset"><i class="fas fa-undo"></i> Reset</button>
+                    <button type="button" class="btn btn-sm btn-outline-success" id="explorerCsv"><i class="fas fa-file-csv"></i> CSV</button>
+                </div>
+            </form>
+
+            <!-- Summary -->
+            <div id="explorerSummary" class="mb-2 d-none">
+                <small class="text-muted">
+                    Showing <strong id="expShowing">0</strong> of <strong id="expTotal">0</strong> results
+                    &mdash; Total value: <strong class="text-success" id="expValue">$0.00</strong>
+                </small>
+            </div>
+
+            <!-- Results Table -->
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0" id="explorerTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>RFPO ID</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th class="text-end">Amount</th>
+                            <th>Vendor</th>
+                            <th>Consortium</th>
+                            <th>Created</th>
+                            <th>Approved</th>
+                            <th>PO #</th>
+                        </tr>
+                    </thead>
+                    <tbody id="explorerTbody">
+                        <tr><td colspan="9" class="text-center text-muted py-4">Use the filters above and click Search</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <nav id="explorerPagination" class="d-none mt-2">
+                <ul class="pagination pagination-sm justify-content-center mb-0"></ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    const form = document.getElementById('explorerForm');
+    const tbody = document.getElementById('explorerTbody');
+    const summaryDiv = document.getElementById('explorerSummary');
+    const paginationNav = document.getElementById('explorerPagination');
+    const paginationUl = paginationNav.querySelector('ul');
+    let currentPage = 1;
+
+    function buildParams(page) {
+        const fd = new FormData(form);
+        const params = new URLSearchParams();
+        for (const [k, v] of fd.entries()) { if (v) params.set(k, v); }
+        params.set('page', page);
+        params.set('per_page', 25);
+        return params;
+    }
+
+    function statusBadge(s) {
+        const cls = {'Approved':'bg-success','Refused':'bg-danger','Pending Approval':'bg-warning text-dark','Draft':'bg-secondary'};
+        return '<span class="badge ' + (cls[s]||'bg-light text-dark') + '">' + s + '</span>';
+    }
+
+    function fmt(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+    function fetchResults(page) {
+        currentPage = page;
+        const params = buildParams(page);
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Loading...</td></tr>';
+        fetch('/reports/explorer?' + params.toString())
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) { tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">' + (data.message||'Error') + '</td></tr>'; return; }
+                if (data.rfpos.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">No RFPOs match your filters</td></tr>';
+                    summaryDiv.classList.add('d-none');
+                    paginationNav.classList.add('d-none');
+                    return;
+                }
+                // Summary
+                document.getElementById('expShowing').textContent = data.rfpos.length;
+                document.getElementById('expTotal').textContent = data.result_count;
+                document.getElementById('expValue').textContent = fmt(data.result_total);
+                summaryDiv.classList.remove('d-none');
+                // Rows
+                tbody.innerHTML = data.rfpos.map(r =>
+                    '<tr>' +
+                    '<td><a href="/rfpo/' + r.rfpo_id + '">' + r.rfpo_id + '</a></td>' +
+                    '<td>' + (r.title||'').substring(0,50) + '</td>' +
+                    '<td>' + statusBadge(r.status) + '</td>' +
+                    '<td class="text-end">' + fmt(r.total_amount) + '</td>' +
+                    '<td>' + (r.vendor||'') + '</td>' +
+                    '<td>' + (r.consortium||'') + '</td>' +
+                    '<td>' + (r.created_at||'') + '</td>' +
+                    '<td>' + (r.approved_at||'') + '</td>' +
+                    '<td>' + (r.po_number||'') + '</td>' +
+                    '</tr>'
+                ).join('');
+                // Pagination
+                if (data.pages > 1) {
+                    paginationNav.classList.remove('d-none');
+                    let html = '';
+                    html += '<li class="page-item ' + (data.page<=1?'disabled':'') + '"><a class="page-link" href="#" data-p="' + (data.page-1) + '">&laquo;</a></li>';
+                    for (let i = Math.max(1, data.page-3); i <= Math.min(data.pages, data.page+3); i++) {
+                        html += '<li class="page-item ' + (i===data.page?'active':'') + '"><a class="page-link" href="#" data-p="' + i + '">' + i + '</a></li>';
+                    }
+                    html += '<li class="page-item ' + (data.page>=data.pages?'disabled':'') + '"><a class="page-link" href="#" data-p="' + (data.page+1) + '">&raquo;</a></li>';
+                    paginationUl.innerHTML = html;
+                } else { paginationNav.classList.add('d-none'); }
+            })
+            .catch(err => { tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Request failed</td></tr>'; });
+    }
+
+    form.addEventListener('submit', function(e) { e.preventDefault(); fetchResults(1); });
+    paginationUl.addEventListener('click', function(e) {
+        e.preventDefault();
+        const p = e.target.closest('[data-p]');
+        if (p) fetchResults(parseInt(p.dataset.p));
+    });
+    document.getElementById('explorerReset').addEventListener('click', function() {
+        form.reset();
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Use the filters above and click Search</td></tr>';
+        summaryDiv.classList.add('d-none');
+        paginationNav.classList.add('d-none');
+    });
+    document.getElementById('explorerCsv').addEventListener('click', function() {
+        const params = buildParams(1);
+        params.delete('page'); params.delete('per_page');
+        window.location.href = '/reports/explorer/csv?' + params.toString();
+    });
+})();
+</script>
+
 <div class="text-muted text-center mb-4">
     <small>
         <i class="fas fa-info-circle"></i>

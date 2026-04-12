@@ -8659,6 +8659,12 @@ Southfield, MI  48075""",
             RFPO.created_at >= thirty_days_ago,
         ).count()
 
+        # ── Lookup data for RFPO Explorer ──────────────────────
+        consortiums_list = Consortium.query.filter_by(active=True).order_by(Consortium.name).all()
+        vendors_list = Vendor.query.filter_by(active=True).order_by(Vendor.company_name).all()
+        projects_list = Project.query.filter_by(active=True).order_by(Project.name).all()
+        teams_list = Team.query.filter_by(active=True).order_by(Team.name).all()
+
         return render_template(
             "admin/reports.html",
             rfpo_summary=rfpo_summary,
@@ -8671,7 +8677,218 @@ Southfield, MI  48075""",
             expiring_certs=expiring_certs,
             email_stats=email_stats,
             recent_rfpo_count=recent_rfpo_count,
+            consortiums_list=consortiums_list,
+            vendors_list=vendors_list,
+            projects_list=projects_list,
+            teams_list=teams_list,
             now=now,
+        )
+
+    @app.route("/reports/explorer")
+    @login_required
+    def admin_reports_explorer():
+        """AJAX endpoint: query RFPOs with ad-hoc filters, return JSON."""
+        from sqlalchemy import func
+        from datetime import datetime as dt, timedelta
+
+        try:
+            page = max(1, request.args.get("page", 1, type=int))
+            per_page = max(1, min(request.args.get("per_page", 25, type=int), 200))
+
+            q = RFPO.query.filter(RFPO.deleted_at.is_(None))
+
+            # Filters
+            status = request.args.get("status")
+            if status:
+                q = q.filter(RFPO.status == status)
+
+            search = request.args.get("search", "").strip()
+            if search:
+                like = f"%{search}%"
+                q = q.filter(db.or_(RFPO.title.ilike(like), RFPO.rfpo_id.ilike(like), RFPO.description.ilike(like)))
+
+            consortium_id = request.args.get("consortium_id")
+            if consortium_id:
+                q = q.filter(RFPO.consortium_id == consortium_id)
+
+            project_id = request.args.get("project_id")
+            if project_id:
+                q = q.filter(RFPO.project_id == project_id)
+
+            team_id = request.args.get("team_id", type=int)
+            if team_id:
+                q = q.filter(RFPO.team_id == team_id)
+
+            vendor_id = request.args.get("vendor_id", type=int)
+            if vendor_id:
+                q = q.filter(RFPO.vendor_id == vendor_id)
+
+            requestor_id = request.args.get("requestor_id")
+            if requestor_id:
+                q = q.filter(RFPO.requestor_id == requestor_id)
+
+            amount_min = request.args.get("amount_min", type=float)
+            if amount_min is not None:
+                q = q.filter(RFPO.total_amount >= amount_min)
+
+            amount_max = request.args.get("amount_max", type=float)
+            if amount_max is not None:
+                q = q.filter(RFPO.total_amount <= amount_max)
+
+            po_number = request.args.get("po_number")
+            if po_number:
+                q = q.filter(RFPO.po_number.ilike(f"%{po_number}%"))
+
+            cost_sharing = request.args.get("cost_sharing")
+            if cost_sharing == "yes":
+                q = q.filter(RFPO.cost_share_amount > 0)
+            elif cost_sharing == "no":
+                q = q.filter(db.or_(RFPO.cost_share_amount == 0, RFPO.cost_share_amount.is_(None)))
+
+            date_from = request.args.get("date_from")
+            if date_from:
+                try:
+                    q = q.filter(RFPO.created_at >= dt.strptime(date_from, "%Y-%m-%d"))
+                except ValueError:
+                    pass
+
+            date_to = request.args.get("date_to")
+            if date_to:
+                try:
+                    q = q.filter(RFPO.created_at < dt.strptime(date_to, "%Y-%m-%d") + timedelta(days=1))
+                except ValueError:
+                    pass
+
+            # Sort
+            SORT_ALLOW = {"created_at", "updated_at", "approved_at", "total_amount", "title", "status", "due_date", "rfpo_id"}
+            sort_by = request.args.get("sort_by", "created_at")
+            if sort_by not in SORT_ALLOW:
+                sort_by = "created_at"
+            sort_dir = request.args.get("sort_dir", "desc")
+            sort_col = getattr(RFPO, sort_by)
+            q = q.order_by(sort_col.desc() if sort_dir == "desc" else sort_col.asc())
+
+            # Aggregate before paginate
+            total_q = q.with_entities(func.count(RFPO.id), func.coalesce(func.sum(RFPO.total_amount), 0))
+            agg = total_q.first()
+            result_count = agg[0] or 0
+            result_total = float(agg[1] or 0)
+
+            pagination = q.paginate(page=page, per_page=per_page, error_out=False)
+
+            rows = []
+            for r in pagination.items:
+                rows.append({
+                    "rfpo_id": r.rfpo_id,
+                    "title": r.title,
+                    "status": r.status,
+                    "total_amount": float(r.total_amount) if r.total_amount else 0,
+                    "vendor": r.vendor.company_name if r.vendor else "",
+                    "consortium": "",
+                    "requestor": r.created_by or "",
+                    "created_at": r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+                    "approved_at": r.approved_at.strftime("%Y-%m-%d") if r.approved_at else "",
+                    "po_number": r.po_number or "",
+                })
+                # Resolve consortium name (avoid N+1 — do inline)
+                cons = Consortium.query.filter_by(consort_id=r.consortium_id).first()
+                if cons:
+                    rows[-1]["consortium"] = cons.name
+
+            return jsonify({
+                "success": True,
+                "rfpos": rows,
+                "total": pagination.total,
+                "page": pagination.page,
+                "pages": pagination.pages,
+                "result_count": result_count,
+                "result_total": result_total,
+            })
+        except Exception as e:
+            return jsonify({"success": False, "message": str(e)}), 500
+
+    @app.route("/reports/explorer/csv")
+    @login_required
+    def admin_reports_explorer_csv():
+        """Export filtered RFPOs as CSV."""
+        from datetime import datetime as dt, timedelta
+        import csv
+        import io as _io
+
+        q = RFPO.query.filter(RFPO.deleted_at.is_(None))
+
+        # Apply same filters as explorer
+        status = request.args.get("status")
+        if status:
+            q = q.filter(RFPO.status == status)
+        search = request.args.get("search", "").strip()
+        if search:
+            like = f"%{search}%"
+            q = q.filter(db.or_(RFPO.title.ilike(like), RFPO.rfpo_id.ilike(like)))
+        consortium_id = request.args.get("consortium_id")
+        if consortium_id:
+            q = q.filter(RFPO.consortium_id == consortium_id)
+        project_id = request.args.get("project_id")
+        if project_id:
+            q = q.filter(RFPO.project_id == project_id)
+        team_id = request.args.get("team_id", type=int)
+        if team_id:
+            q = q.filter(RFPO.team_id == team_id)
+        vendor_id = request.args.get("vendor_id", type=int)
+        if vendor_id:
+            q = q.filter(RFPO.vendor_id == vendor_id)
+        amount_min = request.args.get("amount_min", type=float)
+        if amount_min is not None:
+            q = q.filter(RFPO.total_amount >= amount_min)
+        amount_max = request.args.get("amount_max", type=float)
+        if amount_max is not None:
+            q = q.filter(RFPO.total_amount <= amount_max)
+        po_number = request.args.get("po_number")
+        if po_number:
+            q = q.filter(RFPO.po_number.ilike(f"%{po_number}%"))
+        cost_sharing = request.args.get("cost_sharing")
+        if cost_sharing == "yes":
+            q = q.filter(RFPO.cost_share_amount > 0)
+        elif cost_sharing == "no":
+            q = q.filter(db.or_(RFPO.cost_share_amount == 0, RFPO.cost_share_amount.is_(None)))
+        date_from = request.args.get("date_from")
+        if date_from:
+            try:
+                q = q.filter(RFPO.created_at >= dt.strptime(date_from, "%Y-%m-%d"))
+            except ValueError:
+                pass
+        date_to = request.args.get("date_to")
+        if date_to:
+            try:
+                q = q.filter(RFPO.created_at < dt.strptime(date_to, "%Y-%m-%d") + timedelta(days=1))
+            except ValueError:
+                pass
+
+        # Limit to 5000 rows for CSV
+        rfpos = q.order_by(RFPO.created_at.desc()).limit(5000).all()
+
+        buf = _io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["RFPO ID", "Title", "Status", "Total Amount", "Vendor", "Consortium", "Requestor", "Created", "Approved", "PO Number"])
+        for r in rfpos:
+            cons = Consortium.query.filter_by(consort_id=r.consortium_id).first()
+            writer.writerow([
+                r.rfpo_id, r.title, r.status,
+                float(r.total_amount) if r.total_amount else 0,
+                r.vendor.company_name if r.vendor else "",
+                cons.name if cons else "",
+                r.created_by or "",
+                r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+                r.approved_at.strftime("%Y-%m-%d") if r.approved_at else "",
+                r.po_number or "",
+            ])
+
+        output = buf.getvalue()
+        buf.close()
+        return Response(
+            output,
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=rfpo-export-{dt.utcnow().strftime('%Y%m%d')}.csv"},
         )
 
     return app

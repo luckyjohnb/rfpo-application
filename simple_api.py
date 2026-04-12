@@ -58,6 +58,14 @@ except ImportError as e:
     logging.getLogger(__name__).warning(f"Admin routes not available: {e}")
     ADMIN_ROUTES_AVAILABLE = False
 
+try:
+    from report_routes import report_api
+
+    REPORT_ROUTES_AVAILABLE = True
+except ImportError as e:
+    logging.getLogger(__name__).warning(f"Report routes not available: {e}")
+    REPORT_ROUTES_AVAILABLE = False
+
 # User routes are handled directly in this file
 USER_ROUTES_AVAILABLE = False
 
@@ -520,6 +528,10 @@ def _validate_rfpo_for_approval(rfpo):
 if ADMIN_ROUTES_AVAILABLE:
     app.register_blueprint(admin_api)
     app.logger.info("Admin API routes registered")
+
+if REPORT_ROUTES_AVAILABLE:
+    app.register_blueprint(report_api)
+    app.logger.info("Report API routes registered")
 
 # User routes are handled directly in this file (not as blueprint)
 
@@ -1316,6 +1328,7 @@ def take_approval_action(action_id):
             instance.advance_to_next_step()
             if instance.overall_status == "approved" and instance.rfpo:
                 instance.rfpo.status = "Approved"
+                instance.rfpo.approved_at = datetime.utcnow()
                 instance.rfpo.updated_by = user.get_display_name()
                 # Generate PO number on final approval
                 if not instance.rfpo.po_number:
@@ -1335,6 +1348,7 @@ def take_approval_action(action_id):
             # If workflow is now complete and approved, update RFPO status
             if instance.overall_status == "approved" and instance.rfpo:
                 instance.rfpo.status = "Approved"
+                instance.rfpo.approved_at = datetime.utcnow()
                 instance.rfpo.updated_by = user.get_display_name()
                 # Generate PO number on final approval
                 if not instance.rfpo.po_number:
@@ -1584,6 +1598,7 @@ def bulk_approval_action():
                     instance.advance_to_next_step()
                     if instance.overall_status == "approved" and instance.rfpo:
                         instance.rfpo.status = "Approved"
+                        instance.rfpo.approved_at = datetime.utcnow()
                         instance.rfpo.updated_by = user.get_display_name()
 
                 instance.updated_at = datetime.utcnow()
@@ -2601,6 +2616,18 @@ def list_rfpos():
         date_from = request.args.get("date_from")  # YYYY-MM-DD
         date_to = request.args.get("date_to")  # YYYY-MM-DD
 
+        # Ad-hoc filters
+        vendor_id_filter = request.args.get("vendor_id", type=int)
+        consortium_id_filter = request.args.get("consortium_id")
+        project_id_filter = request.args.get("project_id")
+        requestor_id_filter = request.args.get("requestor_id")
+        amount_min = request.args.get("amount_min", type=float)
+        amount_max = request.args.get("amount_max", type=float)
+        po_number_filter = request.args.get("po_number")
+        cost_sharing_filter = request.args.get("cost_sharing")  # "yes" or "no"
+        sort_by = request.args.get("sort_by", "created_at")
+        sort_dir = request.args.get("sort_dir", "desc")
+
         # Admins (GOD or RFPO_ADMIN) can see all RFPOs
         user_perms = user.get_permissions() or []
         is_admin = "GOD" in user_perms or "RFPO_ADMIN" in user_perms
@@ -2759,8 +2786,32 @@ def list_rfpos():
             except ValueError:
                 pass
 
+        # Apply ad-hoc filters
+        if vendor_id_filter:
+            query = query.filter(RFPO.vendor_id == vendor_id_filter)
+        if consortium_id_filter:
+            query = query.filter(RFPO.consortium_id == consortium_id_filter)
+        if project_id_filter:
+            query = query.filter(RFPO.project_id == project_id_filter)
+        if requestor_id_filter:
+            query = query.filter(RFPO.requestor_id == requestor_id_filter)
+        if amount_min is not None:
+            query = query.filter(RFPO.total_amount >= amount_min)
+        if amount_max is not None:
+            query = query.filter(RFPO.total_amount <= amount_max)
+        if po_number_filter:
+            query = query.filter(RFPO.po_number.ilike(f"%{po_number_filter}%"))
+        if cost_sharing_filter == "yes":
+            query = query.filter(RFPO.cost_share_amount > 0)
+        elif cost_sharing_filter == "no":
+            query = query.filter(db.or_(RFPO.cost_share_amount == 0, RFPO.cost_share_amount.is_(None)))
+
         # Order and paginate
-        query = query.order_by(RFPO.created_at.desc())
+        SORT_ALLOWLIST = {"created_at", "updated_at", "approved_at", "total_amount", "title", "status", "due_date", "rfpo_id"}
+        if sort_by not in SORT_ALLOWLIST:
+            sort_by = "created_at"
+        sort_col = getattr(RFPO, sort_by)
+        query = query.order_by(sort_col.desc() if sort_dir == "desc" else sort_col.asc())
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         rfpos = pagination.items
 
@@ -3913,7 +3964,7 @@ def get_rfpo_rendered_view(rfpo_id):
 # ─── FILE UPLOAD / VIEW / DELETE ─────────────────────────────────────────────
 
 ALLOWED_UPLOAD_EXTENSIONS = {
-    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".md",
     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff",
     ".ppt", ".pptx", ".rtf", ".odt", ".ods",
 }
@@ -4406,6 +4457,11 @@ def list_tickets():
 
         ticket_type = request.args.get("type")  # bug, feature_request
         status = request.args.get("status")
+        search_query = request.args.get("q", "").strip()[:200]
+        date_from = request.args.get("date_from", "").strip()
+        date_to = request.args.get("date_to", "").strip()
+        assigned_to_filter = request.args.get("assigned_to", "").strip()
+        sort_field = request.args.get("sort", "created_at").strip()
         page = max(1, int(request.args.get("page", 1)))
         per_page = min(50, max(1, int(request.args.get("per_page", 20))))
 
@@ -4417,7 +4473,47 @@ def list_tickets():
         if status:
             query = query.filter(Ticket.status == status)
 
-        query = query.order_by(Ticket.created_at.desc())
+        # Text search across ticket fields
+        if search_query:
+            like_term = f"%{search_query}%"
+            query = query.filter(
+                db.or_(
+                    Ticket.ticket_number.ilike(like_term),
+                    Ticket.title.ilike(like_term),
+                    Ticket.description.ilike(like_term),
+                )
+            )
+
+        # Date range filters
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, "%Y-%m-%d")
+                query = query.filter(Ticket.created_at >= from_date)
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+                query = query.filter(Ticket.created_at < to_date)
+            except ValueError:
+                pass
+
+        # Assigned-to filter (admin only)
+        if assigned_to_filter and is_admin:
+            try:
+                query = query.filter(Ticket.assigned_to == int(assigned_to_filter))
+            except (ValueError, TypeError):
+                pass
+
+        # Sorting
+        sort_options = {
+            "created_at": Ticket.created_at.desc(),
+            "updated_at": Ticket.updated_at.desc(),
+            "priority": Ticket.priority.asc(),
+            "ticket_number": Ticket.ticket_number.asc(),
+        }
+        query = query.order_by(sort_options.get(sort_field, Ticket.created_at.desc()))
+
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
         serializer = (lambda t: t.to_dict()) if is_admin else (lambda t: t.to_dict_public())

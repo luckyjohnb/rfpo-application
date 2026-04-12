@@ -1,0 +1,295 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Reports & Analytics - RFPO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="fas fa-chart-bar"></i> Reports & Analytics</h1>
+    <small class="text-muted">Data as of {{ now.strftime('%Y-%m-%d %H:%M') }} UTC</small>
+</div>
+
+<!-- RFPO Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h3 class="mb-1">{{ rfpo_summary.total }}</h3>
+                <small class="text-muted">Total RFPOs</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h3 class="mb-1 text-success">${{ "{:,.2f}".format(rfpo_summary.approved_value) }}</h3>
+                <small class="text-muted">Approved Value</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h3 class="mb-1">${{ "{:,.2f}".format(rfpo_summary.total_value) }}</h3>
+                <small class="text-muted">Total Pipeline Value</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h3 class="mb-1">{{ recent_rfpo_count }}</h3>
+                <small class="text-muted">Last 30 Days</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Breakdown -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card border-start border-secondary border-4 shadow-sm h-100">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div><small class="text-muted">Draft</small></div>
+                <h4 class="mb-0">{{ rfpo_summary.draft }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-start border-warning border-4 shadow-sm h-100">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div><small class="text-muted">Pending Approval</small></div>
+                <h4 class="mb-0">{{ rfpo_summary.pending }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-start border-success border-4 shadow-sm h-100">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div><small class="text-muted">Approved</small></div>
+                <h4 class="mb-0">{{ rfpo_summary.approved }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-start border-danger border-4 shadow-sm h-100">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div><small class="text-muted">Refused</small></div>
+                <h4 class="mb-0">{{ rfpo_summary.refused }}</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- Time to Fulfill -->
+    <div class="col-md-4 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-clock"></i> Avg. Time to Approve
+            </div>
+            <div class="card-body text-center">
+                {% if avg_fulfill_days is not none %}
+                    <h2 class="mb-1">{{ avg_fulfill_days }}</h2>
+                    <small class="text-muted">days (creation → approval)</small>
+                {% else %}
+                    <p class="text-muted mb-0">No approved RFPOs yet</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Approval Queue -->
+    <div class="col-md-4 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-clipboard-check"></i> Approval Queue
+            </div>
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-around">
+                    <div>
+                        <h2 class="mb-1 text-warning">{{ pending_actions }}</h2>
+                        <small class="text-muted">Pending</small>
+                    </div>
+                    <div>
+                        <h2 class="mb-1 text-danger">{{ overdue_actions }}</h2>
+                        <small class="text-muted">Overdue</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Health -->
+    <div class="col-md-4 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-envelope"></i> Email Health (30d)
+            </div>
+            <div class="card-body text-center">
+                {% if email_stats %}
+                    <div class="d-flex justify-content-around">
+                        <div>
+                            <h3 class="mb-1 text-success">{{ email_stats.get('sent', 0) + email_stats.get('delivered', 0) }}</h3>
+                            <small class="text-muted">Sent</small>
+                        </div>
+                        <div>
+                            <h3 class="mb-1 text-danger">{{ email_stats.get('failed', 0) + email_stats.get('error', 0) }}</h3>
+                            <small class="text-muted">Failed</small>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No email data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Busiest Approvers & Top Vendors -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-user-check"></i> Top Approvers (by completed actions)
+            </div>
+            <div class="card-body p-0">
+                {% if busiest_approvers %}
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Approver</th>
+                            <th class="text-center">Total</th>
+                            <th class="text-center">Approved</th>
+                            <th class="text-center">Refused</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name, total, approved_ct, refused_ct in busiest_approvers %}
+                        <tr>
+                            <td>{{ name or 'Unknown' }}</td>
+                            <td class="text-center">{{ total }}</td>
+                            <td class="text-center text-success">{{ approved_ct|int }}</td>
+                            <td class="text-center text-danger">{{ refused_ct|int }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-3 text-muted text-center">No approval actions recorded yet</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-store"></i> Top Vendors (by RFPO count)
+            </div>
+            <div class="card-body p-0">
+                {% if top_vendors %}
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Vendor</th>
+                            <th class="text-center">RFPOs</th>
+                            <th class="text-end">Total Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name, count, value in top_vendors %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td class="text-center">{{ count }}</td>
+                            <td class="text-end">${{ "{:,.2f}".format(value|float) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-3 text-muted text-center">No vendor data yet</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RFPO by Consortium & Expiring Certs -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-building"></i> RFPOs by Consortium (Top 10)
+            </div>
+            <div class="card-body p-0">
+                {% if rfpo_by_consortium %}
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Consortium</th>
+                            <th class="text-center">Count</th>
+                            <th class="text-end">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name, count, value in rfpo_by_consortium %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td class="text-center">{{ count }}</td>
+                            <td class="text-end">${{ "{:,.2f}".format(value|float) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-3 text-muted text-center">No consortium data yet</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-exclamation-triangle"></i> Expiring Vendor Certifications (90 days)
+            </div>
+            <div class="card-body p-0">
+                {% if expiring_certs %}
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Vendor</th>
+                            <th class="text-end">Expires</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vendor in expiring_certs %}
+                        <tr>
+                            <td>{{ vendor.company_name }}</td>
+                            <td class="text-end">
+                                {% if vendor.cert_expire_date %}
+                                    <span class="{% if vendor.cert_expire_date < now.date() %}text-danger{% else %}text-warning{% endif %}">
+                                        {{ vendor.cert_expire_date.strftime('%Y-%m-%d') }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-3 text-muted text-center">No certifications expiring within 90 days</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="text-muted text-center mb-4">
+    <small>
+        <i class="fas fa-info-circle"></i>
+        For detailed data exports and ad-hoc queries, use the
+        <a href="/api/reports/rfpos?report_type=summary" target="_blank">Reports API</a>.
+    </small>
+</div>
+{% endblock %}

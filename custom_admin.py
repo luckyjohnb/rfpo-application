@@ -8336,19 +8336,36 @@ Southfield, MI  48075""",
         """List all bug reports for admin triage."""
         status_filter = request.args.get("status", "")
         priority_filter = request.args.get("priority", "")
+        search_filter = request.args.get("search", "").strip()[:200]
+        page = max(1, int(request.args.get("page", 1)))
+        per_page = 20
         query = Ticket.query.filter(Ticket.type == "bug")
         if status_filter:
             query = query.filter(Ticket.status == status_filter)
         if priority_filter:
             query = query.filter(Ticket.priority == priority_filter)
-        tickets = query.order_by(Ticket.created_at.desc()).all()
+        if search_filter:
+            like_term = f"%{search_filter}%"
+            query = query.filter(
+                db.or_(
+                    Ticket.ticket_number.ilike(like_term),
+                    Ticket.title.ilike(like_term),
+                    Ticket.description.ilike(like_term),
+                )
+            )
+        query = query.order_by(Ticket.created_at.desc())
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         return render_template(
             "admin/tickets.html",
-            tickets=tickets,
+            tickets=pagination.items,
             ticket_type="bug",
             page_title="Bug Log",
             status_filter=status_filter,
             priority_filter=priority_filter,
+            search_filter=search_filter,
+            page=pagination.page,
+            pages=pagination.pages,
+            total=pagination.total,
         )
 
     @app.route("/admin/tickets/features")
@@ -8357,19 +8374,36 @@ Southfield, MI  48075""",
         """List all feature requests for admin review."""
         status_filter = request.args.get("status", "")
         priority_filter = request.args.get("priority", "")
+        search_filter = request.args.get("search", "").strip()[:200]
+        page = max(1, int(request.args.get("page", 1)))
+        per_page = 20
         query = Ticket.query.filter(Ticket.type == "feature_request")
         if status_filter:
             query = query.filter(Ticket.status == status_filter)
         if priority_filter:
             query = query.filter(Ticket.priority == priority_filter)
-        tickets = query.order_by(Ticket.created_at.desc()).all()
+        if search_filter:
+            like_term = f"%{search_filter}%"
+            query = query.filter(
+                db.or_(
+                    Ticket.ticket_number.ilike(like_term),
+                    Ticket.title.ilike(like_term),
+                    Ticket.description.ilike(like_term),
+                )
+            )
+        query = query.order_by(Ticket.created_at.desc())
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         return render_template(
             "admin/tickets.html",
-            tickets=tickets,
+            tickets=pagination.items,
             ticket_type="feature_request",
             page_title="Feature Requests",
             status_filter=status_filter,
             priority_filter=priority_filter,
+            search_filter=search_filter,
+            page=pagination.page,
+            pages=pagination.pages,
+            total=pagination.total,
         )
 
     @app.route("/admin/tickets/<int:ticket_id>")
@@ -8479,6 +8513,165 @@ Southfield, MI  48075""",
             mimetype=attachment.mime_type,
             as_attachment=False,
             download_name=attachment.original_filename,
+        )
+
+    # ── Analytics / Reports ─────────────────────────────────────
+    @app.route("/reports")
+    @login_required
+    def admin_reports():
+        """Analytics dashboard with RFPO, approval, vendor, and email reports."""
+        from sqlalchemy import func, case, extract
+        from datetime import datetime as dt, timedelta
+
+        now = dt.utcnow()
+        thirty_days_ago = now - timedelta(days=30)
+
+        # ── RFPO Summary Cards ──────────────────────────────────
+        status_counts = (
+            db.session.query(RFPO.status, func.count(RFPO.id))
+            .filter(RFPO.deleted_at.is_(None))
+            .group_by(RFPO.status)
+            .all()
+        )
+        status_map = {s: c for s, c in status_counts}
+        total_rfpos = sum(status_map.values())
+        total_value = db.session.query(
+            func.coalesce(func.sum(RFPO.total_amount), 0)
+        ).filter(RFPO.deleted_at.is_(None)).scalar()
+        approved_value = db.session.query(
+            func.coalesce(func.sum(RFPO.total_amount), 0)
+        ).filter(RFPO.deleted_at.is_(None), RFPO.status == "Approved").scalar()
+
+        rfpo_summary = {
+            "total": total_rfpos,
+            "draft": status_map.get("Draft", 0),
+            "pending": status_map.get("Pending Approval", 0),
+            "approved": status_map.get("Approved", 0),
+            "refused": status_map.get("Refused", 0),
+            "total_value": float(total_value),
+            "approved_value": float(approved_value),
+        }
+
+        # ── RFPO by Consortium (top 10) ─────────────────────────
+        rfpo_by_consortium = (
+            db.session.query(
+                Consortium.name,
+                func.count(RFPO.id).label("count"),
+                func.coalesce(func.sum(RFPO.total_amount), 0).label("value"),
+            )
+            .join(Consortium, RFPO.consortium_id == Consortium.consort_id)
+            .filter(RFPO.deleted_at.is_(None))
+            .group_by(Consortium.name)
+            .order_by(func.count(RFPO.id).desc())
+            .limit(10)
+            .all()
+        )
+
+        # ── Time to Fulfill (avg days from creation to approval) ─
+        avg_fulfill = db.session.query(
+            func.avg(
+                func.extract("epoch", RFPO.approved_at)
+                - func.extract("epoch", RFPO.created_at)
+            )
+        ).filter(
+            RFPO.deleted_at.is_(None),
+            RFPO.status == "Approved",
+            RFPO.approved_at.isnot(None),
+        ).scalar()
+        avg_fulfill_days = round(float(avg_fulfill) / 86400, 1) if avg_fulfill else None
+
+        # ── Approval Metrics ────────────────────────────────────
+        pending_actions = RFPOApprovalAction.query.filter_by(status="pending").count()
+        overdue_actions = (
+            RFPOApprovalAction.query
+            .join(RFPOApprovalInstance)
+            .filter(
+                RFPOApprovalAction.status == "pending",
+                RFPOApprovalAction.due_date < now,
+                RFPOApprovalInstance.overall_status == "waiting",
+            )
+            .count()
+        )
+
+        # Busiest approvers (top 5 by completed actions)
+        busiest_approvers = (
+            db.session.query(
+                RFPOApprovalAction.approver_name,
+                func.count(RFPOApprovalAction.id).label("total"),
+                func.sum(case((RFPOApprovalAction.status == "approved", 1), else_=0)).label("approved_ct"),
+                func.sum(case((RFPOApprovalAction.status == "refused", 1), else_=0)).label("refused_ct"),
+            )
+            .filter(RFPOApprovalAction.status.in_(["approved", "refused", "conditional"]))
+            .group_by(RFPOApprovalAction.approver_name)
+            .order_by(func.count(RFPOApprovalAction.id).desc())
+            .limit(5)
+            .all()
+        )
+
+        # ── Vendor Stats (top 5 by RFPO count) ─────────────────
+        top_vendors = (
+            db.session.query(
+                Vendor.company_name,
+                func.count(RFPO.id).label("rfpo_count"),
+                func.coalesce(func.sum(RFPO.total_amount), 0).label("total_value"),
+            )
+            .join(Vendor, RFPO.vendor_id == Vendor.id)
+            .filter(RFPO.deleted_at.is_(None))
+            .group_by(Vendor.company_name)
+            .order_by(func.count(RFPO.id).desc())
+            .limit(5)
+            .all()
+        )
+
+        # Expiring certifications (next 90 days)
+        ninety_days = now + timedelta(days=90)
+        expiring_certs = (
+            Vendor.query
+            .filter(
+                Vendor.active.is_(True),
+                Vendor.cert_expire_date.isnot(None),
+                Vendor.cert_expire_date <= ninety_days.date(),
+            )
+            .order_by(Vendor.cert_expire_date.asc())
+            .limit(10)
+            .all()
+        )
+
+        # ── Email Health (last 30 days) ─────────────────────────
+        email_stats = {}
+        try:
+            email_counts = (
+                db.session.query(
+                    EmailLog.status,
+                    func.count(EmailLog.id),
+                )
+                .filter(EmailLog.created_at >= thirty_days_ago)
+                .group_by(EmailLog.status)
+                .all()
+            )
+            email_stats = {s: c for s, c in email_counts}
+        except Exception:
+            pass  # EmailLog may not exist yet
+
+        # ── Recent activity (last 30 days RFPO count) ───────────
+        recent_rfpo_count = RFPO.query.filter(
+            RFPO.deleted_at.is_(None),
+            RFPO.created_at >= thirty_days_ago,
+        ).count()
+
+        return render_template(
+            "admin/reports.html",
+            rfpo_summary=rfpo_summary,
+            rfpo_by_consortium=rfpo_by_consortium,
+            avg_fulfill_days=avg_fulfill_days,
+            pending_actions=pending_actions,
+            overdue_actions=overdue_actions,
+            busiest_approvers=busiest_approvers,
+            top_vendors=top_vendors,
+            expiring_certs=expiring_certs,
+            email_stats=email_stats,
+            recent_rfpo_count=recent_rfpo_count,
+            now=now,
         )
 
     return app

@@ -202,6 +202,7 @@ class RFPO(db.Model):
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    approved_at = db.Column(db.DateTime, nullable=True, index=True)
 
     # PDF snapshot (frozen at submission)
     pdf_snapshot_path = db.Column(db.String(512), nullable=True)
@@ -214,6 +215,8 @@ class RFPO(db.Model):
         db.Index("idx_rfpo_consortium", "consortium_id"),
         db.Index("idx_rfpo_vendor", "vendor_id"),
         db.Index("idx_rfpo_requestor", "requestor_id"),
+        db.Index("idx_rfpo_status_created", "status", "created_at"),
+        db.Index("idx_rfpo_status_approved", "status", "approved_at"),
     )
 
     # Relationships
@@ -331,6 +334,7 @@ class RFPO(db.Model):
             "updated_by": self.updated_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "approved_at": self.approved_at.isoformat() if self.approved_at else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "pdf_snapshot_path": self.pdf_snapshot_path,
             "file_count": len(self.files) if self.files else 0,

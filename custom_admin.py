@@ -8759,7 +8759,13 @@ Southfield, MI  48075""",
                 except ValueError:
                     pass
 
-            # Sort
+            # Aggregate before sort/paginate (ORDER BY is invalid on aggregate queries in PostgreSQL)
+            total_q = q.with_entities(func.count(RFPO.id), func.coalesce(func.sum(RFPO.total_amount), 0))
+            agg = total_q.first()
+            result_count = agg[0] or 0
+            result_total = float(agg[1] or 0)
+
+            # Sort (applied after aggregates, before paginate)
             SORT_ALLOW = {"created_at", "updated_at", "approved_at", "total_amount", "title", "status", "due_date", "rfpo_id"}
             sort_by = request.args.get("sort_by", "created_at")
             if sort_by not in SORT_ALLOW:
@@ -8767,12 +8773,6 @@ Southfield, MI  48075""",
             sort_dir = request.args.get("sort_dir", "desc")
             sort_col = getattr(RFPO, sort_by)
             q = q.order_by(sort_col.desc() if sort_dir == "desc" else sort_col.asc())
-
-            # Aggregate before paginate
-            total_q = q.with_entities(func.count(RFPO.id), func.coalesce(func.sum(RFPO.total_amount), 0))
-            agg = total_q.first()
-            result_count = agg[0] or 0
-            result_total = float(agg[1] or 0)
 
             pagination = q.paginate(page=page, per_page=per_page, error_out=False)
 

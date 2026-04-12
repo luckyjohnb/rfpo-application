@@ -4457,13 +4457,12 @@ def ai_usage_summary():
         usage_by_user = (
             db.session.query(
                 AIUsageLog.user_id,
-                User.first_name,
-                User.last_name,
+                User.fullname,
                 db.func.count(AIUsageLog.id).label("requests"),
                 db.func.sum(AIUsageLog.estimated_cost_usd).label("cost"),
             )
             .join(User, AIUsageLog.user_id == User.id)
-            .group_by(AIUsageLog.user_id, User.first_name, User.last_name)
+            .group_by(AIUsageLog.user_id, User.fullname)
             .all()
         )
 
@@ -4477,7 +4476,7 @@ def ai_usage_summary():
             "usage_by_user": [
                 {
                     "user_id": u.user_id,
-                    "name": f"{u.first_name or ''} {u.last_name or ''}".strip(),
+                    "name": u.fullname or "",
                     "requests": u.requests,
                     "cost": round(float(u.cost or 0), 4),
                 }

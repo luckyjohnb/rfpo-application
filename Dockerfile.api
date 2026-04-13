@@ -30,6 +30,7 @@ COPY email_service.py .
 COPY pdf_generator.py .
 COPY ai_extractor.py .
 COPY status_constants.py .
+COPY docupload_client.py .
 COPY api/ ./api/
 COPY templates/email/ ./templates/email/
 COPY static/po_files/ ./static/po_files/

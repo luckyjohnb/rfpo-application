@@ -3461,18 +3461,18 @@ def create_app():
         # Add additional info for each RFPO
         for rfpo in rfpos:
             # Check if RFPO has active approval instances (BUG-0038: skip withdrawn/terminal)
-            rfpo.approval_instance = rfpo.active_approval_instance
+            active_inst = rfpo.active_approval_instance
 
             # Allow deletion if no active instance OR if instance is completed
-            if rfpo.approval_instance is None:
+            if active_inst is None:
                 rfpo.can_delete = True
                 rfpo.delete_reason = "No approval workflow"
-            elif rfpo.approval_instance.is_complete():
+            elif active_inst.is_complete():
                 rfpo.can_delete = True
-                rfpo.delete_reason = f"Approval workflow completed ({rfpo.approval_instance.overall_status})"
+                rfpo.delete_reason = f"Approval workflow completed ({active_inst.overall_status})"
             else:
                 rfpo.can_delete = False
-                rfpo.delete_reason = f"Has active approval workflow ({rfpo.approval_instance.overall_status})"
+                rfpo.delete_reason = f"Has active approval workflow ({active_inst.overall_status})"
 
             # Count line items and files
             rfpo.line_item_count = len(rfpo.line_items) if rfpo.line_items else 0

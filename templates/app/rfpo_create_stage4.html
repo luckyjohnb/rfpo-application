@@ -407,7 +407,9 @@
         const files = (currentRfpo && currentRfpo.files) || [];
         checklist.innerHTML = requiredDocs.map((d, i) => {
             if (d.is_uploaded) {
-                const matchingFile = files.find(f => f.document_type === d.name);
+                // Match by key first (new uploads), then by display name (legacy uploads)
+                const matchingFile = files.find(f => f.document_type === d.key)
+                                  || files.find(f => f.document_type === d.name);
                 const fileName = matchingFile ? matchingFile.original_filename : '';
                 return `<div class="d-flex align-items-center mb-2">
                     <i class="fas fa-check-circle text-success me-2"></i>
@@ -459,7 +461,7 @@
         }
 
         const idx = activeUploadIndex;
-        const docType = requiredDocs[idx].name;
+        const docType = requiredDocs[idx].key;  // Use KEY for reliable matching
         const btn = document.getElementById(`docUploadBtn_${idx}`);
         const progressDiv = document.getElementById(`docProgress_${idx}`);
         const progressBar = document.getElementById(`docProgressBar_${idx}`);
@@ -525,15 +527,11 @@
         const doc = requiredDocs[docIndex];
         if (!doc) return;
         const files = (currentRfpo && currentRfpo.files) || [];
-        const matchingFile = files.find(f => f.document_type === doc.name);
+        // Match by key first (new uploads), then by display name (legacy), then by raw key
+        const matchingFile = files.find(f => f.document_type === doc.key)
+                          || files.find(f => f.document_type === doc.name);
         if (!matchingFile) {
-            // Fallback: try matching by key
-            const matchByKey = files.find(f => f.document_type === doc.key);
-            if (!matchByKey) {
-                showAlert('File not found for this document type. Try deleting from the files list below.', 'warning');
-                return;
-            }
-            doDeleteAndReload(matchByKey.file_id);
+            showAlert('File not found for this document type. Try deleting from the files list below.', 'warning');
             return;
         }
         doDeleteAndReload(matchingFile.file_id);
@@ -576,8 +574,8 @@
                 docTypeSelect.innerHTML = '<option value="">-- Select document type --</option>';
                 response.doc_types.forEach(dt => {
                     const option = document.createElement('option');
-                    option.value = dt.value;
-                    option.textContent = dt.value;
+                    option.value = dt.key;           // Use KEY as the stored value
+                    option.textContent = dt.value;    // Display name as label
                     docTypeSelect.appendChild(option);
                 });
                 const otherOption = document.createElement('option');
@@ -623,7 +621,7 @@
                     <div>
                         <i class="fas ${icon} me-2"></i>
                         <strong>${escapeHtml(file.original_filename)}</strong>
-                        ${file.document_type ? `<span class="badge bg-info ms-2">${escapeHtml(file.document_type)}</span>` : ''}
+                        ${(file.document_type_display || file.document_type) ? `<span class="badge bg-info ms-2">${escapeHtml(file.document_type_display || file.document_type)}</span>` : ''}
                         <br><small class="text-muted">${fileSize}</small>
                     </div>
                     <div class="btn-group btn-group-sm">

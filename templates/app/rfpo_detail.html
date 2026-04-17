@@ -742,8 +742,8 @@
                         ${file.original_filename}
                     </td>
                     <td>
-                        ${file.document_type
-                            ? `<span class="badge bg-info">${file.document_type}</span>`
+                        ${file.document_type_display || file.document_type
+                            ? `<span class="badge bg-info">${file.document_type_display || file.document_type}</span>`
                             : '<span class="text-muted">Not specified</span>'}
                     </td>
                     <td>${fileSize}</td>
@@ -815,8 +815,8 @@
                 docTypeSelect.innerHTML = '<option value="">-- Select document type --</option>';
                 response.doc_types.forEach(dt => {
                     const option = document.createElement('option');
-                    option.value = dt.value;
-                    option.textContent = dt.value;
+                    option.value = dt.key;           // Use KEY as the stored value
+                    option.textContent = dt.value;    // Display name as label
                     docTypeSelect.appendChild(option);
                 });
                 // Add "Other" at the end

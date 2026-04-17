@@ -55,7 +55,7 @@ def api_validate_rfpo(rfpo_id):
 def api_submit_for_approval(rfpo_id):
     """Submit RFPO for approval."""
     client = get_api_client()
-    response = client.post(f"/rfpos/{rfpo_id}/submit-for-approval")
+    response = client.post(f"/rfpos/{rfpo_id}/submit-for-approval", timeout=30)
     return jsonify(response)
 
 

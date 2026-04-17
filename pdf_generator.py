@@ -276,23 +276,21 @@ class RFPOPDFGenerator:
         # Header row — 2px solid border (matching HTML th { border: 2px solid #000 })
         c.setLineWidth(2)
         c.setFont("Helvetica-Bold", 8.5)
-        hdr_h = 18  # header cell height
-        hdr_top = y + 10
-        hdr_bottom = hdr_top - hdr_h
-        text_y = hdr_bottom + 5  # text baseline inside header
-        c.rect(margin_left, hdr_bottom, usable_width, hdr_h)
+        header_top = y + 12
+        header_bottom = y - 6
+        header_h = header_top - header_bottom
+        c.rect(margin_left, header_bottom, usable_width, header_h)
         # Vertical dividers inside header
-        col_dividers = [col_qty_x - 2, col_desc_x - 2, col_unit_x - 2, col_total_x - 62]
-        for vx in col_dividers:
-            c.line(vx, hdr_top, vx, hdr_bottom)
-        c.drawString(col_num_x + 4, text_y, "#")
-        c.drawString(col_qty_x + 2, text_y, "Qty")
-        c.drawString(col_desc_x + 2, text_y, "Description of supplies or services")
-        c.drawRightString(col_total_x - 64, text_y, "Unit Price")
-        c.drawRightString(col_total_x - 4, text_y, "Total Price")
+        for vx in [col_qty_x - 2, col_desc_x - 2, col_unit_x - 2, col_total_x - 62]:
+            c.line(vx, header_top, vx, header_bottom)
+        c.drawString(col_num_x + 4, y, "#")
+        c.drawString(col_qty_x + 2, y, "Qty")
+        c.drawString(col_desc_x + 2, y, "Description of supplies or services")
+        c.drawRightString(col_total_x - 64, y, "Unit Price")
+        c.drawRightString(col_total_x - 4, y, "Total Price")
 
-        # Data rows — start BELOW the header with clear gap
-        y = hdr_bottom  # cursor is now the top of the data area
+        # Data rows
+        y = header_bottom - 2
         c.setFont("Helvetica", 8.5)
         items = sorted(rfpo.line_items, key=lambda x: x.line_number) if rfpo.line_items else []
         for idx, item in enumerate(items):
@@ -303,29 +301,29 @@ class RFPOPDFGenerator:
                 desc += " [Capital Equipment]"
             desc_lines = self._wrap_text(desc, 48)
             row_lines = max(1, len(desc_lines))
-            cell_h = 11 * row_lines + 7  # padding top(4) + bottom(3) + text
+            row_h = 11 * row_lines + 5
 
-            row_top = y
-            row_bottom = y - cell_h
-            text_baseline = row_top - 12  # text offset from top of cell
+            # Cell background (light alternating)
+            row_top = y + 10
+            row_bottom = y + 10 - row_h
 
-            # Cell borders — 1px solid #ccc (matching HTML td { border: 1px solid #ccc })
+            # Cell borders — 1px solid #ccc (matching HTML)
             c.setStrokeColorRGB(0.8, 0.8, 0.8)
             c.setLineWidth(0.5)
-            c.rect(margin_left, row_bottom, usable_width, cell_h)
-            for vx in col_dividers:
+            c.rect(margin_left, row_bottom, usable_width, row_h)
+            for vx in [col_qty_x - 2, col_desc_x - 2, col_unit_x - 2, col_total_x - 62]:
                 c.line(vx, row_top, vx, row_bottom)
             c.setStrokeColorRGB(0, 0, 0)
 
             # Cell text
-            c.drawString(col_num_x + 4, text_baseline, str(item.line_number))
-            c.drawString(col_qty_x + 2, text_baseline, str(item.quantity))
+            c.drawString(col_num_x + 4, y, str(item.line_number))
+            c.drawString(col_qty_x + 2, y, str(item.quantity))
             for i, dl in enumerate(desc_lines):
-                c.drawString(col_desc_x + 2, text_baseline - (i * 11), dl)
-            c.drawRightString(col_total_x - 64, text_baseline, f"${item.unit_price:,.2f}")
-            c.drawRightString(col_total_x - 4, text_baseline, f"${item.total_price:,.2f}")
+                c.drawString(col_desc_x + 2, y - (i * 11), dl)
+            c.drawRightString(col_total_x - 64, y, f"${item.unit_price:,.2f}")
+            c.drawRightString(col_total_x - 4, y, f"${item.total_price:,.2f}")
 
-            y = row_bottom  # next row starts at bottom of this row
+            y = row_bottom - 2
 
         # --- TOTALS ---
         y -= 8

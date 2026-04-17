@@ -1,5 +1,4 @@
 import json
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -203,7 +202,6 @@ class RFPO(db.Model):
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
-    approved_at = db.Column(db.DateTime, nullable=True, index=True)
 
     # PDF snapshot (frozen at submission)
     pdf_snapshot_path = db.Column(db.String(512), nullable=True)
@@ -216,8 +214,6 @@ class RFPO(db.Model):
         db.Index("idx_rfpo_consortium", "consortium_id"),
         db.Index("idx_rfpo_vendor", "vendor_id"),
         db.Index("idx_rfpo_requestor", "requestor_id"),
-        db.Index("idx_rfpo_status_created", "status", "created_at"),
-        db.Index("idx_rfpo_status_approved", "status", "approved_at"),
     )
 
     # Relationships
@@ -234,20 +230,6 @@ class RFPO(db.Model):
     @property
     def is_deleted(self) -> bool:
         return self.deleted_at is not None
-
-    @property
-    def active_approval_instance(self):
-        """Get the current non-terminal approval instance, if any (BUG-0038)."""
-        if hasattr(self, 'approval_instances'):
-            for inst in self.approval_instances:
-                if inst.overall_status not in ("withdrawn", "refused", "error"):
-                    return inst
-        return None
-
-    @property
-    def approval_instance(self):
-        """Backward-compatible accessor — returns the active instance."""
-        return self.active_approval_instance
 
     def soft_delete(self) -> None:
         self.deleted_at = datetime.utcnow()
@@ -349,7 +331,6 @@ class RFPO(db.Model):
             "updated_by": self.updated_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "approved_at": self.approved_at.isoformat() if self.approved_at else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "pdf_snapshot_path": self.pdf_snapshot_path,
             "file_count": len(self.files) if self.files else 0,
@@ -1963,7 +1944,7 @@ class RFPOApprovalInstance(db.Model):
     # Relationships
     rfpo = db.relationship(
         "RFPO", backref=db.backref(
-            "approval_instances", lazy=True, cascade="all, delete-orphan"
+            "approval_instance", uselist=False, cascade="all, delete-orphan"
         )
     )
     actions = db.relationship(
@@ -2018,12 +1999,12 @@ class RFPOApprovalInstance(db.Model):
         return [
             action
             for action in self.actions
-            if action.status in ["approved", "conditional", "refused", "cancelled"]
+            if action.status in ["approved", "conditional", "refused"]
         ]
 
     def is_complete(self):
         """Check if approval workflow is complete"""
-        return self.overall_status in ["approved", "refused", "withdrawn", "error"]
+        return self.overall_status in ["approved", "refused"]
 
     def check_completion_status(self):
         """Check if all actions are completed and determine final status"""
@@ -2045,28 +2026,6 @@ class RFPOApprovalInstance(db.Model):
 
         # If all actions are completed and none refused, it's approved
         return "approved"
-
-    def _resolve_orphaned_actions(self):
-        """Auto-complete pending actions that don't match the workflow structure.
-
-        This handles the limbo state where the pointer reaches the end of
-        stages but orphaned pending actions prevent completion (BUG-0040).
-        """
-        data = self.get_instance_data()
-        stages = data.get("stages", [])
-        valid_positions = set()
-        for stage in stages:
-            so = stage.get("stage_order")
-            for step in stage.get("steps", []):
-                valid_positions.add((so, step.get("step_order")))
-
-        for action in self.actions:
-            if action.status == "pending":
-                pos = (action.stage_order, action.step_order)
-                if pos not in valid_positions:
-                    action.status = "cancelled"
-                    action.completed_at = datetime.utcnow()
-                    action.comments = "[System] Auto-cancelled: orphaned action outside workflow structure."
 
     def advance_to_next_step(self):
         """Advance workflow to next step or stage, with proper completion logic.
@@ -2110,7 +2069,10 @@ class RFPOApprovalInstance(db.Model):
                         self.current_stage_order += 1
                         self.current_step_order = 1
                     else:
-                        self._finalize_at_end()
+                        final_status = self.check_completion_status()
+                        if final_status:
+                            self.overall_status = final_status
+                            self.completed_at = datetime.utcnow()
                 # else: still waiting for other approvers — don't move pointer
             else:
                 # Sequential stage: advance one step at a time
@@ -2126,28 +2088,11 @@ class RFPOApprovalInstance(db.Model):
                         self.current_stage_order += 1
                         self.current_step_order = 1
                     else:
-                        self._finalize_at_end()
-
-    def _finalize_at_end(self):
-        """Finalize workflow at the end of all stages with limbo guard (BUG-0040)."""
-        final_status = self.check_completion_status()
-        if final_status:
-            self.overall_status = final_status
-            self.completed_at = datetime.utcnow()
-        else:
-            # Limbo guard: attempt to resolve orphaned actions
-            self._resolve_orphaned_actions()
-            retry_status = self.check_completion_status()
-            if retry_status:
-                self.overall_status = retry_status
-                self.completed_at = datetime.utcnow()
-            else:
-                logging.getLogger(__name__).error(
-                    "Workflow %s stuck at end of stages — marking as error",
-                    self.instance_id,
-                )
-                self.overall_status = "error"
-                self.completed_at = datetime.utcnow()
+                        # Reached end of workflow structure - check completion again
+                        final_status = self.check_completion_status()
+                        if final_status:
+                            self.overall_status = final_status
+                            self.completed_at = datetime.utcnow()
 
     def to_dict(self):
         return {
@@ -2277,8 +2222,6 @@ class RFPOApprovalAction(db.Model):
 
     def complete_action(self, status, comments=None, conditions=None, approver_id=None):
         """Complete this approval action"""
-        if self.status != "pending":
-            raise ValueError(f"Action {self.action_id} is already {self.status}, cannot set to {status}")
         self.status = status
         self.comments = comments
         self.conditions = conditions
@@ -2535,219 +2478,3 @@ class EmailLog(db.Model):
 
     def __repr__(self):
         return f"<EmailLog {self.id}: {self.email_type} {self.status} to {self.to_emails}>"
-
-
-# ---------------------------------------------------------------------------
-# Ticket System (Bug Reports & Feature Requests)
-# ---------------------------------------------------------------------------
-
-class Ticket(db.Model):
-    """Unified ticket for bug reports and feature requests."""
-
-    __tablename__ = "tickets"
-
-    id = db.Column(db.Integer, primary_key=True)
-    ticket_number = db.Column(db.String(20), unique=True, nullable=False, index=True)  # BUG-0001 / FR-0001
-    type = db.Column(db.String(20), nullable=False, index=True)  # bug, feature_request
-    title = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text, nullable=False)
-
-    # Classification
-    status = db.Column(db.String(32), nullable=False, default="open", index=True)
-    # bug statuses: open, in_progress, resolved, closed, wont_fix
-    # feature statuses: open, under_review, planned, in_progress, completed, declined
-    priority = db.Column(db.String(20), nullable=False, default="medium")  # low, medium, high, critical
-    severity = db.Column(db.String(20), nullable=True)  # bug-only: cosmetic, minor, major, blocker
-
-    # Context
-    page_url = db.Column(db.String(512), nullable=True)  # Where the bug occurred / feature is wanted
-    browser_info = db.Column(db.String(512), nullable=True)  # Auto-captured user-agent
-    steps_to_reproduce = db.Column(db.Text, nullable=True)  # Bug-only
-
-    # Tracking
-    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    assigned_to = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-    resolved_at = db.Column(db.DateTime, nullable=True)
-    closed_at = db.Column(db.DateTime, nullable=True)
-
-    # Admin notes (internal, not visible to submitter)
-    internal_notes = db.Column(db.Text, nullable=True)
-
-    # Relationships
-    creator = db.relationship("User", foreign_keys=[created_by], backref=db.backref("tickets_created", lazy=True))
-    assignee = db.relationship("User", foreign_keys=[assigned_to], backref=db.backref("tickets_assigned", lazy=True))
-    comments = db.relationship("TicketComment", backref="ticket", lazy=True, cascade="all, delete-orphan",
-                               order_by="TicketComment.created_at")
-    attachments = db.relationship("TicketAttachment", backref="ticket", lazy=True, cascade="all, delete-orphan")
-
-    __table_args__ = (
-        db.Index("idx_ticket_type_status", "type", "status"),
-        db.Index("idx_ticket_creator_type", "created_by", "type"),
-    )
-
-    @staticmethod
-    def generate_ticket_number(ticket_type: str, session) -> str:
-        """Generate next sequential ticket number like BUG-0001 or FR-0001.
-
-        Uses MAX query + unique constraint retry to handle concurrent inserts.
-        """
-        prefix = "BUG" if ticket_type == "bug" else "FR"
-        # Use MAX on ticket_number for the type to find the highest existing number
-        from sqlalchemy import func as sa_func
-        max_number = session.query(
-            sa_func.max(Ticket.ticket_number)
-        ).filter(Ticket.type == ticket_type).scalar()
-        next_num = 1
-        if max_number:
-            try:
-                next_num = int(max_number.split("-")[1]) + 1
-            except (IndexError, ValueError):
-                pass
-        return f"{prefix}-{next_num:04d}"
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "ticket_number": self.ticket_number,
-            "type": self.type,
-            "title": self.title,
-            "description": self.description,
-            "status": self.status,
-            "priority": self.priority,
-            "severity": self.severity,
-            "page_url": self.page_url,
-            "browser_info": self.browser_info,
-            "steps_to_reproduce": self.steps_to_reproduce,
-            "created_by": self.created_by,
-            "creator_name": self.creator.get_display_name() if self.creator else None,
-            "assigned_to": self.assigned_to,
-            "assignee_name": self.assignee.get_display_name() if self.assignee else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
-            "closed_at": self.closed_at.isoformat() if self.closed_at else None,
-            "internal_notes": self.internal_notes,
-            "comment_count": len(self.comments) if self.comments else 0,
-            "attachment_count": len(self.attachments) if self.attachments else 0,
-        }
-
-    def to_dict_public(self) -> Dict[str, Any]:
-        """Serialization for non-admin users (omits internal_notes, hides internal comment count)."""
-        d = self.to_dict()
-        d.pop("internal_notes", None)
-        # Only count public comments so users can't infer internal discussion
-        if self.comments:
-            d["comment_count"] = len([c for c in self.comments if not c.is_internal])
-        return d
-
-    def __repr__(self):
-        return f"<Ticket {self.ticket_number}: {self.title[:40]}>"
-
-
-class TicketComment(db.Model):
-    """Comments / conversation thread on a ticket."""
-
-    __tablename__ = "ticket_comments"
-
-    id = db.Column(db.Integer, primary_key=True)
-    ticket_id = db.Column(db.Integer, db.ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    is_internal = db.Column(db.Boolean, default=False)  # True = admin-only note
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    author = db.relationship("User", backref=db.backref("ticket_comments", lazy=True))
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "ticket_id": self.ticket_id,
-            "user_id": self.user_id,
-            "author_name": self.author.get_display_name() if self.author else None,
-            "content": self.content,
-            "is_internal": self.is_internal,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-
-    def __repr__(self):
-        return f"<TicketComment {self.id} on ticket {self.ticket_id}>"
-
-
-class TicketAttachment(db.Model):
-    """File attachments on tickets, stored via DOCUPLOAD."""
-
-    __tablename__ = "ticket_attachments"
-
-    id = db.Column(db.Integer, primary_key=True)
-    file_id = db.Column(db.String(36), unique=True, nullable=False)  # UUID
-    ticket_id = db.Column(db.Integer, db.ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
-    original_filename = db.Column(db.String(256), nullable=False)
-    stored_filename = db.Column(db.String(256), nullable=False)  # UUID_originalname
-    file_path = db.Column(db.String(512), nullable=False)  # Local path
-    cloud_path = db.Column(db.String(512), nullable=True)  # DOCUPLOAD folder path
-    file_size = db.Column(db.Integer, nullable=False)  # Bytes
-    mime_type = db.Column(db.String(128), nullable=True)
-    file_extension = db.Column(db.String(10), nullable=True)
-    uploaded_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    uploader = db.relationship("User", backref=db.backref("ticket_attachments", lazy=True))
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "file_id": self.file_id,
-            "ticket_id": self.ticket_id,
-            "original_filename": self.original_filename,
-            "file_size": self.file_size,
-            "mime_type": self.mime_type,
-            "file_extension": self.file_extension,
-            "uploaded_by": self.uploaded_by,
-            "uploader_name": self.uploader.get_display_name() if self.uploader else None,
-            "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
-        }
-
-    def __repr__(self):
-        return f"<TicketAttachment {self.file_id}: {self.original_filename}>"
-
-
-class AIUsageLog(db.Model):
-    """Tracks Azure OpenAI API usage for budget enforcement."""
-
-    __tablename__ = "ai_usage_log"
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    rfpo_id = db.Column(db.Integer, db.ForeignKey("rfpos.id"), nullable=True)
-    operation = db.Column(db.String(50), nullable=False)
-    model_name = db.Column(db.String(50), nullable=False)
-    prompt_tokens = db.Column(db.Integer, default=0)
-    completion_tokens = db.Column(db.Integer, default=0)
-    total_tokens = db.Column(db.Integer, default=0)
-    estimated_cost_usd = db.Column(db.Numeric(10, 6), default=0)
-    file_name = db.Column(db.String(256))
-    items_extracted = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    user = db.relationship("User", backref=db.backref("ai_usage_logs", lazy=True))
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "rfpo_id": self.rfpo_id,
-            "operation": self.operation,
-            "model_name": self.model_name,
-            "prompt_tokens": self.prompt_tokens,
-            "completion_tokens": self.completion_tokens,
-            "total_tokens": self.total_tokens,
-            "estimated_cost_usd": float(self.estimated_cost_usd or 0),
-            "file_name": self.file_name,
-            "items_extracted": self.items_extracted,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-
-    def __repr__(self):
-        return f"<AIUsageLog {self.id}: {self.operation} ${float(self.estimated_cost_usd or 0):.4f}>"

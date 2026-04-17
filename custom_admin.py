@@ -64,9 +64,6 @@ from models import (
     RFPOApprovalWorkflow,
     RFPOLineItem,
     Team,
-    Ticket,
-    TicketAttachment,
-    TicketComment,
     UploadedFile,
     User,
     UserTeam,
@@ -1038,41 +1035,32 @@ def create_app():
         gen = RFPOPDFGenerator(positioning_config=None)
         pdf_buffer = gen.generate_rfpo_pdf(rfpo, consortium, project, vendor, vendor_site, requestor=requestor)
 
-        snapshots_dir = os.path.join(app.root_path, "uploads", "rfpos", rfpo.rfpo_id, "snapshots")
+        snapshots_dir = os.path.join(app.root_path, "uploads", "snapshots")
         os.makedirs(snapshots_dir, exist_ok=True)
 
-        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
-        filename = f"{timestamp}_snapshot.pdf"
+        filename = f"{_uuid.uuid4().hex[:12]}_{rfpo.rfpo_id}.pdf"
         filepath = os.path.join(snapshots_dir, filename)
         with open(filepath, "wb") as f:
             f.write(pdf_buffer.getvalue())
 
-        relative_path = f"uploads/rfpos/{rfpo.rfpo_id}/snapshots/{filename}"
+        relative_path = f"uploads/snapshots/{filename}"
         app.logger.info("PDF snapshot saved for RFPO %s: %s", rfpo.rfpo_id, relative_path)
         return relative_path
 
     def _notify_workflow_complete(rfpo, outcome):
-        """Send email notification to RFPO requestor when workflow completes."""
+        """Send email notification to RFPO creator when workflow completes."""
         try:
             from email_service import email_service as _email_svc
-            # BUG-0044: Look up requestor by record_id (not created_by display name)
-            requestor = None
-            if rfpo.requestor_id:
-                requestor = User.query.filter_by(
-                    record_id=rfpo.requestor_id, active=True
-                ).first()
-            if not requestor:
-                # Fallback: try created_by as email
-                requestor = User.query.filter_by(
-                    email=rfpo.created_by, active=True
-                ).first()
-            if not requestor:
-                # created_by might be display_name; try lookup via fullname
-                requestor = User.query.filter(
+            creator = User.query.filter_by(
+                email=rfpo.created_by, active=True
+            ).first()
+            if not creator:
+                # created_by might be display_name; try lookup via display
+                creator = User.query.filter(
                     User.active == True,
-                    User.fullname == rfpo.created_by
+                    (User.first_name + " " + User.last_name) == rfpo.created_by
                 ).first()
-            if not requestor or not requestor.email:
+            if not creator or not creator.email:
                 return
 
             admin_url = (
@@ -1081,10 +1069,10 @@ def create_app():
                 or "http://localhost:5000"
             )
             _email_svc.send_templated_email(
-                to_emails=[requestor.email],
+                to_emails=[creator.email],
                 template_name="approval_complete",
                 template_data={
-                    "user_name": requestor.get_display_name(),
+                    "user_name": creator.get_display_name(),
                     "rfpo_id": rfpo.rfpo_id,
                     "po_number": rfpo.po_number,
                     "outcome": outcome,
@@ -1096,7 +1084,7 @@ def create_app():
             )
             app.logger.info(
                 "NOTIFY: Completion email sent to %s for RFPO %s (%s)",
-                requestor.email, rfpo.rfpo_id, outcome,
+                creator.email, rfpo.rfpo_id, outcome,
             )
         except Exception as e:
             app.logger.error("Failed to send completion notification: %s", e)
@@ -1290,30 +1278,6 @@ def create_app():
         # Amount exceeds all brackets — no valid stage
         return None
 
-    def determine_rfpo_cumulative_stages(rfpo, workflow):
-        """Determine ALL applicable stages for an RFPO — cumulative cascading.
-
-        Returns all stages at or below the matching bracket, sorted by bracket
-        amount ascending. Higher-value purchases require everything lower tiers
-        require, plus more.
-        """
-        if not rfpo.total_amount or not workflow or not workflow.stages:
-            return []
-
-        rfpo_total = float(rfpo.total_amount)
-        stages = sorted(workflow.stages, key=lambda s: float(s.budget_bracket_amount))
-
-        cumulative = []
-        for stage in stages:
-            cumulative.append(stage)
-            if rfpo_total <= float(stage.budget_bracket_amount):
-                break
-        else:
-            # Amount exceeds all brackets — no valid stages
-            return []
-
-        return cumulative
-
     def validate_rfpo_for_approval(rfpo):
         """Validate an RFPO against all applicable sequential workflow phases"""
         validation_result = {
@@ -1378,101 +1342,61 @@ def create_app():
                     }
                     validation_result["workflow_phases"].append(workflow_phase)
             else:
-                # Process each applicable workflow phase — cumulative stages
+                # Process each applicable workflow phase
                 for workflow_type, workflow, phase_number in applicable_workflows:
                     display_name = (
                         f"Phase {phase_number}: {workflow_type.title()}-specific"
                     )
 
-                    # Determine cumulative stages for this workflow
-                    cumulative_stages = determine_rfpo_cumulative_stages(rfpo, workflow)
-                    # Keep the "top" stage for backward compat display
-                    stage = cumulative_stages[-1] if cumulative_stages else None
+                    # Determine stage for this workflow
+                    stage = determine_rfpo_stage(rfpo, workflow)
                     stage_info = None
 
-                    if cumulative_stages:
-                        # Aggregate document validation across ALL cumulative stages (deduped)
-                        aggregated_doc_validation = {
-                            "required_documents": [],
-                            "uploaded_documents": [],
-                            "missing_documents": [],
-                            "document_status": [],
-                        }
-                        seen_doc_keys = set()
-                        uploaded_doc_types = [f.document_type for f in rfpo.files if f.document_type]
+                    if stage:
+                        # Validate documents for this stage
+                        document_validation = validate_stage_documents(rfpo, stage)
 
-                        for cstage in cumulative_stages:
-                            for key in cstage.get_required_document_types():
-                                if key in seen_doc_keys:
-                                    continue
-                                seen_doc_keys.add(key)
-                                doc_item = List.query.filter_by(
-                                    type="doc_types", key=key, active=True
-                                ).first()
-                                doc_name = doc_item.value if doc_item and doc_item.value and doc_item.value.strip() else key
-                                is_uploaded = key in uploaded_doc_types or doc_name in uploaded_doc_types
-                                aggregated_doc_validation["document_status"].append({
-                                    "key": key, "name": doc_name,
-                                    "is_uploaded": is_uploaded, "is_required": True,
-                                })
-                                aggregated_doc_validation["required_documents"].append(doc_name)
-                                if not is_uploaded:
-                                    aggregated_doc_validation["missing_documents"].append(doc_name)
-
-                        aggregated_doc_validation["uploaded_documents"] = [
-                            {"type": f.document_type, "filename": f.original_filename}
-                            for f in rfpo.files if f.document_type
-                        ]
-
-                        # Collect approval steps across all cumulative stages, deduped by approver_id
-                        # (same person won't appear twice, but multiple approvers of same type are kept)
+                        # Get approval steps
                         approval_steps = []
-                        seen_approvers = set()
-                        for cstage in cumulative_stages:
-                            for step in sorted(cstage.steps, key=lambda s: s.step_order):
-                                approver_id = step.primary_approver_id
-                                if approver_id and approver_id in seen_approvers:
-                                    continue
-                                if approver_id:
-                                    seen_approvers.add(approver_id)
-
-                                primary_approver = User.query.filter_by(
-                                    record_id=step.primary_approver_id, active=True
+                        for step in stage.steps:
+                            primary_approver = User.query.filter_by(
+                                record_id=step.primary_approver_id, active=True
+                            ).first()
+                            backup_approver = (
+                                User.query.filter_by(
+                                    record_id=step.backup_approver_id, active=True
                                 ).first()
-                                backup_approver = (
-                                    User.query.filter_by(
-                                        record_id=step.backup_approver_id, active=True
-                                    ).first()
-                                    if step.backup_approver_id
+                                if step.backup_approver_id
+                                else None
+                            )
+
+                            step_info = {
+                                "step_id": step.step_id,
+                                "step_name": step.step_name,
+                                "step_order": step.step_order,
+                                "approval_type": step.approval_type_name,
+                                "primary_approver": (
+                                    primary_approver.get_display_name()
+                                    if primary_approver
+                                    else "Unknown User"
+                                ),
+                                "backup_approver": (
+                                    backup_approver.get_display_name()
+                                    if backup_approver
                                     else None
+                                ),
+                                "is_required": step.is_required,
+                                "description": step.description,
+                                "approver_valid": primary_approver is not None,
+                            }
+                            approval_steps.append(step_info)
+
+                            # Check for missing approvers
+                            if not primary_approver:
+                                validation_result["errors"].append(
+                                    f"Phase {phase_number} - Primary approver not found for step: {step.step_name}"
                                 )
-
-                                step_info = {
-                                    "step_id": step.step_id,
-                                    "step_name": step.step_name,
-                                    "step_order": step.step_order,
-                                    "approval_type": step.approval_type_name,
-                                    "primary_approver": (
-                                        primary_approver.get_display_name()
-                                        if primary_approver
-                                        else "Unknown User"
-                                    ),
-                                    "backup_approver": (
-                                        backup_approver.get_display_name()
-                                        if backup_approver
-                                        else None
-                                    ),
-                                    "is_required": step.is_required,
-                                    "description": step.description,
-                                    "approver_valid": primary_approver is not None,
-                                }
-                                approval_steps.append(step_info)
-
-                                if not primary_approver:
-                                    validation_result["errors"].append(
-                                        f"Phase {phase_number} - Primary approver not found for step: {step.step_name}"
-                                    )
-                                    validation_result["is_valid"] = False
+                                validation_result["is_valid"] = False
 
                         stage_info = {
                             "stage_id": stage.stage_id,
@@ -1481,18 +1405,18 @@ def create_app():
                             "budget_bracket_amount": float(stage.budget_bracket_amount),
                             "rfpo_amount": float(rfpo.total_amount or 0),
                             "description": stage.description,
-                            "document_validation": aggregated_doc_validation,
+                            "document_validation": document_validation,
                             "approval_steps": approval_steps,
-                            "cumulative_stage_count": len(cumulative_stages),
                         }
 
                         # Add summary warnings for document issues
-                        if aggregated_doc_validation["missing_documents"]:
+                        if document_validation["missing_documents"]:
+                            # Missing required documents block submission
                             missing_count = len(
-                                aggregated_doc_validation["missing_documents"]
+                                document_validation["missing_documents"]
                             )
                             missing_names = ", ".join(
-                                aggregated_doc_validation["missing_documents"]
+                                document_validation["missing_documents"]
                             )
                             msg = (
                                 f"{workflow_type.title()}: {missing_count} required "
@@ -1623,131 +1547,46 @@ def create_app():
         resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return resp
 
-    # ── Template preview (inline iframe) ──────────────────────────────
-    @app.route("/tools/email-template-preview/<template_name>")
-    @login_required
-    def email_template_preview(template_name):
-        """Render an email template with sample data and return raw HTML for iframe preview."""
-        from jinja2 import Environment, FileSystemLoader, select_autoescape
-        import os as _os
-
-        allowed = {
-            "approval_notification", "approval_complete", "approval_reminder",
-            "approval_escalation", "welcome", "password_changed", "user_added_to_project",
-        }
-        if template_name not in allowed:
-            return "Template not found", 404
-
-        tpl_dir = _os.path.join(_os.path.dirname(__file__), "templates", "email")
-        env = Environment(
-            loader=FileSystemLoader(tpl_dir),
-            autoescape=select_autoescape(["html", "xml"]),
-        )
-        template = env.get_template(f"{template_name}.html")
-
-        sample_data = {
-            "user_name": current_user.get_display_name() if current_user else "Jane Doe",
-            "rfpo_id": "RFPO-2026-0042",
-            "approval_type": "Standard Approval",
-            "rfpo_url": "#",
-            "current_date": datetime.now().strftime("%Y-%m-%d"),
-            "current_year": datetime.now().year,
-            "step_name": "Finance Review",
-            "due_date": "2026-04-15",
-            "days_overdue": 3,
-            "reminder_number": 2,
-            "max_reminders": 5,
-            "temp_password": "TempP@ss123",
-            "login_url": "#",
-            "user_login_url": "#",
-            "admin_login_url": "#",
-            "show_user_link": True,
-            "show_admin_link": True,
-            "project_name": "Sample Project Alpha",
-            "team_name": "Engineering Team A",
-            "consortium_name": "USCAR Consortium",
-            "role": "Team Viewer",
-            "added_by": "John Admin",
-            "subject": f"Sample - {template_name.replace('_', ' ').title()}",
-        }
-        html = template.render(**sample_data)
-        return html
-
     # Email test form (admin-only) — supports multiple recipients and HTML
     @app.route("/tools/email-test", methods=["GET", "POST"])
     @login_required
     def email_test_tool():
-        from email_service import email_service, is_email_globally_disabled
+        from email_service import email_service
 
-        # Handle EMAIL_DISABLED kill switch toggle
+        # Handle kill switch toggle
         if request.method == "POST" and request.form.get("_action") == "save_kill_switch":
-            new_val = "true" if request.form.get("email_disabled") == "1" else ""
-            os.environ["EMAIL_DISABLED"] = new_val
-            if new_val:
-                flash(
-                    "\u26d4 Email KILL SWITCH activated \u2014 ALL emails are now blocked. "
-                    "This takes effect immediately across all threads.",
-                    "error",
-                )
+            kill_val = request.form.get("email_disabled") == "1"
+            # Set in-process env var (instant for this container)
+            if kill_val:
+                os.environ["EMAIL_DISABLED"] = "true"
             else:
-                flash(
-                    "\u2705 Email kill switch deactivated \u2014 emails will follow test-mode settings.",
-                    "success",
-                )
-            return redirect(url_for("email_test_tool"))
-
-        # Handle send-template-test action
-        if request.method == "POST" and request.form.get("_action") == "send_template_test":
-            tpl_name = request.form.get("template_name", "").strip()
-            raw_emails = request.form.get("tpl_to_emails", "").strip()
-            to_emails = [
-                e.strip() for e in raw_emails.replace(";", ",").replace("\n", ",").split(",")
-                if e.strip()
-            ]
-            allowed = {
-                "approval_notification", "approval_complete", "approval_reminder",
-                "approval_escalation", "welcome", "password_changed", "user_added_to_project",
-            }
-            if tpl_name not in allowed:
-                flash("❌ Invalid template selected.", "error")
-                return redirect(url_for("email_test_tool"))
-            if not to_emails:
-                flash("❌ Please enter at least one recipient email.", "error")
-                return redirect(url_for("email_test_tool"))
-
-            sample_data = {
-                "user_name": current_user.get_display_name() if current_user else "Jane Doe",
-                "rfpo_id": "RFPO-2026-0042",
-                "approval_type": "Standard Approval",
-                "rfpo_url": "#",
-                "step_name": "Finance Review",
-                "due_date": "2026-04-15",
-                "days_overdue": 3,
-                "reminder_number": 2,
-                "max_reminders": 5,
-                "temp_password": "TempP@ss123",
-                "login_url": "#",
-                "user_login_url": "#",
-                "admin_login_url": "#",
-                "show_user_link": True,
-                "show_admin_link": True,
-                "project_name": "Sample Project Alpha",
-                "team_name": "Engineering Team A",
-                "consortium_name": "USCAR Consortium",
-                "role": "Team Viewer",
-                "added_by": current_user.get_display_name() if current_user else "Admin",
-            }
-            subject = f"[TEMPLATE TEST] {tpl_name.replace('_', ' ').title()} — RFPO"
-            ok = email_service.send_templated_email(
-                to_emails=to_emails,
-                template_name=tpl_name,
-                template_data=sample_data,
-                subject=subject,
-            )
-            if ok:
-                flash(f"✅ Branded template '{tpl_name}' sent to {', '.join(to_emails)}", "success")
+                os.environ.pop("EMAIL_DISABLED", None)
+            # Persist to DB so it works cross-container (API container)
+            import uuid as _uuid
+            row = List.query.filter_by(type="email_settings", key="kill_switch").first()
+            if row:
+                row.value = "true" if kill_val else "false"
+                row.updated_by = current_user.email
             else:
-                flash(f"❌ Failed to send branded template email.", "error")
+                row = List(
+                    list_id=str(_uuid.uuid4())[:10],
+                    type="email_settings",
+                    key="kill_switch",
+                    value="true" if kill_val else "false",
+                    active=True,
+                    created_by=current_user.email,
+                    updated_by=current_user.email,
+                )
+                db.session.add(row)
+            db.session.commit()
+            # Clear email_service caches
+            import email_service as _esm
+            _esm._kill_switch_cache = None
+            _esm._test_settings_cache = None
+            if kill_val:
+                flash("🛑 Email kill switch ENABLED — all outbound email is now blocked.", "warning")
+            else:
+                flash("✅ Email kill switch DISABLED — emails will be sent normally.", "success")
             return redirect(url_for("email_test_tool"))
 
         # Handle test-mode settings save
@@ -1865,11 +1704,18 @@ def create_app():
             if test_recipient_row and test_recipient_row.value else ""
         )
 
+        # Determine kill switch state from env var AND DB
+        _env_kill = os.environ.get("EMAIL_DISABLED", "").lower() in ("true", "1", "yes")
+        _db_kill = False
+        _db_kill_row = List.query.filter_by(type="email_settings", key="kill_switch").first()
+        if _db_kill_row and _db_kill_row.value:
+            _db_kill = _db_kill_row.value.lower() in ("true", "1", "yes")
+
         return render_template(
             "admin/tools/email_test.html",
             email_test_mode=email_test_mode,
             email_test_recipient=email_test_recipient,
-            email_globally_disabled=is_email_globally_disabled(),
+            email_globally_disabled=_env_kill or _db_kill,
         )
 
     # Test route for API integration (safe - doesn't break anything)
@@ -2247,22 +2093,6 @@ def create_app():
                         logo_filename = handle_file_upload(logo_file, "uploads/logos", ALLOWED_IMAGE_EXTENSIONS)
                         if logo_filename:
                             flash(f"📷 Logo uploaded: {logo_filename}", "info")
-                            # Upload logo to cloud storage
-                            try:
-                                from docupload_client import upload_to_docupload, is_configured
-                                if is_configured():
-                                    logo_path = os.path.join("uploads/logos", logo_filename)
-                                    with open(logo_path, "rb") as f:
-                                        logo_bytes = f.read()
-                                    upload_to_docupload(
-                                        files={"logo": (logo_filename, logo_bytes, "image/png")},
-                                        folder_path=f"consortiums/{consort_id}/logos",
-                                        form_id="consortium-assets",
-                                        submitted_by=current_user.get_display_name(),
-                                        tags={"consortium-id": consort_id, "asset-type": "logo", "source": "rfpo-admin"},
-                                    )
-                            except Exception as cloud_err:
-                                logging.getLogger(__name__).warning("DOCUPLOAD logo upload failed: %s", cloud_err)
 
                 # Handle terms PDF upload
                 terms_pdf_filename = None
@@ -2279,22 +2109,6 @@ def create_app():
                                     f"📄 Terms PDF uploaded: {terms_pdf_filename}",
                                     "info",
                                 )
-                                # Upload terms PDF to cloud storage
-                                try:
-                                    from docupload_client import upload_to_docupload, is_configured
-                                    if is_configured():
-                                        terms_path = os.path.join("uploads/terms", terms_pdf_filename)
-                                        with open(terms_path, "rb") as f:
-                                            terms_bytes = f.read()
-                                        upload_to_docupload(
-                                            files={"terms": (terms_pdf_filename, terms_bytes, "application/pdf")},
-                                            folder_path=f"consortiums/{consort_id}/terms",
-                                            form_id="consortium-assets",
-                                            submitted_by=current_user.get_display_name(),
-                                            tags={"consortium-id": consort_id, "asset-type": "terms-pdf", "source": "rfpo-admin"},
-                                        )
-                                except Exception as cloud_err:
-                                    logging.getLogger(__name__).warning("DOCUPLOAD terms upload failed: %s", cloud_err)
                         else:
                             flash("❌ Terms file must be a PDF", "error")
 
@@ -2403,23 +2217,6 @@ def create_app():
 
                         # Upload new logo
                         consortium.logo = handle_file_upload(logo_file, "uploads/logos", ALLOWED_IMAGE_EXTENSIONS)
-                        # Upload to cloud storage
-                        if consortium.logo:
-                            try:
-                                from docupload_client import upload_to_docupload, is_configured
-                                if is_configured():
-                                    logo_path = os.path.join("uploads/logos", consortium.logo)
-                                    with open(logo_path, "rb") as f:
-                                        logo_bytes = f.read()
-                                    upload_to_docupload(
-                                        files={"logo": (consortium.logo, logo_bytes, "image/png")},
-                                        folder_path=f"consortiums/{consortium.consort_id}/logos",
-                                        form_id="consortium-assets",
-                                        submitted_by=current_user.get_display_name(),
-                                        tags={"consortium-id": consortium.consort_id, "asset-type": "logo", "source": "rfpo-admin"},
-                                    )
-                            except Exception as cloud_err:
-                                logging.getLogger(__name__).warning("DOCUPLOAD logo upload failed: %s", cloud_err)
 
                 # Handle terms PDF upload
                 if "terms_pdf_file" in request.files:
@@ -2444,22 +2241,6 @@ def create_app():
                                     f"📄 Terms PDF updated: {consortium.terms_pdf}",
                                     "info",
                                 )
-                                # Upload to cloud storage
-                                try:
-                                    from docupload_client import upload_to_docupload, is_configured
-                                    if is_configured():
-                                        terms_path = os.path.join("uploads/terms", consortium.terms_pdf)
-                                        with open(terms_path, "rb") as f:
-                                            terms_bytes = f.read()
-                                        upload_to_docupload(
-                                            files={"terms": (consortium.terms_pdf, terms_bytes, "application/pdf")},
-                                            folder_path=f"consortiums/{consortium.consort_id}/terms",
-                                            form_id="consortium-assets",
-                                            submitted_by=current_user.get_display_name(),
-                                            tags={"consortium-id": consortium.consort_id, "asset-type": "terms-pdf", "source": "rfpo-admin"},
-                                        )
-                                except Exception as cloud_err:
-                                    logging.getLogger(__name__).warning("DOCUPLOAD terms upload failed: %s", cloud_err)
                         else:
                             flash("❌ Terms file must be a PDF", "error")
 
@@ -3460,19 +3241,21 @@ def create_app():
 
         # Add additional info for each RFPO
         for rfpo in rfpos:
-            # Check if RFPO has active approval instances (BUG-0038: skip withdrawn/terminal)
-            active_inst = rfpo.active_approval_instance
+            # Check if RFPO has approval instances
+            rfpo.approval_instance = RFPOApprovalInstance.query.filter_by(
+                rfpo_id=rfpo.id
+            ).first()
 
-            # Allow deletion if no active instance OR if instance is completed
-            if active_inst is None:
+            # Allow deletion if no approval instance OR if approval instance is completed
+            if rfpo.approval_instance is None:
                 rfpo.can_delete = True
                 rfpo.delete_reason = "No approval workflow"
-            elif active_inst.is_complete():
+            elif rfpo.approval_instance.is_complete():
                 rfpo.can_delete = True
-                rfpo.delete_reason = f"Approval workflow completed ({active_inst.overall_status})"
+                rfpo.delete_reason = f"Approval workflow completed ({rfpo.approval_instance.overall_status})"
             else:
                 rfpo.can_delete = False
-                rfpo.delete_reason = f"Has active approval workflow ({active_inst.overall_status})"
+                rfpo.delete_reason = f"Has active approval workflow ({rfpo.approval_instance.overall_status})"
 
             # Count line items and files
             rfpo.line_item_count = len(rfpo.line_items) if rfpo.line_items else 0
@@ -3905,9 +3688,8 @@ Southfield, MI  48075""",
             file_id = str(uuid.uuid4())
             stored_filename = f"{file_id}_{original_filename}"
 
-            # Create RFPO-specific directory (organized by business RFPO number and doc type)
-            doc_type_folder = secure_filename(document_type or "general").lower().replace(" ", "-") or "general"
-            rfpo_dir = os.path.join("uploads", "rfpos", rfpo.rfpo_id, "documents", doc_type_folder)
+            # Create RFPO-specific directory
+            rfpo_dir = os.path.join("uploads", "rfpo_files", f"rfpo_{rfpo.id}")
             os.makedirs(rfpo_dir, exist_ok=True)
 
             # Full file path
@@ -3915,25 +3697,6 @@ Southfield, MI  48075""",
 
             # Save the file
             file.save(file_path)
-
-            # Upload to DOCUPLOAD (Azure Blob Storage)
-            try:
-                from docupload_client import upload_to_docupload, is_configured
-                if is_configured():
-                    with open(file_path, "rb") as f:
-                        file_bytes = f.read()
-                    doc_type_folder = (document_type or "general").lower().replace(" ", "-")
-                    cloud_result = upload_to_docupload(
-                        files={doc_type_folder: (original_filename, file_bytes, mime_type or "application/octet-stream")},
-                        folder_path=f"rfpo/{rfpo.rfpo_id}/{doc_type_folder}",
-                        form_id="rfpo-documents",
-                        submitted_by=current_user.get_display_name(),
-                        tags={"rfpo-number": rfpo.rfpo_id, "document-type": doc_type_folder, "source": "rfpo-admin"},
-                    )
-                    if cloud_result.get("success"):
-                        flash(f"☁️ Also uploaded to cloud storage: {cloud_result.get('folder_path')}", "info")
-            except Exception as cloud_err:
-                logging.getLogger(__name__).warning("DOCUPLOAD cloud upload failed: %s", cloud_err)
 
             # Create database record
             uploaded_file = UploadedFile(
@@ -8330,571 +8093,6 @@ Southfield, MI  48075""",
             output.getvalue(),
             mimetype="text/csv",
             headers={"Content-Disposition": f"attachment; filename=email_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"},
-        )
-
-    # ──────────────────────────────────────────────────────────────────────
-    # Ticket Management (Bug Log & Feature Requests)
-    # ──────────────────────────────────────────────────────────────────────
-
-    @app.route("/admin/tickets/bugs")
-    @admin_required
-    def admin_ticket_bugs():
-        """List all bug reports for admin triage."""
-        status_filter = request.args.get("status", "")
-        priority_filter = request.args.get("priority", "")
-        search_filter = request.args.get("search", "").strip()[:200]
-        page = max(1, int(request.args.get("page", 1)))
-        per_page = 20
-        query = Ticket.query.filter(Ticket.type == "bug")
-        if status_filter:
-            query = query.filter(Ticket.status == status_filter)
-        if priority_filter:
-            query = query.filter(Ticket.priority == priority_filter)
-        if search_filter:
-            like_term = f"%{search_filter}%"
-            query = query.filter(
-                db.or_(
-                    Ticket.ticket_number.ilike(like_term),
-                    Ticket.title.ilike(like_term),
-                    Ticket.description.ilike(like_term),
-                )
-            )
-        query = query.order_by(Ticket.created_at.desc())
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        return render_template(
-            "admin/tickets.html",
-            tickets=pagination.items,
-            ticket_type="bug",
-            page_title="Bug Log",
-            status_filter=status_filter,
-            priority_filter=priority_filter,
-            search_filter=search_filter,
-            page=pagination.page,
-            pages=pagination.pages,
-            total=pagination.total,
-        )
-
-    @app.route("/admin/tickets/features")
-    @admin_required
-    def admin_ticket_features():
-        """List all feature requests for admin review."""
-        status_filter = request.args.get("status", "")
-        priority_filter = request.args.get("priority", "")
-        search_filter = request.args.get("search", "").strip()[:200]
-        page = max(1, int(request.args.get("page", 1)))
-        per_page = 20
-        query = Ticket.query.filter(Ticket.type == "feature_request")
-        if status_filter:
-            query = query.filter(Ticket.status == status_filter)
-        if priority_filter:
-            query = query.filter(Ticket.priority == priority_filter)
-        if search_filter:
-            like_term = f"%{search_filter}%"
-            query = query.filter(
-                db.or_(
-                    Ticket.ticket_number.ilike(like_term),
-                    Ticket.title.ilike(like_term),
-                    Ticket.description.ilike(like_term),
-                )
-            )
-        query = query.order_by(Ticket.created_at.desc())
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        return render_template(
-            "admin/tickets.html",
-            tickets=pagination.items,
-            ticket_type="feature_request",
-            page_title="Feature Requests",
-            status_filter=status_filter,
-            priority_filter=priority_filter,
-            search_filter=search_filter,
-            page=pagination.page,
-            pages=pagination.pages,
-            total=pagination.total,
-        )
-
-    @app.route("/admin/tickets/<int:ticket_id>")
-    @admin_required
-    def admin_ticket_detail(ticket_id):
-        """Admin detail view for a ticket — triage, assign, comment."""
-        ticket = Ticket.query.get_or_404(ticket_id)
-        comments = TicketComment.query.filter_by(ticket_id=ticket.id).order_by(TicketComment.created_at.asc()).all()
-        attachments = TicketAttachment.query.filter_by(ticket_id=ticket.id).all()
-        admin_users = User.query.filter(User.active == True).order_by(User.fullname).all()
-        return render_template(
-            "admin/ticket_detail.html",
-            ticket=ticket,
-            comments=comments,
-            attachments=attachments,
-            admin_users=admin_users,
-        )
-
-    @app.route("/admin/tickets/<int:ticket_id>/update", methods=["POST"])
-    @admin_required
-    def admin_ticket_update(ticket_id):
-        """Update ticket fields from admin detail page."""
-        ticket = Ticket.query.get_or_404(ticket_id)
-        old_status = ticket.status
-
-        ticket.status = request.form.get("status", ticket.status)
-        ticket.priority = request.form.get("priority", ticket.priority)
-        if ticket.type == "bug":
-            ticket.severity = request.form.get("severity", ticket.severity)
-
-        assigned_to = request.form.get("assigned_to")
-        if assigned_to:
-            try:
-                assigned_id = int(assigned_to)
-                assigned_user = User.query.get(assigned_id)
-                if not assigned_user:
-                    flash("Selected user does not exist.", "danger")
-                    return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
-                ticket.assigned_to = assigned_id
-            except (ValueError, TypeError):
-                flash("Invalid user selection.", "danger")
-                return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
-        else:
-            ticket.assigned_to = None
-
-        ticket.internal_notes = (request.form.get("internal_notes") or "")[:5000]
-
-        if ticket.status in ("resolved", "completed") and ticket.status != old_status:
-            ticket.resolved_at = datetime.now()
-        if ticket.status in ("closed", "wont_fix", "declined") and ticket.status != old_status:
-            ticket.closed_at = datetime.now()
-
-        record_audit("update", "ticket", ticket.id, {
-            "ticket_number": ticket.ticket_number,
-            "old_status": old_status,
-            "new_status": ticket.status,
-        })
-
-        db.session.commit()
-        flash(f"Ticket {ticket.ticket_number} updated.", "success")
-        return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
-
-    @app.route("/admin/tickets/<int:ticket_id>/comment", methods=["POST"])
-    @admin_required
-    def admin_ticket_add_comment(ticket_id):
-        """Add a comment (public or internal) from admin detail page."""
-        ticket = Ticket.query.get_or_404(ticket_id)
-        content = (request.form.get("content") or "").strip()
-        if not content:
-            flash("Comment cannot be empty.", "danger")
-            return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
-
-        is_internal = request.form.get("is_internal") == "1"
-
-        comment = TicketComment(
-            ticket_id=ticket.id,
-            user_id=current_user.id,
-            content=content,
-            is_internal=is_internal,
-        )
-        db.session.add(comment)
-        db.session.commit()
-
-        record_audit("create", "ticket_comment", comment.id, {
-            "ticket_number": ticket.ticket_number,
-            "is_internal": is_internal,
-        })
-
-        flash("Comment added.", "success")
-        return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
-
-    @app.route("/admin/tickets/<int:ticket_id>/attachments/<file_id>")
-    @admin_required
-    def admin_ticket_attachment(ticket_id, file_id):
-        """Serve a ticket attachment file for admin download."""
-        ticket = Ticket.query.get_or_404(ticket_id)
-        attachment = TicketAttachment.query.filter_by(
-            file_id=file_id, ticket_id=ticket.id
-        ).first_or_404()
-
-        if not os.path.exists(attachment.file_path):
-            abort(404)
-
-        from flask import send_file
-        return send_file(
-            attachment.file_path,
-            mimetype=attachment.mime_type,
-            as_attachment=False,
-            download_name=attachment.original_filename,
-        )
-
-    # ── Analytics / Reports ─────────────────────────────────────
-    @app.route("/reports")
-    @login_required
-    def admin_reports():
-        """Analytics dashboard with RFPO, approval, vendor, and email reports."""
-        from sqlalchemy import func, case, extract
-        from datetime import datetime as dt, timedelta
-
-        now = dt.utcnow()
-        thirty_days_ago = now - timedelta(days=30)
-
-        # ── RFPO Summary Cards ──────────────────────────────────
-        status_counts = (
-            db.session.query(RFPO.status, func.count(RFPO.id))
-            .filter(RFPO.deleted_at.is_(None))
-            .group_by(RFPO.status)
-            .all()
-        )
-        status_map = {s: c for s, c in status_counts}
-        total_rfpos = sum(status_map.values())
-        total_value = db.session.query(
-            func.coalesce(func.sum(RFPO.total_amount), 0)
-        ).filter(RFPO.deleted_at.is_(None)).scalar()
-        approved_value = db.session.query(
-            func.coalesce(func.sum(RFPO.total_amount), 0)
-        ).filter(RFPO.deleted_at.is_(None), RFPO.status == "Approved").scalar()
-
-        rfpo_summary = {
-            "total": total_rfpos,
-            "draft": status_map.get("Draft", 0),
-            "pending": status_map.get("Pending Approval", 0),
-            "approved": status_map.get("Approved", 0),
-            "refused": status_map.get("Refused", 0),
-            "total_value": float(total_value),
-            "approved_value": float(approved_value),
-        }
-
-        # ── RFPO by Consortium (top 10) ─────────────────────────
-        rfpo_by_consortium = (
-            db.session.query(
-                Consortium.name,
-                func.count(RFPO.id).label("count"),
-                func.coalesce(func.sum(RFPO.total_amount), 0).label("value"),
-            )
-            .join(Consortium, RFPO.consortium_id == Consortium.consort_id)
-            .filter(RFPO.deleted_at.is_(None))
-            .group_by(Consortium.name)
-            .order_by(func.count(RFPO.id).desc())
-            .limit(10)
-            .all()
-        )
-
-        # ── Time to Fulfill (avg days from creation to approval) ─
-        avg_fulfill = db.session.query(
-            func.avg(
-                func.extract("epoch", RFPO.approved_at)
-                - func.extract("epoch", RFPO.created_at)
-            )
-        ).filter(
-            RFPO.deleted_at.is_(None),
-            RFPO.status == "Approved",
-            RFPO.approved_at.isnot(None),
-        ).scalar()
-        avg_fulfill_days = round(float(avg_fulfill) / 86400, 1) if avg_fulfill else None
-
-        # ── Approval Metrics ────────────────────────────────────
-        pending_actions = RFPOApprovalAction.query.filter_by(status="pending").count()
-        overdue_actions = (
-            RFPOApprovalAction.query
-            .join(RFPOApprovalInstance)
-            .filter(
-                RFPOApprovalAction.status == "pending",
-                RFPOApprovalAction.due_date < now,
-                RFPOApprovalInstance.overall_status == "waiting",
-            )
-            .count()
-        )
-
-        # Busiest approvers (top 5 by completed actions)
-        busiest_approvers = (
-            db.session.query(
-                RFPOApprovalAction.approver_name,
-                func.count(RFPOApprovalAction.id).label("total"),
-                func.sum(case((RFPOApprovalAction.status == "approved", 1), else_=0)).label("approved_ct"),
-                func.sum(case((RFPOApprovalAction.status == "refused", 1), else_=0)).label("refused_ct"),
-            )
-            .filter(RFPOApprovalAction.status.in_(["approved", "refused", "conditional"]))
-            .group_by(RFPOApprovalAction.approver_name)
-            .order_by(func.count(RFPOApprovalAction.id).desc())
-            .limit(5)
-            .all()
-        )
-
-        # ── Vendor Stats (top 5 by RFPO count) ─────────────────
-        top_vendors = (
-            db.session.query(
-                Vendor.company_name,
-                func.count(RFPO.id).label("rfpo_count"),
-                func.coalesce(func.sum(RFPO.total_amount), 0).label("total_value"),
-            )
-            .join(Vendor, RFPO.vendor_id == Vendor.id)
-            .filter(RFPO.deleted_at.is_(None))
-            .group_by(Vendor.company_name)
-            .order_by(func.count(RFPO.id).desc())
-            .limit(5)
-            .all()
-        )
-
-        # Expiring certifications (next 90 days)
-        ninety_days = now + timedelta(days=90)
-        expiring_certs = (
-            Vendor.query
-            .filter(
-                Vendor.active.is_(True),
-                Vendor.cert_expire_date.isnot(None),
-                Vendor.cert_expire_date <= ninety_days.date(),
-            )
-            .order_by(Vendor.cert_expire_date.asc())
-            .limit(10)
-            .all()
-        )
-
-        # ── Email Health (last 30 days) ─────────────────────────
-        email_stats = {}
-        try:
-            email_counts = (
-                db.session.query(
-                    EmailLog.status,
-                    func.count(EmailLog.id),
-                )
-                .filter(EmailLog.created_at >= thirty_days_ago)
-                .group_by(EmailLog.status)
-                .all()
-            )
-            email_stats = {s: c for s, c in email_counts}
-        except Exception:
-            pass  # EmailLog may not exist yet
-
-        # ── Recent activity (last 30 days RFPO count) ───────────
-        recent_rfpo_count = RFPO.query.filter(
-            RFPO.deleted_at.is_(None),
-            RFPO.created_at >= thirty_days_ago,
-        ).count()
-
-        # ── Lookup data for RFPO Explorer ──────────────────────
-        consortiums_list = Consortium.query.filter_by(active=True).order_by(Consortium.name).all()
-        vendors_list = Vendor.query.filter_by(active=True).order_by(Vendor.company_name).all()
-        projects_list = Project.query.filter_by(active=True).order_by(Project.name).all()
-        teams_list = Team.query.filter_by(active=True).order_by(Team.name).all()
-
-        return render_template(
-            "admin/reports.html",
-            rfpo_summary=rfpo_summary,
-            rfpo_by_consortium=rfpo_by_consortium,
-            avg_fulfill_days=avg_fulfill_days,
-            pending_actions=pending_actions,
-            overdue_actions=overdue_actions,
-            busiest_approvers=busiest_approvers,
-            top_vendors=top_vendors,
-            expiring_certs=expiring_certs,
-            email_stats=email_stats,
-            recent_rfpo_count=recent_rfpo_count,
-            consortiums_list=consortiums_list,
-            vendors_list=vendors_list,
-            projects_list=projects_list,
-            teams_list=teams_list,
-            now=now,
-        )
-
-    @app.route("/reports/explorer")
-    @login_required
-    def admin_reports_explorer():
-        """AJAX endpoint: query RFPOs with ad-hoc filters, return JSON."""
-        from sqlalchemy import func
-        from datetime import datetime as dt, timedelta
-
-        try:
-            page = max(1, request.args.get("page", 1, type=int))
-            per_page = max(1, min(request.args.get("per_page", 25, type=int), 200))
-
-            q = RFPO.query.filter(RFPO.deleted_at.is_(None))
-
-            # Filters
-            status = request.args.get("status")
-            if status:
-                q = q.filter(RFPO.status == status)
-
-            search = request.args.get("search", "").strip()
-            if search:
-                like = f"%{search}%"
-                q = q.filter(db.or_(RFPO.title.ilike(like), RFPO.rfpo_id.ilike(like), RFPO.description.ilike(like)))
-
-            consortium_id = request.args.get("consortium_id")
-            if consortium_id:
-                q = q.filter(RFPO.consortium_id == consortium_id)
-
-            project_id = request.args.get("project_id")
-            if project_id:
-                q = q.filter(RFPO.project_id == project_id)
-
-            team_id = request.args.get("team_id", type=int)
-            if team_id:
-                q = q.filter(RFPO.team_id == team_id)
-
-            vendor_id = request.args.get("vendor_id", type=int)
-            if vendor_id:
-                q = q.filter(RFPO.vendor_id == vendor_id)
-
-            requestor_id = request.args.get("requestor_id")
-            if requestor_id:
-                q = q.filter(RFPO.requestor_id == requestor_id)
-
-            amount_min = request.args.get("amount_min", type=float)
-            if amount_min is not None:
-                q = q.filter(RFPO.total_amount >= amount_min)
-
-            amount_max = request.args.get("amount_max", type=float)
-            if amount_max is not None:
-                q = q.filter(RFPO.total_amount <= amount_max)
-
-            po_number = request.args.get("po_number")
-            if po_number:
-                q = q.filter(RFPO.po_number.ilike(f"%{po_number}%"))
-
-            cost_sharing = request.args.get("cost_sharing")
-            if cost_sharing == "yes":
-                q = q.filter(RFPO.cost_share_amount > 0)
-            elif cost_sharing == "no":
-                q = q.filter(db.or_(RFPO.cost_share_amount == 0, RFPO.cost_share_amount.is_(None)))
-
-            date_from = request.args.get("date_from")
-            if date_from:
-                try:
-                    q = q.filter(RFPO.created_at >= dt.strptime(date_from, "%Y-%m-%d"))
-                except ValueError:
-                    pass
-
-            date_to = request.args.get("date_to")
-            if date_to:
-                try:
-                    q = q.filter(RFPO.created_at < dt.strptime(date_to, "%Y-%m-%d") + timedelta(days=1))
-                except ValueError:
-                    pass
-
-            # Aggregate before sort/paginate (ORDER BY is invalid on aggregate queries in PostgreSQL)
-            total_q = q.with_entities(func.count(RFPO.id), func.coalesce(func.sum(RFPO.total_amount), 0))
-            agg = total_q.first()
-            result_count = agg[0] or 0
-            result_total = float(agg[1] or 0)
-
-            # Sort (applied after aggregates, before paginate)
-            SORT_ALLOW = {"created_at", "updated_at", "approved_at", "total_amount", "title", "status", "due_date", "rfpo_id"}
-            sort_by = request.args.get("sort_by", "created_at")
-            if sort_by not in SORT_ALLOW:
-                sort_by = "created_at"
-            sort_dir = request.args.get("sort_dir", "desc")
-            sort_col = getattr(RFPO, sort_by)
-            q = q.order_by(sort_col.desc() if sort_dir == "desc" else sort_col.asc())
-
-            pagination = q.paginate(page=page, per_page=per_page, error_out=False)
-
-            rows = []
-            for r in pagination.items:
-                rows.append({
-                    "rfpo_id": r.rfpo_id,
-                    "title": r.title,
-                    "status": r.status,
-                    "total_amount": float(r.total_amount) if r.total_amount else 0,
-                    "vendor": r.vendor.company_name if r.vendor else "",
-                    "consortium": "",
-                    "requestor": r.created_by or "",
-                    "created_at": r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
-                    "approved_at": r.approved_at.strftime("%Y-%m-%d") if r.approved_at else "",
-                    "po_number": r.po_number or "",
-                })
-                # Resolve consortium name (avoid N+1 — do inline)
-                cons = Consortium.query.filter_by(consort_id=r.consortium_id).first()
-                if cons:
-                    rows[-1]["consortium"] = cons.name
-
-            return jsonify({
-                "success": True,
-                "rfpos": rows,
-                "total": pagination.total,
-                "page": pagination.page,
-                "pages": pagination.pages,
-                "result_count": result_count,
-                "result_total": result_total,
-            })
-        except Exception as e:
-            return jsonify({"success": False, "message": str(e)}), 500
-
-    @app.route("/reports/explorer/csv")
-    @login_required
-    def admin_reports_explorer_csv():
-        """Export filtered RFPOs as CSV."""
-        from datetime import datetime as dt, timedelta
-        import csv
-        import io as _io
-
-        q = RFPO.query.filter(RFPO.deleted_at.is_(None))
-
-        # Apply same filters as explorer
-        status = request.args.get("status")
-        if status:
-            q = q.filter(RFPO.status == status)
-        search = request.args.get("search", "").strip()
-        if search:
-            like = f"%{search}%"
-            q = q.filter(db.or_(RFPO.title.ilike(like), RFPO.rfpo_id.ilike(like)))
-        consortium_id = request.args.get("consortium_id")
-        if consortium_id:
-            q = q.filter(RFPO.consortium_id == consortium_id)
-        project_id = request.args.get("project_id")
-        if project_id:
-            q = q.filter(RFPO.project_id == project_id)
-        team_id = request.args.get("team_id", type=int)
-        if team_id:
-            q = q.filter(RFPO.team_id == team_id)
-        vendor_id = request.args.get("vendor_id", type=int)
-        if vendor_id:
-            q = q.filter(RFPO.vendor_id == vendor_id)
-        amount_min = request.args.get("amount_min", type=float)
-        if amount_min is not None:
-            q = q.filter(RFPO.total_amount >= amount_min)
-        amount_max = request.args.get("amount_max", type=float)
-        if amount_max is not None:
-            q = q.filter(RFPO.total_amount <= amount_max)
-        po_number = request.args.get("po_number")
-        if po_number:
-            q = q.filter(RFPO.po_number.ilike(f"%{po_number}%"))
-        cost_sharing = request.args.get("cost_sharing")
-        if cost_sharing == "yes":
-            q = q.filter(RFPO.cost_share_amount > 0)
-        elif cost_sharing == "no":
-            q = q.filter(db.or_(RFPO.cost_share_amount == 0, RFPO.cost_share_amount.is_(None)))
-        date_from = request.args.get("date_from")
-        if date_from:
-            try:
-                q = q.filter(RFPO.created_at >= dt.strptime(date_from, "%Y-%m-%d"))
-            except ValueError:
-                pass
-        date_to = request.args.get("date_to")
-        if date_to:
-            try:
-                q = q.filter(RFPO.created_at < dt.strptime(date_to, "%Y-%m-%d") + timedelta(days=1))
-            except ValueError:
-                pass
-
-        # Limit to 5000 rows for CSV
-        rfpos = q.order_by(RFPO.created_at.desc()).limit(5000).all()
-
-        buf = _io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(["RFPO ID", "Title", "Status", "Total Amount", "Vendor", "Consortium", "Requestor", "Created", "Approved", "PO Number"])
-        for r in rfpos:
-            cons = Consortium.query.filter_by(consort_id=r.consortium_id).first()
-            writer.writerow([
-                r.rfpo_id, r.title, r.status,
-                float(r.total_amount) if r.total_amount else 0,
-                r.vendor.company_name if r.vendor else "",
-                cons.name if cons else "",
-                r.created_by or "",
-                r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
-                r.approved_at.strftime("%Y-%m-%d") if r.approved_at else "",
-                r.po_number or "",
-            ])
-
-        output = buf.getvalue()
-        buf.close()
-        return Response(
-            output,
-            mimetype="text/csv",
-            headers={"Content-Disposition": f"attachment; filename=rfpo-export-{dt.utcnow().strftime('%Y%m%d')}.csv"},
         )
 
     return app

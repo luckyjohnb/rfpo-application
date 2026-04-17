@@ -95,27 +95,11 @@ _test_settings_ts: float = 0.0
 _TEST_SETTINGS_TTL = 5.0  # seconds
 
 
-def is_email_globally_disabled() -> bool:
-    """Check if emails are globally disabled via environment variable.
-
-    Set EMAIL_DISABLED=true in .env or environment to block ALL email
-    sending regardless of test-mode settings.  This is the safest kill
-    switch for testing — it requires no database access and works in
-    background threads that lack Flask app context.
-    """
-    val = os.environ.get("EMAIL_DISABLED", "").strip().lower()
-    return val in ("true", "1", "yes")
-
-
 def _get_email_test_settings() -> Dict[str, Any]:
     """Read email test-mode settings from the database (List model).
 
     Returns dict with 'test_mode' (bool) and 'test_recipient' (str).
     Cached for 5 seconds to avoid DB hits on burst sends.
-
-    FAIL-SAFE: If the database cannot be reached (e.g. background thread
-    without Flask app context), defaults to test_mode=True so emails are
-    blocked rather than leaking to real recipients.
     """
     global _test_settings_cache, _test_settings_ts
 
@@ -126,8 +110,7 @@ def _get_email_test_settings() -> Dict[str, Any]:
     ):
         return _test_settings_cache
 
-    # Fail-safe: block emails when DB is unreachable
-    fail_safe = {"test_mode": True, "test_recipient": ""}
+    defaults = {"test_mode": False, "test_recipient": ""}
     try:
         # Import here to avoid circular imports (models → email_service)
         from models import List as ListModel
@@ -152,14 +135,50 @@ def _get_email_test_settings() -> Dict[str, Any]:
             ),
         }
     except Exception as exc:
-        logger.warning(
-            "Could not load email test settings (fail-safe: emails blocked): %s",
-            exc,
-        )
-        result = fail_safe
+        logger.debug("Could not load email test settings: %s", exc)
+        result = defaults
 
     _test_settings_cache = result
     _test_settings_ts = now
+    return result
+
+
+# ------------------------------------------------------------------
+# Kill switch — DB-backed (works cross-container)
+# ------------------------------------------------------------------
+
+_kill_switch_cache: Optional[bool] = None
+_kill_switch_ts: float = 0.0
+_KILL_SWITCH_TTL = 5.0  # seconds
+
+
+def _is_kill_switch_on() -> bool:
+    """Check the DB-backed kill switch (email_settings / kill_switch).
+
+    Cached for 5 seconds. Returns False on any error (fail-open).
+    """
+    global _kill_switch_cache, _kill_switch_ts
+
+    now = time.time()
+    if (
+        _kill_switch_cache is not None
+        and (now - _kill_switch_ts) < _KILL_SWITCH_TTL
+    ):
+        return _kill_switch_cache
+
+    result = False
+    try:
+        from models import List as ListModel
+        row = ListModel.query.filter_by(
+            type="email_settings", key="kill_switch",
+        ).first()
+        if row and row.value:
+            result = row.value.lower() in ("true", "1", "yes")
+    except Exception as exc:
+        logger.debug("Could not load kill switch setting: %s", exc)
+
+    _kill_switch_cache = result
+    _kill_switch_ts = now
     return result
 
 
@@ -512,16 +531,21 @@ class EmailService:
             self._reset_last_result()
 
             # =============================================================
-            # Global kill switch (env var — works in any thread)
+            # Kill switch — blocks ALL outbound email instantly
+            # Checks env var first (fastest), then DB setting (cross-container)
             # =============================================================
-            if is_email_globally_disabled():
+            _kill_active = os.environ.get(
+                "EMAIL_DISABLED", "",
+            ).lower() in ("true", "1", "yes")
+            if not _kill_active:
+                _kill_active = _is_kill_switch_on()
+            if _kill_active:
                 logger.info(
-                    "EMAIL_DISABLED: Blocked email to %s — %s",
-                    to_emails, subject,
+                    "EMAIL KILL SWITCH: Blocked email to %s "
+                    "(subject: %s)", to_emails, subject,
                 )
-                self.last_error = "Email globally disabled via EMAIL_DISABLED env var"
+                self.last_error = "Email kill switch is active"
                 self.last_status = "blocked"
-                self.last_recipients = list(to_emails) if to_emails else []
                 return False
 
             # -- Validate inputs --

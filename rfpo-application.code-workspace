@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../DOCUPLOAD-master"
+		}
+	],
+	"settings": {
+		"chat.agent.maxRequests": 100,
+		"chat.tools.terminal.autoReplyToPrompts": true
+	}
+}

@@ -29,7 +29,6 @@ COPY logging_config.py .
 COPY env_config.py .
 COPY auth_saml.py .
 COPY reminder_service.py .
-COPY docupload_client.py .
 COPY migrate_add_reminder_tracking.py .
 COPY templates/ ./templates/
 COPY static/ ./static/

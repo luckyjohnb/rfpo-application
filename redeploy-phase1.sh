@@ -284,6 +284,23 @@ update_app_with_suffix_retry \
     "user-${rfpo_user_GIT_SHORT}" \
     "${USER_EXTRA_ENV}"
 
+# Update Reminder Job (Container Apps Job - uses different az command)
+echo -e "${YELLOW}Updating rfpo-reminder-job container apps job...${NC}"
+set +e
+az containerapp job update \
+    --name "rfpo-reminder-job" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --image "$ACR_LOGIN_SERVER/rfpo-reminder@${rfpo_reminder_DIGEST}" \
+    --set-env-vars APP_BUILD_SHA="${rfpo_reminder_GIT_HEAD}" \
+    --output none
+rc=$?
+set -e
+if [ $rc -ne 0 ]; then
+    echo -e "${RED}❌ Failed to update rfpo-reminder-job${NC}"
+else
+    echo -e "${GREEN}✅ rfpo-reminder-job updated${NC}"
+fi
+
 # Quick health checks
 echo ""
 echo -e "${BLUE}🩺 Running health checks...${NC}"

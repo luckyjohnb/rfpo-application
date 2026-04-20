@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAAMS 3D Viewer — ASB1224</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0f1a; color: #e0e0e0; overflow: hidden;
+        }
+        #header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+            background: linear-gradient(180deg, #002D72 0%, #001a44 100%);
+            padding: 12px 24px; display: flex; align-items: center; gap: 16px;
+            border-bottom: 3px solid #C8102E;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+        }
+        #header h1 { font-size: 18px; font-weight: 600; color: #fff; }
+        #header .badge {
+            background: #C8102E; color: #fff; font-size: 11px; font-weight: 700;
+            padding: 3px 10px; border-radius: 12px; text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        #header .subtitle { font-size: 13px; color: rgba(255,255,255,0.7); margin-left: auto; }
+        #canvas-container { 
+            position: fixed; top: 51px; left: 0; right: 0; bottom: 40px;
+        }
+        #info-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+            background: #111827; padding: 8px 24px; font-size: 12px;
+            display: flex; gap: 24px; border-top: 1px solid #1f2937;
+            color: #9ca3af;
+        }
+        #info-bar .stat { display: flex; gap: 6px; }
+        #info-bar .stat .label { color: #6b7280; }
+        #info-bar .stat .value { color: #C8102E; font-weight: 600; }
+        #loading {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 20; text-align: center; font-size: 14px; color: #9ca3af;
+        }
+        #loading .spinner {
+            width: 40px; height: 40px; border: 3px solid #1f2937;
+            border-top-color: #C8102E; border-radius: 50%;
+            animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #controls-hint {
+            position: fixed; bottom: 50px; right: 16px; z-index: 10;
+            background: rgba(17,24,39,0.9); padding: 12px 16px; border-radius: 8px;
+            font-size: 11px; line-height: 1.8; border: 1px solid #1f2937;
+            transition: opacity 0.5s; pointer-events: none;
+        }
+        #controls-hint kbd {
+            background: #1f2937; padding: 1px 6px; border-radius: 3px;
+            font-family: monospace; color: #C8102E;
+        }
+        #view-buttons {
+            position: fixed; top: 64px; right: 16px; z-index: 10;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        #view-buttons button {
+            background: rgba(17,24,39,0.9); color: #9ca3af; border: 1px solid #1f2937;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px;
+            font-family: inherit; transition: all 0.2s;
+        }
+        #view-buttons button:hover { background: #C8102E; color: #fff; border-color: #C8102E; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>NAAMS 3D Viewer</h1>
+        <span class="badge">Prototype</span>
+        <span class="subtitle" id="model-name">Loading...</span>
+    </div>
+
+    <div id="view-buttons">
+        <button onclick="setView('front')">Front</button>
+        <button onclick="setView('top')">Top</button>
+        <button onclick="setView('right')">Right</button>
+        <button onclick="setView('iso')">Iso</button>
+        <button onclick="setView('reset')">Reset</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="info-bar">
+        <div class="stat"><span class="label">Vertices:</span><span class="value" id="stat-verts">—</span></div>
+        <div class="stat"><span class="label">Faces:</span><span class="value" id="stat-faces">—</span></div>
+        <div class="stat"><span class="label">Bounds:</span><span class="value" id="stat-bounds">—</span></div>
+        <div class="stat"><span class="label">Format:</span><span class="value">U3D (ECMA-363)</span></div>
+    </div>
+
+    <div id="controls-hint">
+        <kbd>LMB</kbd> Rotate &nbsp; <kbd>RMB</kbd> Pan &nbsp; <kbd>Scroll</kbd> Zoom<br>
+        <kbd>F</kbd> Fit all &nbsp; <kbd>W</kbd> Wireframe &nbsp; <kbd>P</kbd> Points
+    </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        Loading 3D model...
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls, meshGroup;
+        let currentMode = 'solid'; // solid, wireframe, points
+
+        async function init() {
+            const container = document.getElementById('canvas-container');
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1a);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, w / h, 1, 50000);
+            camera.position.set(2000, 1500, 2000);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(w, h);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.08;
+            controls.rotateSpeed = 0.8;
+            controls.zoomSpeed = 1.2;
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambient);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight1.position.set(2000, 3000, 2000);
+            dirLight1.castShadow = true;
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0x4488cc, 0.3);
+            dirLight2.position.set(-2000, -1000, -2000);
+            scene.add(dirLight2);
+
+            // Grid
+            const grid = new THREE.GridHelper(4000, 40, 0x1a2744, 0x111827);
+            grid.rotation.x = Math.PI / 2; // XY plane
+            scene.add(grid);
+
+            // Load model
+            await loadModel();
+
+            // Resize handler
+            window.addEventListener('resize', onResize);
+
+            // Keyboard shortcuts
+            window.addEventListener('keydown', onKeyDown);
+
+            // Hide controls hint after 5s
+            setTimeout(() => {
+                document.getElementById('controls-hint').style.opacity = '0';
+            }, 5000);
+
+            animate();
+        }
+
+        async function loadModel() {
+            const resp = await fetch('test_model.json');
+            const data = await resp.json();
+
+            document.getElementById('model-name').textContent = data.name;
+            document.getElementById('stat-verts').textContent = data.numPositions.toLocaleString();
+            document.getElementById('stat-faces').textContent = data.numFaces.toLocaleString() + ' (encoded)';
+
+            const b = data.bounds;
+            document.getElementById('stat-bounds').textContent = 
+                `${(b.maxX - b.minX).toFixed(0)} × ${(b.maxY - b.minY).toFixed(0)} × ${(b.maxZ - b.minZ).toFixed(0)}`;
+
+            meshGroup = new THREE.Group();
+
+            // Create geometry from positions
+            const positions = new Float32Array(data.positions.flat());
+            const normals = new Float32Array(data.normals.flat());
+
+            // Point cloud
+            const pointGeom = new THREE.BufferGeometry();
+            pointGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            pointGeom.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+
+            // Create a Delaunay-like mesh by connecting nearest neighbors
+            // For the POC, we'll use ConvexGeometry as an approximation
+            const points = [];
+            for (let i = 0; i < data.positions.length; i++) {
+                points.push(new THREE.Vector3(
+                    data.positions[i][0],
+                    data.positions[i][1],
+                    data.positions[i][2]
+                ));
+            }
+
+            // Solid mesh via ConvexGeometry (approximation)
+            const { ConvexGeometry } = await import('three/addons/geometries/ConvexGeometry.js');
+            const convexGeom = new ConvexGeometry(points);
+
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x6688bb,
+                specular: 0x222244,
+                shininess: 40,
+                side: THREE.DoubleSide,
+                flatShading: true,
+            });
+
+            const mesh = new THREE.Mesh(convexGeom, material);
+            mesh.name = 'solid';
+            meshGroup.add(mesh);
+
+            // Wireframe overlay
+            const wireGeom = convexGeom.clone();
+            const wireMat = new THREE.MeshBasicMaterial({
+                color: 0xC8102E,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.15,
+            });
+            const wireMesh = new THREE.Mesh(wireGeom, wireMat);
+            wireMesh.name = 'wireframe';
+            meshGroup.add(wireMesh);
+
+            // Point cloud overlay (hidden by default)
+            const pointMat = new THREE.PointsMaterial({
+                color: 0xC8102E,
+                size: 6,
+                sizeAttenuation: true,
+            });
+            const pointCloud = new THREE.Points(pointGeom, pointMat);
+            pointCloud.name = 'points';
+            pointCloud.visible = false;
+            meshGroup.add(pointCloud);
+
+            // Edges
+            const edges = new THREE.EdgesGeometry(convexGeom, 15);
+            const edgeMat = new THREE.LineBasicMaterial({ color: 0x334466, transparent: true, opacity: 0.5 });
+            const edgeLines = new THREE.LineSegments(edges, edgeMat);
+            edgeLines.name = 'edges';
+            meshGroup.add(edgeLines);
+
+            scene.add(meshGroup);
+
+            // Center and fit
+            const box = new THREE.Box3().setFromObject(meshGroup);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+
+            controls.target.copy(center);
+            camera.position.set(center.x + maxDim, center.y + maxDim * 0.7, center.z + maxDim);
+            controls.update();
+
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function setView(view) {
+            if (!meshGroup) return;
+            const box = new THREE.Box3().setFromObject(meshGroup);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z) * 1.5;
+
+            controls.target.copy(center);
+
+            switch (view) {
+                case 'front':
+                    camera.position.set(center.x, center.y, center.z + maxDim);
+                    break;
+                case 'top':
+                    camera.position.set(center.x, center.y + maxDim, center.z);
+                    break;
+                case 'right':
+                    camera.position.set(center.x + maxDim, center.y, center.z);
+                    break;
+                case 'iso':
+                    camera.position.set(center.x + maxDim * 0.7, center.y + maxDim * 0.5, center.z + maxDim * 0.7);
+                    break;
+                case 'reset':
+                    camera.position.set(center.x + maxDim, center.y + maxDim * 0.7, center.z + maxDim);
+                    break;
+            }
+            controls.update();
+        }
+
+        function onKeyDown(e) {
+            if (e.key === 'f' || e.key === 'F') {
+                setView('reset');
+            } else if (e.key === 'w' || e.key === 'W') {
+                toggleMode('wireframe');
+            } else if (e.key === 'p' || e.key === 'P') {
+                toggleMode('points');
+            }
+        }
+
+        function toggleMode(mode) {
+            if (!meshGroup) return;
+            const solid = meshGroup.getObjectByName('solid');
+            const wire = meshGroup.getObjectByName('wireframe');
+            const pts = meshGroup.getObjectByName('points');
+            const edges = meshGroup.getObjectByName('edges');
+
+            if (mode === 'wireframe') {
+                if (currentMode === 'wireframe') {
+                    // Back to solid
+                    solid.visible = true;
+                    wire.material.opacity = 0.15;
+                    pts.visible = false;
+                    edges.visible = true;
+                    currentMode = 'solid';
+                } else {
+                    solid.visible = false;
+                    wire.material.opacity = 0.8;
+                    wire.visible = true;
+                    pts.visible = false;
+                    edges.visible = false;
+                    currentMode = 'wireframe';
+                }
+            } else if (mode === 'points') {
+                if (currentMode === 'points') {
+                    solid.visible = true;
+                    wire.visible = true;
+                    wire.material.opacity = 0.15;
+                    pts.visible = false;
+                    edges.visible = true;
+                    currentMode = 'solid';
+                } else {
+                    solid.visible = false;
+                    wire.visible = false;
+                    pts.visible = true;
+                    edges.visible = false;
+                    currentMode = 'points';
+                }
+            }
+        }
+
+        function onResize() {
+            const container = document.getElementById('canvas-container');
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Expose setView globally for button onclick
+        window.setView = setView;
+
+        init();
+    </script>
+</body>
+</html>

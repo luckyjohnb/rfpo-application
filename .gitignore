@@ -144,3 +144,16 @@ __pypackages__/
 config/users.json
 /uploads/terms
 MFGPROOF_PO_p.pdf
+
+# ----- NAAMS site data / 3D viewer experiments -----
+naams_site_dump/
+naams_site_redesigned/
+naams_site_redesigned_deploy/
+assimp-bin/
+assimp*.dll
+assimp-win64.zip
+test_model.u3d
+test_model.obj
+test_model.stl
+test_model.json
+-

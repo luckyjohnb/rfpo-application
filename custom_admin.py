@@ -7641,6 +7641,300 @@ Southfield, MI  48075""",
             app.logger.exception("Error generating template image: %s", e)
             return Response(f"Error generating template image: {str(e)}", status=500)
 
+    # ── Reports & Analytics ─────────────────────────────────────
+    @app.route("/reports")
+    @login_required
+    def admin_reports():
+        """Reports & Analytics dashboard."""
+        from sqlalchemy import func, case
+        from datetime import timedelta
+
+        now = datetime.utcnow()
+        thirty_days_ago = now - timedelta(days=30)
+        ninety_days_from_now = (now + timedelta(days=90)).date()
+
+        # RFPO summary counts
+        rfpo_q = RFPO.query.filter(RFPO.deleted_at.is_(None))
+        total = rfpo_q.count()
+        draft = rfpo_q.filter(RFPO.status == "Draft").count()
+        pending = rfpo_q.filter(RFPO.status == "Pending Approval").count()
+        approved = rfpo_q.filter(RFPO.status == "Approved").count()
+        refused = rfpo_q.filter(RFPO.status == "Refused").count()
+        total_value = db.session.query(
+            func.coalesce(func.sum(RFPO.total_amount), 0)
+        ).filter(RFPO.deleted_at.is_(None)).scalar()
+        approved_value = db.session.query(
+            func.coalesce(func.sum(RFPO.total_amount), 0)
+        ).filter(RFPO.deleted_at.is_(None), RFPO.status == "Approved").scalar()
+
+        rfpo_summary = {
+            "total": total, "draft": draft, "pending": pending,
+            "approved": approved, "refused": refused,
+            "total_value": float(total_value), "approved_value": float(approved_value),
+        }
+
+        recent_rfpo_count = rfpo_q.filter(RFPO.created_at >= thirty_days_ago).count()
+
+        # Avg time to approve
+        avg_row = db.session.query(
+            func.avg(func.julianday(RFPO.updated_at) - func.julianday(RFPO.created_at))
+        ).filter(RFPO.deleted_at.is_(None), RFPO.status == "Approved").scalar()
+        # julianday is SQLite-only; for PostgreSQL fall back to EXTRACT
+        if avg_row is None:
+            try:
+                from sqlalchemy import text
+                avg_row = db.session.execute(
+                    text("SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/86400) FROM rfpo WHERE deleted_at IS NULL AND status='Approved'")
+                ).scalar()
+            except Exception:
+                avg_row = None
+        avg_fulfill_days = round(float(avg_row), 1) if avg_row else None
+
+        # Approval queue
+        pending_actions = RFPOApprovalAction.query.filter_by(status="pending").count()
+        overdue_actions = (
+            db.session.query(func.count(RFPOApprovalAction.id))
+            .join(RFPOApprovalInstance)
+            .filter(
+                RFPOApprovalAction.status == "pending",
+                RFPOApprovalAction.due_date < now,
+                RFPOApprovalInstance.overall_status == "waiting",
+            ).scalar() or 0
+        )
+
+        # Email stats (last 30 days)
+        email_stats = {}
+        try:
+            rows = db.session.query(
+                EmailLog.status, func.count(EmailLog.id)
+            ).filter(EmailLog.sent_at >= thirty_days_ago).group_by(EmailLog.status).all()
+            email_stats = {r[0]: r[1] for r in rows}
+        except Exception:
+            pass
+
+        # Busiest approvers
+        busiest_approvers = (
+            db.session.query(
+                User.fullname,
+                func.count(RFPOApprovalAction.id),
+                func.sum(case((RFPOApprovalAction.status == "approved", 1), else_=0)),
+                func.sum(case((RFPOApprovalAction.status == "refused", 1), else_=0)),
+            )
+            .join(User, RFPOApprovalAction.approver_id == User.id)
+            .filter(RFPOApprovalAction.status.in_(["approved", "refused"]))
+            .group_by(User.fullname)
+            .order_by(func.count(RFPOApprovalAction.id).desc())
+            .limit(10).all()
+        )
+
+        # Top vendors
+        top_vendors = (
+            db.session.query(
+                Vendor.company_name,
+                func.count(RFPO.id),
+                func.coalesce(func.sum(RFPO.total_amount), 0),
+            )
+            .join(Vendor, RFPO.vendor_id == Vendor.id)
+            .filter(RFPO.deleted_at.is_(None))
+            .group_by(Vendor.company_name)
+            .order_by(func.count(RFPO.id).desc())
+            .limit(10).all()
+        )
+
+        # RFPOs by consortium
+        rfpo_by_consortium = (
+            db.session.query(
+                Consortium.name,
+                func.count(RFPO.id),
+                func.coalesce(func.sum(RFPO.total_amount), 0),
+            )
+            .join(Consortium, RFPO.consortium_id == Consortium.consort_id)
+            .filter(RFPO.deleted_at.is_(None))
+            .group_by(Consortium.name)
+            .order_by(func.count(RFPO.id).desc())
+            .limit(10).all()
+        )
+
+        # Expiring vendor certs
+        expiring_certs = Vendor.query.filter(
+            Vendor.cert_expire_date.isnot(None),
+            Vendor.cert_expire_date <= ninety_days_from_now,
+        ).order_by(Vendor.cert_expire_date.asc()).all()
+
+        # Filter dropdowns
+        consortiums_list = Consortium.query.filter_by(active=True).order_by(Consortium.name).all()
+        vendors_list = Vendor.query.filter_by(active=True).order_by(Vendor.company_name).all()
+        projects_list = Project.query.filter_by(active=True).order_by(Project.name).all()
+        teams_list = Team.query.filter_by(active=True).order_by(Team.name).all()
+
+        return render_template(
+            "admin/reports.html",
+            rfpo_summary=rfpo_summary,
+            recent_rfpo_count=recent_rfpo_count,
+            avg_fulfill_days=avg_fulfill_days,
+            pending_actions=pending_actions,
+            overdue_actions=overdue_actions,
+            email_stats=email_stats,
+            busiest_approvers=busiest_approvers,
+            top_vendors=top_vendors,
+            rfpo_by_consortium=rfpo_by_consortium,
+            expiring_certs=expiring_certs,
+            consortiums_list=consortiums_list,
+            vendors_list=vendors_list,
+            projects_list=projects_list,
+            teams_list=teams_list,
+            now=now,
+        )
+
+    @app.route("/reports/explorer")
+    @login_required
+    def reports_explorer():
+        """RFPO Explorer — JSON endpoint for AJAX search."""
+        from sqlalchemy import func, text
+
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 25, type=int), 100)
+
+        q = db.session.query(RFPO).filter(RFPO.deleted_at.is_(None))
+
+        # Filters
+        status = request.args.get("status")
+        if status:
+            q = q.filter(RFPO.status == status)
+        consortium_id = request.args.get("consortium_id", type=int)
+        if consortium_id:
+            q = q.filter(RFPO.consortium_id == consortium_id)
+        vendor_id = request.args.get("vendor_id", type=int)
+        if vendor_id:
+            q = q.filter(RFPO.vendor_id == vendor_id)
+        project_id = request.args.get("project_id", type=int)
+        if project_id:
+            q = q.filter(RFPO.project_id == project_id)
+        team_id = request.args.get("team_id", type=int)
+        if team_id:
+            q = q.filter(RFPO.team_id == team_id)
+        amount_min = request.args.get("amount_min", type=float)
+        if amount_min is not None:
+            q = q.filter(RFPO.total_amount >= amount_min)
+        amount_max = request.args.get("amount_max", type=float)
+        if amount_max is not None:
+            q = q.filter(RFPO.total_amount <= amount_max)
+        date_from = request.args.get("date_from")
+        if date_from:
+            q = q.filter(RFPO.created_at >= date_from)
+        date_to = request.args.get("date_to")
+        if date_to:
+            q = q.filter(RFPO.created_at <= date_to + " 23:59:59")
+        cost_sharing = request.args.get("cost_sharing")
+        if cost_sharing == "yes":
+            q = q.filter(RFPO.cost_sharing.is_(True))
+        elif cost_sharing == "no":
+            q = q.filter(RFPO.cost_sharing.isnot(True))
+        po_number = request.args.get("po_number")
+        if po_number:
+            q = q.filter(RFPO.po_number.ilike(f"%{po_number}%"))
+        search = request.args.get("search")
+        if search:
+            q = q.filter(
+                db.or_(
+                    RFPO.rfpo_id.ilike(f"%{search}%"),
+                    RFPO.title.ilike(f"%{search}%"),
+                )
+            )
+
+        # Aggregates on filtered set
+        agg = db.session.query(
+            func.count(RFPO.id), func.coalesce(func.sum(RFPO.total_amount), 0)
+        ).filter(RFPO.deleted_at.is_(None))
+        # Apply same filters
+        for criterion in q.whereclause.clauses if hasattr(q.whereclause, 'clauses') else [q.whereclause] if q.whereclause is not None else []:
+            agg = agg.filter(criterion)
+
+        # Sorting
+        ALLOWED_SORT = {"created_at", "total_amount", "title", "status", "rfpo_id", "approved_at", "due_date"}
+        sort_by = request.args.get("sort_by", "created_at")
+        if sort_by not in ALLOWED_SORT:
+            sort_by = "created_at"
+        sort_dir = request.args.get("sort_dir", "desc")
+        col = getattr(RFPO, sort_by, RFPO.created_at)
+        q = q.order_by(col.desc() if sort_dir == "desc" else col.asc())
+
+        # Paginate
+        total_count = q.count()
+        total_value = db.session.query(
+            func.coalesce(func.sum(RFPO.total_amount), 0)
+        ).filter(*[c for c in (q.whereclause.clauses if hasattr(q.whereclause, 'clauses') else [q.whereclause] if q.whereclause is not None else [])]).scalar()
+        pages = max(1, (total_count + per_page - 1) // per_page)
+        rfpos = q.offset((page - 1) * per_page).limit(per_page).all()
+
+        rows = []
+        for r in rfpos:
+            vendor = Vendor.query.get(r.vendor_id) if r.vendor_id else None
+            consortium = Consortium.query.filter_by(consort_id=r.consortium_id).first() if r.consortium_id else None
+            rows.append({
+                "rfpo_id": r.rfpo_id,
+                "title": r.title,
+                "status": r.status,
+                "total_amount": float(r.total_amount or 0),
+                "vendor": vendor.company_name if vendor else "",
+                "consortium": consortium.name if consortium else "",
+                "created_at": r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+                "approved_at": r.approved_at.strftime("%Y-%m-%d") if getattr(r, "approved_at", None) else "",
+                "po_number": r.po_number or "",
+            })
+
+        return jsonify({
+            "success": True,
+            "rfpos": rows,
+            "page": page,
+            "pages": pages,
+            "result_count": total_count,
+            "result_total": float(total_value or 0),
+        })
+
+    @app.route("/reports/explorer/csv")
+    @login_required
+    def reports_explorer_csv():
+        """Export filtered RFPO Explorer results as CSV."""
+        import csv
+        import io as _io
+
+        q = db.session.query(RFPO).filter(RFPO.deleted_at.is_(None))
+
+        status = request.args.get("status")
+        if status:
+            q = q.filter(RFPO.status == status)
+        consortium_id = request.args.get("consortium_id", type=int)
+        if consortium_id:
+            q = q.filter(RFPO.consortium_id == consortium_id)
+        vendor_id = request.args.get("vendor_id", type=int)
+        if vendor_id:
+            q = q.filter(RFPO.vendor_id == vendor_id)
+
+        q = q.order_by(RFPO.created_at.desc())
+        rfpos = q.all()
+
+        si = _io.StringIO()
+        writer = csv.writer(si)
+        writer.writerow(["RFPO ID", "Title", "Status", "Amount", "Vendor", "Consortium", "Created", "PO Number"])
+        for r in rfpos:
+            vendor = Vendor.query.get(r.vendor_id) if r.vendor_id else None
+            consortium = Consortium.query.filter_by(consort_id=r.consortium_id).first() if r.consortium_id else None
+            writer.writerow([
+                r.rfpo_id, r.title, r.status, float(r.total_amount or 0),
+                vendor.company_name if vendor else "",
+                consortium.name if consortium else "",
+                r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+                r.po_number or "",
+            ])
+
+        output = si.getvalue()
+        return Response(
+            output,
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=rfpo_explorer.csv"},
+        )
+
     # PDF Positioning Editor routes
     @app.route("/pdf-positioning")
     @login_required

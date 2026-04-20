@@ -43,6 +43,9 @@ from models import (
     AuditLog,
     Notification,
     EmailLog,
+    Ticket,
+    TicketComment,
+    TicketAttachment,
 )
 import sys
 
@@ -4182,6 +4185,441 @@ def mark_all_notifications_read():
         return jsonify({"success": True})
     except Exception as e:
         db.session.rollback()
+        return _error_response(e)
+
+
+# ─── Ticket System Endpoints ─────────────────────────────────────────────
+
+TICKET_MAX_ATTACHMENTS = 5
+TICKET_MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+TICKET_MAX_TOTAL_SIZE = 50 * 1024 * 1024  # 50 MB per ticket
+
+
+@app.route("/api/tickets", methods=["GET"])
+@require_auth
+def list_tickets():
+    """List tickets. Regular users see only their own; admins see all."""
+    try:
+        user = request.current_user
+        is_admin = user.has_permission("GOD")
+
+        query = Ticket.query
+
+        # Regular users only see their own tickets
+        if not is_admin:
+            query = query.filter_by(created_by=user.id)
+
+        # Filters
+        ticket_type = request.args.get("type")
+        if ticket_type:
+            query = query.filter_by(type=ticket_type)
+
+        status = request.args.get("status")
+        if status:
+            query = query.filter_by(status=status)
+
+        # Search
+        q = request.args.get("q", "").strip()
+        if q:
+            search = f"%{q}%"
+            query = query.filter(
+                db.or_(
+                    Ticket.ticket_number.ilike(search),
+                    Ticket.title.ilike(search),
+                    Ticket.description.ilike(search),
+                )
+            )
+
+        # Date filters
+        date_from = request.args.get("date_from")
+        if date_from:
+            try:
+                dt = datetime.strptime(date_from, "%Y-%m-%d")
+                query = query.filter(Ticket.created_at >= dt)
+            except ValueError:
+                pass
+
+        date_to = request.args.get("date_to")
+        if date_to:
+            try:
+                dt = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+                query = query.filter(Ticket.created_at < dt)
+            except ValueError:
+                pass
+
+        # Sort
+        sort = request.args.get("sort", "created_at_desc")
+        if sort == "ticket_number":
+            query = query.order_by(Ticket.ticket_number.asc())
+        elif sort == "created_at_asc":
+            query = query.order_by(Ticket.created_at.asc())
+        else:
+            query = query.order_by(Ticket.created_at.desc())
+
+        # Pagination
+        page = max(1, request.args.get("page", 1, type=int))
+        per_page = min(50, max(1, request.args.get("per_page", 20, type=int)))
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+        serializer = (lambda t: t.to_dict()) if is_admin else (lambda t: t.to_dict_public())
+        return jsonify({
+            "success": True,
+            "tickets": [serializer(t) for t in pagination.items],
+            "total": pagination.total,
+            "page": pagination.page,
+            "pages": pagination.pages,
+            "per_page": per_page,
+        })
+    except Exception as e:
+        return _error_response(e)
+
+
+@app.route("/api/tickets", methods=["POST"])
+@require_auth
+def create_ticket():
+    """Create a new bug or feature request."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        ticket_type = data.get("type")
+        if ticket_type not in ("bug", "feature_request"):
+            return jsonify({"success": False, "message": "type must be 'bug' or 'feature_request'"}), 400
+
+        title = (data.get("title") or "").strip()
+        if not title:
+            return jsonify({"success": False, "message": "title is required"}), 400
+        if len(title) > 255:
+            return jsonify({"success": False, "message": "title must be 255 characters or less"}), 400
+
+        description = (data.get("description") or "").strip()
+        if not description:
+            return jsonify({"success": False, "message": "description is required"}), 400
+
+        priority = data.get("priority", "medium")
+        if priority not in ("low", "medium", "high", "critical"):
+            return jsonify({"success": False, "message": "Invalid priority value"}), 400
+
+        ticket_number = Ticket.generate_ticket_number(ticket_type, db.session)
+
+        ticket = Ticket(
+            ticket_number=ticket_number,
+            type=ticket_type,
+            title=title,
+            description=description,
+            status="open",
+            priority=priority,
+            severity=data.get("severity") if ticket_type == "bug" else None,
+            page_url=data.get("page_url"),
+            browser_info=data.get("browser_info"),
+            steps_to_reproduce=data.get("steps_to_reproduce") if ticket_type == "bug" else None,
+            created_by=request.current_user.id,
+        )
+
+        db.session.add(ticket)
+        db.session.commit()
+
+        app.logger.info("Ticket %s created by user %s", ticket_number, request.current_user.id)
+        return jsonify({"success": True, "ticket": ticket.to_dict_public()}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/tickets/<int:ticket_id>", methods=["GET"])
+@require_auth
+def get_ticket(ticket_id):
+    """Get a single ticket with comments and attachments."""
+    try:
+        ticket = Ticket.query.get_or_404(ticket_id)
+        user = request.current_user
+        is_admin = user.has_permission("GOD")
+
+        # Access check: owner or admin
+        if ticket.created_by != user.id and not is_admin:
+            return jsonify({"success": False, "message": "Access denied"}), 403
+
+        ticket_data = ticket.to_dict() if is_admin else ticket.to_dict_public()
+
+        # Include comments (filter internal for non-admins)
+        comments = ticket.comments or []
+        if not is_admin:
+            comments = [c for c in comments if not c.is_internal]
+        ticket_data["comments"] = [c.to_dict() for c in comments]
+
+        # Include attachments
+        ticket_data["attachments"] = [a.to_dict() for a in (ticket.attachments or [])]
+
+        return jsonify({"success": True, "ticket": ticket_data})
+    except Exception as e:
+        return _error_response(e)
+
+
+@app.route("/api/tickets/<int:ticket_id>", methods=["PUT"])
+@require_auth
+def update_ticket(ticket_id):
+    """Update a ticket — admins can change status, assignment, internal notes; submitters can update title/description."""
+    try:
+        ticket = Ticket.query.get_or_404(ticket_id)
+        user = request.current_user
+        is_admin = user.has_permission("GOD")
+
+        if ticket.created_by != user.id and not is_admin:
+            return jsonify({"success": False, "message": "Access denied"}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        # Fields editable by submitter
+        if "title" in data:
+            title = (data["title"] or "").strip()
+            if title and len(title) <= 255:
+                ticket.title = title
+        if "description" in data:
+            desc = (data["description"] or "").strip()
+            if desc:
+                ticket.description = desc
+
+        # Admin-only fields
+        if is_admin:
+            if "status" in data:
+                old_status = ticket.status
+                ticket.status = data["status"]
+                if data["status"] in ("resolved",) and not ticket.resolved_at:
+                    ticket.resolved_at = datetime.utcnow()
+                if data["status"] in ("closed",) and not ticket.closed_at:
+                    ticket.closed_at = datetime.utcnow()
+
+                # Background email on status change
+                if old_status != data["status"]:
+                    _send_ticket_status_email(ticket, old_status, data["status"])
+
+            if "priority" in data:
+                ticket.priority = data["priority"]
+            if "severity" in data:
+                ticket.severity = data["severity"]
+            if "assigned_to" in data:
+                ticket.assigned_to = data["assigned_to"] or None
+            if "internal_notes" in data:
+                ticket.internal_notes = data["internal_notes"]
+
+        db.session.commit()
+
+        serializer = ticket.to_dict if is_admin else ticket.to_dict_public
+        return jsonify({"success": True, "ticket": serializer()})
+
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+def _send_ticket_status_email(ticket, old_status, new_status):
+    """Fire status-change email in a background thread."""
+    try:
+        creator = User.query.get(ticket.created_by)
+        if not creator or not creator.email:
+            return
+        email = creator.email
+        name = creator.get_display_name()
+        ticket_num = ticket.ticket_number
+        ticket_title = ticket.title
+        ticket_id = ticket.id
+
+        def _send(email, name, ticket_num, title, tid, old_s, new_s):
+            try:
+                from email_service import send_ticket_status_notification
+                send_ticket_status_notification(email, name, ticket_num, title, tid, old_s, new_s)
+            except Exception as exc:
+                logging.getLogger(__name__).warning("Ticket status email failed: %s", exc)
+
+        threading.Thread(
+            target=_send,
+            args=(email, name, ticket_num, ticket_title, ticket_id, old_status, new_status),
+            daemon=True,
+        ).start()
+    except Exception:
+        pass  # Never let email setup crash the main request
+
+
+@app.route("/api/tickets/<int:ticket_id>/comments", methods=["POST"])
+@require_auth
+def add_ticket_comment(ticket_id):
+    """Add a comment to a ticket."""
+    try:
+        ticket = Ticket.query.get_or_404(ticket_id)
+        user = request.current_user
+        is_admin = user.has_permission("GOD")
+
+        if ticket.created_by != user.id and not is_admin:
+            return jsonify({"success": False, "message": "Access denied"}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        content = (data.get("content") or "").strip()
+        if not content:
+            return jsonify({"success": False, "message": "content is required"}), 400
+
+        # Only admins can create internal comments
+        is_internal = bool(data.get("is_internal")) and is_admin
+
+        comment = TicketComment(
+            ticket_id=ticket.id,
+            user_id=user.id,
+            content=content,
+            is_internal=is_internal,
+        )
+        db.session.add(comment)
+        db.session.commit()
+
+        return jsonify({"success": True, "comment": comment.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/tickets/<int:ticket_id>/attachments", methods=["POST"])
+@require_auth
+def upload_ticket_attachment(ticket_id):
+    """Upload a file attachment to a ticket."""
+    try:
+        ticket = Ticket.query.get_or_404(ticket_id)
+        user = request.current_user
+        is_admin = user.has_permission("GOD")
+
+        if ticket.created_by != user.id and not is_admin:
+            return jsonify({"success": False, "message": "Access denied"}), 403
+
+        if "file" not in request.files:
+            return jsonify({"success": False, "message": "No file provided"}), 400
+
+        file = request.files["file"]
+        if not file.filename:
+            return jsonify({"success": False, "message": "No file selected"}), 400
+
+        # Check attachment count limit
+        existing_count = TicketAttachment.query.filter_by(ticket_id=ticket.id).count()
+        if existing_count >= TICKET_MAX_ATTACHMENTS:
+            return jsonify({"success": False, "message": f"Maximum {TICKET_MAX_ATTACHMENTS} attachments per ticket"}), 400
+
+        from werkzeug.utils import secure_filename
+        import uuid
+        import mimetypes
+
+        original_filename = secure_filename(file.filename)
+        if not original_filename:
+            return jsonify({"success": False, "message": "Invalid filename"}), 400
+
+        file_extension = os.path.splitext(original_filename)[1].lower()
+        if file_extension not in ALLOWED_UPLOAD_EXTENSIONS:
+            return jsonify({"success": False, "message": f"File type '{file_extension}' is not allowed"}), 400
+
+        # Validate file header
+        if not _validate_file_header(file, file_extension):
+            return jsonify({"success": False, "message": f"File content does not match '{file_extension}' format"}), 400
+
+        # Check file size
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > TICKET_MAX_FILE_SIZE:
+            return jsonify({"success": False, "message": "File exceeds 10 MB limit"}), 400
+
+        # Check total ticket attachment size
+        existing_total = db.session.query(
+            db.func.coalesce(db.func.sum(TicketAttachment.file_size), 0)
+        ).filter_by(ticket_id=ticket.id).scalar()
+        if existing_total + file_size > TICKET_MAX_TOTAL_SIZE:
+            return jsonify({"success": False, "message": "Total attachments would exceed 50 MB limit"}), 400
+
+        mime_type, _ = mimetypes.guess_type(original_filename)
+
+        file_id = str(uuid.uuid4())
+        stored_filename = f"{file_id}_{original_filename}"
+
+        ticket_dir = os.path.join("uploads", "tickets", ticket.ticket_number)
+        os.makedirs(ticket_dir, exist_ok=True)
+
+        file_path = os.path.join(ticket_dir, stored_filename)
+        file.save(file_path)
+
+        # Attempt DOCUPLOAD cloud sync (non-blocking)
+        cloud_path = None
+        try:
+            from docupload_client import upload_to_docupload, is_configured
+            if is_configured():
+                with open(file_path, "rb") as fh:
+                    result = upload_to_docupload(
+                        files={"attachment": (original_filename, fh.read(), mime_type or "application/octet-stream")},
+                        folder_path=f"tickets/{ticket.ticket_number}/{ticket.type}",
+                        form_id="ticket-attachments",
+                        submitted_by=user.email,
+                        tags={"ticket-number": ticket.ticket_number},
+                    )
+                if result and result.get("success"):
+                    cloud_path = f"tickets/{ticket.ticket_number}/{ticket.type}/{original_filename}"
+        except Exception as exc:
+            app.logger.warning("DOCUPLOAD sync for ticket attachment failed: %s", exc)
+
+        attachment = TicketAttachment(
+            file_id=file_id,
+            ticket_id=ticket.id,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            file_path=file_path,
+            cloud_path=cloud_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            file_extension=file_extension,
+            uploaded_by=user.id,
+        )
+        db.session.add(attachment)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f'File "{original_filename}" attached',
+            "attachment": attachment.to_dict(),
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return _error_response(e)
+
+
+@app.route("/api/tickets/<int:ticket_id>/attachments/<file_id>/view", methods=["GET"])
+@require_auth
+def view_ticket_attachment(ticket_id, file_id):
+    """Stream/download a ticket attachment."""
+    try:
+        ticket = Ticket.query.get_or_404(ticket_id)
+        user = request.current_user
+        is_admin = user.has_permission("GOD")
+
+        if ticket.created_by != user.id and not is_admin:
+            return jsonify({"success": False, "message": "Access denied"}), 403
+
+        attachment = TicketAttachment.query.filter_by(
+            ticket_id=ticket.id, file_id=file_id
+        ).first()
+        if not attachment:
+            return jsonify({"success": False, "message": "Attachment not found"}), 404
+
+        if not os.path.exists(attachment.file_path):
+            return jsonify({"success": False, "message": "File not found on disk"}), 404
+
+        from flask import send_file
+        return send_file(
+            attachment.file_path,
+            mimetype=attachment.mime_type or "application/octet-stream",
+            as_attachment=True,
+            download_name=attachment.original_filename,
+        )
+    except Exception as e:
         return _error_response(e)
 
 

@@ -201,6 +201,16 @@
                             <h6 class="sidebar-heading text-muted px-3">Tools</h6>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_tickets_bugs') }}">
+                                <i class="fas fa-bug"></i> Bug Log
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_tickets_features') }}">
+                                <i class="fas fa-lightbulb"></i> Feature Requests
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('admin_reports') }}">
                                 <i class="fas fa-chart-bar"></i> Reports & Analytics
                             </a>

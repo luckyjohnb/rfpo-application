@@ -20,7 +20,7 @@ from werkzeug.security import generate_password_hash
 
 from models import (
     db, User, Consortium, Team, Project, Vendor, VendorSite,
-    RFPO, RFPOLineItem, UploadedFile,
+    RFPO, RFPOLineItem, UploadedFile, Ticket,
 )
 import simple_api
 
@@ -211,6 +211,14 @@ PROXY_TO_API_MAP = [
     ("GET",    "/api/notifications/unread-count"),
     ("PUT",    "/api/notifications/<int:notif_id>/read"),
     ("POST",   "/api/notifications/mark-all-read"),
+    # ── Tickets ──
+    ("GET",    "/api/tickets"),
+    ("POST",   "/api/tickets"),
+    ("GET",    "/api/tickets/<int:ticket_id>"),
+    ("PUT",    "/api/tickets/<int:ticket_id>"),
+    ("POST",   "/api/tickets/<int:ticket_id>/comments"),
+    ("POST",   "/api/tickets/<int:ticket_id>/attachments"),
+    ("GET",    "/api/tickets/<int:ticket_id>/attachments/<file_id>/view"),
 ]
 
 
@@ -491,6 +499,94 @@ class TestAPISmokeEndpoints:
 
     def test_notifications_mark_all_read(self):
         self._post("/api/notifications/mark-all-read")
+
+    # ── Tickets ──
+
+    def test_tickets_list(self):
+        self._get("/api/tickets")
+
+    def test_tickets_create(self):
+        self._post("/api/tickets", json={
+            "type": "bug",
+            "title": "Smoke test bug",
+            "description": "A test bug",
+        })
+
+    def test_ticket_get(self):
+        ticket = Ticket(
+            ticket_number="BUG-9999",
+            type="bug",
+            title="Get Test",
+            description="desc",
+            created_by=self.data["user"].id,
+        )
+        db.session.add(ticket)
+        db.session.commit()
+        self._get(f"/api/tickets/{ticket.id}")
+
+    def test_ticket_update(self):
+        ticket = Ticket(
+            ticket_number="BUG-9998",
+            type="bug",
+            title="Update Test",
+            description="desc",
+            created_by=self.data["user"].id,
+        )
+        db.session.add(ticket)
+        db.session.commit()
+        self._put(f"/api/tickets/{ticket.id}", json={"title": "Updated"})
+
+    def test_ticket_add_comment(self):
+        ticket = Ticket(
+            ticket_number="BUG-9997",
+            type="bug",
+            title="Comment Test",
+            description="desc",
+            created_by=self.data["user"].id,
+        )
+        db.session.add(ticket)
+        db.session.commit()
+        self._post(f"/api/tickets/{ticket.id}/comments", json={"content": "test comment"})
+
+    def test_ticket_upload_attachment(self):
+        ticket = Ticket(
+            ticket_number="BUG-9996",
+            type="bug",
+            title="Attach Test",
+            description="desc",
+            created_by=self.data["user"].id,
+        )
+        db.session.add(ticket)
+        db.session.commit()
+        import io
+        data = {
+            "file": (io.BytesIO(b"%PDF-1.4 test"), "attach.pdf", "application/pdf"),
+        }
+        resp = self.client.post(
+            f"/api/tickets/{ticket.id}/attachments",
+            headers=_auth(self.token),
+            data=data,
+            content_type="multipart/form-data",
+        )
+        assert resp.status_code not in (404, 405)
+
+    def test_ticket_view_attachment(self):
+        # Just verify the route exists (will 404 without real attachment)
+        ticket = Ticket(
+            ticket_number="BUG-9995",
+            type="bug",
+            title="View Attach Test",
+            description="desc",
+            created_by=self.data["user"].id,
+        )
+        db.session.add(ticket)
+        db.session.commit()
+        resp = self.client.get(
+            f"/api/tickets/{ticket.id}/attachments/fake-uuid/view",
+            headers=_auth(self.token),
+        )
+        # 404 is OK here (no attachment) — but 405 means route missing
+        assert resp.status_code != 405
 
     # ── Health ──
 

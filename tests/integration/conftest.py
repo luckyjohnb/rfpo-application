@@ -68,6 +68,7 @@ def live_db_cleanup(live_app):
             RFPOApprovalAction, RFPOApprovalInstance,
             RFPOApprovalStep, RFPOApprovalStage, RFPOApprovalWorkflow,
             EmailLog, Notification, AuditLog,
+            TicketAttachment, TicketComment, Ticket,
             UploadedFile, RFPOLineItem, RFPO,
             UserTeam, VendorSite, Vendor, Project, Team, Consortium, User,
         )
@@ -75,6 +76,7 @@ def live_db_cleanup(live_app):
             RFPOApprovalAction, RFPOApprovalInstance,
             RFPOApprovalStep, RFPOApprovalStage, RFPOApprovalWorkflow,
             EmailLog, Notification, AuditLog,
+            TicketAttachment, TicketComment, Ticket,
             UploadedFile, RFPOLineItem, RFPO,
             UserTeam, VendorSite, Vendor, Project, Team, Consortium, User,
         ]:

@@ -2478,3 +2478,163 @@ class EmailLog(db.Model):
 
     def __repr__(self):
         return f"<EmailLog {self.id}: {self.email_type} {self.status} to {self.to_emails}>"
+
+
+# ─── Ticket System Models ────────────────────────────────────────────────
+
+
+class Ticket(db.Model):
+    __tablename__ = "tickets"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_number = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    type = db.Column(db.String(20), nullable=False, index=True)  # bug | feature_request
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(32), nullable=False, default="open")
+    priority = db.Column(db.String(20), nullable=False, default="medium")
+    severity = db.Column(db.String(20), nullable=True)  # bug only
+    page_url = db.Column(db.String(512), nullable=True)
+    browser_info = db.Column(db.String(512), nullable=True)
+    steps_to_reproduce = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    assigned_to = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    internal_notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    closed_at = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.Index("idx_ticket_type_status", "type", "status"),
+        db.Index("idx_ticket_created_by_type", "created_by", "type"),
+    )
+
+    comments = db.relationship(
+        "TicketComment", backref="ticket", cascade="all, delete-orphan",
+        order_by="TicketComment.created_at", lazy=True,
+    )
+    attachments = db.relationship(
+        "TicketAttachment", backref="ticket", cascade="all, delete-orphan", lazy=True,
+    )
+    creator = db.relationship("User", foreign_keys=[created_by], backref="tickets_created")
+    assignee = db.relationship("User", foreign_keys=[assigned_to], backref="tickets_assigned")
+
+    @staticmethod
+    def generate_ticket_number(ticket_type, session):
+        """Generate next sequential ticket number: BUG-0001 or FR-0001."""
+        prefix = "BUG" if ticket_type == "bug" else "FR"
+        last = (
+            session.query(Ticket)
+            .filter(Ticket.type == ticket_type)
+            .order_by(Ticket.id.desc())
+            .first()
+        )
+        if last and last.ticket_number:
+            try:
+                num = int(last.ticket_number.split("-")[1]) + 1
+            except (IndexError, ValueError):
+                num = 1
+        else:
+            num = 1
+        return f"{prefix}-{num:04d}"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "ticket_number": self.ticket_number,
+            "type": self.type,
+            "title": self.title,
+            "description": self.description,
+            "status": self.status,
+            "priority": self.priority,
+            "severity": self.severity,
+            "page_url": self.page_url,
+            "browser_info": self.browser_info,
+            "steps_to_reproduce": self.steps_to_reproduce,
+            "created_by": self.created_by,
+            "assigned_to": self.assigned_to,
+            "internal_notes": self.internal_notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "closed_at": self.closed_at.isoformat() if self.closed_at else None,
+            "creator_name": self.creator.get_display_name() if self.creator else None,
+            "assignee_name": self.assignee.get_display_name() if self.assignee else None,
+            "comment_count": len(self.comments) if self.comments else 0,
+            "attachment_count": len(self.attachments) if self.attachments else 0,
+        }
+
+    def to_dict_public(self):
+        """Serialization for non-admin users — hides internal_notes."""
+        d = self.to_dict()
+        d.pop("internal_notes", None)
+        # Only count public comments
+        d["comment_count"] = sum(1 for c in (self.comments or []) if not c.is_internal)
+        return d
+
+    def __repr__(self):
+        return f"<Ticket {self.ticket_number}: {self.title}>"
+
+
+class TicketComment(db.Model):
+    __tablename__ = "ticket_comments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    is_internal = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    author = db.relationship("User", foreign_keys=[user_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "ticket_id": self.ticket_id,
+            "user_id": self.user_id,
+            "author_name": self.author.get_display_name() if self.author else None,
+            "content": self.content,
+            "is_internal": self.is_internal,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def __repr__(self):
+        return f"<TicketComment {self.id} on Ticket {self.ticket_id}>"
+
+
+class TicketAttachment(db.Model):
+    __tablename__ = "ticket_attachments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    file_id = db.Column(db.String(36), unique=True, nullable=False)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=False)
+    stored_filename = db.Column(db.String(256), nullable=False)
+    file_path = db.Column(db.String(512), nullable=False)
+    cloud_path = db.Column(db.String(512), nullable=True)
+    file_size = db.Column(db.Integer, nullable=False)
+    mime_type = db.Column(db.String(128), nullable=True)
+    file_extension = db.Column(db.String(10), nullable=True)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    uploader = db.relationship("User", foreign_keys=[uploaded_by])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "file_id": self.file_id,
+            "ticket_id": self.ticket_id,
+            "original_filename": self.original_filename,
+            "file_size": self.file_size,
+            "mime_type": self.mime_type,
+            "file_extension": self.file_extension,
+            "uploaded_by": self.uploaded_by,
+            "uploader_name": self.uploader.get_display_name() if self.uploader else None,
+            "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
+        }
+
+    def __repr__(self):
+        return f"<TicketAttachment {self.file_id}: {self.original_filename}>"

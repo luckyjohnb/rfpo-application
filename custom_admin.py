@@ -64,6 +64,9 @@ from models import (
     RFPOApprovalWorkflow,
     RFPOLineItem,
     Team,
+    Ticket,
+    TicketAttachment,
+    TicketComment,
     UploadedFile,
     User,
     UserTeam,
@@ -8387,6 +8390,153 @@ Southfield, MI  48075""",
             output.getvalue(),
             mimetype="text/csv",
             headers={"Content-Disposition": f"attachment; filename=email_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"},
+        )
+
+    # ─── Ticket Admin Routes ─────────────────────────────────────────────
+
+    @app.route("/admin/tickets/bugs")
+    @login_required
+    def admin_tickets_bugs():
+        """List bug tickets for admin triage."""
+        status_filter = request.args.get("status", "")
+        priority_filter = request.args.get("priority", "")
+        query = Ticket.query.filter_by(type="bug")
+        if status_filter:
+            query = query.filter_by(status=status_filter)
+        if priority_filter:
+            query = query.filter_by(priority=priority_filter)
+        tickets = query.order_by(Ticket.created_at.desc()).all()
+        return render_template(
+            "admin/tickets.html",
+            tickets=tickets,
+            ticket_type="bug",
+            title="Bug Log",
+            status_filter=status_filter,
+            priority_filter=priority_filter,
+        )
+
+    @app.route("/admin/tickets/features")
+    @login_required
+    def admin_tickets_features():
+        """List feature request tickets for admin triage."""
+        status_filter = request.args.get("status", "")
+        priority_filter = request.args.get("priority", "")
+        query = Ticket.query.filter_by(type="feature_request")
+        if status_filter:
+            query = query.filter_by(status=status_filter)
+        if priority_filter:
+            query = query.filter_by(priority=priority_filter)
+        tickets = query.order_by(Ticket.created_at.desc()).all()
+        return render_template(
+            "admin/tickets.html",
+            tickets=tickets,
+            ticket_type="feature_request",
+            title="Feature Requests",
+            status_filter=status_filter,
+            priority_filter=priority_filter,
+        )
+
+    @app.route("/admin/tickets/<int:ticket_id>")
+    @login_required
+    def admin_ticket_detail(ticket_id):
+        """Admin detail/triage view for a ticket."""
+        ticket = Ticket.query.get_or_404(ticket_id)
+        users = User.query.filter_by(active=True).order_by(User.fullname).all()
+        return render_template(
+            "admin/ticket_detail.html",
+            ticket=ticket,
+            users=users,
+        )
+
+    @app.route("/admin/tickets/<int:ticket_id>/update", methods=["POST"])
+    @login_required
+    def admin_ticket_update(ticket_id):
+        """Update ticket from admin detail page."""
+        ticket = Ticket.query.get_or_404(ticket_id)
+        old_status = ticket.status
+
+        ticket.status = request.form.get("status", ticket.status)
+        ticket.priority = request.form.get("priority", ticket.priority)
+        ticket.severity = request.form.get("severity", ticket.severity) or None
+        assigned_to = request.form.get("assigned_to")
+        ticket.assigned_to = int(assigned_to) if assigned_to else None
+        ticket.internal_notes = request.form.get("internal_notes", ticket.internal_notes)
+
+        if ticket.status in ("resolved",) and not ticket.resolved_at:
+            ticket.resolved_at = datetime.utcnow()
+        if ticket.status in ("closed", "completed") and not ticket.closed_at:
+            ticket.closed_at = datetime.utcnow()
+
+        db.session.commit()
+
+        # Background email on status change
+        if old_status != ticket.status:
+            try:
+                creator = User.query.get(ticket.created_by)
+                if creator and creator.email:
+                    import threading
+                    email = creator.email
+                    name = creator.get_display_name()
+                    t_num = ticket.ticket_number
+                    t_title = ticket.title
+                    t_id = ticket.id
+
+                    def _send(e, n, tn, tt, tid, os_, ns):
+                        try:
+                            from email_service import send_ticket_status_notification
+                            send_ticket_status_notification(e, n, tn, tt, tid, os_, ns)
+                        except Exception:
+                            pass
+
+                    threading.Thread(
+                        target=_send,
+                        args=(email, name, t_num, t_title, t_id, old_status, ticket.status),
+                        daemon=True,
+                    ).start()
+            except Exception:
+                pass
+
+        flash(f"Ticket {ticket.ticket_number} updated", "success")
+        return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
+
+    @app.route("/admin/tickets/<int:ticket_id>/comment", methods=["POST"])
+    @login_required
+    def admin_ticket_comment(ticket_id):
+        """Add a comment from admin detail page."""
+        ticket = Ticket.query.get_or_404(ticket_id)
+        content = (request.form.get("content") or "").strip()
+        if not content:
+            flash("Comment cannot be empty", "warning")
+            return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
+
+        is_internal = request.form.get("is_internal") == "1"
+        comment = TicketComment(
+            ticket_id=ticket.id,
+            user_id=current_user.id,
+            content=content,
+            is_internal=is_internal,
+        )
+        db.session.add(comment)
+        db.session.commit()
+
+        flash("Comment added", "success")
+        return redirect(url_for("admin_ticket_detail", ticket_id=ticket.id))
+
+    @app.route("/admin/tickets/<int:ticket_id>/attachments/<file_id>")
+    @login_required
+    def admin_ticket_attachment(ticket_id, file_id):
+        """Download a ticket attachment from admin."""
+        attachment = TicketAttachment.query.filter_by(
+            ticket_id=ticket_id, file_id=file_id
+        ).first_or_404()
+        if not os.path.exists(attachment.file_path):
+            flash("File not found on disk", "danger")
+            return redirect(url_for("admin_ticket_detail", ticket_id=ticket_id))
+        return send_file(
+            attachment.file_path,
+            mimetype=attachment.mime_type or "application/octet-stream",
+            as_attachment=True,
+            download_name=attachment.original_filename,
         )
 
     return app

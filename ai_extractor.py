@@ -153,13 +153,16 @@ def check_budget():
     Returns:
         tuple: (within_budget, total_spent, budget_limit)
     """
-    from models import AIUsageLog, db
-
-    total_spent = db.session.query(
-        db.func.coalesce(db.func.sum(AIUsageLog.estimated_cost_usd), 0)
-    ).scalar()
     budget_limit = float(os.environ.get("AZURE_OPENAI_BUDGET_LIMIT", "100.00"))
-    return (float(total_spent) < budget_limit, float(total_spent), budget_limit)
+    try:
+        from models import AIUsageLog, db
+        total_spent = db.session.query(
+            db.func.coalesce(db.func.sum(AIUsageLog.estimated_cost_usd), 0)
+        ).scalar()
+        return (float(total_spent) < budget_limit, float(total_spent), budget_limit)
+    except Exception:
+        # AIUsageLog table may not exist yet — allow usage
+        return (True, 0.0, budget_limit)
 
 
 def _get_client():

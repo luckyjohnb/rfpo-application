@@ -3939,6 +3939,86 @@ def upload_rfpo_file(rfpo_id):
         return _error_response(e)
 
 
+# ─── AI SCAN (LINE ITEM EXTRACTION) ─────────────────────────────────────────
+
+@app.route("/api/rfpos/<int:rfpo_id>/ai-scan/upload", methods=["POST"])
+@require_auth
+def ai_scan_upload(rfpo_id):
+    """Upload a document and extract line items via Azure OpenAI GPT-4o."""
+    try:
+        rfpo = RFPO.query.get(rfpo_id)
+        if not rfpo:
+            return jsonify({"success": False, "message": "RFPO not found"}), 404
+
+        if "file" not in request.files:
+            return jsonify({"success": False, "message": "No file provided"}), 400
+
+        file = request.files["file"]
+        if not file.filename:
+            return jsonify({"success": False, "message": "No file selected"}), 400
+
+        from werkzeug.utils import secure_filename
+        import uuid
+        import mimetypes
+
+        original_filename = secure_filename(file.filename)
+        if not original_filename:
+            return jsonify({"success": False, "message": "Invalid filename"}), 400
+
+        file_extension = os.path.splitext(original_filename)[1].lower()
+        if file_extension not in ALLOWED_UPLOAD_EXTENSIONS:
+            return jsonify({"success": False, "message": f"File type '{file_extension}' is not allowed"}), 400
+
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > MAX_UPLOAD_SIZE_BYTES:
+            return jsonify({"success": False, "message": "File exceeds 10 MB limit"}), 400
+
+        mime_type, _ = mimetypes.guess_type(original_filename)
+
+        # Save to temp location for AI processing
+        file_id = str(uuid.uuid4())
+        stored_filename = f"{file_id}_{original_filename}"
+        ai_dir = os.path.join("uploads", "rfpo_files", f"rfpo_{rfpo.id}", "ai_scan")
+        os.makedirs(ai_dir, exist_ok=True)
+        file_path = os.path.join(ai_dir, stored_filename)
+        file.save(file_path)
+
+        try:
+            from ai_extractor import extract_line_items, check_budget
+
+            # Budget check
+            within_budget, spent, limit = check_budget()
+            if not within_budget:
+                os.remove(file_path)
+                return jsonify({
+                    "success": False,
+                    "message": f"AI scanning budget exhausted. ${spent:.2f} of ${limit:.2f} used. Contact your administrator.",
+                }), 429
+
+            result = extract_line_items(file_path, mime_type or "application/octet-stream")
+
+            return jsonify({
+                "success": True,
+                "extracted_items": result.get("items", []),
+                "warning": result.get("warning"),
+                "token_usage": {
+                    "prompt_tokens": result.get("prompt_tokens", 0),
+                    "completion_tokens": result.get("completion_tokens", 0),
+                    "total_tokens": result.get("total_tokens", 0),
+                },
+            })
+
+        finally:
+            # Clean up temp file
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+    except Exception as e:
+        return _error_response(e)
+
+
 @app.route("/api/rfpos/<int:rfpo_id>/files/<file_id>/view", methods=["GET"])
 @require_auth
 def view_rfpo_file(rfpo_id, file_id):
